@@ -7,7 +7,7 @@ After=time-sync.target
 
 [Service]
 User=_kea
-CapabilityBoundingSet=CAP_NET_BIND_SERVICE
+AmbientCapabilities=CAP_NET_BIND_SERVICE
 Environment="KEA_PIDFILE_DIR=/run/kea"
 Environment="KEA_LOCKFILE_DIR=/run/lock/kea"
 Environment="KEA_LOGGER_DESTINATION=/var/log/kea"

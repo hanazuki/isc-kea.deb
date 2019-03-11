@@ -7,6 +7,7 @@ set -e
 
 case "$1" in
     configure)
+    addgroup --force-badname _kea
 	adduser --force-badname --quiet --system --home /var/lib/kea \
            --shell /bin/false --no-create-home --disabled-password --disabled-login \
 	   --gecos "Kea DHCP User" _kea >/dev/null || exit 1
