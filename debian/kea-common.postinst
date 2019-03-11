@@ -7,10 +7,9 @@ set -e
 
 case "$1" in
     configure)
-    addgroup --force-badname _kea
 	adduser --force-badname --quiet --system --home /var/lib/kea \
            --shell /bin/false --no-create-home --disabled-password --disabled-login \
-	   --gecos "Kea DHCP User" _kea >/dev/null || exit 1
+	   --gecos "Kea DHCP User" --group _kea >/dev/null || exit 1
 
 	for d in /var/log/kea /var/lib/kea; do
 	    if ! dpkg-statoverride --list $d >/dev/null 2>&1; then
