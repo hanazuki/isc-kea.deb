@@ -13,8 +13,6 @@ case "$1" in
 	    fi
 	done
 
-	deluser --system _kea >/dev/null || /bin/true
-	delgroup --system _kea >/dev/null || /bin/true
     ;;
     remove|upgrade|failed-upgrade|abort-install|abort-upgrade|disappear)
     ;;

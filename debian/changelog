@@ -2,6 +2,9 @@ isc-kea (1.5.0-2) UNRELEASED; urgency=medium
 
   * Non-maintainer upload.
   * Fix maintaner scripts to handle the _kea group (Closes: #924105)
+  * Stop deleting _kea user and group on postrm for security
+  * Drop debhelper compat to v11; v12 adds dependency on init-system-helpers 
+    (>=1.52), and stretch uses 1.48.
 
  --  <jguy@jguy-vm>  Thu, 06 Jun 2019 10:18:41 -0400
 
