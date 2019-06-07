@@ -20,5 +20,5 @@ StateDirectory=kea
 ExecStart=/usr/sbin/kea-dhcp-ddns -c /etc/kea/kea-dhcp-ddns.conf
 
 [Install]
-WantedBy=kea-dhcpv4-server.service
-WantedBy=kea-dhcpv6-server.service
+WantedBy=kea-dhcp4-server.service
+WantedBy=kea-dhcp6-server.service
