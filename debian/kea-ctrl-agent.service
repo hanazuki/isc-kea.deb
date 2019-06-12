@@ -20,5 +20,5 @@ KillMode=process
 Restart=on-failure
 
 [Install]
-WantedBy=kea-dhcpv4-server.service
-WantedBy=kea-dhcpv6-server.service
+WantedBy=kea-dhcp4-server.service
+WantedBy=kea-dhcp6-server.service
