@@ -18,3 +18,4 @@ usr/share/kea/yang/modules/kea-dhcp6-server@2018-11-20.yang
 usr/share/kea/yang/modules/ietf-inet-types@2013-07-15.yang
 usr/share/kea/yang/modules/ietf-yang-types@2013-07-15.yang
 usr/share/kea/yang/modules/ietf-dhcpv6-relay@2018-09-04.yang
+usr/share/man/man8/kea-netconf.8

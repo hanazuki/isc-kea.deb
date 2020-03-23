@@ -1,3 +1,2 @@
 usr/include/kea/*
 usr/lib/*/libkea-*.so
-usr/lib/*/pkgconfig/dns++.pc
