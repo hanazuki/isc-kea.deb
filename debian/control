@@ -34,8 +34,9 @@ Depends: kea-dhcp4-server,
          kea-dhcp6-server,
 	 kea-dhcp-ddns-server,
 	 kea-ctrl-agent,
-	 kea-admin
-Description: Kea DHCP server [meta]
+	 kea-admin,
+	 ${misc:Depends}
+Description: DHCP server [meta]
  Kea is an IPv4 and IPv6 DHCP server developed by Internet Systems Consortium
  providing a very high-performance with PostgreSQL, MySQL and memfile backends.
  .
@@ -49,7 +50,7 @@ Depends: kea-common (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Suggests: kea-doc
-Description: Kea IPv4 DHCP server
+Description: IPv4 DHCP server
  Kea is an IPv4 and IPv6 DHCP server developed by Internet Systems Consortium
  providing a very high-performance with PostgreSQL, MySQL and memfile backends.
  .
@@ -63,7 +64,7 @@ Depends: kea-common (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Suggests: kea-doc
-Description: Kea IPv6 DHCP server
+Description: IPv6 DHCP server
  Kea is an IPv4 and IPv6 DHCP server developed by Internet Systems Consortium
  providing a very high-performance with PostgreSQL, MySQL and memfile backends.
  .
@@ -77,7 +78,7 @@ Depends: kea-common (= ${binary:Version}),
          ${misc:Depends},
          ${shlibs:Depends}
 Suggests: kea-doc
-Description: Kea DHCP Dynamic DNS service
+Description: DHCP Dynamic DNS service
  Kea is an IPv4 and IPv6 DHCP server developed by Internet Systems Consortium.
  .
  This package provides Dynamic DNS service to update DNS mapping based on
@@ -92,7 +93,7 @@ Depends: kea-common (= ${binary:Version}),
          ${python3:Depends},
          ${shlibs:Depends}
 Suggests: kea-doc
-Description: Kea DHCP server REST API service
+Description: REST API service for Kea DHCP server
  Kea is an IPv4 and IPv6 DHCP server developed by Internet Systems Consortium.
  .
  This package provides the REST API service agent for Kea DHCP.
