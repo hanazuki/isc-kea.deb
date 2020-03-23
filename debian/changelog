@@ -1,3 +1,25 @@
+isc-kea (1.7.5-1) unstable; urgency=medium
+
+  * Bump dh compat to 12, bump debian standard to 4.5.0
+    (dh_compat v11 is broken and should not be used)
+  * New upstream version 1.7.5
+  * Security issues fixed since 1.5.0-2:
+   + CVE-2019-6472: A packet containing a malformed DUID can cause the
+     kea-dhcp6 server to terminate
+   + CVE-2019-6473: An invalid hostname option can cause the kea-dhcp4
+     server to terminate
+   + CVE-2019-6474: An oversight when validating incoming client requests
+     can lead to a situation where the Kea server will exit when trying to
+     restart
+  * Add python3-sphinx and python3-sphinx-rtd-theme to Build-Depends to
+    build the documentation
+  * Adjust installed files
+  * Add 'kea' metapackage that depends on all server components of Kea
+  * Fix more ISC KEA -> Kea naming
+  * Cleanup the lintian warnings
+
+ -- Ondřej Surý <ondrej@debian.org>  Mon, 23 Mar 2020 11:11:05 +0100
+
 isc-kea (1.5.0-2) unstable; urgency=medium
 
   [ Jason Guy  ]
