@@ -28,6 +28,19 @@ Homepage: http://kea.isc.org/
 Vcs-Git: https://salsa.debian.org/debian/isc-kea.git
 Vcs-Browser: https://salsa.debian.org/debian/isc-kea
 
+Package: kea
+Architecture: all
+Depends: kea-dhcp4-server,
+         kea-dhcp6-server,
+	 kea-dhcp-ddns-server,
+	 kea-ctrl-agent,
+	 kea-admin
+Description: ISC KEA DHCP server [meta]
+ KEA is an IPv4 and IPv6 DHCP server developed by Internet Systems Consortium
+ providing a very high-performance with PostgreSQL, MySQL and memfile backends.
+ .
+ This is a meta package that depends on all server components of Kea
+
 Package: kea-dhcp4-server
 Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
