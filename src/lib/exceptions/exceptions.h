@@ -1,4 +1,4 @@
-// Copyright (C) 2009-2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2009-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -161,10 +161,20 @@ public:
 /// not implemented.
 ///
 /// This may be due to unfinished implementation or in case the
-/// function isn't even planned to be provided for that situation.
+/// function isn't even planned to be provided for that situation,
+/// i.e. not yet implemented or not supported.
 class NotImplemented : public Exception {
 public:
     NotImplemented(const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) {}
+};
+
+///
+/// \brief A generic exception that is thrown when an object can
+/// not be found.
+class NotFound : public Exception {
+public:
+    NotFound(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) {}
 };
 

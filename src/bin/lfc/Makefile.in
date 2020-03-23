@@ -101,6 +101,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -117,15 +118,13 @@ CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 liblfc_la_LIBADD =
-am_liblfc_la_OBJECTS = lfc_controller.lo lfc_log.lo
-nodist_liblfc_la_OBJECTS = lfc_messages.lo
-liblfc_la_OBJECTS = $(am_liblfc_la_OBJECTS) \
-	$(nodist_liblfc_la_OBJECTS)
+am_liblfc_la_OBJECTS = lfc_controller.lo lfc_log.lo lfc_messages.lo
+liblfc_la_OBJECTS = $(am_liblfc_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man8dir)"
+am__installdirs = "$(DESTDIR)$(sbindir)"
 PROGRAMS = $(sbin_PROGRAMS)
 am_kea_lfc_OBJECTS = main.$(OBJEXT)
 kea_lfc_OBJECTS = $(am_kea_lfc_OBJECTS)
@@ -147,7 +146,6 @@ kea_lfc_DEPENDENCIES = liblfc.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -207,8 +205,7 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(liblfc_la_SOURCES) $(nodist_liblfc_la_SOURCES) \
-	$(kea_lfc_SOURCES)
+SOURCES = $(liblfc_la_SOURCES) $(kea_lfc_SOURCES)
 DIST_SOURCES = $(liblfc_la_SOURCES) $(kea_lfc_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
 	ctags-recursive dvi-recursive html-recursive info-recursive \
@@ -223,36 +220,6 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
-am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
-am__vpath_adj = case $$p in \
-    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
-    *) f=$$p;; \
-  esac;
-am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
-am__install_max = 40
-am__nobase_strip_setup = \
-  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
-am__nobase_strip = \
-  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
-am__nobase_list = $(am__nobase_strip_setup); \
-  for p in $$list; do echo "$$p $$p"; done | \
-  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
-  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
-    if (++n[$$2] == $(am__install_max)) \
-      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
-    END { for (dir in files) print dir, files[dir] }'
-am__base_list = \
-  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
-  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
-am__uninstall_files_from_dir = { \
-  test -z "$$files" \
-    || { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
-    || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
-         $(am__cd) "$$dir" && rm -f $$files; }; \
-  }
-man8dir = $(mandir)/man8
-NROFF = nroff
-MANS = $(man_MANS)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
   distclean-recursive maintainer-clean-recursive
 am__recursive_targets = \
@@ -324,7 +291,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -345,7 +311,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -355,6 +320,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -364,7 +330,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -415,6 +380,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -432,17 +398,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -507,17 +473,12 @@ AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
 	$(BOOST_INCLUDES)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 @USE_STATIC_LINK_TRUE@AM_LDFLAGS = -static
-CLEANFILES = lfc_messages.h lfc_messages.cc s-messages
-man_MANS = kea-lfc.8
-DISTCLEANFILES = $(man_MANS)
-EXTRA_DIST = $(man_MANS) kea-lfc.xml lfc.dox lfc_messages.mes
-BUILT_SOURCES = lfc_messages.h lfc_messages.cc
+EXTRA_DIST = lfc.dox lfc_messages.mes
 
 # convenience archive
 noinst_LTLIBRARIES = liblfc.la
 liblfc_la_SOURCES = lfc_controller.h lfc_controller.cc lfc_log.h \
-	lfc_log.cc
-nodist_liblfc_la_SOURCES = lfc_messages.h lfc_messages.cc
+	lfc_log.cc lfc_messages.h lfc_messages.cc
 kea_lfc_SOURCES = main.cc
 kea_lfc_LDADD = liblfc.la $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 	$(top_builddir)/src/lib/eval/libkea-eval.la \
@@ -535,15 +496,13 @@ kea_lfc_LDADD = liblfc.la $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 kea_lfc_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(am__append_4) \
 	$(am__append_5) $(am__append_6)
 kea_lfcdir = $(pkgdatadir)
-all: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+all: all-recursive
 
 .SUFFIXES:
 .SUFFIXES: .cc .lo .o .obj
@@ -681,49 +640,6 @@ mostlyclean-libtool:
 
 clean-libtool:
 	-rm -rf .libs _libs
-install-man8: $(man_MANS)
-	@$(NORMAL_INSTALL)
-	@list1=''; \
-	list2='$(man_MANS)'; \
-	test -n "$(man8dir)" \
-	  && test -n "`echo $$list1$$list2`" \
-	  || exit 0; \
-	echo " $(MKDIR_P) '$(DESTDIR)$(man8dir)'"; \
-	$(MKDIR_P) "$(DESTDIR)$(man8dir)" || exit 1; \
-	{ for i in $$list1; do echo "$$i"; done;  \
-	if test -n "$$list2"; then \
-	  for i in $$list2; do echo "$$i"; done \
-	    | sed -n '/\.8[a-z]*$$/p'; \
-	fi; \
-	} | while read p; do \
-	  if test -f $$p; then d=; else d="$(srcdir)/"; fi; \
-	  echo "$$d$$p"; echo "$$p"; \
-	done | \
-	sed -e 'n;s,.*/,,;p;h;s,.*\.,,;s,^[^8][0-9a-z]*$$,8,;x' \
-	      -e 's,\.[0-9a-z]*$$,,;$(transform);G;s,\n,.,' | \
-	sed 'N;N;s,\n, ,g' | { \
-	list=; while read file base inst; do \
-	  if test "$$base" = "$$inst"; then list="$$list $$file"; else \
-	    echo " $(INSTALL_DATA) '$$file' '$(DESTDIR)$(man8dir)/$$inst'"; \
-	    $(INSTALL_DATA) "$$file" "$(DESTDIR)$(man8dir)/$$inst" || exit $$?; \
-	  fi; \
-	done; \
-	for i in $$list; do echo "$$i"; done | $(am__base_list) | \
-	while read files; do \
-	  test -z "$$files" || { \
-	    echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(man8dir)'"; \
-	    $(INSTALL_DATA) $$files "$(DESTDIR)$(man8dir)" || exit $$?; }; \
-	done; }
-
-uninstall-man8:
-	@$(NORMAL_UNINSTALL)
-	@list=''; test -n "$(man8dir)" || exit 0; \
-	files=`{ for i in $$list; do echo "$$i"; done; \
-	l2='$(man_MANS)'; for i in $$l2; do echo "$$i"; done | \
-	  sed -n '/\.8[a-z]*$$/p'; \
-	} | sed -e 's,.*/,,;h;s,.*\.,,;s,^[^8][0-9a-z]*$$,8,;x' \
-	      -e 's,\.[0-9a-z]*$$,,;$(transform);G;s,\n,.,'`; \
-	dir='$(DESTDIR)$(man8dir)'; $(am__uninstall_files_from_dir)
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run 'make' without going through this Makefile.
@@ -880,16 +796,14 @@ distdir: $(DISTFILES)
 	  fi; \
 	done
 check-am: all-am
-check: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) check-recursive
-all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(MANS)
+check: check-recursive
+all-am: Makefile $(LTLIBRARIES) $(PROGRAMS)
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man8dir)"; do \
+	for dir in "$(DESTDIR)$(sbindir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
-install: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) install-recursive
+install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
 uninstall: uninstall-recursive
@@ -911,17 +825,14 @@ install-strip:
 mostlyclean-generic:
 
 clean-generic:
-	-test -z "$(CLEANFILES)" || rm -f $(CLEANFILES)
 
 distclean-generic:
 	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
 	-test . = "$(srcdir)" || test -z "$(CONFIG_CLEAN_VPATH_FILES)" || rm -f $(CONFIG_CLEAN_VPATH_FILES)
-	-test -z "$(DISTCLEANFILES)" || rm -f $(DISTCLEANFILES)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 clean: clean-recursive
 
 clean-am: clean-generic clean-libtool clean-noinstLTLIBRARIES \
@@ -945,7 +856,7 @@ info: info-recursive
 
 info-am:
 
-install-data-am: install-man
+install-data-am:
 
 install-dvi: install-dvi-recursive
 
@@ -961,7 +872,7 @@ install-info: install-info-recursive
 
 install-info-am:
 
-install-man: install-man8
+install-man:
 
 install-pdf: install-pdf-recursive
 
@@ -976,7 +887,8 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
-maintainer-clean-am: distclean-am maintainer-clean-generic
+maintainer-clean-am: distclean-am maintainer-clean-generic \
+	maintainer-clean-local
 
 mostlyclean: mostlyclean-recursive
 
@@ -991,12 +903,9 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am: uninstall-man uninstall-sbinPROGRAMS
+uninstall-am: uninstall-sbinPROGRAMS
 
-uninstall-man: uninstall-man8
-
-.MAKE: $(am__recursive_targets) all check install install-am \
-	install-strip
+.MAKE: $(am__recursive_targets) install-am install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am check \
 	check-am clean clean-generic clean-libtool \
@@ -1006,32 +915,43 @@ uninstall-man: uninstall-man8
 	html-am info info-am install install-am install-data \
 	install-data-am install-dvi install-dvi-am install-exec \
 	install-exec-am install-html install-html-am install-info \
-	install-info-am install-man install-man8 install-pdf \
-	install-pdf-am install-ps install-ps-am install-sbinPROGRAMS \
-	install-strip installcheck installcheck-am installdirs \
-	installdirs-am maintainer-clean maintainer-clean-generic \
-	mostlyclean mostlyclean-compile mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
-	uninstall-am uninstall-man uninstall-man8 \
-	uninstall-sbinPROGRAMS
+	install-info-am install-man install-pdf install-pdf-am \
+	install-ps install-ps-am install-sbinPROGRAMS install-strip \
+	installcheck installcheck-am installdirs installdirs-am \
+	maintainer-clean maintainer-clean-generic \
+	maintainer-clean-local mostlyclean mostlyclean-compile \
+	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
+	tags tags-am uninstall uninstall-am uninstall-sbinPROGRAMS
 
 .PRECIOUS: Makefile
 
 
-@GENERATE_DOCS_TRUE@kea-lfc.8: kea-lfc.xml
-@GENERATE_DOCS_TRUE@	@XSLTPROC@ --novalid --xinclude --nonet -o $@ \
-@GENERATE_DOCS_TRUE@        http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl \
-@GENERATE_DOCS_TRUE@	$(srcdir)/kea-lfc.xml
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f lfc_messages.h lfc_messages.cc
 
-@GENERATE_DOCS_FALSE@$(man_MANS):
-@GENERATE_DOCS_FALSE@	@echo Man generation disabled.  Creating dummy $@.  Configure with --enable-generate-docs to enable it.
-@GENERATE_DOCS_FALSE@	@echo Man generation disabled.  Remove this file, configure with --enable-generate-docs, and rebuild Kea > $@
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
 
-lfc_messages.h lfc_messages.cc: s-messages
+# Define rule to build logging source files from message file
+@GENERATE_MESSAGES_TRUE@messages: lfc_messages.h lfc_messages.cc
+@GENERATE_MESSAGES_TRUE@	@echo Message files regenerated
 
-s-messages: lfc_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/lfc/lfc_messages.mes
-	touch $@
+@GENERATE_MESSAGES_TRUE@lfc_messages.h lfc_messages.cc: lfc_messages.mes
+@GENERATE_MESSAGES_TRUE@	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/lfc/lfc_messages.mes
+
+@GENERATE_MESSAGES_FALSE@messages lfc_messages.h lfc_messages.cc:
+@GENERATE_MESSAGES_FALSE@	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

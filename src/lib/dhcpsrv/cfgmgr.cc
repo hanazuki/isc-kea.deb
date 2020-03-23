@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,13 +27,14 @@ CfgMgr::instance() {
     return (cfg_mgr);
 }
 
-std::string CfgMgr::getDataDir() const {
+Optional<std::string>
+CfgMgr::getDataDir() const {
     return (datadir_);
 }
 
 void
-CfgMgr::setDataDir(const std::string& datadir) {
-    datadir_ = datadir;
+CfgMgr::setDataDir(const std::string& datadir, bool unspecified) {
+    datadir_ = Optional<std::string>(datadir, unspecified);
 }
 
 void
@@ -80,7 +81,9 @@ CfgMgr::clear() {
         configuration_->removeStatistics();
     }
     configs_.clear();
-    ensureCurrentAllocated();
+    external_configs_.clear();
+    D2ClientConfigPtr d2_default_conf(new D2ClientConfig());
+    setD2ClientConfig(d2_default_conf);
 }
 
 void
@@ -104,6 +107,10 @@ CfgMgr::commit() {
             configs_.erase(configs_.begin(), it);
         }
     }
+
+    // Set the last commit timestamp.
+    auto now = boost::posix_time::second_clock::universal_time();
+    configuration_->setLastCommitTime(now);
 
     // Now we need to set the statistics back.
     configuration_->updateStatistics();
@@ -166,8 +173,54 @@ CfgMgr::getStagingCfg() {
     return (configs_.back());
 }
 
+SrvConfigPtr
+CfgMgr::createExternalCfg() {
+    uint32_t seq = 0;
+
+    if (!external_configs_.empty()) {
+        seq = external_configs_.rbegin()->second->getSequence() + 1;
+    }
+
+    SrvConfigPtr srv_config(new SrvConfig(seq));
+    external_configs_[seq] = srv_config;
+    return (srv_config);
+}
+
+void
+CfgMgr::mergeIntoStagingCfg(const uint32_t seq) {
+    mergeIntoCfg(getStagingCfg(), seq);
+}
+
+void
+CfgMgr::mergeIntoCurrentCfg(const uint32_t seq) {
+    try {
+        // First we need to remove statistics.
+        getCurrentCfg()->removeStatistics();
+        mergeIntoCfg(getCurrentCfg(), seq);
+
+    } catch (...) {
+        // Make sure the statistics is updated even if the merge failed.
+        getCurrentCfg()->updateStatistics();
+        throw;
+    }
+    getCurrentCfg()->updateStatistics();
+}
+
+void
+CfgMgr::mergeIntoCfg(const SrvConfigPtr& target_config, const uint32_t seq) {
+    auto source_config = external_configs_.find(seq);
+    if (source_config != external_configs_.end()) {
+        target_config->merge(*source_config->second);
+        external_configs_.erase(source_config);
+
+    } else {
+        isc_throw(BadValue, "the external configuration with the sequence number "
+                  "of " << seq << " was not found");
+    }
+}
+
 CfgMgr::CfgMgr()
-    : datadir_(DHCP_DATA_DIR), d2_client_mgr_(), family_(AF_INET) {
+    : datadir_(DHCP_DATA_DIR, true), d2_client_mgr_(), family_(AF_INET) {
     // DHCP_DATA_DIR must be set set with -DDHCP_DATA_DIR="..." in Makefile.am
     // Note: the definition of DHCP_DATA_DIR needs to include quotation marks
     // See AM_CPPFLAGS definition in Makefile.am

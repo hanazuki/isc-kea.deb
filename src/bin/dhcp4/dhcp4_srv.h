@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,22 +9,21 @@
 
 #include <asiolink/io_service.h>
 #include <dhcp/dhcp4.h>
-#include <dhcp/pkt4.h>
 #include <dhcp/option.h>
 #include <dhcp/option_string.h>
 #include <dhcp/option4_client_fqdn.h>
 #include <dhcp/option_custom.h>
+#include <dhcp/pkt4.h>
 #include <dhcp_ddns/ncr_msg.h>
 #include <dhcpsrv/alloc_engine.h>
-#include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/callout_handle_store.h>
+#include <dhcpsrv/cb_ctl_dhcp4.h>
+#include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/d2_client_mgr.h>
 #include <dhcpsrv/network_state.h>
 #include <dhcpsrv/subnet.h>
 #include <hooks/callout_handle.h>
 #include <process/daemon.h>
-
-#include <boost/noncopyable.hpp>
 
 #include <functional>
 #include <iostream>
@@ -163,12 +162,16 @@ private:
 
     /// @brief Pointer to the allocation engine used by the server.
     AllocEnginePtr alloc_engine_;
+
     /// @brief Pointer to the DHCPv4 message sent by the client.
     Pkt4Ptr query_;
+
     /// @brief Pointer to the DHCPv4 message to be sent to the client.
     Pkt4Ptr resp_;
+
     /// @brief Context for use with allocation engine.
     AllocEngine::ClientContext4Ptr context_;
+
     /// @brief Configured option list.
     /// @note The configured option list is an *ordered* list of
     /// @c CfgOption objects used to append options to the response.
@@ -212,23 +215,34 @@ public:
     /// In particular, creates IfaceMgr that will be responsible for
     /// network interaction. Will instantiate lease manager, and load
     /// old or create new DUID. It is possible to specify alternate
-    /// port on which DHCPv4 server will listen on. That is mostly useful
+    /// port on which DHCPv4 server will listen on and alternate port
+    /// where DHCPv4 server sends all responses to. Those are mostly useful
     /// for testing purposes. The Last two arguments of the constructor
     /// should be left at default values for normal server operation.
     /// They should be set to 'false' when creating an instance of this
     /// class for unit testing because features they enable require
     /// root privileges.
     ///
-    /// @param port specifies port number to listen on
+    /// @param server_port specifies port number to listen on
+    /// @param client_port specifies port number to send to
     /// @param use_bcast configure sockets to support broadcast messages.
     /// @param direct_response_desired specifies if it is desired to
     /// use direct V4 traffic.
-    Dhcpv4Srv(uint16_t port = DHCP4_SERVER_PORT,
+    Dhcpv4Srv(uint16_t server_port = DHCP4_SERVER_PORT,
+              uint16_t client_port = 0,
               const bool use_bcast = true,
               const bool direct_response_desired = true);
 
     /// @brief Destructor. Used during DHCPv4 service shutdown.
     virtual ~Dhcpv4Srv();
+
+    /// @brief Checks if the server is running in unit test mode.
+    ///
+    /// @return true if the server is running in unit test mode,
+    /// false otherwise.
+    bool inTestMode() const {
+        return (server_port_ == 0);
+    }
 
     /// @brief Returns pointer to the IO service used by the server.
     asiolink::IOServicePtr& getIOService() {
@@ -238,6 +252,15 @@ public:
     /// @brief Returns pointer to the network state used by the server.
     NetworkStatePtr& getNetworkState() {
         return (network_state_);
+    }
+
+    /// @brief Returns an object which controls access to the configuration
+    /// backends.
+    ///
+    /// @return Pointer to the instance of the object which controls
+    /// access to the configuration backends.
+    CBControlDHCPv4Ptr getCBControl() const {
+        return (cb_control_);
     }
 
     /// @brief returns Kea version on stdout and exit.
@@ -258,6 +281,32 @@ public:
     /// the processing packet routing and (if necessary) transmits
     /// a response.
     void run_one();
+
+    /// @brief Process a single incoming DHCPv4 packet and sends the response.
+    ///
+    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// methods, generates appropriate answer, sends the answer to the client.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response
+    void processPacketAndSendResponse(Pkt4Ptr& query, Pkt4Ptr& rsp);
+
+    /// @brief Process a single incoming DHCPv4 packet and sends the response.
+    ///
+    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// methods, generates appropriate answer, sends the answer to the client.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response
+    void processPacketAndSendResponseNoThrow(Pkt4Ptr& query, Pkt4Ptr& rsp);
+
+    /// @brief Process an unparked DHCPv4 packet and sends the response.
+    ///
+    /// @param callout_handle pointer to the callout handle.
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response
+    void sendResponseNoThrow(hooks::CalloutHandlePtr& callout_handle,
+                             Pkt4Ptr& query, Pkt4Ptr& rsp);
 
     /// @brief Process a single incoming DHCPv4 packet.
     ///
@@ -285,8 +334,8 @@ public:
     /// for testing purposes only.
     ///
     /// @return UDP port on which server should listen.
-    uint16_t getPort() const {
-        return (port_);
+    uint16_t getServerPort() const {
+        return (server_port_);
     }
 
     /// @brief Return bool value indicating that broadcast flags should be set
@@ -330,7 +379,9 @@ public:
                                       NameChangeSender::Result result,
                                       dhcp_ddns::NameChangeRequestPtr& ncr);
 
-    /// @brief Discard all in-progress packets
+    /// @brief Discards cached and parked packets
+    /// Clears the call_handle store and packet parking lots
+    /// of all packets.  Called during reconfigure and shutdown.
     void discardPackets();
 
 protected:
@@ -539,6 +590,33 @@ protected:
     /// @param ex DHCPv4 exchange holding the client's message to be checked.
     void assignLease(Dhcpv4Exchange& ex);
 
+    /// @brief Adds the T1 and T2 timers to the outbound response as appropriate
+    ///
+    /// This method determines if either of the timers T1 (option 58) and T2
+    /// (option 59) should be sent to the client.  It is influenced by the
+    /// lease's subnet's values for renew-timer, rebind-timer,
+    /// calculate-tee-times, t1-percent, and t2-percent as follows:
+    ///
+    /// By default neither T1 nor T2 will be sent.
+    ///
+    /// T2:
+    ///
+    /// If rebind-timer is set use its value, otherwise if calculate-tee-times
+    /// is true use the value given by valid lease time * t2-percent.  Either
+    /// way the value will only be sent if it is less than the valid lease time.
+    ///
+    /// T1:
+    ///
+    /// If renew-timer is set use its value, otherwise if calculate-tee-times
+    /// is true use the value given by valid lease time * t1-percent.  Either
+    /// way the value will only be sent if it is less than T2 when T2 is being
+    /// sent, or less than the valid lease time if T2 is not being sent.
+    ///
+    /// @param lease lease being assigned to the client
+    /// @param subnet the subnet to which the lease belongs
+    /// @param resp outbound response for the client to which timers are added.
+    void setTeeTimes(const Lease4Ptr& lease, const Subnet4Ptr& subnet, Pkt4Ptr resp);
+
     /// @brief Append basic options if they are not present.
     ///
     /// This function adds the following basic options if they
@@ -603,6 +681,14 @@ protected:
     /// @param ex The exchange holding both the client's message and the
     /// server's response.
     void processClientName(Dhcpv4Exchange& ex);
+
+    /// @brief This function sets statistics related to DHCPv4 packets processing
+    /// to their initial values.
+    ///
+    /// All of the statistics observed by the DHCPv4 server and with the names
+    /// like "pkt4-" are reset to 0. This function must be invoked in the class
+    /// constructor.
+    void setPacketStatisticsDefaults();
 
     /// @brief this is a prefix added to the content of vendor-class option
     ///
@@ -745,7 +831,8 @@ protected:
     /// address).
     ///
     /// The destination port is always DHCPv4 client (68) or relay (67) port,
-    /// depending if the response will be sent directly to a client.
+    /// depending if the response will be sent directly to a client, unless
+    /// a client port was enforced from the command line.
     ///
     /// The source port is always set to DHCPv4 server port (67).
     ///
@@ -762,7 +849,7 @@ protected:
     ///
     /// @param ex The exchange holding both the client's message and the
     /// server's response.
-    static void adjustIfaceData(Dhcpv4Exchange& ex);
+    void adjustIfaceData(Dhcpv4Exchange& ex);
 
     /// @brief Sets remote addresses for outgoing packet.
     ///
@@ -821,10 +908,6 @@ protected:
     isc::dhcp::Subnet4Ptr selectSubnet4o6(const Pkt4Ptr& query,
                                           bool& drop,
                                           bool sanity_only = false) const;
-
-    /// indicates if shutdown is in progress. Setting it to true will
-    /// initiate server shutdown procedure.
-    volatile bool shutdown_;
 
     /// @brief dummy wrapper around IfaceMgr::receive4
     ///
@@ -904,12 +987,6 @@ protected:
     void processPacketBufferSend(hooks::CalloutHandlePtr& callout_handle,
                                  Pkt4Ptr& rsp);
 
-    /// @brief Allocation Engine.
-    /// Pointer to the allocation engine that we are currently using
-    /// It must be a pointer, because we will support changing engines
-    /// during normal operation (e.g. to use different allocators)
-    boost::shared_ptr<AllocEngine> alloc_engine_;
-
 private:
 
     /// @public
@@ -927,14 +1004,33 @@ private:
     /// @return Option that contains netmask information
     static OptionPtr getNetmaskOption(const Subnet4Ptr& subnet);
 
-    uint16_t port_;  ///< UDP port number on which server listens.
-    bool use_bcast_; ///< Should broadcast be enabled on sockets (if true).
-
 protected:
+
+    /// UDP port number on which server listens.
+    uint16_t server_port_;
+
+    /// UDP port number to which server sends all responses.
+    uint16_t client_port_;
+
+    /// Indicates if shutdown is in progress. Setting it to true will
+    /// initiate server shutdown procedure.
+    volatile bool shutdown_;
+
+    /// @brief Allocation Engine.
+    /// Pointer to the allocation engine that we are currently using
+    /// It must be a pointer, because we will support changing engines
+    /// during normal operation (e.g. to use different allocators)
+    boost::shared_ptr<AllocEngine> alloc_engine_;
+
+    /// Should broadcast be enabled on sockets (if true).
+    bool use_bcast_;
 
     /// @brief Holds information about disabled DHCP service and/or
     /// disabled subnet/network scopes.
     NetworkStatePtr network_state_;
+
+    /// @brief Controls access to the configuration backends.
+    CBControlDHCPv4Ptr cb_control_;
 
 public:
     /// Class methods for DHCPv4-over-DHCPv6 handler
@@ -976,7 +1072,7 @@ public:
     static int getHookIndexLease4Decline();
 };
 
-}; // namespace isc::dhcp
-}; // namespace isc
+}  // namespace dhcp
+}  // namespace isc
 
 #endif // DHCP4_SRV_H

@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,8 +17,8 @@
 namespace isc {
 namespace db {
 
-/// @brief Define PostgreSQL backend version: 5.0
-const uint32_t PG_SCHEMA_VERSION_MAJOR = 5;
+/// @brief Define PostgreSQL backend version: 6.0
+const uint32_t PG_SCHEMA_VERSION_MAJOR = 6;
 const uint32_t PG_SCHEMA_VERSION_MINOR = 0;
 
 // Maximum number of parameters that can be used a statement
@@ -311,6 +311,19 @@ public:
     /// @brief Destructor
     virtual ~PgSqlConnection();
 
+    /// @brief Get the schema version.
+    ///
+    /// @param parameters A data structure relating keywords and values
+    ///        concerned with the database.
+    ///
+    /// @return Version number as a pair of unsigned integers.  "first" is the
+    ///         major version number, "second" the minor number.
+    ///
+    /// @throw isc::db::DbOperationError An operation on the open database has
+    ///        failed.
+    static std::pair<uint32_t, uint32_t>
+    getVersion(const ParameterMap& parameters);
+
     /// @brief Prepare Single Statement
     ///
     /// Creates a prepared statement from the text given and adds it to the
@@ -318,7 +331,7 @@ public:
     ///
     /// @param statement SQL statement to be prepared.
     ///
-    /// @throw isc::dhcp::DbOperationError An operation on the open database has
+    /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
     void prepareStatement(const PgSqlTaggedStatement& statement);
 
@@ -332,7 +345,7 @@ public:
     /// @param end_statement Pointer to the statement marking end of the
     /// range of statements to be compiled. This last statement is not compiled.
     ///
-    /// @throw isc::dhcp::DbOperationError An operation on the open database has
+    /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
     void prepareStatements(const PgSqlTaggedStatement* start_statement,
                            const PgSqlTaggedStatement* end_statement);
@@ -386,8 +399,8 @@ public:
     /// If the error is deemed unrecoverable, such as a loss of connectivity
     /// with the server, the function will call invokeDbLostCallback(). If the
     /// invocation returns false then either there is no callback registered
-    /// or the callback has elected not to attempt to reconnect, and exit(-1)
-    /// is called;
+    /// or the callback has elected not to attempt to reconnect, and a
+    /// DbUnrecoverableError is thrown.
     ///
     /// If the invocation returns true, this indicates the calling layer will
     /// attempt recovery, and the function throws a DbOperationError to allow
@@ -396,7 +409,7 @@ public:
     /// @param r result of the last PostgreSQL operation
     /// @param statement - tagged statement that was executed
     ///
-    /// @throw isc::dhcp::DbOperationError Detailed PostgreSQL failure
+    /// @throw isc::db::DbOperationError Detailed PostgreSQL failure
     void checkStatementError(const PgSqlResult& r,
                              PgSqlTaggedStatement& statement) const;
 

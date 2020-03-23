@@ -96,6 +96,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -114,12 +115,13 @@ CONFIG_CLEAN_VPATH_FILES =
 am__EXEEXT_2 = $(am__EXEEXT_1)
 PROGRAMS = $(noinst_PROGRAMS)
 am__libprocess_unittests_SOURCES_DIST = d_cfg_mgr_unittests.cc \
-	config_base_unittests.cc config_ctl_info_unittests.cc \
-	config_ctl_parser_unittests.cc d_controller_unittests.cc \
-	daemon_unittest.cc io_service_signal_unittests.cc \
-	log_parser_unittests.cc logging_info_unittests.cc \
-	run_unittests.cc
+	cb_ctl_base_unittests.cc config_base_unittests.cc \
+	config_ctl_info_unittests.cc config_ctl_parser_unittests.cc \
+	d_controller_unittests.cc daemon_unittest.cc \
+	io_service_signal_unittests.cc log_parser_unittests.cc \
+	logging_info_unittests.cc run_unittests.cc
 @HAVE_GTEST_TRUE@am_libprocess_unittests_OBJECTS = libprocess_unittests-d_cfg_mgr_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	libprocess_unittests-cb_ctl_base_unittests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libprocess_unittests-config_base_unittests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libprocess_unittests-config_ctl_info_unittests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libprocess_unittests-config_ctl_parser_unittests.$(OBJEXT) \
@@ -295,7 +297,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -316,7 +317,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -326,6 +326,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -335,7 +336,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -386,6 +386,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -403,17 +404,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -473,7 +474,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = .
-dhcp_data_dir = @localstatedir@/@PACKAGE@
+dhcp_data_dir = @runstatedir@/@PACKAGE@
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 	$(BOOST_INCLUDES) \
 	-DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/lib/process/tests\" \
@@ -487,6 +488,7 @@ TESTS_ENVIRONMENT = \
 
 @HAVE_GTEST_TRUE@libprocess_unittests_SOURCES =  \
 @HAVE_GTEST_TRUE@	d_cfg_mgr_unittests.cc \
+@HAVE_GTEST_TRUE@	cb_ctl_base_unittests.cc \
 @HAVE_GTEST_TRUE@	config_base_unittests.cc \
 @HAVE_GTEST_TRUE@	config_ctl_info_unittests.cc \
 @HAVE_GTEST_TRUE@	config_ctl_parser_unittests.cc \
@@ -564,6 +566,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libprocess_unittests-cb_ctl_base_unittests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libprocess_unittests-config_base_unittests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libprocess_unittests-config_ctl_info_unittests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libprocess_unittests-config_ctl_parser_unittests.Po@am__quote@
@@ -609,6 +612,20 @@ libprocess_unittests-d_cfg_mgr_unittests.obj: d_cfg_mgr_unittests.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='d_cfg_mgr_unittests.cc' object='libprocess_unittests-d_cfg_mgr_unittests.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libprocess_unittests_CPPFLAGS) $(CPPFLAGS) $(libprocess_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libprocess_unittests-d_cfg_mgr_unittests.obj `if test -f 'd_cfg_mgr_unittests.cc'; then $(CYGPATH_W) 'd_cfg_mgr_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/d_cfg_mgr_unittests.cc'; fi`
+
+libprocess_unittests-cb_ctl_base_unittests.o: cb_ctl_base_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libprocess_unittests_CPPFLAGS) $(CPPFLAGS) $(libprocess_unittests_CXXFLAGS) $(CXXFLAGS) -MT libprocess_unittests-cb_ctl_base_unittests.o -MD -MP -MF $(DEPDIR)/libprocess_unittests-cb_ctl_base_unittests.Tpo -c -o libprocess_unittests-cb_ctl_base_unittests.o `test -f 'cb_ctl_base_unittests.cc' || echo '$(srcdir)/'`cb_ctl_base_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libprocess_unittests-cb_ctl_base_unittests.Tpo $(DEPDIR)/libprocess_unittests-cb_ctl_base_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cb_ctl_base_unittests.cc' object='libprocess_unittests-cb_ctl_base_unittests.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libprocess_unittests_CPPFLAGS) $(CPPFLAGS) $(libprocess_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libprocess_unittests-cb_ctl_base_unittests.o `test -f 'cb_ctl_base_unittests.cc' || echo '$(srcdir)/'`cb_ctl_base_unittests.cc
+
+libprocess_unittests-cb_ctl_base_unittests.obj: cb_ctl_base_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libprocess_unittests_CPPFLAGS) $(CPPFLAGS) $(libprocess_unittests_CXXFLAGS) $(CXXFLAGS) -MT libprocess_unittests-cb_ctl_base_unittests.obj -MD -MP -MF $(DEPDIR)/libprocess_unittests-cb_ctl_base_unittests.Tpo -c -o libprocess_unittests-cb_ctl_base_unittests.obj `if test -f 'cb_ctl_base_unittests.cc'; then $(CYGPATH_W) 'cb_ctl_base_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/cb_ctl_base_unittests.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libprocess_unittests-cb_ctl_base_unittests.Tpo $(DEPDIR)/libprocess_unittests-cb_ctl_base_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cb_ctl_base_unittests.cc' object='libprocess_unittests-cb_ctl_base_unittests.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libprocess_unittests_CPPFLAGS) $(CPPFLAGS) $(libprocess_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libprocess_unittests-cb_ctl_base_unittests.obj `if test -f 'cb_ctl_base_unittests.cc'; then $(CYGPATH_W) 'cb_ctl_base_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/cb_ctl_base_unittests.cc'; fi`
 
 libprocess_unittests-config_base_unittests.o: config_base_unittests.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libprocess_unittests_CPPFLAGS) $(CPPFLAGS) $(libprocess_unittests_CXXFLAGS) $(CXXFLAGS) -MT libprocess_unittests-config_base_unittests.o -MD -MP -MF $(DEPDIR)/libprocess_unittests-config_base_unittests.Tpo -c -o libprocess_unittests-config_base_unittests.o `test -f 'config_base_unittests.cc' || echo '$(srcdir)/'`config_base_unittests.cc

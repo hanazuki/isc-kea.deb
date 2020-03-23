@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -113,6 +113,21 @@ public:
     OptionDefinitionPtr get(const std::string& option_space,
                             const std::string& option_name) const;
 
+    /// @brief Deletes all option definitions having a given database id.
+    ///
+    /// Note that there are cases when there will be multiple option
+    /// definitions having the same id (typically id of 0). When
+    /// configuration backend is in use it sets the unique ids from the
+    /// database. In cases when the configuration backend is not used,
+    /// the ids default to 0. Passing the id of 0 would result in
+    /// deleting all option definitions that were not added via the
+    /// database.
+    ///
+    /// @param id Identifier of the option definitions to be deleted.
+    ///
+    /// @return Number of deleted option definitions.
+    uint64_t del(const uint64_t id);
+
     /// @brief Returns reference to container holding option definitions.
     const OptionDefSpaceContainer& getContainer() const {
         return (option_definitions_);
@@ -122,6 +137,39 @@ public:
     ///
     /// @return a pointer to unparsed configuration
     virtual isc::data::ElementPtr toElement() const;
+
+    /// @brief Unparse a configuration object with optionally including
+    /// the metadata.
+    ///
+    /// @param include_metadata boolean value indicating if the metadata
+    /// should be included (if true) or not (if false).
+    ///
+    /// @return A pointer to the unparsed configuration.
+    isc::data::ElementPtr
+    toElementWithMetadata(const bool include_metadata) const;
+
+    /// @brief Merges specified option definitions from a configuration
+    /// into this configuration.
+    ///
+    /// This method merges the option definitions from the @c other
+    /// configuration into this configuration.  The merged set of
+    /// definitions is created as follows:
+    ///
+    /// Iterator over the definitions in each name space in this configuration:
+    /// If either the definition's name or code are defined in @c other
+    /// then skip over the definition otherwise add it to @c other.
+    ///
+    /// Replace this configuration's definitions with the definitions
+    /// in @c other using @c copyTo().
+    ///
+    /// @param other option definitions to merge in.
+    ///
+    /// @warning The merge operation affects @c other.
+    /// Therefore, the caller must not rely on the data held in the @c other
+    /// object after the call to @c merge. Also, the data held in @c other must
+    /// not be modified after the call to @c merge because it may affect the
+    /// merged configuration.
+    void merge(CfgOptionDef& other);
 
 private:
 

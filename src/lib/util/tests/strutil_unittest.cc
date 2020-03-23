@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -431,6 +431,8 @@ void testFormatted(const std::string& input,
 TEST(StringUtilTest, decodeFormattedHexString) {
     // Colon separated.
     testFormatted("1:A7:B5:4:23", "01A7B50423");
+    // Space separated.
+    testFormatted("1 A7 B5 4 23", "01A7B50423");
     // No colons, even number of digits.
     testFormatted("17a534", "17A534");
     // Odd number of digits.
@@ -443,17 +445,26 @@ TEST(StringUtilTest, decodeFormattedHexString) {
     testFormatted("", "");
 
     std::vector<uint8_t> decoded;
-    // Whitespace.
+    // Dangling colon.
+    EXPECT_THROW(decodeFormattedHexString("0a:", decoded),
+                 isc::BadValue);
+    // Dangling space.
     EXPECT_THROW(decodeFormattedHexString("0a ", decoded),
                  isc::BadValue);
-    // Whitespace within a string.
-    EXPECT_THROW(decodeFormattedHexString("01 02", decoded),
+    // '0x' prefix and spaces.
+    EXPECT_THROW(decodeFormattedHexString("x01 02", decoded),
                  isc::BadValue);
     // '0x' prefix and colons.
     EXPECT_THROW(decodeFormattedHexString("0x01:02", decoded),
                  isc::BadValue);
+    // colon and spaces mixed
+    EXPECT_THROW(decodeFormattedHexString("01:02 03", decoded),
+                 isc::BadValue);
     // Missing colon.
     EXPECT_THROW(decodeFormattedHexString("01:0203", decoded),
+                 isc::BadValue);
+    // Missing space.
+    EXPECT_THROW(decodeFormattedHexString("01 0203", decoded),
                  isc::BadValue);
     // Invalid prefix.
     EXPECT_THROW(decodeFormattedHexString("x0102", decoded),
@@ -498,7 +509,6 @@ void sanitizeStringTest(
 
 // Verifies StringSantizer class
 TEST(StringUtilTest, stringSanitizer) {
-
     // Bad regular expression should throw.
     StringSanitizerPtr ss;
     ASSERT_THROW (ss.reset(new StringSanitizer("[bogus-regex","")), BadValue);
@@ -506,7 +516,6 @@ TEST(StringUtilTest, stringSanitizer) {
     // List of invalid chars should work: (b,c,2 are invalid)
     sanitizeStringTest("abc.123", "[b-c2]", "*",
                        "a**.1*3");
-
     // Inverted list of valid chars should work: (b,c,2 are valid)
     sanitizeStringTest("abc.123", "[^b-c2]", "*",
                        "*bc**2*");
@@ -538,6 +547,56 @@ TEST(StringUtilTest, stringSanitizer) {
     // Dots as valid chars work.
     sanitizeStringTest("abc.123", "[^A-Za-z0-9_.]", "*",
                        "abc.123");
+
+    std::string withNulls("\000ab\000c.12\0003",10);
+    sanitizeStringTest(withNulls, "[^A-Za-z0-9_.]", "*",
+                       "*ab*c.12*3");
+}
+
+// Verifies templated buffer iterator seekTrimmed() function
+TEST(StringUtilTest, seekTrimmed) {
+
+    // Empty buffer should be fine.
+    std::vector<uint8_t> buffer;
+    auto begin = buffer.end();
+    auto end = buffer.end();
+    ASSERT_NO_THROW(end = seekTrimmed(begin, end, 0));
+    EXPECT_EQ(0, std::distance(begin, end));
+
+    // Buffer of only trim values, should be fine.
+    buffer = { 1, 1 };
+    begin = buffer.begin();
+    end = buffer.end();
+    ASSERT_NO_THROW(end = seekTrimmed(begin, end, 1));
+    EXPECT_EQ(0, std::distance(begin, end));
+
+    // One trailing null should trim off.
+    buffer = {'o', 'n', 'e', 0 };
+    begin = buffer.begin();
+    end = buffer.end();
+    ASSERT_NO_THROW(end = seekTrimmed(begin, end, 0));
+    EXPECT_EQ(3, std::distance(begin, end));
+
+    // More than one trailing null should trim off.
+    buffer = { 't', 'h', 'r', 'e', 'e', 0, 0, 0 };
+    begin = buffer.begin();
+    end = buffer.end();
+    ASSERT_NO_THROW(end = seekTrimmed(begin, end, 0));
+    EXPECT_EQ(5, std::distance(begin, end));
+
+    // Embedded null should be left in place.
+    buffer = { 'e', 'm', 0, 'b', 'e', 'd' };
+    begin = buffer.begin();
+    end = buffer.end();
+    ASSERT_NO_THROW(end = seekTrimmed(begin, end, 0));
+    EXPECT_EQ(6, std::distance(begin, end));
+
+    // Leading null should be left in place.
+    buffer = { 0, 'l', 'e', 'a', 'd', 'i', 'n', 'g' };
+    begin = buffer.begin();
+    end = buffer.end();
+    ASSERT_NO_THROW(end = seekTrimmed(begin, end, 0));
+    EXPECT_EQ(8, std::distance(begin, end));
 }
 
 } // end of anonymous namespace

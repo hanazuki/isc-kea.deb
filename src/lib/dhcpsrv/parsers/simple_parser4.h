@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -37,15 +37,28 @@ public:
     static size_t deriveParameters(isc::data::ElementPtr global);
 
     // see simple_parser4.cc for comments for those parameters
-    static const isc::data::SimpleDefaults OPTION4_DEF_DEFAULTS;
-    static const isc::data::SimpleDefaults OPTION4_DEFAULTS;
+    static const isc::data::SimpleKeywords GLOBAL4_PARAMETERS;
     static const isc::data::SimpleDefaults GLOBAL4_DEFAULTS;
+
+    static const isc::data::SimpleKeywords OPTION4_DEF_PARAMETERS;
+    static const isc::data::SimpleDefaults OPTION4_DEF_DEFAULTS;
+
+    static const isc::data::SimpleKeywords OPTION4_PARAMETERS;
+    static const isc::data::SimpleDefaults OPTION4_DEFAULTS;
+
+    static const isc::data::SimpleKeywords SUBNET4_PARAMETERS;
     static const isc::data::SimpleDefaults SUBNET4_DEFAULTS;
     static const isc::data::SimpleDefaults SHARED_SUBNET4_DEFAULTS;
+    static const isc::data::ParamsList INHERIT_TO_SUBNET4;
+
+    static const isc::data::SimpleKeywords POOL4_PARAMETERS;
+
+    static const isc::data::SimpleKeywords SHARED_NETWORK4_PARAMETERS;
     static const isc::data::SimpleDefaults SHARED_NETWORK4_DEFAULTS;
+
     static const isc::data::SimpleDefaults IFACE4_DEFAULTS;
     static const isc::data::SimpleDefaults DHCP_QUEUE_CONTROL4_DEFAULTS;
-    static const isc::data::ParamsList INHERIT_TO_SUBNET4;
+    static const isc::data::SimpleDefaults SANITY_CHECKS4_DEFAULTS;
 };
 
 };

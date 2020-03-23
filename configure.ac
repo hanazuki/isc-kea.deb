@@ -7,7 +7,7 @@ AC_PREREQ([2.69])
 # For GIT versions, this is x.y.z-git, where x.y.z denotes the software
 # version that was used as a base + changes that were made later, but
 # are not released yet.
-AC_INIT(kea,1.5.0, kea-dev@lists.isc.org)
+AC_INIT(kea,1.7.5, kea-dev@lists.isc.org)
 AC_CONFIG_SRCDIR(README)
 
 # serial-tests is not available in automake version before 1.13, so
@@ -63,21 +63,6 @@ if test "$sep" = "__NONE__"; then
         AC_MSG_ERROR([can't find a separator character in '+,;&' for the path_replacer shell script])
 fi
 AC_SUBST(SEP)
-
-# If cross compiling assume the message compiler executable was
-# magically already in place...
-if test "$cross_compiling" = "yes"; then
-        AC_MSG_CHECKING("build (vs. host) compiled message compiler")
-	if test -x "${srcdir}/src/lib/log/compiler/message"; then
-		AC_MSG_RESULT(yes)
-	else
-		AC_MSG_RESULT(no)
-		AC_MSG_WARN("you must install a message compiler in:")
-		AC_MSG_WARN("    ${srcdir}/src/lib/log/compiler/message")
-		AC_MSG_WARN("compiled for build ($build).")
-	fi
-fi
-AM_CONDITIONAL([CROSS_COMPILING], [test "$cross_compiling" = "yes"])
 
 # pkg-config can be required.
 AC_PATH_PROG([PKG_CONFIG], [pkg-config])
@@ -436,44 +421,19 @@ case "$host" in
         ;;
 esac
 
-# Kea-shell is written in python. It can work with python 2.7 or any 3.x.
-# It may likely work with earlier versions, but 2.7 was the oldest one we tested
-# it with. We require python only if kea-shell was enabled. It is disabled
-# by default to not introduce hard dependency on python.
-AC_ARG_ENABLE(shell, [AC_HELP_STRING([--enable-shell],
-  [enable kea-shell, a text management client for Control Agent [default=no]])],
-  enable_shell=$enableval, enable_shell=no)
+# Made perfdhcp optional.
+AC_ARG_ENABLE(perfdhcp, [AC_HELP_STRING([--enable-perfdhcp],
+  [enable perfdhcp, a DHCP benchmarking tool [default=no]])],
+  enable_perfdhcp=$enableval, enable_perfdhcp=no)
 
-DISTCHECK_KEA_SHELL_CONFIGURE_FLAG=
-PKGPYTHONDIR=
-m4_define_default([_AM_PYTHON_INTERPRETER_LIST],
- [python3 python3.9 python3.8 python3.7 python3.6 python3.5 python3.4 dnl
-  python3.3 python3.2 python3.1 python3.0 python python2 python2.7])
-if test "x$enable_shell" != xno ; then
-# If kea-shell is enabled, we really need python. 2.7 or anything newer will do.
-# We try to find 3.x first. If not found, we can do with 2.7.
-  AM_PATH_PYTHON([2.7])
-  # pkgpythondir needs to be expanded
-  saved_prefix="$prefix"
-  if test "$prefix" = "NONE"; then
-    prefix=$ac_default_prefix
-  fi
-  PKGPYTHONDIR="$pkgpythondir"
-  OLD=
-  while test "x$OLD" != "x$PKGPYTHONDIR"; do
-    OLD="$PKGPYTHONDIR"
-    eval PKGPYTHONDIR="\"$OLD\""
-  done
-  prefix="$saved_prefix"
-  DISTCHECK_KEA_SHELL_CONFIGURE_FLAG="--enable-shell"
-else
-  PYTHON=no
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG=
+if test "x$enable_perfdhcp" != xno ; then
+  DISTCHECK_PERFDHCP_CONFIGURE_FLAG="--enable-perfdhcp"
 fi
 
-# Export to makefiles the info whether we have shell enabled or not
-AM_CONDITIONAL(KEA_SHELL, test x$enable_shell != xno)
-AC_SUBST(DISTCHECK_KEA_SHELL_CONFIGURE_FLAG)
-AC_SUBST(PKGPYTHONDIR)
+# Export to makefiles the info whether we have perfdhcp enabled or not
+AM_CONDITIONAL(PERFDHCP, test x$enable_perfdhcp != xno)
+AC_SUBST(DISTCHECK_PERFDHCP_CONFIGURE_FLAG)
 
 # produce PIC unless we disable shared libraries. need this for python bindings.
 if test $enable_shared != "no" -a "X$GXX" = "Xyes"; then
@@ -593,54 +553,11 @@ int main() {
         AC_DEFINE(USE_REGEX, 1, [Define to 1 if C++11 regex is usable])],
         AC_MSG_RESULT(no))
 
-enable_gtest="no"
-GTEST_INCLUDES=
-
-AC_ARG_WITH([gtest-source],
-            [AS_HELP_STRING([--with-gtest-source=PATH],
-                            [location of the Googletest source])],
-            [enable_gtest="yes" ; GTEST_SOURCE="$withval"])
-
-AC_ARG_WITH([gtest],
-            [AS_HELP_STRING([--with-gtest=PATH],
-                            [specify a path to gtest header files (PATH/include) and library (PATH/lib)])],
-        [gtest_path="$withval"; enable_gtest="yes"], [gtest_path="no"])
-
-AC_ARG_WITH(lcov,
-[  --with-lcov[=PROGRAM]         enable gtest and coverage target using the specified lcov], lcov="$withval", lcov="no")
-
-USE_LCOV="no"
-if test "$lcov" != "no"; then
-        # force gtest if not set
-        if test "$enable_gtest" = "no"; then
-#               AC_MSG_ERROR("lcov needs gtest for test coverage report")
-                AC_MSG_NOTICE([gtest support is now enabled, because used by coverage tests])
-                enable_gtest="yes"
-        fi
-        if test "$lcov" != "yes"; then
-                LCOV=$lcov
-        else
-                AC_PATH_PROG([LCOV], [lcov])
-        fi
-        if test -x "${LCOV}"; then
-                USE_LCOV="yes"
-        else
-                AC_MSG_ERROR([Cannot find lcov.])
-        fi
-        # is genhtml always in the same directory?
-        GENHTML=`echo "$LCOV" | ${SED} s/lcov$/genhtml/`
-        if test ! -x $GENHTML; then
-                AC_MSG_ERROR([genhtml not found, needed for lcov])
-        fi
-        # GCC specific?
-        CXXFLAGS="$CXXFLAGS -fprofile-arcs -ftest-coverage"
-        LIBS=" $LIBS -lgcov"
-        AC_SUBST(CPPFLAGS)
-        AC_SUBST(LIBS)
-        AC_SUBST(LCOV)
-        AC_SUBST(GENHTML)
-fi
-AC_SUBST(USE_LCOV)
+# Run the gtest detection routines. This supports --with-gtest and --with-gtest-source
+# parameters. If specified, those will set the HAVE_GTEST, HAVE_GTEST_SOURCE,
+# DISTCHECK_GTEST_CONFIGURE_FLAG, GTEST_INCLUDES, GTEST_LDFLAGS, GTEST_LDADD, GTEST_SOURCE
+# variables.
+AX_ISC_GTEST
 
 enable_benchmark="no"
 BENCHMARK_INCLUDES=
@@ -681,6 +598,7 @@ if test "${deprec_msg}" = "yes" ; then
 fi
 
 if test "${mysql_config}" = "yes" ; then
+    MYSQL_CONFIG="/usr/bin/mysql_config"
     for d in $defaultdirs
     do
         if test -f $d/bin/mysql_config; then
@@ -694,11 +612,12 @@ fi
 
 if test "$MYSQL_CONFIG" != "" ; then
     if test -d "$MYSQL_CONFIG" -o ! -x "$MYSQL_CONFIG" ; then
-        AC_MSG_ERROR([--with-mysql should point to a mysql_config program])
+        AC_MSG_ERROR([MySQL dependencies cannot be found. Please install MySQL libraries or point --with-mysql to mysql_config program if it is located in non-default directory, eg. --with-mysql=/opt/mysql/bin/mysql_config.])
     fi
 
     MYSQL_CPPFLAGS=`$MYSQL_CONFIG --cflags`
     MYSQL_LIBS=`$MYSQL_CONFIG --libs`
+    MYSQL_LIBS="$MYSQL_LIBS $CRYPTO_LIBS"
     MYSQL_VERSION=`$MYSQL_CONFIG --version`
 
     AC_SUBST(MYSQL_CPPFLAGS)
@@ -712,20 +631,30 @@ if test "$MYSQL_CONFIG" != "" ; then
     LIBS="$MYSQL_LIBS $LIBS"
 
     AC_LINK_IFELSE(
-            [AC_LANG_PROGRAM([#include <mysql.h>],
-                             [MYSQL mysql_handle;
-                              (void) mysql_init(&mysql_handle);
-                             ])],
-            [AC_MSG_RESULT([checking for MySQL headers and library... yes])],
-            [AC_MSG_RESULT([checking for MySQL headers and library... no])
-             AC_MSG_ERROR([Needs MySQL library])]
+        [AC_LANG_PROGRAM([#include <mysql.h>],
+                         [MYSQL mysql_handle;
+                          (void) mysql_init(&mysql_handle);
+                         ])],
+        [AC_MSG_RESULT([checking for MySQL headers and library... yes])],
+        [AC_MSG_RESULT([checking for MySQL headers and library... no])
+         AC_MSG_ERROR([Needs MySQL library])]
     )
+
+    # Note that MYSQL is present in the config.h file
+    AC_DEFINE([HAVE_MYSQL], [1], [MySQL is present])
+
+    # Check is my_bool is defined.
+    AC_COMPILE_IFELSE(
+        [AC_LANG_PROGRAM([#include <mysql.h>
+                          const my_bool MLM_FALSE = 0;]
+                         [])],
+        [AC_MSG_RESULT([checking for MySQL my_bool... yes])
+         AC_DEFINE([HAVE_MYSQL_MY_BOOL], [1], [MySQL uses my_bool])],
+        [AC_MSG_RESULT([checking for MySQL my_bool... no])])
 
     CPPFLAGS=$CPPFLAGS_SAVED
     LIBS=$LIBS_SAVED
 
-    # Note that MYSQL is present in the config.h file
-    AC_DEFINE([HAVE_MYSQL], [1], [MySQL is present])
 fi
 
 # Solaris puts FIONREAD in filio.h
@@ -749,6 +678,7 @@ if test "${deprec_msg}" = "yes" ; then
 fi
 
 if test "${pg_config}" = "yes" ; then
+    PG_CONFIG="/usr/bin/pg_config"
     for d in $defaultdirs
     do
         if test -f $d/bin/pg_config; then
@@ -762,7 +692,7 @@ fi
 
 if test "$PG_CONFIG" != "" ; then
     if test -d "$PG_CONFIG" -o ! -x "$PG_CONFIG" ; then
-        AC_MSG_ERROR([--with-pgsql should point to a pg_config program])
+        AC_MSG_ERROR([PostgreSQL dependencies cannot be found. Please install PostgreSQL libraries or point --with-pgsql to pg_config program if it is located in non-default directory, eg. --with-pgsql=/opt/pgsql/bin/pg_config.])
     fi
 
     PGSQL_CPPFLAGS=`$PG_CONFIG --cppflags`
@@ -835,11 +765,18 @@ if test "$CQL_CONFIG" != "" ; then
         AC_MSG_ERROR([--with-cql should point to a pkg-config or cql_config program])
     fi
 
+    $CQL_CONFIG --print-errors $cql_lib
+    if test $? -ne 0; then
+        AC_MSG_ERROR([$CQL_CONFIG $cql_lib failed])
+    fi
+
     CQL_INCLUDEDIR=`$CQL_CONFIG --cflags-only-I $cql_lib`
-    CQL_CPPFLAGS="$CQL_INCLUDEDIR `$CQL_CONFIG --cflags-only-other $cql_lib`"
-    CQL_LIBS="`$CQL_CONFIG --libs $cql_lib`"
+    CQL_CPPFLAGS=`$CQL_CONFIG --cflags-only-other $cql_lib`
+    CQL_LIBS=`$CQL_CONFIG --libs $cql_lib`
+    CQL_LIBS="$CQL_LIBS $CRYPTO_LIBS"
     CQL_VERSION=`$CQL_CONFIG --modversion $cql_lib`
 
+    CQL_CPPFLAGS="${CQL_CPPFLAGS} ${CQL_INCLUDEDIR}"
     AC_SUBST(CQL_CPPFLAGS)
     AC_SUBST(CQL_LIBS)
 
@@ -876,6 +813,9 @@ AC_ARG_WITH([sysrepo],
     [sysrepo_config="$withval"])
 
 if test "${sysrepo_config}" = "yes" ; then
+    if test "$PKG_CONFIG" = ""; then
+        AC_MSG_ERROR([--with-sysrepo specified without any parameter and pkg-config was not found. Either use --with-sysrepo=path or install pkg-config])
+    fi
     SYSREPO_CONFIG="$PKG_CONFIG"
     DISTCHECK_SYSREPO_CONFIGURE_FLAG="-with-sysrepo=${sysrepo_config}"
 elif test "${sysrepo_config}" != "no" ; then
@@ -916,6 +856,7 @@ if test "$SYSREPO_CONFIG" != "" ; then
        SYSREPO_LIBS="${SYSREPO_LIBS} ${SYSREPOCPP_LIBS}"
     fi
 
+    AC_SUBST(SYSREPO_INCLUDEDIR)
     AC_SUBST(SYSREPO_CPPFLAGS)
     AC_SUBST(SYSREPO_LIBS)
     AC_SUBST(SYSREPO_REPO)
@@ -944,7 +885,15 @@ if test "$SYSREPO_CONFIG" != "" ; then
         [AC_LANG_PROGRAM(
             [#include <sysrepo-cpp/Session.hpp>],
             [sysrepo::Connection("conn-name");])],
-        [AC_MSG_RESULT([checking for Sysrepo C++ bindings headers and library... yes])],
+        [AC_LINK_IFELSE(
+            [AC_LANG_PROGRAM(
+                [#include <sysrepo-cpp/Session.hpp>],
+                [auto is_empty = [[]](sysrepo::S_Val v){
+                    return (v->empty()); };
+                ])],
+            [AC_MSG_RESULT([checking for Sysrepo C++ bindings headers and library, new])
+             AC_DEFINE([HAVE_POST_0_7_7_SYSREPO], [1], [Using sysrepo > 0.7.7])],
+            [AC_MSG_RESULT([checking for Sysrepo C++ bindings headers and library, yes])])],
         [AC_LINK_IFELSE(
             [AC_LANG_PROGRAM(
                 [#include <sysrepo-cpp/Session.h>],
@@ -985,11 +934,14 @@ else
         do
                 if test -f $d/include/log4cplus/logger.h; then
                         LOG4CPLUS_INCLUDES="-I$d/include"
-                        LOG4CPLUS_LIBS="-L$d/lib -L$d/lib64"
+                        LOG4CPLUS_LIBS="-L$d/lib"
+                        if test -d $d/lib64; then
+                                LOG4CPLUS_LIBS="$LOG4CPLUS_LIBS -L$d/lib64"
+                        fi
                         break
                 fi
         done
-	DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG="-with-log4cplus"
+        DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG="-with-log4cplus"
 fi
 
 LOG4CPLUS_LIBS="$LOG4CPLUS_LIBS -llog4cplus"
@@ -1032,6 +984,25 @@ AC_MSG_RESULT([$LOG4CPLUS_VERSION])
 CPPFLAGS=$CPPFLAGS_SAVED
 LIBS=$LIBS_SAVED
 
+# Older log4cplus versions (1.2.0) don't have the initializer.h header that
+# would allow explicit initialization. Newer versions (2.0.4 for sure, possibly
+# older as well) have it and it's recommended to use it. We detect whether
+# it's present or not and do explicit initalization if possible.
+CPPFLAGS_SAVED=$CPPFLAGS
+CPPFLAGS="$LOG4CPLUS_INCLUDES $CPPFLAGS"
+LIBS_SAVED="$LIBS"
+LIBS="$LOG4CPLUS_LIBS $LIBS"
+AC_MSG_CHECKING([log4cplus explicit initialization (log4cplus/initializer.h)])
+AC_LINK_IFELSE(
+        [AC_LANG_PROGRAM([#include <log4cplus/initializer.h>],
+                         [log4cplus::Initializer initializer;]
+                         )],
+        [AC_MSG_RESULT([yes])
+         AC_DEFINE(LOG4CPLUS_INITIALIZER_H, [1], [Explicit initialization of log4cplus possible])],
+        [AC_MSG_RESULT(no)])
+LIBS="$LIBS_SAVED"
+CPPFLAGS=$CPPFLAGS_SAVED
+
 #
 # Configure Boost header path
 #
@@ -1059,103 +1030,6 @@ CPPFLAGS="$CPPFLAGS $CPPFLAGS_BOOST_THREADCONF"
 # Can be required by gtest, boost and perhaps still asio
 AC_CHECK_LIB(pthread, pthread_create,[ LDFLAGS="$LDFLAGS -lpthread" ], [])
 
-#
-# Check availability of gtest, which will be used for unit tests.
-#
-GTEST_LDFLAGS=
-GTEST_LDADD=
-DISTCHECK_GTEST_CONFIGURE_FLAG=
-GTEST_VERSION="unknown"
-
-if test "x$enable_gtest" = "xyes" ; then
-
-    DISTCHECK_GTEST_CONFIGURE_FLAG="--with-gtest=$gtest_path"
-
-    if test -n "$with_gtest_source" ; then
-
-        if test "x$GTEST_SOURCE" = "xyes" ; then
-
-            AC_MSG_CHECKING([for gtest source])
-            # If not specified, try some common paths.
-            GTEST_SOURCE=
-            for d in /usr/src/gtest /usr/local /usr/pkg /opt /opt/local ; do
-                if test -f $d/src/gtest-all.cc -a $d/src/gtest_main.cc; then
-                    GTEST_SOURCE=$d
-                    AC_MSG_RESULT([$GTEST_SOURCE])
-                    break
-                fi
-            done
-            if test -z $GTEST_SOURCE ; then
-                AC_MSG_ERROR([no gtest source but it was selected])
-            fi
-        else
-            if test ! -d $GTEST_SOURCE/src -a -d $GTEST_SOURCE/googletest; then
-                GTEST_SOURCE=$GTEST_SOURCE/googletest
-            fi
-            AC_CHECK_FILES([$GTEST_SOURCE/src/gtest-all.cc]
-                [$GTEST_SOURCE/src/gtest_main.cc],
-                [have_gtest_source=yes],
-                [AC_MSG_ERROR([no gtest source at $GTEST_SOURCE])])
-        fi
-        have_gtest_source=yes
-        GTEST_LDADD="\$(top_builddir)/ext/gtest/libgtest.a"
-        DISTCHECK_GTEST_CONFIGURE_FLAG="--with-gtest-source=$GTEST_SOURCE"
-        GTEST_INCLUDES="-I$GTEST_SOURCE -I$GTEST_SOURCE/include"
-        GTEST_VERSION="`basename $GTEST_SOURCE`"
-    fi
-
-    if test "$gtest_path" != "no" ; then
-        if test "$gtest_path" != "yes"; then
-            GTEST_PATHS=$gtest_path
-            if test -x "${gtest_path}/bin/gtest-config" ; then
-                GTEST_CONFIG="${gtest_path}/bin/gtest-config"
-            fi
-        else
-            AC_PATH_PROG([GTEST_CONFIG], [gtest-config])
-        fi
-        if test -x "${GTEST_CONFIG}" ; then :
-            # using cppflags instead of cxxflags
-            GTEST_INCLUDES=`${GTEST_CONFIG} --cppflags`
-            GTEST_LDFLAGS=`${GTEST_CONFIG} --ldflags`
-            GTEST_LDADD=`${GTEST_CONFIG} --libs`
-            GTEST_VERSION=`${GTEST_CONFIG} --version`
-            GTEST_FOUND="true"
-        else
-            AC_MSG_WARN([Unable to locate Google Test gtest-config.])
-            if test -z "${GTEST_PATHS}" ; then
-                GTEST_PATHS="/usr /usr/local"
-            fi
-            GTEST_FOUND="false"
-        fi
-        if test "${GTEST_FOUND}" != "true"; then
-            GTEST_FOUND="false"
-            for dir in $GTEST_PATHS; do
-                if test -f "$dir/include/gtest/gtest.h"; then
-                    if ! test -f "$dir/lib/libgtests.a"; then
-                        AC_MSG_WARN([Found Google Test include but not the library in $dir.])
-                        continue
-                    fi
-                    GTEST_INCLUDES="-I$dir/include"
-                    GTEST_LDFLAGS="-L$dir/lib"
-                    GTEST_LDADD="-lgtest"
-                    GTEST_FOUND="true"
-                    break
-                fi
-            done
-        fi
-        if test "${GTEST_FOUND}" != "true"; then
-            AC_MSG_ERROR([Cannot find gtest in: $GTEST_PATHS])
-        fi
-
-    fi
-fi
-AM_CONDITIONAL(HAVE_GTEST, test $enable_gtest != "no")
-AM_CONDITIONAL(HAVE_GTEST_SOURCE, test "X$have_gtest_source" = "Xyes")
-AC_SUBST(DISTCHECK_GTEST_CONFIGURE_FLAG)
-AC_SUBST(GTEST_INCLUDES)
-AC_SUBST(GTEST_LDFLAGS)
-AC_SUBST(GTEST_LDADD)
-AC_SUBST(GTEST_SOURCE)
 
 #
 # Check availability of benchmark.
@@ -1232,6 +1106,11 @@ if test "x$enable_benchmark" = "xyes" ; then
         fi
 
     fi
+
+    if test $enable_gtest = no; then
+        AC_MSG_ERROR([--with-benchmark and --with-benchmark-source require --with-gtest or --with-gtest-source])
+    fi
+
 fi
 AM_CONDITIONAL(HAVE_BENCHMARK, test $enable_benchmark != "no")
 AM_CONDITIONAL(HAVE_BENCHMARK_SOURCE, test "X$have_benchmark_source" = "Xyes")
@@ -1296,7 +1175,7 @@ fi
 
 #
 # Doesn't seem to be required?
-CPPFLAGS="$CPPFLAGS -DBOOST_ASIO_HEADER_ONLY"
+#CPPFLAGS="$CPPFLAGS -DBOOST_ASIO_HEADER_ONLY"
 #
 # Disable threads: they seems to break things on some systems
 # As now we use threads in boost ASIO this is commented out...
@@ -1311,7 +1190,7 @@ if test "x${BOOST_LIBS}" = "x"; then
 fi
 
 # Check for functions that are not available on all platforms
-AC_CHECK_FUNCS([pselect srandomdev])
+AC_CHECK_FUNCS([pselect])
 
 # /dev/poll issue: ASIO uses /dev/poll by default if it's available (generally
 # the case with Solaris).  Unfortunately its /dev/poll specific code would
@@ -1336,6 +1215,19 @@ AC_SUBST(PERL)
 AC_PATH_PROGS(AWK, gawk awk)
 AC_SUBST(AWK)
 
+AC_ARG_ENABLE(generate_messages, [AC_HELP_STRING([--enable-generate-messages],
+  [indicates that the messages files will be regenerated. [default=no]])],
+  enable_generate_messages=$enableval, enable_generate_messages=no)
+
+AM_CONDITIONAL([GENERATE_MESSAGES], [test x$enable_generate_messages != xno])
+
+# cross compiling is not compatible with enable-generate-messages.
+if test "$cross_compiling" = "yes"; then
+    if test "$enable_generate_messages" != "no"; then
+        AC_MSG_WARN([To build the message compiler is not compatible with cross compiling])
+    fi
+fi
+
 AC_ARG_ENABLE(generate_parser, [AC_HELP_STRING([--enable-generate-parser],
   [indicates that the parsers will be regenerated. This implies that the
    bison and flex are required [default=no]])],
@@ -1347,11 +1239,12 @@ AC_PROG_LEX
 
 # Check if bison is available. Bison is not needed for building Kea sources,
 # unless you want to regenerate grammars
-AC_PROG_YACC
+AC_PATH_PROG(YACC, bison)
+AC_SUBST(YACC)
 
 if test "x$enable_generate_parser" != "xno"; then
 
-    if test "x$LEX" == "x"; then
+    if test "x$LEX" != "xflex"; then
        AC_MSG_ERROR([Flex is required for enable-generate-parser, but was not found])
     fi
 
@@ -1381,40 +1274,155 @@ fi
 
 AM_CONDITIONAL([GENERATE_PARSER], [test x$enable_generate_parser != xno])
 
+# Kea-shell is written in python. It can work with python 2.7 or any 3.x.
+# It may likely work with earlier versions, but 2.7 was the oldest one we tested
+# it with. We require python only if kea-shell was enabled. It is disabled
+# by default to not introduce hard dependency on python.
+AC_ARG_ENABLE(shell, [AC_HELP_STRING([--enable-shell],
+  [enable kea-shell, a text management client for Control Agent [default=no]])],
+  enable_shell=$enableval, enable_shell=no)
+
+
 AC_ARG_ENABLE(generate_docs, [AC_HELP_STRING([--enable-generate-docs],
-  [regenerate documentation using Docbook [default=no]])],
+  [regenerate documentation using Sphinx [default=no]])],
   enable_generate_docs=$enableval, enable_generate_docs=no)
 
-if test "x$enable_generate_docs" != xno ; then
 
-# Check for xsltproc
-  AC_PATH_PROG([XSLTPROC], [xsltproc])
-  if test -z "$XSLTPROC"; then
-    AC_MSG_ERROR("xsltproc not found; it is required for --enable-generate-docs")
-  else
-    AC_MSG_CHECKING([if $XSLTPROC works])
-    # run xsltproc to see if works
-    $XSLTPROC --novalid --xinclude http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl
-    if test $? -ne 0 ; then
-      AC_MSG_ERROR("Error with $XSLTPROC using release/xsl/current/manpages/docbook.xsl")
-    fi
-    $XSLTPROC --novalid --xinclude http://docbook.sourceforge.net/release/xsl/current/html/docbook.xsl
-    if test $? -ne 0 ; then
-      AC_MSG_ERROR("Error with $XSLTPROC using release/xsl/current/html/docbook.xsl")
-    fi
-    AC_MSG_RESULT(yes)
+DISTCHECK_KEA_SHELL_CONFIGURE_FLAG=
+PKGPYTHONDIR=
+shell_report=no
+m4_define_default([_AM_PYTHON_INTERPRETER_LIST],
+ [python3 python3.9 python3.8 python3.7 python3.6 python3.5 python3.4 dnl
+  python3.3 python3.2 python3.1 python3.0 python python2 python2.7])
+if test "x$enable_shell" != xno -o "x$enable_generate_docs" != xno; then
+# If kea-shell is enabled, we really need python. 2.7 or anything newer will do.
+# We try to find 3.x first. If not found, we can do with 2.7.
+  AM_PATH_PYTHON([2.7])
+
+  AC_ARG_WITH(site-packages,
+           AC_HELP_STRING([--with-site-packages],
+                          [place to install Kea Python module]),
+           [pythondir=$withval;
+            pkgpythondir=${pythondir}/$PACKAGE_NAME])
+  if test "$pythondir" = "yes"; then
+     AC_MSG_ERROR([If enabled, site-packages must be specified explicitly, e.g. --site-packages=/usr/lib/python3/dist-packages])
   fi
 
-  AC_PATH_PROG([ELINKS], [elinks])
-  if test -z "$ELINKS"; then
-    AC_MSG_ERROR("elinks not found; it is required for --enable-generate-docs")
+  # pkgpythondir needs to be expanded
+  saved_prefix="$prefix"
+  if test "$prefix" = "NONE"; then
+    prefix=$ac_default_prefix
   fi
+  PKGPYTHONDIR="$pkgpythondir"
+  OLD=
+  while test "x$OLD" != "x$PKGPYTHONDIR"; do
+    OLD="$PKGPYTHONDIR"
+    eval PKGPYTHONDIR="\"$OLD\""
+  done
+  prefix="$saved_prefix"
+  DISTCHECK_KEA_SHELL_CONFIGURE_FLAG="--enable-shell"
+  shell_report="yes, install to $pythondir"
+else
+  PYTHON=no
 fi
 
-# Don't fail here if not found, used to generate PDF documentation.
-AC_PATH_PROG([DBLATEX], [dblatex])
-AM_CONDITIONAL(HAVE_DBLATEX, test "x$DBLATEX" != "x")
+# Export to makefiles the info whether we have shell enabled or not
+AM_CONDITIONAL(KEA_SHELL, test x$enable_shell != xno)
+AC_SUBST(DISTCHECK_KEA_SHELL_CONFIGURE_FLAG)
+AC_SUBST(PKGPYTHONDIR)
 
+AC_ARG_WITH([sphinx],
+  AC_HELP_STRING([--with-sphinx=PATH], [path to sphinx-build tool]),
+  [sphinx_path="$withval"])
+
+AC_ARG_WITH([pdflatex],
+  AC_HELP_STRING([--with-pdflatex=PATH], [path to pdflatex tool]),
+  [pdflatex_path="$withval"])
+PDFLATEX=no
+
+if test "x$enable_generate_docs" != xno ; then
+  # Check for sphinx-build
+  AC_MSG_CHECKING([for sphinx-build])
+  if test -z "$sphinx_path"; then
+     AC_PATH_PROGS([SPHINXBUILD], [sphinx-build sphinx-build-3])
+  else
+     SPHINXBUILD="$sphinx_path"
+  fi
+
+  if test -z "$SPHINXBUILD"; then
+    AC_MSG_ERROR([sphinx-build not found; it is required for --enable-generate-docs, please see http://www.sphinx-doc.org/en/master/usage/installation.html for details])
+  else
+    AC_MSG_RESULT([$SPHINXBUILD])
+
+    AC_MSG_CHECKING([whether $SPHINXBUILD is runnable])
+    $SPHINXBUILD --version > conftest.err 2>&1
+    if test $? -ne 0 ; then
+      AC_MSG_ERROR([error with $SPHINXBUILD --version, check conftest.err for details])
+    fi
+    rm -f conftest.err
+    AC_MSG_RESULT([yes])
+  fi
+
+  # Check for pdflatex
+  if test -z "$pdflatex_path"; then
+     AC_PATH_PROG([PDFLATEX], [pdflatex])
+  else
+     PDFLATEX="$pdflatex_path"
+  fi
+
+  if test -z "$PDFLATEX"; then
+    PDFLATEX=no
+  elif test "x$PDFLATEX" == "xno"; then
+    AC_MSG_CHECKING([for pdflatex])
+    AC_MSG_RESULT([no (disabled)])
+  else
+    AC_MSG_CHECKING([whether $PDFLATEX is runnable])
+    $PDFLATEX --version > /dev/null 2>&1
+    if test $? -ne 0 ; then
+      AC_MSG_RESULT([no - disabled building docs in PDF])
+      PDFLATEX=no
+    else
+      AC_MSG_RESULT([yes])
+    fi
+  fi
+
+  if test -n "$SPHINXBUILD" -a "x$PDFLATEX" != "xno"; then
+    AC_MSG_CHECKING([whether $SPHINXBUILD and $PDFLATEX work])
+    ti=`mktemp -d`
+    to=`mktemp -d`
+    echo 'hello' > $ti/contents.rst
+    sphinx-build -b latex -C $ti $to > /dev/null 2>&1
+    pushd $to > /dev/null 2>&1
+    $PDFLATEX -interaction nonstopmode [[pP]]ython.tex > /dev/null 2>&1
+    popd > /dev/null 2>&1
+    file $to/[[pP]]ython.pdf | grep PDF > /dev/null 2>&1
+    if test $? -ne 0 ; then
+      AC_MSG_RESULT([no - disabled building docs in PDF])
+      PDFLATEX=no
+    else
+      AC_MSG_RESULT([ok])
+    fi
+    rm -rf $ti $to
+  fi
+
+  if test "x$PDFLATEX" != "xno"; then
+    generate_docs_report="html, man and pdf"
+  else
+    generate_docs_report="html, man but no pdf"
+  fi
+  install_mans="no"
+else
+  # now let's check if there are some existing manuals
+  # checking just one is sufficient
+  if test -f `pwd`/doc/sphinx/_build/man/kea-dhcp6.8; then
+    install_mans="yes"
+  else
+    install_mans="no"
+  fi
+  generate_docs_report="no"
+fi
+AM_CONDITIONAL(INSTALL_MANS, test "x$install_mans" == "xyes")
+AM_CONDITIONAL(HAVE_PDFLATEX, test "x$PDFLATEX" != "xno")
 AM_CONDITIONAL(GENERATE_DOCS, test x$enable_generate_docs != xno)
 
 AC_ARG_ENABLE(install-configurations,
@@ -1452,6 +1460,25 @@ if test "x$VALGRIND" != "xno"; then
    found_valgrind="found"
 fi
 
+AC_ARG_ENABLE([fuzzing], [AC_HELP_STRING([--enable-fuzzing],
+  [indicates that the code will be built with AFL (American Fuzzy Lop) support.
+   Code built this way is unusable as a regular server. [default=no]])],
+   [enable_fuzzing=$enableval], [enable_fuzzing=no])
+AM_CONDITIONAL([ENABLE_AFL], [test x$enable_fuzzing != xno])
+
+if test "x$enable_fuzzing" != "xno" ; then
+    AC_DEFINE([ENABLE_AFL], [1], [AFL fuzzing was enabled.])
+    AC_MSG_CHECKING([for AFL enabled compiler])
+    AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],
+					  [#ifndef __AFL_COMPILER
+					   #error AFL compiler required
+					   #endif
+					  ])],
+			 [AC_MSG_RESULT([yes])],
+			 [AC_MSG_ERROR([set CXX to afl-clang-fast++ when --enable-fuzzing is used])])
+fi
+
+
 # Check for optreset in unistd.h. On BSD systems the optreset is
 # used to reset the state of getopt() function. Resetting its state
 # is required if command line arguments are parsed multiple times
@@ -1474,13 +1501,24 @@ AM_COND_IF([HAVE_OPTRESET], [AC_DEFINE([HAVE_OPTRESET], [1], [Check for optreset
 
 AC_DEFINE([CONFIG_H_WAS_INCLUDED], [1], [config.h inclusion marker])
 
+# Autoconf 2.70 has runstatedir but is not yet released.
+m4_version_prereq([2.70], [], [dnl
+    AC_ARG_VAR(runstatedir, [$localstatedir/run for autoconf < 2.70])dnl
+    AC_SUBST(runstatedir)dnl
+])
+if test "x$runstatedir" = "x"; then
+    runstatedir="$localstatedir/run"
+fi
+
+# Expand runstatedir to remove ${localstatedir} from it
+if (echo ${runstatedir} | grep -q localstatedir); then
+    runstatedir="$(eval echo ${runstatedir})"
+fi
+
 AC_CONFIG_FILES([Makefile
-                 compatcheck/Makefile
-                 dns++.pc
                  doc/Makefile
-                 doc/guide/Makefile
-                 doc/version.ent
-                 doc/docgen/Makefile
+                 doc/sphinx/Makefile
+                 doc/devel/Makefile
                  ext/Makefile
                  ext/gtest/Makefile
                  ext/coroutine/Makefile
@@ -1540,15 +1578,23 @@ AC_CONFIG_FILES([Makefile
                  src/bin/shell/tests/shell_unittest.py
                  src/hooks/Makefile
                  src/hooks/dhcp/Makefile
+                 src/hooks/dhcp/bootp/Makefile
+                 src/hooks/dhcp/bootp/tests/Makefile
+                 src/hooks/dhcp/flex_option/Makefile
+                 src/hooks/dhcp/flex_option/libloadtests/Makefile
+                 src/hooks/dhcp/flex_option/tests/Makefile
                  src/hooks/dhcp/high_availability/Makefile
+                 src/hooks/dhcp/high_availability/libloadtests/Makefile
                  src/hooks/dhcp/high_availability/tests/Makefile
                  src/hooks/dhcp/lease_cmds/Makefile
                  src/hooks/dhcp/lease_cmds/tests/Makefile
+                 src/hooks/dhcp/mysql_cb/Makefile
+                 src/hooks/dhcp/mysql_cb/tests/Makefile
+                 src/hooks/dhcp/stat_cmds/Makefile
+                 src/hooks/dhcp/stat_cmds/tests/Makefile
                  src/hooks/dhcp/user_chk/Makefile
                  src/hooks/dhcp/user_chk/tests/Makefile
                  src/hooks/dhcp/user_chk/tests/test_data_files_config.h
-                 src/hooks/dhcp/stat_cmds/Makefile
-                 src/hooks/dhcp/stat_cmds/tests/Makefile
                  src/lib/Makefile
                  src/lib/asiodns/Makefile
                  src/lib/asiodns/tests/Makefile
@@ -1628,8 +1674,6 @@ AC_CONFIG_FILES([Makefile
                  src/lib/util/python/gen_wiredata.py
                  src/lib/util/tests/Makefile
                  src/lib/util/tests/process_spawn_app.sh
-                 src/lib/util/threads/Makefile
-                 src/lib/util/threads/tests/Makefile
                  src/lib/util/unittests/Makefile
                  src/lib/yang/Makefile
                  src/lib/yang/pretests/Makefile
@@ -1641,6 +1685,9 @@ AC_CONFIG_FILES([Makefile
                  src/share/database/scripts/cql/Makefile
                  src/share/database/scripts/cql/upgrade_1.0_to_2.0.sh
                  src/share/database/scripts/cql/upgrade_2.0_to_3.0.sh
+                 src/share/database/scripts/cql/upgrade_3.0_to_4.0.sh
+                 src/share/database/scripts/cql/upgrade_4.0_to_5.0.sh
+                 src/share/database/scripts/cql/wipe_data.sh
                  src/share/database/scripts/mysql/Makefile
                  src/share/database/scripts/mysql/upgrade_1.0_to_2.0.sh
                  src/share/database/scripts/mysql/upgrade_2.0_to_3.0.sh
@@ -1651,6 +1698,12 @@ AC_CONFIG_FILES([Makefile
                  src/share/database/scripts/mysql/upgrade_5.1_to_5.2.sh
                  src/share/database/scripts/mysql/upgrade_5.2_to_6.0.sh
                  src/share/database/scripts/mysql/upgrade_6.0_to_7.0.sh
+                 src/share/database/scripts/mysql/upgrade_7.0_to_8.0.sh
+                 src/share/database/scripts/mysql/upgrade_8.0_to_8.1.sh
+                 src/share/database/scripts/mysql/upgrade_8.1_to_8.2.sh
+                 src/share/database/scripts/mysql/upgrade_8.2_to_9.0.sh
+                 src/share/database/scripts/mysql/upgrade_9.0_to_9.1.sh
+                 src/share/database/scripts/mysql/wipe_data.sh
                  src/share/database/scripts/pgsql/Makefile
                  src/share/database/scripts/pgsql/upgrade_1.0_to_2.0.sh
                  src/share/database/scripts/pgsql/upgrade_2.0_to_3.0.sh
@@ -1659,6 +1712,9 @@ AC_CONFIG_FILES([Makefile
                  src/share/database/scripts/pgsql/upgrade_3.2_to_3.3.sh
                  src/share/database/scripts/pgsql/upgrade_3.3_to_4.0.sh
                  src/share/database/scripts/pgsql/upgrade_4.0_to_5.0.sh
+                 src/share/database/scripts/pgsql/upgrade_5.0_to_5.1.sh
+                 src/share/database/scripts/pgsql/upgrade_5.1_to_6.0.sh
+                 src/share/database/scripts/pgsql/wipe_data.sh
                  src/share/yang/Makefile
                  src/share/yang/modules/Makefile
                  tools/Makefile
@@ -1697,6 +1753,22 @@ if test "$KEA_SRCID" != ""; then
    EXTENDED_VERSION="${EXTENDED_VERSION} ($KEA_SRCID)"
 fi
 
+# By default the following variables are defined:
+# - prefix = /usr/local
+# - exec_prefix = ${prefix}
+# - libdir = ${exec_prefix}/lib
+# The exec_prefix and libdir variables contain unexpanded,literal ${prefix}.
+# This is done on purpose. The idea is to be able to make this expansion
+# late, so use can do:
+# make install prefix=/my/own/prefix
+#
+# Now, we want to print those directories in the config.report, but we
+# don't want to modify the actual variables. So we need to expand them.
+# Since libdir contains $exec_prefix and exec_prefix contains $prefix, then
+# to get the real value, we need to expand it twice.
+libdir_real="$(eval echo ${libdir})"
+libdir_real="$(eval echo ${libdir_real})"
+
 cat > config.report << END
 
        Kea source configure results:
@@ -1708,7 +1780,8 @@ Package:
   Extended version:  ${EXTENDED_VERSION}
   OS Family:         ${OS_TYPE}
 
-  Hooks directory:   ${prefix}/lib/hooks
+  Prefix:            ${prefix}
+  Hooks directory:   ${libdir_real}/kea/hooks
 END
 if test "$PREMIUM" != ""; then
 cat >> config.report << END
@@ -1720,6 +1793,13 @@ cat >> config.report << END
   Premium hooks:     no
 END
 fi
+
+cat >> config.report << END
+
+Configure arguments:
+$ac_configure_args
+END
+
 cat >> config.report << END
 
 C++ Compiler:
@@ -1904,14 +1984,19 @@ fi
 cat >> config.report << END
 
 Developer:
-  Enable Debugging:       $debug_enabled
-  Google Tests:           $enable_gtest
-  Valgrind:               $found_valgrind
-  C++ Code Coverage:      $USE_LCOV
-  Logger checks:          $enable_logger_checks
-  Generate Documentation: $enable_generate_docs
-  Parser Generation:      $enable_generate_parser
-  Kea-shell:              $enable_shell
+  Enable Debugging:          $debug_enabled
+  Google Tests:              $enable_gtest
+  Google Benchmark:          $enable_benchmark
+  Valgrind:                  $found_valgrind
+  C++ Code Coverage:         $USE_LCOV
+  Logger checks:             $enable_logger_checks
+  Install existing manuals:  $install_mans
+  Generate Documentation:    $generate_docs_report
+  Generate Parser:           $enable_generate_parser
+  Generate Messages Files:   $enable_generate_messages
+  Perfdhcp:                  $enable_perfdhcp
+  Kea-shell:                 $shell_report
+  Enable fuzzing:            $enable_fuzzing
 
 END
 

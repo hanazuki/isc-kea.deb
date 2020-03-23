@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -262,6 +262,23 @@ HAImpl::commandProcessed(hooks::CalloutHandle& callout_handle) {
     callout_handle.getArgument("name", command_name);
     if (command_name == "dhcp-enable") {
         service_->adjustNetworkState();
+    } else if (command_name == "status-get") {
+        // Get the response.
+        ConstElementPtr response;
+        callout_handle.getArgument("response", response);
+        if (!response || (response->getType() != Element::map)) {
+            return;
+        }
+        // Get the arguments item from the response.
+        ConstElementPtr resp_args = response->get("arguments");
+        if (!resp_args || (resp_args->getType() != Element::map)) {
+            return;
+        }
+        // Add the ha servers info to arguments.
+        ElementPtr mutable_resp_args =
+            boost::const_pointer_cast<Element>(resp_args);
+        ConstElementPtr ha_servers = service_->processStatusGet();
+        mutable_resp_args->set("ha-servers", ha_servers);
     }
 }
 
@@ -396,6 +413,40 @@ HAImpl::continueHandler(hooks::CalloutHandle& callout_handle) {
     callout_handle.setArgument("response", response);
 }
 
+void
+HAImpl::maintenanceNotifyHandler(hooks::CalloutHandle& callout_handle) {
+    // Command must always be provided.
+    ConstElementPtr command;
+    callout_handle.getArgument("command", command);
+
+    // Retrieve arguments.
+    ConstElementPtr args;
+    static_cast<void>(parseCommandWithArgs(args, command));
+
+    ConstElementPtr cancel_op = args->get("cancel");
+    if (!cancel_op) {
+        isc_throw(BadValue, "'cancel' is mandatory for the 'ha-maintenance-notify' command");
+    }
+
+    if (cancel_op->getType() != Element::boolean) {
+        isc_throw(BadValue, "'cancel' must be a boolean in the 'ha-maintenance-notify' command");
+    }
+
+    ConstElementPtr response = service_->processMaintenanceNotify(cancel_op->boolValue());
+    callout_handle.setArgument("response", response);
+}
+
+void
+HAImpl::maintenanceStartHandler(hooks::CalloutHandle& callout_handle) {
+    ConstElementPtr response = service_->processMaintenanceStart();
+    callout_handle.setArgument("response", response);
+}
+
+void
+HAImpl::maintenanceCancelHandler(hooks::CalloutHandle& callout_handle) {
+    ConstElementPtr response = service_->processMaintenanceCancel();
+    callout_handle.setArgument("response", response);
+}
 
 } // end of namespace isc::ha
 } // end of namespace isc

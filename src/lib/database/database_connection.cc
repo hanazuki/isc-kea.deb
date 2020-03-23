@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -163,12 +163,12 @@ DatabaseConnection::toElement(const ParameterMap& params) {
 
         if ((keyword == "lfc-interval") ||
             (keyword == "connect-timeout") ||
-            (keyword == "request-timeout") ||
-            (keyword == "port") ||
-            (keyword == "max-reconnect-tries") ||
             (keyword == "reconnect-wait-time") ||
-            (keyword == "tcp-keepalive")) {
-
+            (keyword == "max-reconnect-tries") ||
+            (keyword == "request-timeout") ||
+            (keyword == "tcp-keepalive") ||
+            (keyword == "port") ||
+            (keyword == "max-row-errors")) {
             // integer parameters
             int64_t int_value;
             try {
@@ -179,9 +179,8 @@ DatabaseConnection::toElement(const ParameterMap& params) {
                     .arg("integer").arg(keyword).arg(value);
             }
         } else if ((keyword == "persist") ||
-                   (keyword == "readonly") ||
-                   (keyword == "tcp-nodelay")) {
-
+                   (keyword == "tcp-nodelay") ||
+                   (keyword == "readonly")) {
             if (value == "true") {
                 result->set(keyword, isc::data::Element::create(true));
             } else if (value == "false") {
@@ -196,6 +195,8 @@ DatabaseConnection::toElement(const ParameterMap& params) {
                    (keyword == "host") ||
                    (keyword == "name") ||
                    (keyword == "contact-points") ||
+                   (keyword == "consistency") ||
+                   (keyword == "serial-consistency") ||
                    (keyword == "keyspace")) {
             result->set(keyword, isc::data::Element::create(value));
         } else {

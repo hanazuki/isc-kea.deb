@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -492,7 +492,7 @@ TEST_F(SARRTest, sarrStats) {
         getCfgSubnets6()->getAll();
     ASSERT_EQ(2, subnets->size());
 
-    // Ok, let's check the statistics. None should be present.
+    // Check that the tested statistics is initially set to 0
     using namespace isc::stats;
     StatsMgr& mgr = StatsMgr::instance();
     ObservationPtr pkt6_rcvd = mgr.getObservation("pkt6-received");
@@ -501,12 +501,18 @@ TEST_F(SARRTest, sarrStats) {
     ObservationPtr pkt6_request_rcvd = mgr.getObservation("pkt6-request-received");
     ObservationPtr pkt6_reply_sent = mgr.getObservation("pkt6-reply-sent");
     ObservationPtr pkt6_sent = mgr.getObservation("pkt6-sent");
-    EXPECT_FALSE(pkt6_rcvd);
-    EXPECT_FALSE(pkt6_solicit_rcvd);
-    EXPECT_FALSE(pkt6_adv_sent);
-    EXPECT_FALSE(pkt6_request_rcvd);
-    EXPECT_FALSE(pkt6_reply_sent);
-    EXPECT_FALSE(pkt6_sent);
+    ASSERT_TRUE(pkt6_rcvd);
+    ASSERT_TRUE(pkt6_solicit_rcvd);
+    ASSERT_TRUE(pkt6_adv_sent);
+    ASSERT_TRUE(pkt6_request_rcvd);
+    ASSERT_TRUE(pkt6_reply_sent);
+    ASSERT_TRUE(pkt6_sent);
+    EXPECT_EQ(0, pkt6_rcvd->getInteger().first);
+    EXPECT_EQ(0, pkt6_solicit_rcvd->getInteger().first);
+    EXPECT_EQ(0, pkt6_adv_sent->getInteger().first);
+    EXPECT_EQ(0, pkt6_request_rcvd->getInteger().first);
+    EXPECT_EQ(0, pkt6_reply_sent->getInteger().first);
+    EXPECT_EQ(0, pkt6_sent->getInteger().first);
 
     // Perform 4-way exchange.
     ASSERT_NO_THROW(client.doSARR());

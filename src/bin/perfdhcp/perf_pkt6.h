@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,12 +7,13 @@
 #ifndef PERF_PKT6_H
 #define PERF_PKT6_H
 
-#include <time.h>
-#include <boost/shared_ptr.hpp>
+#include <perfdhcp/localized_option.h>
+#include <perfdhcp/pkt_transform.h>
+
 #include <dhcp/pkt6.h>
 
-#include "localized_option.h"
-#include "pkt_transform.h"
+#include <time.h>
+#include <boost/shared_ptr.hpp>
 
 namespace isc {
 namespace perfdhcp {

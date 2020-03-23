@@ -1,4 +1,4 @@
--- Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+-- Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 -- Copyright (C) 2015-2017 Deutsche Telekom AG.
 
 -- Author: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -21,7 +21,7 @@ DROP TABLE IF EXISTS lease6_types;
 DROP TABLE IF EXISTS lease_hwaddr_source;
 DROP TABLE IF EXISTS lease_state;
 DROP TABLE IF EXISTS schema_version;
-DROP TABLE IF EXISTS host_reservations;
+DROP TABLE IF EXISTS hosts;
 DROP TABLE IF EXISTS dhcp4_options;
 DROP TABLE IF EXISTS dhcp6_options;
 DROP TABLE IF EXISTS host_identifier_type;
@@ -33,6 +33,7 @@ DROP INDEX IF EXISTS lease4index2;
 DROP INDEX IF EXISTS lease4index3;
 DROP INDEX IF EXISTS lease4index4;
 DROP INDEX IF EXISTS lease4index5;
+DROP INDEX IF EXISTS lease4index6;
 
 DROP INDEX IF EXISTS lease6index1;
 DROP INDEX IF EXISTS lease6index2;
@@ -40,13 +41,15 @@ DROP INDEX IF EXISTS lease6index3;
 DROP INDEX IF EXISTS lease6index4;
 DROP INDEX IF EXISTS lease6index5;
 DROP INDEX IF EXISTS lease6index6;
+DROP INDEX IF EXISTS lease6index7;
 
-DROP INDEX IF EXISTS host_reservationsindex1;
-DROP INDEX IF EXISTS host_reservationsindex2;
-DROP INDEX IF EXISTS host_reservationsindex3;
-DROP INDEX IF EXISTS host_reservationsindex4;
-DROP INDEX IF EXISTS host_reservationsindex5;
-DROP INDEX IF EXISTS host_reservationsindex6;
-DROP INDEX IF EXISTS host_reservationsindex7;
+DROP INDEX IF EXISTS hostsindex1;
+DROP INDEX IF EXISTS hostsindex2;
+DROP INDEX IF EXISTS hostsindex3;
+DROP INDEX IF EXISTS hostsindex4;
+DROP INDEX IF EXISTS hostsindex5;
+DROP INDEX IF EXISTS hostsindex6;
+DROP INDEX IF EXISTS hostsindex7;
+DROP INDEX IF EXISTS hostsindex8;
 
 DROP INDEX IF EXISTS logsindex;

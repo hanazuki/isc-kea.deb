@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -70,6 +70,8 @@ Dhcp6SrvD2Test::buildTestNcr(uint32_t dhcid_id_num) {
 
 void
 Dhcp6SrvD2Test::reset() {
+    CfgMgr::instance().clear();
+
     std::string config = "{ \"interfaces-config\": {"
             "  \"interfaces\": [ \"*\" ]"
             "},"
@@ -125,7 +127,6 @@ Dhcp6SrvD2Test::configureD2(bool enable_d2, const bool exp_result,
 
 void
 Dhcp6SrvD2Test::configure(const std::string& config, bool exp_result) {
-    CfgMgr::instance().clear();
     ElementPtr json = Element::fromJSON(config);
     ConstElementPtr status;
 
@@ -136,9 +137,13 @@ Dhcp6SrvD2Test::configure(const std::string& config, bool exp_result) {
     int rcode;
     ConstElementPtr comment = config::parseAnswer(rcode, status);
     if (exp_result == SHOULD_PASS) {
-        ASSERT_EQ(0, rcode);
+        ASSERT_EQ(0, rcode) << "parse comment: " << comment->stringValue();
     } else {
-        ASSERT_EQ(1, rcode);
+        ASSERT_EQ(1, rcode) << "parse comment: " << comment->stringValue();
+    }
+
+    if (rcode == 0) {
+        CfgMgr::instance().commit();
     }
 }
 

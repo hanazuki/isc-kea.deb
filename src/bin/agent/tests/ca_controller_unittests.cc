@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,6 +13,7 @@
 #include <process/testutils/d_test_stubs.h>
 #include <boost/pointer_cast.hpp>
 #include <sstream>
+#include <unistd.h>
 
 using namespace std;
 using namespace isc::agent;
@@ -256,7 +257,7 @@ TEST_F(CtrlAgentControllerTest, sigintShutdown) {
 
 // Tests that the SIGTERM triggers a normal shutdown.
 TEST_F(CtrlAgentControllerTest, sigtermShutdown) {
-    // Setup to raise SIGHUP in 1 ms.
+    // Setup to raise SIGTERM in 1 ms.
     TimedSignal sighup(*getIOService(), SIGTERM, 1);
 
     // Write valid_agent_config and then run launch() for a maximum of 1 s.
@@ -448,10 +449,13 @@ TEST_F(CtrlAgentControllerTest, registeredCommands) {
     // Check that the following command are really available.
     checkCommandRegistered("build-report");
     checkCommandRegistered("config-get");
+    checkCommandRegistered("config-reload");
+    checkCommandRegistered("config-set");
     checkCommandRegistered("config-test");
     checkCommandRegistered("config-write");
     checkCommandRegistered("list-commands");
     checkCommandRegistered("shutdown");
+    checkCommandRegistered("status-get");
     checkCommandRegistered("version-get");
 
     ctrl->deregisterCommands();
@@ -509,6 +513,188 @@ TEST_F(CtrlAgentControllerTest, configWrite) {
 
     // Now clean up after ourselves.
     ctrl->deregisterCommands();
+}
+
+// Tests if config-reload attempts to reload a file and reports that the
+// file is missing.
+TEST_F(CtrlAgentControllerTest, configReloadMissingFile) {
+    ASSERT_NO_THROW(initProcess());
+    EXPECT_TRUE(checkProcess());
+
+    // The framework available makes it very difficult to test the actual
+    // code as CtrlAgentController is not initialized the same way it is
+    // in production code. In particular, the way CtrlAgentController
+    // is initialized in tests does not call registerCommands().
+    // This is a crude workaround for this problem. Proper solution should
+    // be developed sooner rather than later.
+    const DControllerBasePtr& base = getController();
+    const CtrlAgentControllerPtr& ctrl
+        = boost::dynamic_pointer_cast<CtrlAgentController>(base);
+    ASSERT_TRUE(ctrl);
+    // Now clean up after ourselves.
+    ctrl->registerCommands();
+
+    // This is normally set to whatever value is passed to -c when the server is
+    // started, but we're not starting it that way, so need to set it by hand.
+    getController()->setConfigFile("does-not-exist.json");
+
+    // Build and execute the command.
+    string cmd_txt = "{ \"command\": \"config-reload\" }";
+    ConstElementPtr cmd = Element::fromJSON(cmd_txt);
+    ConstElementPtr params;
+    ConstElementPtr answer;
+    answer = CtrlAgentCommandMgr::instance().handleCommand("config-reload",
+                                                           params, cmd);
+
+    // Verify the reload was rejected.
+    string expected = "[ { \"result\": 1, \"text\": "
+        "\"Configuration parsing failed: "
+        "Unable to open file does-not-exist.json\" } ]";
+    EXPECT_EQ(expected, answer->str());
+
+    // Now clean up after ourselves.
+    ctrl->deregisterCommands();
+}
+
+// Tests if config-reload attempts to reload a file and reports that the
+// file is not a valid JSON.
+TEST_F(CtrlAgentControllerTest, configReloadBrokenFile) {
+    ASSERT_NO_THROW(initProcess());
+    EXPECT_TRUE(checkProcess());
+
+    // The framework available makes it very difficult to test the actual
+    // code as CtrlAgentController is not initialized the same way it is
+    // in production code. In particular, the way CtrlAgentController
+    // is initialized in tests does not call registerCommands().
+    // This is a crude workaround for this problem. Proper solution should
+    // be developed sooner rather than later.
+    const DControllerBasePtr& base = getController();
+    const CtrlAgentControllerPtr& ctrl
+        = boost::dynamic_pointer_cast<CtrlAgentController>(base);
+    ASSERT_TRUE(ctrl);
+    // Now clean up after ourselves.
+    ctrl->registerCommands();
+
+    // This is normally set to whatever value is passed to -c when the server is
+    // started, but we're not starting it that way, so need to set it by hand.
+    getController()->setConfigFile("testbad.json");
+
+    // Although Kea is smart, its AI routines are not smart enough to handle
+    // this one... at least not yet.
+    ofstream f("testbad.json", ios::trunc);
+    f << "bla bla bla...";
+    f.close();
+
+    // Build and execute the command.
+    string cmd_txt = "{ \"command\": \"config-reload\" }";
+    ConstElementPtr cmd = Element::fromJSON(cmd_txt);
+    ConstElementPtr params;
+    ConstElementPtr answer;
+    answer = CtrlAgentCommandMgr::instance().handleCommand("config-reload",
+                                                           params, cmd);
+
+    // Verify the reload was rejected.
+    string expected = "[ { \"result\": 1, \"text\": "
+        "\"Configuration parsing failed: "
+        "testbad.json:1.1: Invalid character: b\" } ]";
+    EXPECT_EQ(expected, answer->str());
+
+    // Remove the file.
+    ::remove("testbad.json");
+
+    // Now clean up after ourselves.
+    ctrl->deregisterCommands();
+}
+
+// Tests if config-reload attempts to reload a file and reports that the
+// file is missing.
+TEST_F(CtrlAgentControllerTest, configReloadFileValid) {
+    ASSERT_NO_THROW(initProcess());
+    EXPECT_TRUE(checkProcess());
+
+    // The framework available makes it very difficult to test the actual
+    // code as CtrlAgentController is not initialized the same way it is
+    // in production code. In particular, the way CtrlAgentController
+    // is initialized in tests does not call registerCommands().
+    // This is a crude workaround for this problem. Proper solution should
+    // be developed sooner rather than later.
+    const DControllerBasePtr& base = getController();
+    const CtrlAgentControllerPtr& ctrl
+        = boost::dynamic_pointer_cast<CtrlAgentController>(base);
+    ASSERT_TRUE(ctrl);
+    // Now clean up after ourselves.
+    ctrl->registerCommands();
+
+    // This is normally set to whatever value is passed to -c when the server is
+    // started, but we're not starting it that way, so need to set it by hand.
+    getController()->setConfigFile("testvalid.json");
+
+    // Ok, enough fooling around. Let's create a valid config.
+    ofstream f("testvalid.json", ios::trunc);
+    f << "{ \"Control-agent\": "
+      << string(valid_agent_config)
+      << " }" << endl;
+    f.close();
+
+    // Build and execute the command.
+    string cmd_txt = "{ \"command\": \"config-reload\" }";
+    ConstElementPtr cmd = Element::fromJSON(cmd_txt);
+    ConstElementPtr params;
+    ConstElementPtr answer;
+    answer = CtrlAgentCommandMgr::instance().handleCommand("config-reload",
+                                                           params, cmd);
+
+
+    // Verify the reload was successful.
+    string expected = "[ { \"result\": 0, \"text\": "
+        "\"Configuration applied successfully.\" } ]";
+    EXPECT_EQ(expected, answer->str());
+
+    // Check that the config was indeed applied?
+
+    // Remove the file.
+    ::remove("testvalid.json");
+
+    // Now clean up after ourselves.
+    ctrl->deregisterCommands();
+}
+
+// Tests that status-get returns expected info (pid, uptime and reload).
+TEST_F(CtrlAgentControllerTest, statusGet) {
+    // Start the server.
+    time_duration elapsed_time;
+    runWithConfig(valid_agent_config, 500, elapsed_time);
+
+    const DControllerBasePtr& ctrl = getController();
+    ConstElementPtr response;
+    ASSERT_NO_THROW(response = ctrl->statusGetHandler("status-get", ConstElementPtr()));
+    ASSERT_TRUE(response);
+    ASSERT_EQ(Element::map, response->getType());
+    EXPECT_EQ(2, response->size());
+    ConstElementPtr result = response->get("result");
+    ASSERT_TRUE(result);
+    ASSERT_EQ(Element::integer, result->getType());
+    EXPECT_EQ(0, result->intValue());
+    ConstElementPtr arguments = response->get("arguments");
+    ASSERT_EQ(Element::map, arguments->getType());
+
+    // The returned pid should be the pid of our process.
+    auto found_pid = arguments->get("pid");
+    ASSERT_TRUE(found_pid);
+    EXPECT_EQ(static_cast<int64_t>(getpid()), found_pid->intValue());
+
+    // It is hard to check the actual uptime (and reload) as it is based
+    // on current time. Let's just make sure it is within a reasonable
+    // range.
+    auto found_uptime = arguments->get("uptime");
+    ASSERT_TRUE(found_uptime);
+    EXPECT_LE(found_uptime->intValue(), 5);
+    EXPECT_GE(found_uptime->intValue(), 0);
+
+    auto found_reload = arguments->get("reload");
+    ASSERT_TRUE(found_reload);
+    EXPECT_LE(found_reload->intValue(), 5);
+    EXPECT_GE(found_reload->intValue(), 0);
 }
 
 }

@@ -16,7 +16,7 @@
 // details. These are section numbers in Kea User's Guide. The version matching
 // your software should come with your Kea package, but it is also available
 // in ISC's Knowledgebase (https://kb.isc.org/docs/kea-administrator-reference-manual; the direct link for
-// the stable version is https://jenkins.isc.org/job/Kea_doc/guide/kea-guide.html).
+// the stable version is https://kea.readthedocs.io/).
 //
 // This configuration file contains only DHCPv4 server's configuration.
 // If configurations for other Kea services are also included in this file they
@@ -49,7 +49,7 @@
     // more. For detailed description, see Sections 8.8, 16 and 15.
     "control-socket": {
         "socket-type": "unix",
-        "socket-name": "/tmp/kea-dhcp4-ctrl.sock"
+        "socket-name": "/tmp/kea4-ctrl-socket"
     },
 
     // Use Memfile lease database backend to store leases in a CSV file.
@@ -252,9 +252,9 @@
     //      // of all devices serviced by Kea, including their identifiers
     //      // (like MAC address), their location in the network, times
     //      // when they were active etc.
-    //      "library": "@localstatedir@/kea/libdhcp_legal_log.so"
+    //      "library": "@libdir@/kea/hooks/libdhcp_legal_log.so"
     //      "parameters": {
-    //          "path": "/var/kea/var",
+    //          "path": "/var/lib/kea",
     //          "base-name": "kea-forensic4"
     //      }
     //  },
@@ -269,7 +269,7 @@
     //      // of specific options or perhaps even a combination of several
     //      // options and fields to uniquely identify a client. Those scenarios
     //      // are addressed by the Flexible Identifiers hook application.
-    //      "library": "@localstatedir@/kea/libdhcp_flex_id.so",
+    //      "library": "@libdir@/kea/hooks/libdhcp_flex_id.so",
     //      "parameters": {
     //          "identifier-expression": "substring(relay6[0].option[18],0,8)"
     //      }
@@ -405,18 +405,15 @@
             ]
             // You can add more subnets there.
         }
-    ]
+    ],
 
     // There are many, many more parameters that DHCPv4 server is able to use.
     // They were not added here to not overwhelm people with too much
     // information at once.
-},
 
 // Logging configuration starts here. Kea uses different loggers to log various
 // activities. For details (e.g. names of loggers), see Chapter 18.
-"Logging":
-{
-  "loggers": [
+    "loggers": [
     {
         // This section affects kea-dhcp4, which is the base logger for DHCPv4
         // component. It tells DHCPv4 server to write all log messages (on
@@ -432,6 +429,10 @@
                 // - syslog:name (logs to syslog using specified name)
                 // Any other value is considered a name of a time
                 "output": "@localstatedir@/log/kea-dhcp4.log"
+
+                // Shorter log pattern suitable for use with systemd,
+                // avoids redundant information
+                // "pattern": "%-5p %m\n"
 
                 // This governs whether the log output is flushed to disk after
                 // every write.

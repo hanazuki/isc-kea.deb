@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,8 +20,9 @@
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/ncr_generator.h>
-
+#include <dhcp6/tests/dhcp6_client.h>
 #include <dhcp6/tests/dhcp6_test_utils.h>
+
 #include <boost/pointer_cast.hpp>
 #include <gtest/gtest.h>
 
@@ -36,16 +37,9 @@ using namespace std;
 
 namespace {
 
-
 /// @brief A test fixture class for testing DHCPv6 Client FQDN Option handling.
 class FqdnDhcpv6SrvTest : public Dhcpv6SrvTest {
 public:
-    /// Pointer to Dhcpv6Srv that is used in tests
-    boost::scoped_ptr<NakedDhcpv6Srv> srv_;
-
-    // Reference to D2ClientMgr singleton
-    D2ClientMgr& d2_mgr_;
-
     // Bit Constants for turning on and off DDNS configuration options.
     // (Defined here as these are only meaningful to this class.)
     static const uint16_t OVERRIDE_NO_UPDATE = 1;
@@ -81,12 +75,13 @@ public:
     /// @brief Constructor
     FqdnDhcpv6SrvTest()
         : Dhcpv6SrvTest(), srv_(new NakedDhcpv6Srv(0)),
-          d2_mgr_(CfgMgr::instance().getD2ClientMgr()) {
+          d2_mgr_(CfgMgr::instance().getD2ClientMgr()),
+          iface_mgr_test_config_(true) {
         // generateClientId assigns DUID to duid_.
         generateClientId();
         lease_.reset(new Lease6(Lease::TYPE_NA, IOAddress("2001:db8:1::1"),
-                                duid_, 1234, 501, 502, 503,
-                                504, 1, HWAddrPtr(), 0));
+                                duid_, 1234, 501, 502,
+                                1, HWAddrPtr(), 0));
         // Config DDNS to be enabled, all controls off
         enableD2();
     }
@@ -120,16 +115,36 @@ public:
         ASSERT_NO_THROW(cfg.reset(new D2ClientConfig(true,
                                   isc::asiolink::IOAddress("::1"), 53001,
                                   isc::asiolink::IOAddress("::"), 0,
-                                  1024,
-                                  dhcp_ddns::NCR_UDP, dhcp_ddns::FMT_JSON,
-                                  (mask & OVERRIDE_NO_UPDATE),
-                                  (mask & OVERRIDE_CLIENT_UPDATE),
-                                  ((mask & REPLACE_CLIENT_NAME) ?
-                                   D2ClientConfig::RCM_WHEN_PRESENT
-                                   : D2ClientConfig::RCM_NEVER),
-                                  "myhost", "example.com", "[^A-Za-z0-9-]", "x")));
+                                  1024, dhcp_ddns::NCR_UDP, dhcp_ddns::FMT_JSON)));
+
         ASSERT_NO_THROW(CfgMgr::instance().setD2ClientConfig(cfg));
+
+        // Now we'll set the DDNS parameters at the subnet level.
+        // These should get fetched when getDdnsParams() is invoked.
+        ASSERT_TRUE(subnet_) << "enableD2 called without subnet_ set";
+        subnet_->setDdnsSendUpdates(true);
+        subnet_->setDdnsOverrideNoUpdate(mask & OVERRIDE_NO_UPDATE);
+        subnet_->setDdnsOverrideClientUpdate(mask & OVERRIDE_CLIENT_UPDATE);
+        subnet_->setDdnsReplaceClientNameMode((mask & REPLACE_CLIENT_NAME) ?
+                                              D2ClientConfig::RCM_WHEN_PRESENT
+                                              : D2ClientConfig::RCM_NEVER);
+        subnet_->setDdnsGeneratedPrefix("myhost");
+        subnet_->setDdnsQualifyingSuffix("example.com");
+        subnet_->setHostnameCharSet("[^A-Za-z0-9-]");
+        subnet_->setHostnameCharReplacement("x");
+
         ASSERT_NO_THROW(srv_->startD2());
+    }
+
+    // Fetch DDNS parameter set scoped to the current subnet_.
+    DdnsParamsPtr getDdnsParams() {
+        ConstElementPtr cfg = CfgMgr::instance().getCurrentCfg()->toElement();
+        if (!subnet_) {
+            ADD_FAILURE() << "getDdnsParams() - subnet_ is empty!";
+            return (DdnsParamsPtr(new DdnsParams()));
+        }
+
+        return(CfgMgr::instance().getCurrentCfg()->getDdnsParams(subnet_));
     }
 
     /// @brief Construct the DHCPv6 Client FQDN option using flags and
@@ -170,10 +185,8 @@ public:
                             const bool include_oro,
                             OptionPtr srvid = OptionPtr()) {
         Pkt6Ptr pkt = Pkt6Ptr(new Pkt6(msg_type, 1234));
-        pkt->setRemoteAddr(IOAddress("fe80::abcd"));
         pkt->setIface("eth0");
         Option6IAPtr ia = generateIA(D6O_IA_NA, 234, 1500, 3000);
-
         if (msg_type != DHCPV6_REPLY) {
             IOAddress hint("2001:db8:1:1::dead:beef");
             OptionPtr hint_opt(new Option6IAAddr(D6O_IAADDR, hint, 300, 500));
@@ -208,6 +221,7 @@ public:
     /// @return An object representing the created message.
     Pkt6Ptr generateMessageWithIds(const uint8_t msg_type) {
         Pkt6Ptr pkt = Pkt6Ptr(new Pkt6(msg_type, 1234));
+        pkt->setIface("eth0");
         // Generate client-id.
         OptionPtr opt_clientid = generateClientId();
         pkt->addOption(opt_clientid);
@@ -333,6 +347,9 @@ public:
         addIA(1234, IOAddress("2001:db8:1::1"), answer);
 
         AllocEngine::ClientContext6 ctx;
+        // Set the selected subnet so ddns params get returned correctly.
+        ctx.subnet_ = subnet_;
+
         ASSERT_NO_THROW(srv_->processClientFqdn(question, answer, ctx));
         Option6ClientFqdnPtr answ_fqdn = boost::dynamic_pointer_cast<
             Option6ClientFqdn>(answer->getOption(D6O_CLIENT_FQDN));
@@ -410,7 +427,6 @@ public:
             "\"subnet6\": [ {  \n"
             "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ], \n"
             "    \"subnet\": \"2001:db8:1::/48\",  \n"
-            "    \"interface-id\": \"\", \n"
             "    \"interface\": \"eth0\" \n"
             " } ], \n"
             "\"dhcp-ddns\": { \n"
@@ -434,9 +450,12 @@ public:
             query = generateMessageWithIds(DHCPV6_SOLICIT);
         }
 
+        AllocEngine::ClientContext6 ctx;
+        bool drop = false;
+        srv_->initContext(query, ctx, drop);
+
         Pkt6Ptr answer = generateMessageWithIds(DHCPV6_ADVERTISE);
 
-        AllocEngine::ClientContext6 ctx;
         ASSERT_NO_THROW(srv_->processClientFqdn(query, answer, ctx));
 
         Option6ClientFqdnPtr answ_fqdn = boost::dynamic_pointer_cast<
@@ -495,6 +514,7 @@ public:
         AllocEngine::ClientContext6 ctx;
         bool drop = false;
         srv_->initContext(req, ctx, drop);
+
         ASSERT_FALSE(drop);
         if (msg_type == DHCPV6_SOLICIT) {
           ASSERT_NO_THROW(reply = srv_->processSolicit(ctx));
@@ -559,7 +579,7 @@ public:
     /// @param forward An expected setting of the forward update flag.
     /// @param addr A string representation of the IPv6 address held in the
     /// NameChangeRequest.
-    /// @param dhcid An expected DHCID value.
+    /// @param dhcid An expected DHCID value.  Ignored if blank.
     /// @note This value is the value that is produced by
     /// dhcp_ddns::D2Dhcid::createDigest() with the appropriate arguments. This
     /// method uses encryption tools to produce the value which cannot be
@@ -588,7 +608,10 @@ public:
         EXPECT_EQ(forward, ncr->isForwardChange());
         EXPECT_EQ(reverse, ncr->isReverseChange());
         EXPECT_EQ(addr, ncr->getIpAddress());
-        EXPECT_EQ(dhcid, ncr->getDhcid().toStr());
+        if (!dhcid.empty()) {
+            EXPECT_EQ(dhcid, ncr->getDhcid().toStr());
+        }
+
         EXPECT_EQ(expires, ncr->getLeaseExpiresOn());
         EXPECT_EQ(len, ncr->getLeaseLength());
         EXPECT_EQ(isc::dhcp_ddns::ST_NEW, ncr->getStatus());
@@ -627,9 +650,17 @@ public:
         ASSERT_TRUE(pool);
     }
 
+    /// Pointer to Dhcpv6Srv that is used in tests
+    boost::scoped_ptr<NakedDhcpv6Srv> srv_;
+
+    // Reference to D2ClientMgr singleton
+    D2ClientMgr& d2_mgr_;
+
+    /// @brief Interface Manager's fake configuration control.
+    IfaceMgrTestConfig iface_mgr_test_config_;
+
     // Holds a lease used by a test.
     Lease6Ptr lease_;
-
 };
 
 // A set of tests verifying server's behavior when it receives the DHCPv6
@@ -702,6 +733,7 @@ TEST_F(FqdnDhcpv6SrvTest, createNameChangeRequestsNoAnswer) {
     Pkt6Ptr answer;
 
     AllocEngine::ClientContext6 ctx;
+    ctx.subnet_ = subnet_;
     ctx.fwd_dns_update_ = ctx.rev_dns_update_ = true;
     EXPECT_THROW(srv_->createNameChangeRequests(answer, ctx),
                  isc::Unexpected);
@@ -718,6 +750,7 @@ TEST_F(FqdnDhcpv6SrvTest, createNameChangeRequestsNoDUID) {
     answer->addOption(fqdn);
 
     AllocEngine::ClientContext6 ctx;
+    ctx.subnet_ = subnet_;
     ctx.fwd_dns_update_ = ctx.rev_dns_update_ = true;
     EXPECT_THROW(srv_->createNameChangeRequests(answer, ctx), isc::Unexpected);
 
@@ -730,6 +763,7 @@ TEST_F(FqdnDhcpv6SrvTest, createNameChangeRequestsNoFQDN) {
     Pkt6Ptr answer = generateMessageWithIds(DHCPV6_REPLY);
 
     AllocEngine::ClientContext6 ctx;
+    ctx.subnet_ = subnet_;
     ctx.fwd_dns_update_ = ctx.rev_dns_update_ = true;
     ASSERT_NO_THROW(srv_->createNameChangeRequests(answer, ctx));
 
@@ -778,6 +812,7 @@ TEST_F(FqdnDhcpv6SrvTest, createNameChangeRequests) {
 
     // Create NameChangeRequest for the first allocated address.
     AllocEngine::ClientContext6 ctx;
+    ctx.subnet_ = subnet_;
     ctx.fwd_dns_update_ = ctx.rev_dns_update_ = true;
     ASSERT_NO_THROW(srv_->createNameChangeRequests(answer, ctx));
     ASSERT_EQ(1, d2_mgr_.getQueueSize());
@@ -812,6 +847,7 @@ TEST_F(FqdnDhcpv6SrvTest, noAddRequestsWhenDisabled) {
 
     // An attempt to send a NCR would throw.
     AllocEngine::ClientContext6 ctx;
+    ctx.subnet_ = subnet_;
     ctx.fwd_dns_update_ = ctx.rev_dns_update_ = true;
     ASSERT_NO_THROW(srv_->createNameChangeRequests(answer, ctx));
 }
@@ -1272,10 +1308,15 @@ TEST_F(FqdnDhcpv6SrvTest, processRequestReuseExpiredLease) {
     subnet_ = Subnet6Ptr(new Subnet6(IOAddress("2001:db8:1:1::"), 56, 1, 2,
                                      3, 4));
     subnet_->setIface("eth0");
+    subnet_->setDdnsSendUpdates(true);
+
     pool_ = Pool6Ptr(new Pool6(Lease::TYPE_NA, addr, addr));
     subnet_->addPool(pool_);
     CfgMgr::instance().getStagingCfg()->getCfgSubnets6()->add(subnet_);
     CfgMgr::instance().commit();
+
+    // Enable D2.
+    enableD2();
 
     // Allocate a lease.
     testProcessMessage(DHCPV6_REQUEST, "myhost.example.com",
@@ -1496,6 +1537,7 @@ TEST_F(FqdnDhcpv6SrvTest, replaceClientNameModeTest) {
 
     testReplaceClientNameMode("never",
                               CLIENT_NAME_NOT_PRESENT, NAME_NOT_REPLACED);
+
     testReplaceClientNameMode("never",
                               CLIENT_NAME_PRESENT, NAME_NOT_REPLACED);
 
@@ -1542,6 +1584,100 @@ TEST_F(FqdnDhcpv6SrvTest, sanitizeFqdn) {
              "m%y*host",
              Option6ClientFqdn::PARTIAL, Option6ClientFqdn::FLAG_S,
              "mxyxhost.example.com.", false);
+
+    // Verify that a full FQDN with nul chars is cleaned.
+    testFqdn(DHCPV6_SOLICIT, Option6ClientFqdn::FLAG_S,
+             std::string("m\000yhost.exa\000mple.com", 20),
+             Option6ClientFqdn::FULL, Option6ClientFqdn::FLAG_S,
+             "mxyhost.exaxmple.com.", false);
+
+}
+
+// Verifies that scoped ddns-parameter handling.
+// Specifically that D2 can be enabled with sending updates
+// disabled globally, and enabled at the subnet level.
+TEST_F(FqdnDhcpv6SrvTest, ddnsScopeTest) {
+    std::string config_str =
+    "{ \"interfaces-config\": {\n"
+        "  \"interfaces\": [ \"*\" ]\n"
+        "},\n"
+        "\"preferred-lifetime\": 3000,\n"
+        "\"rebind-timer\": 2000,\n"
+        "\"renew-timer\": 1000,\n"
+        "\"ddns-send-updates\": false,\n"
+        "\"subnet6\": [ {\n"
+        "    \"subnet\": \"2001:db8:1::/48\",\n"
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::1 - 2001:db8:1::10\" } ],\n"
+        "    \"interface\": \"eth0\"\n"
+        " },\n"
+        " {\n"
+        "    \"subnet\": \"2001:db8:2::/48\",\n"
+        "    \"pools\": [ { \"pool\": \"2001:db8:2::1 - 2001:db8:2::10\" } ],\n"
+        "    \"interface\": \"eth1\",\n"
+        "    \"ddns-send-updates\": true\n"
+        " } ],\n"
+        "\"valid-lifetime\": 4000,\n"
+        " \"dhcp-ddns\" : {\n"
+        "     \"enable-updates\" : true\n"
+        " }\n"
+    "}";
+
+    Dhcp6Client client1;
+    client1.setInterface("eth0");
+
+    // Load a configuration with D2 enabled
+    ASSERT_NO_FATAL_FAILURE(configure(config_str, *client1.getServer()));
+    ASSERT_TRUE(CfgMgr::instance().ddnsEnabled());
+    ASSERT_NO_THROW(client1.getServer()->startD2());
+
+    // Include the Client FQDN option.
+    ASSERT_NO_THROW(client1.useFQDN(Option6ClientFqdn::FLAG_S, "one.example.org.",
+                                    Option6ClientFqdn::FULL));
+
+    // Now send the DHCPREQUEST with including the FQDN option.
+    ASSERT_NO_THROW(client1.doSARR());
+    Pkt6Ptr resp = client1.getContext().response_;
+    ASSERT_TRUE(resp);
+    ASSERT_EQ(DHCPV6_REPLY, static_cast<int>(resp->getType()));
+
+    // Check that the response FQDN is as expected.
+    Option6ClientFqdnPtr fqdn;
+    fqdn = boost::dynamic_pointer_cast<Option6ClientFqdn>(resp->getOption(D6O_CLIENT_FQDN));
+    ASSERT_TRUE(fqdn);
+    EXPECT_EQ("one.example.org.", fqdn->getDomainName());
+
+    // ddns-send-udpates for subnet 1 should be off, so we should NOT have an NRC.
+    ASSERT_EQ(0, CfgMgr::instance().getD2ClientMgr().getQueueSize());
+
+    // Now let's try with a client on subnet 2.
+    Dhcp6Client client2;
+    client2.setInterface("eth1");
+    client2.requestAddress();
+
+    // Include the Client FQDN option.
+    ASSERT_NO_THROW(client2.useFQDN(Option6ClientFqdn::FLAG_S, "two.example.org.",
+                                    Option6ClientFqdn::FULL));
+
+    ASSERT_NO_THROW(client2.doSARR());
+    resp = client2.getContext().response_;
+    ASSERT_TRUE(resp);
+    ASSERT_EQ(DHCPV6_REPLY, static_cast<int>(resp->getType()));
+
+    // Check that the response FQDN is as expected.
+    fqdn = boost::dynamic_pointer_cast<Option6ClientFqdn>(resp->getOption(D6O_CLIENT_FQDN));
+    ASSERT_TRUE(fqdn);
+    EXPECT_EQ("two.example.org.", fqdn->getDomainName());
+
+    Subnet6Ptr subnet = (CfgMgr::instance().getCurrentCfg()->getCfgSubnets6()->getSubnet(2));
+    ASSERT_TRUE(subnet);
+    DdnsParamsPtr p = (CfgMgr::instance().getCurrentCfg()->getDdnsParams(subnet));
+    ASSERT_TRUE(p->getEnableUpdates());
+
+    // ddns-send-udpates for subnet 2 are enabled, verify the NCR is correct.
+    ASSERT_EQ(1, CfgMgr::instance().getD2ClientMgr().getQueueSize());
+    verifyNameChangeRequest(isc::dhcp_ddns::CHG_ADD, true, true, "2001:db8:2::1",
+                            "", 0, 4000);
+
 }
 
 }   // end of anonymous namespace

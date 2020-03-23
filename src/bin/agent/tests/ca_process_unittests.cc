@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -63,7 +63,7 @@ TEST(CtrlAgentProcess, construction) {
 }
 
 // Verifies that en external call to shutdown causes the run method to
-// exit gracefully. 
+// exit gracefully.
 TEST_F(CtrlAgentProcessTest, shutdown) {
     // Use an asiolink IntervalTimer and callback to generate the
     // shutdown invocation. (Note IntervalTimer setup is in milliseconds).

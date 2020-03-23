@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -273,24 +273,20 @@ TEST_F(HandlesTest, ContextAccessCheck) {
     // Register callouts for the different libraries.
     CalloutHandle handle(getCalloutManager());
 
-    // Library 0.
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", callout11);
-    getCalloutManager()->registerCallout("beta", callout12);
-    getCalloutManager()->registerCallout("gamma", callout13);
-    getCalloutManager()->registerCallout("delta", print1);
+    getCalloutManager()->registerCallout("alpha", callout11, 0);
+    getCalloutManager()->registerCallout("beta", callout12, 0);
+    getCalloutManager()->registerCallout("gamma", callout13, 0);
+    getCalloutManager()->registerCallout("delta", print1, 0);
 
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("alpha", callout21);
-    getCalloutManager()->registerCallout("beta", callout22);
-    getCalloutManager()->registerCallout("gamma", callout23);
-    getCalloutManager()->registerCallout("delta", print2);
+    getCalloutManager()->registerCallout("alpha", callout21, 1);
+    getCalloutManager()->registerCallout("beta", callout22, 1);
+    getCalloutManager()->registerCallout("gamma", callout23, 1);
+    getCalloutManager()->registerCallout("delta", print2, 1);
 
-    getCalloutManager()->setLibraryIndex(2);
-    getCalloutManager()->registerCallout("alpha", callout31);
-    getCalloutManager()->registerCallout("beta", callout32);
-    getCalloutManager()->registerCallout("gamma", callout33);
-    getCalloutManager()->registerCallout("delta", print3);
+    getCalloutManager()->registerCallout("alpha", callout31, 2);
+    getCalloutManager()->registerCallout("beta", callout32, 2);
+    getCalloutManager()->registerCallout("gamma", callout33, 2);
+    getCalloutManager()->registerCallout("delta", print3, 2);
 
     // Create the callout handles and distinguish them by setting the
     // "handle_num" argument.
@@ -426,29 +422,25 @@ printContextNames3(CalloutHandle& handle) {
 // Perform the test including deletion of context items.
 
 TEST_F(HandlesTest, ContextDeletionCheck) {
+    getCalloutManager()->registerCallout("alpha", callout11, 0);
+    getCalloutManager()->registerCallout("beta", callout12, 0);
+    getCalloutManager()->registerCallout("beta", printContextNames1, 0);
+    getCalloutManager()->registerCallout("gamma", callout13, 0);
+    getCalloutManager()->registerCallout("delta", print1, 0);
 
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", callout11);
-    getCalloutManager()->registerCallout("beta", callout12);
-    getCalloutManager()->registerCallout("beta", printContextNames1);
-    getCalloutManager()->registerCallout("gamma", callout13);
-    getCalloutManager()->registerCallout("delta", print1);
+    getCalloutManager()->registerCallout("alpha", callout21, 1);
+    getCalloutManager()->registerCallout("beta", callout22, 1);
+    getCalloutManager()->registerCallout("beta", deleteIntContextItem, 1);
+    getCalloutManager()->registerCallout("beta", printContextNames2, 1);
+    getCalloutManager()->registerCallout("gamma", callout23, 1);
+    getCalloutManager()->registerCallout("delta", print2, 1);
 
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("alpha", callout21);
-    getCalloutManager()->registerCallout("beta", callout22);
-    getCalloutManager()->registerCallout("beta", deleteIntContextItem);
-    getCalloutManager()->registerCallout("beta", printContextNames2);
-    getCalloutManager()->registerCallout("gamma", callout23);
-    getCalloutManager()->registerCallout("delta", print2);
-
-    getCalloutManager()->setLibraryIndex(2);
-    getCalloutManager()->registerCallout("alpha", callout31);
-    getCalloutManager()->registerCallout("beta", callout32);
-    getCalloutManager()->registerCallout("beta", deleteAllContextItems);
-    getCalloutManager()->registerCallout("beta", printContextNames3);
-    getCalloutManager()->registerCallout("gamma", callout33);
-    getCalloutManager()->registerCallout("delta", print3);
+    getCalloutManager()->registerCallout("alpha", callout31, 2);
+    getCalloutManager()->registerCallout("beta", callout32, 2);
+    getCalloutManager()->registerCallout("beta", deleteAllContextItems, 2);
+    getCalloutManager()->registerCallout("beta", printContextNames3, 2);
+    getCalloutManager()->registerCallout("gamma", callout33, 2);
+    getCalloutManager()->registerCallout("delta", print3, 2);
 
     // Create the callout handles and distinguish them by setting the "long"
     // argument.
@@ -520,11 +512,10 @@ TEST_F(HandlesTest, ContextDeletionCheck) {
 TEST_F(HandlesTest, ConstructionDestructionCallouts) {
 
     // Register context callouts.
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("context_create", callout11);
-    getCalloutManager()->registerCallout("context_create", print1);
-    getCalloutManager()->registerCallout("context_destroy", callout12);
-    getCalloutManager()->registerCallout("context_destroy", print1);
+    getCalloutManager()->registerCallout("context_create", callout11, 0);
+    getCalloutManager()->registerCallout("context_create", print1, 0);
+    getCalloutManager()->registerCallout("context_destroy", callout12, 0);
+    getCalloutManager()->registerCallout("context_destroy", print1, 0);
 
     // Create the CalloutHandle and check that the constructor callout
     // has run.
@@ -543,204 +534,6 @@ TEST_F(HandlesTest, ConstructionDestructionCallouts) {
 
     EXPECT_EQ("110120", resultCalloutString(0));
     EXPECT_EQ((110 + 120), resultCalloutInt(0));
-}
-
-// Dynamic callout registration and deregistration.
-// The following are the dynamic registration/deregistration callouts.
-
-
-// Add callout_78_alpha - adds a callout to hook alpha that appends "78x"
-// (where "x" is the callout handle) to the current output.
-
-int
-callout78(CalloutHandle& callout_handle) {
-    return (execute(callout_handle, 7, 8));
-}
-
-int
-add_callout78_alpha(CalloutHandle& callout_handle) {
-    callout_handle.getLibraryHandle().registerCallout("alpha", callout78);
-    return (0);
-}
-
-int
-delete_callout78_alpha(CalloutHandle& callout_handle) {
-    static_cast<void>(
-        callout_handle.getLibraryHandle().deregisterCallout("alpha",
-                                                            callout78));
-    return (0);
-}
-
-// Check that a callout can register another callout on a different hook.
-
-TEST_F(HandlesTest, DynamicRegistrationAnotherHook) {
-    // Register callouts for the different libraries.
-    CalloutHandle handle(getCalloutManager());
-
-    // Set up callouts on "alpha".
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", callout11);
-    getCalloutManager()->registerCallout("delta", print1);
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("alpha", callout21);
-    getCalloutManager()->registerCallout("delta", print2);
-    getCalloutManager()->setLibraryIndex(2);
-    getCalloutManager()->registerCallout("alpha", callout31);
-    getCalloutManager()->registerCallout("delta", print3);
-
-    // ... and on "beta", set up the function to add a hook to alpha (but only
-    // for library 1).
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("beta", add_callout78_alpha);
-
-    // See what we get for calling the callouts on alpha first.
-    CalloutHandle callout_handle_1(getCalloutManager());
-    callout_handle_1.setArgument("handle_num", static_cast<int>(1));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_1);
-
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_1);
-    EXPECT_EQ("111", resultCalloutString(0));
-    EXPECT_EQ("211", resultCalloutString(1));
-    EXPECT_EQ("311", resultCalloutString(2));
-
-    // All as expected, now call the callouts on beta.  This should add a
-    // callout to the list of callouts for alpha, which we should see when
-    // we run the test again.
-    getCalloutManager()->callCallouts(beta_index_, callout_handle_1);
-
-    // Use a new callout handle so as to get fresh callout context.
-    CalloutHandle callout_handle_2(getCalloutManager());
-    callout_handle_2.setArgument("handle_num", static_cast<int>(2));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_2);
-
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_2);
-    EXPECT_EQ("112", resultCalloutString(0));
-    EXPECT_EQ("212782", resultCalloutString(1));
-    EXPECT_EQ("312", resultCalloutString(2));
-}
-
-// Check that a callout can register another callout on the same hook.
-// Note that the registration only applies to a subsequent invocation of
-// callCallouts, not to the current one. In other words, if
-//
-// * the callout list for a library is "A then B then C"
-// * when callCallouts is executed "B" adds "D" to that list,
-//
-// ... the current execution of callCallouts only executes A, B and C.  A
-// subsequent invocation will execute A, B, C then D.
-
-TEST_F(HandlesTest, DynamicRegistrationSameHook) {
-    // Register callouts for the different libraries.
-    CalloutHandle handle(getCalloutManager());
-
-    // Set up callouts on "alpha".
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", callout11);
-    getCalloutManager()->registerCallout("alpha", add_callout78_alpha);
-    getCalloutManager()->registerCallout("delta", print1);
-
-    // See what we get for calling the callouts on alpha first.
-    CalloutHandle callout_handle_1(getCalloutManager());
-    callout_handle_1.setArgument("handle_num", static_cast<int>(1));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_1);
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_1);
-    EXPECT_EQ("111", resultCalloutString(0));
-
-    // Run it again - we should have added something to this hook.
-    CalloutHandle callout_handle_2(getCalloutManager());
-    callout_handle_2.setArgument("handle_num", static_cast<int>(2));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_2);
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_2);
-    EXPECT_EQ("112782", resultCalloutString(0));
-
-    // And a third time...
-    CalloutHandle callout_handle_3(getCalloutManager());
-    callout_handle_3.setArgument("handle_num", static_cast<int>(3));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_3);
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_3);
-    EXPECT_EQ("113783783", resultCalloutString(0));
-}
-
-// Deregistration of a callout from a different hook
-
-TEST_F(HandlesTest, DynamicDeregistrationDifferentHook) {
-    // Register callouts for the different libraries.
-    CalloutHandle handle(getCalloutManager());
-
-    // Set up callouts on "alpha".
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", callout11);
-    getCalloutManager()->registerCallout("alpha", callout78);
-    getCalloutManager()->registerCallout("alpha", callout11);
-    getCalloutManager()->registerCallout("delta", print1);
-
-    getCalloutManager()->registerCallout("beta", delete_callout78_alpha);
-
-    // Call the callouts on alpha
-    CalloutHandle callout_handle_1(getCalloutManager());
-    callout_handle_1.setArgument("handle_num", static_cast<int>(1));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_1);
-
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_1);
-    EXPECT_EQ("111781111", resultCalloutString(0));
-
-    // Run the callouts on hook beta to remove the callout on alpha.
-    getCalloutManager()->callCallouts(beta_index_, callout_handle_1);
-
-    // The run of the callouts should have altered the callout list on the
-    // first library for hook alpha, so call again to make sure.
-    CalloutHandle callout_handle_2(getCalloutManager());
-    callout_handle_2.setArgument("handle_num", static_cast<int>(2));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_2);
-
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_2);
-    EXPECT_EQ("112112", resultCalloutString(0));
-}
-
-// Deregistration of a callout from the same hook
-
-TEST_F(HandlesTest, DynamicDeregistrationSameHook) {
-    // Register callouts for the different libraries.
-    CalloutHandle handle(getCalloutManager());
-
-    // Set up callouts on "alpha".
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", callout11);
-    getCalloutManager()->registerCallout("alpha", delete_callout78_alpha);
-    getCalloutManager()->registerCallout("alpha", callout78);
-    getCalloutManager()->registerCallout("delta", print1);
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("alpha", callout21);
-    getCalloutManager()->registerCallout("alpha", callout78);
-    getCalloutManager()->registerCallout("delta", print2);
-
-    // Call the callouts on alpha
-    CalloutHandle callout_handle_1(getCalloutManager());
-    callout_handle_1.setArgument("handle_num", static_cast<int>(1));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_1);
-
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_1);
-    EXPECT_EQ("111781", resultCalloutString(0));
-    EXPECT_EQ("211781", resultCalloutString(1));
-
-    // The run of the callouts should have altered the callout list on the
-    // first library for hook alpha, so call again to make sure.
-    CalloutHandle callout_handle_2(getCalloutManager());
-    callout_handle_2.setArgument("handle_num", static_cast<int>(2));
-    getCalloutManager()->callCallouts(alpha_index_, callout_handle_2);
-
-    zero_results();
-    getCalloutManager()->callCallouts(delta_index_, callout_handle_2);
-    EXPECT_EQ("112", resultCalloutString(0));
-    EXPECT_EQ("212782", resultCalloutString(1));
 }
 
 // Testing the operation of the "skip" flag.  Callouts print the value
@@ -786,29 +579,26 @@ calloutClearSkip(CalloutHandle& handle) {
 // Do a series of tests, returning with the skip flag set "true".
 
 TEST_F(HandlesTest, ReturnSkipSet) {
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", calloutPrintSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
+    getCalloutManager()->registerCallout("alpha", calloutPrintSkip, 0);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 0);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 0);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 0);
 
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("alpha", calloutPrintSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
+    getCalloutManager()->registerCallout("alpha", calloutPrintSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 1);
 
-    getCalloutManager()->setLibraryIndex(2);
-    getCalloutManager()->registerCallout("alpha", calloutPrintSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
+    getCalloutManager()->registerCallout("alpha", calloutPrintSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 2);
 
     CalloutHandle callout_handle(getCalloutManager());
     getCalloutManager()->callCallouts(alpha_index_, callout_handle);
 
-    // Check result.  For each of visual checking, the expected string is
+    // Check result.  For ease of visual checking, the expected string is
     // divided into sections corresponding to the blocks of callouts above.
     EXPECT_EQ(std::string("NNYY" "NNYYN" "NNYN"), common_string_);
 
@@ -818,29 +608,26 @@ TEST_F(HandlesTest, ReturnSkipSet) {
 
 // Repeat the test, returning with the skip flag clear.
 TEST_F(HandlesTest, ReturnSkipClear) {
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 0);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 0);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 0);
 
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("alpha", calloutPrintSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
+    getCalloutManager()->registerCallout("alpha", calloutPrintSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 1);
 
-    getCalloutManager()->setLibraryIndex(2);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
-    getCalloutManager()->registerCallout("alpha", calloutPrintSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetSkip);
-    getCalloutManager()->registerCallout("alpha", calloutClearSkip);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutPrintSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutSetSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutClearSkip, 2);
 
     CalloutHandle callout_handle(getCalloutManager());
     getCalloutManager()->callCallouts(alpha_index_, callout_handle);
 
-    // Check result.  For each of visual checking, the expected string is
+    // Check result.  For ease of visual checking, the expected string is
     // divided into sections corresponding to the blocks of callouts above.
     EXPECT_EQ(std::string("NYY" "NNYNYN" "NNNY"), common_string_);
 
@@ -914,24 +701,21 @@ calloutPrintArgument(CalloutHandle& handle) {
 // This test verifies that the next step status is processed appropriately.
 // The test checks the following next step statuses: CONTINUE, SKIP, DROP.
 TEST_F(HandlesTest, CheckModifiedArgument) {
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip, 0);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue, 0);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue, 0);
 
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentDrop);
-    getCalloutManager()->registerCallout("alpha", calloutPrintArgument);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentDrop);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip, 1);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentDrop, 1);
+    getCalloutManager()->registerCallout("alpha", calloutPrintArgument, 1);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentDrop, 1);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue, 1);
 
-    getCalloutManager()->setLibraryIndex(2);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentPark);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip);
-    getCalloutManager()->registerCallout("alpha", calloutSetArgumentPark);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentContinue, 2);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentPark, 2);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentSkip, 2);
+    getCalloutManager()->registerCallout("alpha", calloutSetArgumentPark, 2);
 
     // Create the argument with an initial empty string value.  Then call the
     // sequence of callouts above.
@@ -964,9 +748,8 @@ callout_hook_dummy(CalloutHandle&) {
 }
 
 TEST_F(HandlesTest, HookName) {
-    getCalloutManager()->setLibraryIndex(0);
-    getCalloutManager()->registerCallout("alpha", callout_hook_name);
-    getCalloutManager()->registerCallout("beta", callout_hook_name);
+    getCalloutManager()->registerCallout("alpha", callout_hook_name, 0);
+    getCalloutManager()->registerCallout("beta", callout_hook_name, 0);
 
     // Call alpha and beta callouts and check the hook to which they belong.
     CalloutHandle callout_handle(getCalloutManager());
@@ -981,10 +764,9 @@ TEST_F(HandlesTest, HookName) {
 
     // Make sure that the callout accesses the name even if it is not the
     // only callout in the list.
-    getCalloutManager()->setLibraryIndex(1);
-    getCalloutManager()->registerCallout("gamma", callout_hook_dummy);
-    getCalloutManager()->registerCallout("gamma", callout_hook_name);
-    getCalloutManager()->registerCallout("gamma", callout_hook_dummy);
+    getCalloutManager()->registerCallout("gamma", callout_hook_dummy, 1);
+    getCalloutManager()->registerCallout("gamma", callout_hook_name, 1);
+    getCalloutManager()->registerCallout("gamma", callout_hook_dummy, 1);
 
     EXPECT_EQ(std::string("beta"), HandlesTest::common_string_);
     getCalloutManager()->callCallouts(gamma_index_, callout_handle);

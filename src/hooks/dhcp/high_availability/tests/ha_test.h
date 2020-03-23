@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,14 +15,15 @@
 #include <dhcp/pkt6.h>
 #include <dhcpsrv/network_state.h>
 #include <hooks/libinfo.h>
-#include <util/threads/sync.h>
-#include <util/threads/thread.h>
 #include <boost/shared_ptr.hpp>
 #include <gtest/gtest.h>
 #include <cstdint>
 #include <functional>
 #include <string>
 #include <vector>
+#include <mutex>
+#include <condition_variable>
+#include <thread>
 
 namespace isc {
 namespace ha {
@@ -65,6 +66,8 @@ public:
     using StateType::timer_;
     using StateType::clock_skew_;
     using StateType::last_clock_skew_warn_;
+    using StateType::my_time_at_skew_;
+    using StateType::partner_time_at_skew_;
 };
 
 /// @brief Type of the NakedCommunicationState for DHCPv4.
@@ -113,8 +116,7 @@ public:
     /// @brief Runs IO service in a thread.
     ///
     /// @return Shared pointer to the thread.
-    boost::shared_ptr<util::thread::Thread>
-    runIOServiceInThread();
+    boost::shared_ptr<std::thread> runIOServiceInThread();
 
     /// @brief Executes commands while running IO service in a thread.
     ///
@@ -130,8 +132,8 @@ protected:
     /// IO service starts running and executes this function.
     /// @param mutex reference to the mutex used for synchronization.
     /// @param condvar reference to condition variable used for synchronization.
-    void signalServiceRunning(bool& running, util::thread::Mutex& mutex,
-                              util::thread::CondVar& condvar);
+    void signalServiceRunning(bool& running, std::mutex& mutex,
+                              std::condition_variable& condvar);
 
 public:
 

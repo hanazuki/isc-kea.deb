@@ -9,33 +9,8 @@ if USE_STATIC_LINK
 AM_LDFLAGS = -static
 endif
 
-CLEANFILES  = lfc_messages.h lfc_messages.cc s-messages
+EXTRA_DIST = lfc.dox
 
-man_MANS = kea-lfc.8
-DISTCLEANFILES = $(man_MANS)
-EXTRA_DIST = $(man_MANS) kea-lfc.xml lfc.dox
-
-if GENERATE_DOCS
-kea-lfc.8: kea-lfc.xml
-	@XSLTPROC@ --novalid --xinclude --nonet -o $@ \
-        http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl \
-	$(srcdir)/kea-lfc.xml
-
-else
-
-$(man_MANS):
-	@echo Man generation disabled.  Creating dummy $@.  Configure with --enable-generate-docs to enable it.
-	@echo Man generation disabled.  Remove this file, configure with --enable-generate-docs, and rebuild Kea > $@
-
-endif
-
-lfc_messages.h lfc_messages.cc: s-messages
-
-s-messages: lfc_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/lfc/lfc_messages.mes
-	touch $@
-
-BUILT_SOURCES = lfc_messages.h lfc_messages.cc
 
 # convenience archive
 
@@ -44,8 +19,7 @@ noinst_LTLIBRARIES = liblfc.la
 liblfc_la_SOURCES  =
 liblfc_la_SOURCES += lfc_controller.h lfc_controller.cc
 liblfc_la_SOURCES += lfc_log.h lfc_log.cc
-
-nodist_liblfc_la_SOURCES = lfc_messages.h lfc_messages.cc
+liblfc_la_SOURCES += lfc_messages.h lfc_messages.cc
 EXTRA_DIST += lfc_messages.mes
 
 sbin_PROGRAMS = kea-lfc
@@ -80,7 +54,6 @@ kea_lfc_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 kea_lfc_LDADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
 kea_lfc_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 kea_lfc_LDADD += $(top_builddir)/src/lib/log/libkea-log.la
-kea_lfc_LDADD += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 kea_lfc_LDADD += $(top_builddir)/src/lib/util/libkea-util.la
 kea_lfc_LDADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 kea_lfc_LDADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
@@ -97,3 +70,36 @@ kea_lfc_LDFLAGS += $(CQL_LIBS)
 endif
 
 kea_lfcdir = $(pkgdatadir)
+
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f lfc_messages.h lfc_messages.cc
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
+if GENERATE_MESSAGES
+
+# Define rule to build logging source files from message file
+messages: lfc_messages.h lfc_messages.cc
+	@echo Message files regenerated
+
+lfc_messages.h lfc_messages.cc: lfc_messages.mes
+	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/lfc/lfc_messages.mes
+
+else
+
+messages lfc_messages.h lfc_messages.cc:
+	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
+
+endif

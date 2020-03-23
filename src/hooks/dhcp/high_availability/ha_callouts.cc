@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,8 +14,11 @@
 #include <ha_log.h>
 #include <asiolink/io_service.h>
 #include <cc/command_interpreter.h>
+#include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/network_state.h>
+#include <exceptions/exceptions.h>
 #include <hooks/hooks.h>
+#include <process/daemon.h>
 
 namespace isc {
 namespace ha {
@@ -27,8 +30,10 @@ HAImplPtr impl;
 
 using namespace isc::config;
 using namespace isc::data;
+using namespace isc::dhcp;
 using namespace isc::ha;
 using namespace isc::hooks;
+using namespace isc::process;
 
 extern "C" {
 
@@ -203,6 +208,45 @@ int continue_command(CalloutHandle& handle) {
     return (0);
 }
 
+/// @brief ha-maintenance-notify command handler implementation.
+int maintenance_notify_command(CalloutHandle& handle) {
+    try {
+        impl->maintenanceNotifyHandler(handle);
+
+    } catch (const std::exception& ex) {
+        LOG_ERROR(ha_logger, HA_MAINTENANCE_NOTIFY_HANDLER_FAILED)
+            .arg(ex.what());
+    }
+
+    return (0);
+}
+
+/// @brief ha-maintenance-start command handler implementation.
+int maintenance_start_command(CalloutHandle& handle) {
+    try {
+        impl->maintenanceStartHandler(handle);
+
+    } catch (const std::exception& ex) {
+        LOG_ERROR(ha_logger, HA_MAINTENANCE_START_HANDLER_FAILED)
+            .arg(ex.what());
+    }
+
+    return (0);
+}
+
+/// @brief ha-maintenance-cancel command handler implementation.
+int maintenance_cancel_command(CalloutHandle& handle) {
+    try {
+        impl->maintenanceCancelHandler(handle);
+
+    } catch (const std::exception& ex) {
+        LOG_ERROR(ha_logger, HA_MAINTENANCE_CANCEL_HANDLER_FAILED)
+            .arg(ex.what());
+    }
+
+    return (0);
+}
+
 /// @brief This function is called when the library is loaded.
 ///
 /// @param handle library handle
@@ -215,6 +259,21 @@ int load(LibraryHandle& handle) {
     }
 
     try {
+        // Make the hook library not loadable by d2 or ca.
+        uint16_t family = CfgMgr::instance().getFamily();
+        const std::string& proc_name = Daemon::getProcName();
+        if (family == AF_INET) {
+            if (proc_name != "kea-dhcp4") {
+                isc_throw(isc::Unexpected, "Bad process name: " << proc_name
+                          << ", expected kea-dhcp4");
+            }
+        } else {
+            if (proc_name != "kea-dhcp6") {
+                isc_throw(isc::Unexpected, "Bad process name: " << proc_name
+                          << ", expected kea-dhcp6");
+            }
+        }
+
         impl = boost::make_shared<HAImpl>();
         impl->configure(config);
 
@@ -222,6 +281,9 @@ int load(LibraryHandle& handle) {
         handle.registerCommandCallout("ha-sync", sync_command);
         handle.registerCommandCallout("ha-scopes", scopes_command);
         handle.registerCommandCallout("ha-continue", continue_command);
+        handle.registerCommandCallout("ha-maintenance-notify", maintenance_notify_command);
+        handle.registerCommandCallout("ha-maintenance-start", maintenance_start_command);
+        handle.registerCommandCallout("ha-maintenance-cancel", maintenance_cancel_command);
 
     } catch (const std::exception& ex) {
         LOG_ERROR(ha_logger, HA_CONFIGURATION_FAILED)
@@ -241,5 +303,14 @@ int unload() {
     return (0);
 }
 
+/// @brief This function is called to retrieve the multi-threading compatibility.
+///
+/// @note: this should be revisited as the library is not essentially
+/// incompatible.
+///
+/// @return 0 which means not compatible with multi-threading.
+int multi_threading_compatible() {
+    return (0);
+}
 
 } // end extern "C"

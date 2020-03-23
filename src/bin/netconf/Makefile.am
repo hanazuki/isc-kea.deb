@@ -3,7 +3,7 @@ SUBDIRS = . tests
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib
 AM_CPPFLAGS += -I$(top_srcdir)/src/bin -I$(top_builddir)/src/bin
 AM_CPPFLAGS += -I$(top_srcdir)/src -I$(top_builddir)/src
-AM_CPPFLAGS += $(BOOST_INCLUDES) $(SYSREPO_INCLUDES)
+AM_CPPFLAGS += $(BOOST_INCLUDES) $(SYSREPO_INCLUDEDIR)
 
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
@@ -11,34 +11,9 @@ if USE_STATIC_LINK
 AM_LDFLAGS = -static
 endif
 
-CLEANFILES  = *.gcno *.gcda netconf_messages.h netconf_messages.cc s-messages
+CLEANFILES  = *.gcno *.gcda
 
-man_MANS = kea-netconf.8
-DISTCLEANFILES = $(man_MANS)
-EXTRA_DIST = $(man_MANS) kea-netconf.xml
 #EXTRA_DIST += netconf.dox netconf_hooks.dox
-
-if GENERATE_DOCS
-kea-netconf.8: kea-netconf.xml
-	@XSLTPROC@ --novalid --xinclude --nonet -o $@ \
-        http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl \
-	$(srcdir)/kea-netconf.xml
-
-else
-
-$(man_MANS):
-	@echo Man generation disabled.  Creating dummy $@.  Configure with --enable-generate-docs to enable it.
-	@echo Man generation disabled.  Remove this file, configure with --enable-generate-docs, and rebuild Kea > $@
-
-endif
-
-netconf_messages.h netconf_messages.cc: s-messages
-
-s-messages: netconf_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/netconf/netconf_messages.mes
-	touch $@
-
-BUILT_SOURCES = netconf_messages.h netconf_messages.cc
 
 # convenience archive
 
@@ -60,10 +35,9 @@ libnetconf_la_SOURCES += parser_context_decl.h
 libnetconf_la_SOURCES += simple_parser.cc simple_parser.h
 libnetconf_la_SOURCES += location.hh position.hh stack.hh
 libnetconf_la_SOURCES += netconf_lexer.ll netconf_parser.yy
+libnetconf_la_SOURCES += netconf_messages.h netconf_messages.cc
 
-nodist_libnetconf_la_SOURCES = netconf_messages.h netconf_messages.cc
-
-EXTRA_DIST += netconf_messages.mes
+EXTRA_DIST = netconf_messages.mes
 EXTRA_DIST += netconf_lexer.ll
 EXTRA_DIST += netconf_parser.yy
 
@@ -81,13 +55,45 @@ kea_netconf_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 kea_netconf_LDADD += $(top_builddir)/src/lib/cc/libkea-cc.la
 kea_netconf_LDADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 kea_netconf_LDADD += $(top_builddir)/src/lib/log/libkea-log.la
-kea_netconf_LDADD += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 kea_netconf_LDADD += $(top_builddir)/src/lib/util/libkea-util.la
 kea_netconf_LDADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 kea_netconf_LDADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS) $(SYSREPO_LIBS)
 
 
 kea_netconfdir = $(pkgdatadir)
+
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f netconf_messages.h netconf_messages.cc
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
+if GENERATE_MESSAGES
+
+# Define rule to build logging source files from message file
+messages: netconf_messages.h netconf_messages.cc
+	@echo Message files regenerated
+
+netconf_messages.h netconf_messages.cc: netconf_messages.mes
+	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/netconf/netconf_messages.mes
+
+else
+
+messages netconf_messages.h netconf_messages.cc:
+	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
+
+endif
 
 if GENERATE_PARSER
 

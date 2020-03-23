@@ -96,6 +96,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -113,13 +114,15 @@ CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
 libperfdhcp_la_LIBADD =
 am_libperfdhcp_la_OBJECTS = command_options.lo perf_pkt6.lo \
-	perf_pkt4.lo pkt_transform.lo rate_control.lo test_control.lo
+	perf_pkt4.lo pkt_transform.lo rate_control.lo stats_mgr.lo \
+	test_control.lo receiver.lo perf_socket.lo avalanche_scen.lo \
+	basic_scen.lo
 libperfdhcp_la_OBJECTS = $(am_libperfdhcp_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
-am__installdirs = "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man8dir)"
+am__installdirs = "$(DESTDIR)$(sbindir)"
 PROGRAMS = $(sbin_PROGRAMS)
 am_perfdhcp_OBJECTS = main.$(OBJEXT)
 perfdhcp_OBJECTS = $(am_perfdhcp_OBJECTS)
@@ -132,7 +135,6 @@ perfdhcp_DEPENDENCIES = libperfdhcp.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/cc/libkea-cc.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
@@ -207,36 +209,6 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
-am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
-am__vpath_adj = case $$p in \
-    $(srcdir)/*) f=`echo "$$p" | sed "s|^$$srcdirstrip/||"`;; \
-    *) f=$$p;; \
-  esac;
-am__strip_dir = f=`echo $$p | sed -e 's|^.*/||'`;
-am__install_max = 40
-am__nobase_strip_setup = \
-  srcdirstrip=`echo "$(srcdir)" | sed 's/[].[^$$\\*|]/\\\\&/g'`
-am__nobase_strip = \
-  for p in $$list; do echo "$$p"; done | sed -e "s|$$srcdirstrip/||"
-am__nobase_list = $(am__nobase_strip_setup); \
-  for p in $$list; do echo "$$p $$p"; done | \
-  sed "s| $$srcdirstrip/| |;"' / .*\//!s/ .*/ ./; s,\( .*\)/[^/]*$$,\1,' | \
-  $(AWK) 'BEGIN { files["."] = "" } { files[$$2] = files[$$2] " " $$1; \
-    if (++n[$$2] == $(am__install_max)) \
-      { print $$2, files[$$2]; n[$$2] = 0; files[$$2] = "" } } \
-    END { for (dir in files) print dir, files[dir] }'
-am__base_list = \
-  sed '$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;$$!N;s/\n/ /g' | \
-  sed '$$!N;$$!N;$$!N;$$!N;s/\n/ /g'
-am__uninstall_files_from_dir = { \
-  test -z "$$files" \
-    || { test ! -d "$$dir" && test ! -f "$$dir" && test ! -r "$$dir"; } \
-    || { echo " ( cd '$$dir' && rm -f" $$files ")"; \
-         $(am__cd) "$$dir" && rm -f $$files; }; \
-  }
-man8dir = $(mandir)/man8
-NROFF = nroff
-MANS = $(man_MANS)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
   distclean-recursive maintainer-clean-recursive
 am__recursive_targets = \
@@ -308,7 +280,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -329,7 +300,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -339,6 +309,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -348,7 +319,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -399,6 +369,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -416,17 +387,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -488,7 +459,7 @@ top_srcdir = @top_srcdir@
 SUBDIRS = . tests
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
 	-I$(top_srcdir)/src/bin -I$(top_builddir)/src/bin \
-	$(BOOST_INCLUDES)
+	$(BOOST_INCLUDES) -Werror
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 AM_LDFLAGS = -lm $(am__append_1)
 
@@ -497,8 +468,10 @@ noinst_LTLIBRARIES = libperfdhcp.la
 libperfdhcp_la_SOURCES = command_options.cc command_options.h \
 	localized_option.h perf_pkt6.cc perf_pkt6.h perf_pkt4.cc \
 	perf_pkt4.h packet_storage.h pkt_transform.cc pkt_transform.h \
-	rate_control.cc rate_control.h stats_mgr.h test_control.cc \
-	test_control.h
+	rate_control.cc rate_control.h stats_mgr.cc stats_mgr.h \
+	test_control.cc test_control.h receiver.cc receiver.h \
+	perf_socket.cc perf_socket.h abstract_scen.h avalanche_scen.cc \
+	avalanche_scen.h basic_scen.cc basic_scen.h
 perfdhcp_SOURCES = main.cc
 perfdhcp_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS)
 perfdhcp_LDADD = libperfdhcp.la \
@@ -509,16 +482,13 @@ perfdhcp_LDADD = libperfdhcp.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/cc/libkea-cc.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(CRYPTO_LIBS) $(BOOST_LIBS) $(PTHREAD_LDFLAGS)
 
 # ... and the documentation
-EXTRA_DIST = perfdhcp_internals.dox $(man_MANS) perfdhcp.xml
-man_MANS = perfdhcp.8
-DISTCLEANFILES = $(man_MANS)
+EXTRA_DIST = perfdhcp_internals.dox
 all: all-recursive
 
 .SUFFIXES:
@@ -626,12 +596,17 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/avalanche_scen.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/basic_scen.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/command_options.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/main.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/perf_pkt4.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/perf_pkt6.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/perf_socket.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pkt_transform.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/rate_control.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/receiver.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stats_mgr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/test_control.Plo@am__quote@
 
 .cc.o:
@@ -660,49 +635,6 @@ mostlyclean-libtool:
 
 clean-libtool:
 	-rm -rf .libs _libs
-install-man8: $(man_MANS)
-	@$(NORMAL_INSTALL)
-	@list1=''; \
-	list2='$(man_MANS)'; \
-	test -n "$(man8dir)" \
-	  && test -n "`echo $$list1$$list2`" \
-	  || exit 0; \
-	echo " $(MKDIR_P) '$(DESTDIR)$(man8dir)'"; \
-	$(MKDIR_P) "$(DESTDIR)$(man8dir)" || exit 1; \
-	{ for i in $$list1; do echo "$$i"; done;  \
-	if test -n "$$list2"; then \
-	  for i in $$list2; do echo "$$i"; done \
-	    | sed -n '/\.8[a-z]*$$/p'; \
-	fi; \
-	} | while read p; do \
-	  if test -f $$p; then d=; else d="$(srcdir)/"; fi; \
-	  echo "$$d$$p"; echo "$$p"; \
-	done | \
-	sed -e 'n;s,.*/,,;p;h;s,.*\.,,;s,^[^8][0-9a-z]*$$,8,;x' \
-	      -e 's,\.[0-9a-z]*$$,,;$(transform);G;s,\n,.,' | \
-	sed 'N;N;s,\n, ,g' | { \
-	list=; while read file base inst; do \
-	  if test "$$base" = "$$inst"; then list="$$list $$file"; else \
-	    echo " $(INSTALL_DATA) '$$file' '$(DESTDIR)$(man8dir)/$$inst'"; \
-	    $(INSTALL_DATA) "$$file" "$(DESTDIR)$(man8dir)/$$inst" || exit $$?; \
-	  fi; \
-	done; \
-	for i in $$list; do echo "$$i"; done | $(am__base_list) | \
-	while read files; do \
-	  test -z "$$files" || { \
-	    echo " $(INSTALL_DATA) $$files '$(DESTDIR)$(man8dir)'"; \
-	    $(INSTALL_DATA) $$files "$(DESTDIR)$(man8dir)" || exit $$?; }; \
-	done; }
-
-uninstall-man8:
-	@$(NORMAL_UNINSTALL)
-	@list=''; test -n "$(man8dir)" || exit 0; \
-	files=`{ for i in $$list; do echo "$$i"; done; \
-	l2='$(man_MANS)'; for i in $$l2; do echo "$$i"; done | \
-	  sed -n '/\.8[a-z]*$$/p'; \
-	} | sed -e 's,.*/,,;h;s,.*\.,,;s,^[^8][0-9a-z]*$$,8,;x' \
-	      -e 's,\.[0-9a-z]*$$,,;$(transform);G;s,\n,.,'`; \
-	dir='$(DESTDIR)$(man8dir)'; $(am__uninstall_files_from_dir)
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run 'make' without going through this Makefile.
@@ -860,10 +792,10 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 check: check-recursive
-all-am: Makefile $(LTLIBRARIES) $(PROGRAMS) $(MANS)
+all-am: Makefile $(LTLIBRARIES) $(PROGRAMS)
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(sbindir)" "$(DESTDIR)$(man8dir)"; do \
+	for dir in "$(DESTDIR)$(sbindir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-recursive
@@ -892,7 +824,6 @@ clean-generic:
 distclean-generic:
 	-test -z "$(CONFIG_CLEAN_FILES)" || rm -f $(CONFIG_CLEAN_FILES)
 	-test . = "$(srcdir)" || test -z "$(CONFIG_CLEAN_VPATH_FILES)" || rm -f $(CONFIG_CLEAN_VPATH_FILES)
-	-test -z "$(DISTCLEANFILES)" || rm -f $(DISTCLEANFILES)
 
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
@@ -920,7 +851,7 @@ info: info-recursive
 
 info-am:
 
-install-data-am: install-man
+install-data-am:
 
 install-dvi: install-dvi-recursive
 
@@ -936,7 +867,7 @@ install-info: install-info-recursive
 
 install-info-am:
 
-install-man: install-man8
+install-man:
 
 install-pdf: install-pdf-recursive
 
@@ -966,9 +897,7 @@ ps: ps-recursive
 
 ps-am:
 
-uninstall-am: uninstall-man uninstall-sbinPROGRAMS
-
-uninstall-man: uninstall-man8
+uninstall-am: uninstall-sbinPROGRAMS
 
 .MAKE: $(am__recursive_targets) install-am install-strip
 
@@ -980,24 +909,16 @@ uninstall-man: uninstall-man8
 	html-am info info-am install install-am install-data \
 	install-data-am install-dvi install-dvi-am install-exec \
 	install-exec-am install-html install-html-am install-info \
-	install-info-am install-man install-man8 install-pdf \
-	install-pdf-am install-ps install-ps-am install-sbinPROGRAMS \
-	install-strip installcheck installcheck-am installdirs \
-	installdirs-am maintainer-clean maintainer-clean-generic \
-	mostlyclean mostlyclean-compile mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
-	uninstall-am uninstall-man uninstall-man8 \
+	install-info-am install-man install-pdf install-pdf-am \
+	install-ps install-ps-am install-sbinPROGRAMS install-strip \
+	installcheck installcheck-am installdirs installdirs-am \
+	maintainer-clean maintainer-clean-generic mostlyclean \
+	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
+	pdf pdf-am ps ps-am tags tags-am uninstall uninstall-am \
 	uninstall-sbinPROGRAMS
 
 .PRECIOUS: Makefile
 
-
-@GENERATE_DOCS_TRUE@perfdhcp.8: perfdhcp.xml
-@GENERATE_DOCS_TRUE@	@XSLTPROC@ --novalid --xinclude --nonet -o $@ http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl $(srcdir)/perfdhcp.xml
-
-@GENERATE_DOCS_FALSE@$(man_MANS):
-@GENERATE_DOCS_FALSE@	@echo Man generation disabled.  Creating dummy $@.  Configure with --enable-generate-docs to enable it.
-@GENERATE_DOCS_FALSE@	@echo Man generation disabled.  Remove this file, configure with --enable-generate-docs, and rebuild Kea > $@
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

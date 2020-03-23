@@ -1,11 +1,12 @@
 #!/bin/sh
 
+prefix=/usr/local
 # Include utilities. Use installed version if available and
 # use build version if it isn't.
 if [ -e ${prefix}/share/kea/scripts/admin-utils.sh ]; then
     . ${prefix}/share/kea/scripts/admin-utils.sh
 else
-    . /home/wlodek/dev/kea/src/bin/admin/admin-utils.sh
+    . /home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/bin/admin/admin-utils.sh
 fi
 
 VERSION=`pgsql_version "$@"`

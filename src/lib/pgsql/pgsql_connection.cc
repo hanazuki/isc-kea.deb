@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <database/db_log.h>
 #include <pgsql/pgsql_connection.h>
+#include <pgsql/pgsql_exchange.h>
 
 // PostgreSQL errors should be tested based on the SQL state code.  Each state
 // code is 5 decimal, ASCII, digits, the first two define the category of
@@ -24,6 +25,8 @@
 // So we can use it like this: const char some_error[] = ERRCODE_xxxx;
 #define PGSQL_STATECODE_LEN 5
 #include <utils/errcodes.h>
+
+#include <sstream>
 
 using namespace std;
 
@@ -125,6 +128,30 @@ PgSqlConnection::~PgSqlConnection() {
             }
         }
     }
+}
+
+std::pair<uint32_t, uint32_t>
+PgSqlConnection::getVersion(const ParameterMap& parameters) {
+    // Get a connection.
+    PgSqlConnection conn(parameters);
+
+    // Open the database.
+    conn.openDatabase();
+
+    const char* version_sql =  "SELECT version, minor FROM schema_version;";
+    PgSqlResult r(PQexec(conn.conn_, version_sql));
+    if (PQresultStatus(r) != PGRES_TUPLES_OK) {
+        isc_throw(DbOperationError, "unable to execute PostgreSQL statement <"
+                  << version_sql << ", reason: " << PQerrorMessage(conn.conn_));
+    }
+
+    uint32_t version;
+    PgSqlExchange::getColumnValue(r, 0, 0, version);
+
+    uint32_t minor;
+    PgSqlExchange::getColumnValue(r, 0, 1, minor);
+
+    return (make_pair(version, minor));
 }
 
 void
@@ -309,15 +336,16 @@ PgSqlConnection::checkStatementError(const PgSqlResult& r,
                 .arg(sqlstate ? sqlstate : "<sqlstate null>");
 
             // If there's no lost db callback or it returns false,
-            // then we're not attempting to recover so we're done
+            // then we're not attempting to recover so we're done.
             if (!invokeDbLostCallback()) {
-                exit (-1);
+                isc_throw(db::DbUnrecoverableError,
+                          "database connectivity cannot be recovered");
             }
 
             // We still need to throw so caller can error out of the current
             // processing.
             isc_throw(DbOperationError,
-                      "fatal database errror or connectivity lost");
+                      "fatal database error or connectivity lost");
         }
 
         // Apparently it wasn't fatal, so we throw with a helpful message.

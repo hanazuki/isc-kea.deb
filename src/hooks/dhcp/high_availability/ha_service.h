@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,7 +38,7 @@ namespace ha {
 class HAService : public boost::noncopyable, public util::StateModel {
 public:
 
-    /// Finished heartbeat commannd.
+    /// Finished heartbeat command.
     static const int HA_HEARTBEAT_COMPLETE_EVT = SM_DERIVED_EVENT_MIN + 1;
 
     /// Finished lease updates commands.
@@ -49,6 +49,18 @@ public:
 
     /// Lease database synchroniation succeeded.
     static const int HA_SYNCING_SUCCEEDED_EVT = SM_DERIVED_EVENT_MIN + 4;
+
+    /// ha-maintenance-notify command received.
+    static const int HA_MAINTENANCE_NOTIFY_EVT = SM_DERIVED_EVENT_MIN + 5;
+
+    /// ha-maintenance-start command received.
+    static const int HA_MAINTENANCE_START_EVT = SM_DERIVED_EVENT_MIN + 6;
+
+    /// ha-maintenance-cancel command received.
+    static const int HA_MAINTENANCE_CANCEL_EVT = SM_DERIVED_EVENT_MIN + 7;
+
+    /// Control result returned in response to ha-maintenance-notify.
+    static const int HA_CONTROL_RESULT_MAINTENANCE_NOT_ALLOWED = 1001;
 
 protected:
 
@@ -129,17 +141,27 @@ public:
     /// If any of the servers detects a failure of its partner,
     /// it transitions to the "partner-down" state.
     ///
-    /// If any of the servers being in the "hot-standby" or
-    /// "load-balancing" state detects that its partner is in the
-    /// "partner-down" state, the server transitions to the
-    /// "waiting" state. Such situation may occur if the Control
-    /// Agent of this server crashes but the DHCP daemon continues
-    /// to run. The partner will transition to the "partner-down"
-    /// state if the failure detection algorithm (based on "secs"
-    /// field or "elapsed time" option monitoring) and this server
-    /// is considered to be offline based solely on the fact that
-    /// it doesn't respond to heartbeats.
+    /// If any of the servers in the "hot-standby" or "load-balancing"
+    /// state detects that its partner is in the "partner-down" state,
+    /// the server transitions to the "waiting" state. Such situation
+    /// may occur if the Control Agent of this server crashes but the
+    /// DHCP daemon continues to run. The partner will transition to
+    /// the "partner-down" state if the failure detection algorithm
+    /// (based on "secs" field or "elapsed time" option monitoring)
+    /// and this server is considered to be offline based solely on
+    /// the fact that it doesn't respond to heartbeats.
     void normalStateHandler();
+
+    /// @brief Handler for the "in-maintenance" state.
+    ///
+    /// This is a handler invoked when one of the servers detected that
+    /// its partner is in the "partner-in-maintenance" state. The server
+    /// in this state is awaiting the shutdown by the administrator.
+    /// The administrator shuts down the server to perform some planned
+    /// maintenance. Meanwhile, the partner in the "partner-in-maintenance"
+    /// state responds to all DHCP queries. The server in the
+    /// "in-maintenance" state responds to no DHCP queries.
+    void inMaintenanceStateHandler();
 
     /// @brief Handler for "partner-down" state.
     ///
@@ -167,12 +189,34 @@ public:
     /// to the "waiting" state to try to resolve the conflict with the partner.
     void partnerDownStateHandler();
 
+    /// @brief Handler for "partner-in-maintenance" state.
+    ///
+    /// This is a handler invoked for the server which was administratively
+    /// transitioned to the "partner-in-maintenance" state. This is the case
+    /// when the partner needs to be shutdown for some planned maintenance.
+    ///
+    /// The server receiving ha-maintenance-start command transitions to this
+    /// state. It sends the ha-maintenance-notify command to the partner to cause
+    /// the partner to stop responding to the DHCP queries. Next, this server
+    /// starts responding to all DHCP queries. This allows the server
+    /// administrator to safely shutdown the partner as it is no longer
+    /// responsible for any portion of the DHCP traffic.
+    ///
+    /// The server in the "partner-in-maintenance" state remains in this state
+    /// until the first unsuccessful lease update, ha-heartbeat or any
+    /// other command send to the partner due to the issues with communication.
+    /// In that case the server assumes that the partner has been shutdown
+    /// and transitions to the "partner-down" state in which it still responds
+    /// to all DHCP queries but doesn't attempt to send lease updates to the
+    /// offline partner.
+    void partnerInMaintenanceStateHandler();
+
     /// @brief Handler for "ready" state.
     ///
     /// This a handler invoked for the server which finished synchronizing
     /// its lease database with the partner and is indicating readiness to
     /// start normal operation, i.e. load balancing or hot standby. The
-    /// partner being in the "partner-down" state will transition to the
+    /// partner in the "partner-down" state will transition to the
     /// "load-balancing" or "hot-standby" state. The "ready" server will
     /// also transition to one of these states following the transition
     /// of the partner.
@@ -187,7 +231,7 @@ public:
     /// @brief Handler for "syncing" state.
     ///
     /// This is a handler invoked for the server in the "syncing" state.
-    /// The server being in this state is trying to retrieve leases from
+    /// The server in this state is trying to retrieve leases from
     /// the partner's database and update its local database. Every
     /// primary, secondary and standby server must transition via this
     /// state to retrieve up to date lease information from the active
@@ -215,7 +259,7 @@ public:
     /// DHCP server. In the future, we will provide a command to restart
     /// the HA service.
     ///
-    /// The server being in the "terminated" state will respond to DHCP clients
+    /// The server in the "terminated" state will respond to DHCP clients
     /// as if it was in a hot-standby or load-balancing state. However, it will
     /// neither send nor receive lease updates. It also won't send heartbeats
     /// to the partner.
@@ -245,6 +289,12 @@ public:
     /// The server in the "waiting" state is not responding to the DHCP
     /// queries.
     void waitingStateHandler();
+
+    /// @brief Returns last known state of the partner.
+    /// @ref CommunicationState::getPartnerState.
+    int getPartnerState() const {
+        return (communication_state_->getPartnerState());
+    }
 
 protected:
 
@@ -366,6 +416,12 @@ protected:
     /// false otherwise.
     bool shouldTerminate() const;
 
+    /// @brief Convenience method checking if the current state is a result
+    /// of canceling the maintenance.
+    ///
+    /// @return true if the maintenance was canceled, false otherwise.
+    bool isMaintenanceCanceled() const;
+
 public:
 
     /// @brief Schedules asynchronous IPv4 leases updates.
@@ -450,6 +506,18 @@ protected:
                               const data::ConstElementPtr& command,
                               const hooks::ParkingLotHandlePtr& parking_lot);
 
+    /// @brief Log failed lease updates.
+    ///
+    /// Logs failed lease updates included in the "failed-deleted-leases"
+    /// and/or "failed-leases" carried in the response to the
+    /// @c lease6-bulk-apply command.
+    ///
+    /// @param query Pointer to the DHCP client's query.
+    /// @param args Arguments of the response. It may be null, in which
+    /// case the function simply returns.
+    void logFailedLeaseUpdates(const dhcp::PktPtr& query,
+                               const data::ConstElementPtr& args) const;
+
     /// @brief Checks if the lease updates should be sent as result of leases
     /// allocation or release.
     ///
@@ -473,12 +541,13 @@ public:
     /// a restart.
     ///
     /// The ha-heartbeat command takes no arguments. The response contains
-    /// a server state and timestamp in the following format:
+    /// a server state, served scopes and timestamp in the following format:
     ///
     /// @code
     /// {
     ///     "arguments": {
     ///         "date-time": "Thu, 01 Feb 2018 21:18:26 GMT",
+    ///         "scopes": [ "server1" ],
     ///         "state": "waiting"
     ///     },
     ///     "result": 0,
@@ -488,6 +557,14 @@ public:
     ///
     /// @return Pointer to the response to the heartbeat.
     data::ConstElementPtr processHeartbeat();
+
+    /// @brief Processes status-get command and returns a response.
+    ///
+    ///
+    ///
+    /// @c HAImpl::commandProcessed calls this to add information about the
+    /// HA servers status into the status-get response.
+    data::ConstElementPtr processStatusGet() const;
 
 protected:
 
@@ -703,6 +780,60 @@ public:
     /// @return Pointer to the response to the ha-continue command.
     data::ConstElementPtr processContinue();
 
+    /// @brief Processes ha-maintenance-notify command and returns a response.
+    ///
+    /// This command attempts to tramsition the server to the in-maintenance state
+    /// if the cancel flag is set to false. Such transition is not allowed if
+    /// the server is currently in one of the following states:
+    /// - backup: becase maintenance is not supported for backup servers,
+    /// - partner-in-maintenance: because only one server is in maintenance while
+    ///   the partner must be in parter-in-maintenance state,
+    /// - terminated: because the only way to resume HA service is by shutting
+    ///   down the server, fixing the clock skew and restarting.
+    ///
+    /// If the cancel flag is set to true, the server will be transitioned from
+    /// the in-maintenance state to the previous state it was in before entering
+    /// the in-maintenance state.
+    ///
+    /// @param cancel boolean value indicating if the maintenance is being
+    /// canceled with this operation. If it is set to false the maintenance
+    /// is being started.
+    ///
+    /// @return Pointer to the reponse to the ha-maintenance-notify.
+    data::ConstElementPtr processMaintenanceNotify(const bool cancel);
+
+    /// @brief Processes ha-maintenance-start command and returns a response.
+    ///
+    /// The server receiving this command will try to send the
+    /// ha-maintenance-notify command to the partner to instruct the partner
+    /// to transition to the in-maintenance state. In this state the partner will
+    /// not respond to any DHCP queries. Next, this server will transition to
+    /// the partner-in-maintenance state and therefore will start responding
+    /// to all DHCP queries. If the partner responds to the ha-maintenance-notify
+    /// with an error, this server won't transition to the partner-in-maintenance
+    /// state and signal an error to the caller. If the partner is unavailable,
+    /// this server will directly transition to the partner-down state.
+    ///
+    /// @return Pointer to the response to the ha-maintenance-start.
+    data::ConstElementPtr processMaintenanceStart();
+
+    /// @brief Processes ha-maintenance-cancel command and returns a response.
+    ///
+    /// The server receiving this command will try to revert the partner's
+    /// state from the in-maintenance to the previous state, and also it will
+    /// try to revert its own state from the partner-in-maintenance to the
+    /// previous state. It effectively means canceling the request for
+    /// maintenance signaled with the ha-maintenance-start command.
+    ///
+    /// In some cases canceling the maintenace is no longer possible, e.g.
+    /// if the server has already got into the partner-down state. Generally,
+    /// canceling the maintenance is only possible if this server is in the
+    /// partner-in-maintenance state and the partner is in the in-maintenance
+    /// state.
+    ///
+    /// @return Pointer to the response to the ha-maintenance-cancel.
+    data::ConstElementPtr processMaintenanceCancel();
+
 protected:
 
     /// @brief Checks if the response is valid or contains an error.
@@ -711,9 +842,49 @@ protected:
     /// contain a success status code.
     ///
     /// @param response pointer to the received response.
+    /// @param [out] rcode result found in the response.
     /// @return Pointer to the response arguments.
     /// @throw CtrlChannelError if response is invalid or contains an error.
-    data::ConstElementPtr verifyAsyncResponse(const http::HttpResponsePtr& response);
+    data::ConstElementPtr verifyAsyncResponse(const http::HttpResponsePtr& response,
+                                              int& rcode);
+
+    /// @brief HttpClient connect callback handler
+    ///
+    /// Passed into HttpClient calls to allow registration of client's TCP socket
+    /// with an external monitor (such as IfaceMgr's  main-thread select()).
+    ///
+    /// @param ec Error status of the ASIO connect
+    /// @param tcp_native_fd socket descriptor to register
+    /// @return always true. Registeration cannot fail, and if ec indicates a real
+    /// error we want Connection logic to process it.
+    bool clientConnectHandler(const boost::system::error_code& ec, int tcp_native_fd);
+
+    /// @brief IfaceMgr external socket ready callback handler
+    ///
+    /// IfaceMgr invokes this call back when a registered socket has been
+    /// flagged as ready to read.   It is installed by the invocation to
+    /// register the socket with IfaceMgr made in @ref clientConnectHandler.
+    ///
+    /// The handler calls @ref HttpClient::closeIfOutOfBandwidth() to catch
+    /// and close any sockets that have gone ready outside of transactions.
+    ///
+    /// We do this in case the other peer closed the socket (e.g. idle timeout),
+    /// as this will cause the socket to appear ready to read to the
+    /// IfaceMgr::select(). If this happens while no transcations are
+    /// in progess, we won't have anything to deal with the socket event.
+    /// This causes IfaceMgr::select() to endlessly interrupt on the socket.
+    ///
+    /// @param tcp_native_fd socket descriptor of the ready socket
+    void socketReadyHandler(int tcp_native_fd);
+
+    /// @brief HttpClient close callback handler
+    ///
+    /// Passed into HttpClient calls to allow unregistration of client's
+    /// TCP socket with an external monitor (such as IfaceMgr's
+    /// main-thread select()).
+    ///
+    /// @param tcp_native_fd socket descriptor to register
+    void clientCloseHandler(int tcp_native_fd);
 
     /// @brief Pointer to the IO service object shared between this hooks
     /// library and the DHCP server.

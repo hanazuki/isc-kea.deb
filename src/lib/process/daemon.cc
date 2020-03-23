@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,6 +20,8 @@
 #include <fstream>
 #include <errno.h>
 
+using namespace isc::data;
+
 /// @brief provides default implementation for basic daemon operations
 ///
 /// This file provides stub implementations that are expected to be redefined
@@ -29,10 +31,12 @@ namespace process {
 
 bool Daemon::verbose_ = false;
 
+std::string Daemon::proc_name_("");
+
 std::string Daemon::default_logger_name_("kea");
 
 Daemon::Daemon()
-    : signal_set_(), signal_handler_(), config_file_(""), proc_name_(""),
+    : signal_set_(), signal_handler_(), config_file_(""),
       pid_file_dir_(DATA_DIR), pid_file_(), am_file_author_(false) {
 
     // The pid_file_dir can be overridden via environment variable
@@ -63,11 +67,36 @@ void Daemon::handleSignal() {
     }
 }
 
-void Daemon::configureLogger(const isc::data::ConstElementPtr& log_config,
+void Daemon::relocateLogging(ConstElementPtr config,
+                             const std::string server_name) {
+    ConstElementPtr logging = config->get("Logging");
+    ConstElementPtr loggers;
+    if (logging) {
+        loggers = logging->get("loggers");
+        ElementPtr mutable_cfg = boost::const_pointer_cast<Element>(config);
+        mutable_cfg->remove("Logging");
+    }
+    if (loggers) {
+        ConstElementPtr server = config->get(server_name);
+        ElementPtr mutable_srv = boost::const_pointer_cast<Element>(server);
+        mutable_srv->set("loggers", loggers);
+    }
+    while (config->size() > 1) {
+        ElementPtr mutable_cfg = boost::const_pointer_cast<Element>(config);
+        for (auto object : config->mapValue()) {
+            if (object.first != server_name) {
+                mutable_cfg->remove(object.first);
+                break;
+            }
+        }
+    }
+}
+
+void Daemon::configureLogger(const ConstElementPtr& log_config,
                              const ConfigPtr& storage) {
 
     if (log_config) {
-        isc::data::ConstElementPtr loggers = log_config->get("loggers");
+        ConstElementPtr loggers = log_config->get("loggers");
         if (loggers) {
             LogConfigParser parser(storage);
             parser.parseConfiguration(loggers, verbose_);
@@ -127,7 +156,7 @@ Daemon::checkConfigFile() const {
 }
 
 std::string
-Daemon::getProcName() const {
+Daemon::getProcName() {
     return (proc_name_);
 };
 
@@ -227,7 +256,7 @@ Daemon::createPIDFile(int pid) {
 
 size_t
 Daemon::writeConfigFile(const std::string& config_file,
-                        isc::data::ConstElementPtr cfg) const {
+                        ConstElementPtr cfg) const {
     if (!cfg) {
         isc_throw(Unexpected, "Can't write configuration: conversion to JSON failed");
     }
@@ -238,7 +267,7 @@ Daemon::writeConfigFile(const std::string& config_file,
     }
 
     // Write the actual content using pretty printing.
-    isc::data::prettyPrint(cfg, out);
+    prettyPrint(cfg, out);
 
     size_t bytes = static_cast<size_t>(out.tellp());
 

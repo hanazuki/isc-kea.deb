@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 #include <asiolink/io_address.h>
 #include <cc/command_interpreter.h>
 #include <config/command_mgr.h>
+#include <dhcp/libdhcp++.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/lease_mgr_factory.h>
@@ -17,8 +18,10 @@
 #include <hooks/hooks_manager.h>
 #include <log/logger_support.h>
 #include <stats/stats_mgr.h>
-#include <testutils/unix_control_client.h>
 #include <testutils/io_utils.h>
+#include <testutils/unix_control_client.h>
+#include <testutils/sandbox.h>
+#include <util/boost_time_utils.h>
 
 #include "marker_file.h"
 #include "test_libraries.h"
@@ -33,10 +36,12 @@
 #include <sys/stat.h>
 #include <sys/ioctl.h>
 #include <cstdlib>
+#include <unistd.h>
 
 #include <thread>
 
 using namespace std;
+using namespace isc;
 using namespace isc::asiolink;
 using namespace isc::config;
 using namespace isc::data;
@@ -125,6 +130,7 @@ public:
 
 class CtrlChannelDhcpv6SrvTest : public CtrlDhcpv6SrvTest {
 public:
+    isc::test::Sandbox sandbox;
 
     /// @brief Path to the UNIX socket being used to communicate with the server
     std::string socket_path_;
@@ -140,7 +146,7 @@ public:
         if (env) {
             socket_path_ = string(env) + "/kea6.sock";
         } else {
-            socket_path_ = string(TEST_DATA_BUILDDIR) + "/kea6.sock";
+            socket_path_ = sandbox.join("/kea6.sock");
         }
         reset();
     }
@@ -217,6 +223,8 @@ public:
     /// @brief Reset
     void reset() {
         CtrlDhcpv6SrvTest::reset();
+
+        // Remove unix socket file
         static_cast<void>(::remove(socket_path_.c_str()));
     }
 
@@ -390,7 +398,6 @@ public:
     }
 };
 
-
 TEST_F(CtrlDhcpv6SrvTest, commands) {
 
     boost::scoped_ptr<ControlledDhcpv6Srv> srv;
@@ -404,12 +411,12 @@ TEST_F(CtrlDhcpv6SrvTest, commands) {
 
     // Case 1: send bogus command
     ConstElementPtr result = ControlledDhcpv6Srv::processCommand("blah", params);
-    ConstElementPtr comment = isc::config::parseAnswer(rcode, result);
+    ConstElementPtr comment = parseAnswer(rcode, result);
     EXPECT_EQ(1, rcode); // expect failure (no such command as blah)
 
     // Case 2: send shutdown command without any parameters
     result = ControlledDhcpv6Srv::processCommand("shutdown", params);
-    comment = isc::config::parseAnswer(rcode, result);
+    comment = parseAnswer(rcode, result);
     EXPECT_EQ(0, rcode); // expect success
 
     const pid_t pid(getpid());
@@ -418,8 +425,8 @@ TEST_F(CtrlDhcpv6SrvTest, commands) {
 
     // Case 3: send shutdown command with 1 parameter: pid
     result = ControlledDhcpv6Srv::processCommand("shutdown", params);
-    comment = isc::config::parseAnswer(rcode, result);
-    EXPECT_EQ(0, rcode); // Expect success
+    comment = parseAnswer(rcode, result);
+    EXPECT_EQ(0, rcode); // expect success
 }
 
 // Check that the "libreload" command will reload libraries
@@ -463,6 +470,92 @@ TEST_F(CtrlChannelDhcpv6SrvTest, libreload) {
     EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "1212"));
 }
 
+typedef std::map<std::string, isc::data::ConstElementPtr> ElementMap;
+
+// This test checks which commands are registered by the DHCPv6 server.
+TEST_F(CtrlDhcpv6SrvTest, commandsRegistration) {
+
+    ConstElementPtr list_cmds = createCommand("list-commands");
+    ConstElementPtr answer;
+
+    // By default the list should be empty (except the standard list-commands
+    // supported by the CommandMgr itself)
+    EXPECT_NO_THROW(answer = CommandMgr::instance().processCommand(list_cmds));
+    ASSERT_TRUE(answer);
+    ASSERT_TRUE(answer->get("arguments"));
+    EXPECT_EQ("[ \"list-commands\" ]", answer->get("arguments")->str());
+
+    // Created server should register several additional commands.
+    boost::scoped_ptr<ControlledDhcpv6Srv> srv;
+    ASSERT_NO_THROW(
+        srv.reset(new ControlledDhcpv6Srv(0));
+    );
+
+    EXPECT_NO_THROW(answer = CommandMgr::instance().processCommand(list_cmds));
+    ASSERT_TRUE(answer);
+
+    ASSERT_TRUE(answer->get("arguments"));
+    std::string command_list = answer->get("arguments")->str();
+
+    EXPECT_TRUE(command_list.find("\"list-commands\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"build-report\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"config-backend-pull\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"config-get\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"config-set\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"config-write\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"leases-reclaim\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"libreload\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"server-tag-get\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"shutdown\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-get\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-get-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-remove\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-remove-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-reset\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-reset-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-age-set\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-age-set-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-count-set\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-count-set-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"status-get\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"version-get\"") != string::npos);
+
+    // Ok, and now delete the server. It should deregister its commands.
+    srv.reset();
+
+    // The list should be (almost) empty again.
+    EXPECT_NO_THROW(answer = CommandMgr::instance().processCommand(list_cmds));
+    ASSERT_TRUE(answer);
+    ASSERT_TRUE(answer->get("arguments"));
+    EXPECT_EQ("[ \"list-commands\" ]", answer->get("arguments")->str());
+}
+
+// Tests that the server properly responds to invalid commands sent
+// via ControlChannel
+TEST_F(CtrlChannelDhcpv6SrvTest, controlChannelNegative) {
+    createUnixChannelServer();
+    std::string response;
+
+    sendUnixCommand("{ \"command\": \"bogus\" }", response);
+    EXPECT_EQ("{ \"result\": 2,"
+              " \"text\": \"'bogus' command not supported.\" }", response);
+
+    sendUnixCommand("utter nonsense", response);
+    EXPECT_EQ("{ \"result\": 1, "
+              "\"text\": \"invalid first character u\" }",
+              response);
+}
+
+// Tests that the server properly responds to shtudown command sent
+// via ControlChannel
+TEST_F(CtrlChannelDhcpv6SrvTest, controlChannelShutdown) {
+    createUnixChannelServer();
+    std::string response;
+
+    sendUnixCommand("{ \"command\": \"shutdown\" }", response);
+    EXPECT_EQ("{ \"result\": 0, \"text\": \"Shutting down.\" }",response);
+}
+
 // Check that the "config-set" command will replace current configuration
 TEST_F(CtrlChannelDhcpv6SrvTest, configSet) {
     createUnixChannelServer();
@@ -498,10 +591,32 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configSet) {
         "               {\"subnet\": \"3003::/64\", \n"
         "                \"pools\": [{ \"pool\": \"3003::100-3003::200\" }]}\n";
     string bad_subnet =
-        "               {\"BOGUS\": \"3005::/64\", \n"
+        "               {\"comment\": \"3005::/64\", \n"
         "                \"pools\": [{ \"pool\": \"3005::100-3005::200\" }]}\n";
     string subnet_footer =
         "          ] \n";
+    string option_def =
+        "    ,\"option-def\": [\n"
+        "    {\n"
+        "        \"name\": \"foo\",\n"
+        "        \"code\": 163,\n"
+        "        \"type\": \"uint32\",\n"
+        "        \"array\": false,\n"
+        "        \"record-types\": \"\",\n"
+        "        \"space\": \"dhcp6\",\n"
+        "        \"encapsulate\": \"\"\n"
+        "    }\n"
+        "]\n";
+    string option_data =
+        "    ,\"option-data\": [\n"
+        "    {\n"
+        "        \"name\": \"foo\",\n"
+        "        \"code\": 163,\n"
+        "        \"space\": \"dhcp6\",\n"
+        "        \"csv-format\": true,\n"
+        "        \"data\": \"12345\"\n"
+        "    }\n"
+        "]\n";
     string control_socket_header =
         "       ,\"control-socket\": { \n"
         "       \"socket-type\": \"unix\", \n"
@@ -527,6 +642,8 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configSet) {
         << dhcp6_cfg_txt
         << subnet1
         << subnet_footer
+        << option_def
+        << option_data
         << control_socket_header
         << socket_path_
         << control_socket_footer
@@ -548,6 +665,9 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configSet) {
         CfgMgr::instance().getCurrentCfg()->getCfgSubnets6()->getAll();
     EXPECT_EQ(1, subnets->size());
 
+    OptionDefinitionPtr def = LibDHCP::getRuntimeOptionDef("dhcp6", 163);
+    ASSERT_TRUE(def);
+
     // Create a config with malformed subnet that should fail to parse.
     os.str("");
     os << set_config_txt << ","
@@ -566,15 +686,19 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configSet) {
 
     // Should fail with a syntax error
     EXPECT_EQ("{ \"result\": 1, "
-              "\"text\": \"subnet configuration failed: mandatory 'subnet' parameter is missing for a subnet being configured (<wire>:20:17)\" }",
+              "\"text\": \"subnet configuration failed: mandatory 'subnet' "
+              "parameter is missing for a subnet being configured (<wire>:20:17)\" }",
               response);
 
     // Check that the config was not lost
     subnets = CfgMgr::instance().getCurrentCfg()->getCfgSubnets6()->getAll();
     EXPECT_EQ(1, subnets->size());
 
+    def = LibDHCP::getRuntimeOptionDef("dhcp6", 163);
+    ASSERT_TRUE(def);
+
     // Create a valid config with two subnets and no command channel.
-    // It should succeed but client will not receive a the response
+    // It should succeed, client should still receive the response
     os.str("");
     os << set_config_txt << ","
         << args_txt
@@ -607,7 +731,31 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configSet) {
     CfgMgr::instance().clear();
 }
 
-  // Verify that the "config-test" command will do what we expect.
+// Tests if the server returns its configuration using config-get.
+// Note there are separate tests that verify if toElement() called by the
+// config-get handler are actually converting the configuration correctly.
+TEST_F(CtrlChannelDhcpv6SrvTest, configGet) {
+    createUnixChannelServer();
+    std::string response;
+
+    sendUnixCommand("{ \"command\": \"config-get\" }", response);
+    ConstElementPtr rsp;
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    int status;
+    ConstElementPtr cfg = parseAnswer(status, rsp);
+    EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
+
+    // Ok, now roughly check if the response seems legit.
+    ASSERT_TRUE(cfg);
+    ASSERT_EQ(Element::map, cfg->getType());
+    EXPECT_TRUE(cfg->get("Dhcp6"));
+}
+
+// Verify that the "config-test" command will do what we expect.
 TEST_F(CtrlChannelDhcpv6SrvTest, configTest) {
     createUnixChannelServer();
 
@@ -643,7 +791,7 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configTest) {
         "               {\"subnet\": \"3003::/64\", \n"
         "                \"pools\": [{ \"pool\": \"3003::100-3003::200\" }]}\n";
     string bad_subnet =
-        "               {\"BOGUS\": \"3005::/64\", \n"
+        "               {\"comment\": \"3005::/64\", \n"
         "                \"pools\": [{ \"pool\": \"3005::100-3005::200\" }]}\n";
     string subnet_footer =
         "          ] \n";
@@ -754,87 +902,8 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configTest) {
     CfgMgr::instance().clear();
 }
 
-typedef std::map<std::string, isc::data::ConstElementPtr> ElementMap;
-
-// This test checks which commands are registered by the DHCPv6 server.
-TEST_F(CtrlDhcpv6SrvTest, commandsRegistration) {
-
-    ConstElementPtr list_cmds = createCommand("list-commands");
-    ConstElementPtr answer;
-
-    // By default the list should be empty (except the standard list-commands
-    // supported by the CommandMgr itself)
-    EXPECT_NO_THROW(answer = CommandMgr::instance().processCommand(list_cmds));
-    ASSERT_TRUE(answer);
-    ASSERT_TRUE(answer->get("arguments"));
-    EXPECT_EQ("[ \"list-commands\" ]", answer->get("arguments")->str());
-
-    // Created server should register several additional commands.
-    boost::scoped_ptr<ControlledDhcpv6Srv> srv;
-    ASSERT_NO_THROW(
-        srv.reset(new ControlledDhcpv6Srv(0));
-    );
-
-    EXPECT_NO_THROW(answer = CommandMgr::instance().processCommand(list_cmds));
-    ASSERT_TRUE(answer);
-
-    ASSERT_TRUE(answer->get("arguments"));
-    std::string command_list = answer->get("arguments")->str();
-
-    EXPECT_TRUE(command_list.find("\"list-commands\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"build-report\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"config-get\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"config-write\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"leases-reclaim\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"libreload\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"config-set\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"shutdown\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"statistic-get\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"statistic-get-all\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"statistic-remove\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"statistic-remove-all\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"statistic-reset\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"statistic-reset-all\"") != string::npos);
-    EXPECT_TRUE(command_list.find("\"version-get\"") != string::npos);
-
-    // Ok, and now delete the server. It should deregister its commands.
-    srv.reset();
-
-    // The list should be (almost) empty again.
-    EXPECT_NO_THROW(answer = CommandMgr::instance().processCommand(list_cmds));
-    ASSERT_TRUE(answer);
-    ASSERT_TRUE(answer->get("arguments"));
-    EXPECT_EQ("[ \"list-commands\" ]", answer->get("arguments")->str());
-}
-
-// Tests that the server properly responds to invalid commands sent
-// via ControlChannel
-TEST_F(CtrlChannelDhcpv6SrvTest, controlChannelNegative) {
-    createUnixChannelServer();
-    std::string response;
-
-    sendUnixCommand("{ \"command\": \"bogus\" }", response);
-    EXPECT_EQ("{ \"result\": 2,"
-              " \"text\": \"'bogus' command not supported.\" }", response);
-
-    sendUnixCommand("utter nonsense", response);
-    EXPECT_EQ("{ \"result\": 1, "
-              "\"text\": \"invalid first character u\" }",
-              response);
-}
-
-// Tests that the server properly responds to shtudown command sent
-// via ControlChannel
-TEST_F(CtrlChannelDhcpv6SrvTest, controlChannelShutdown) {
-    createUnixChannelServer();
-    std::string response;
-
-    sendUnixCommand("{ \"command\": \"shutdown\" }", response);
-    EXPECT_EQ("{ \"result\": 0, \"text\": \"Shutting down.\" }",response);
-}
-
 // This test verifies that the DHCP server handles version-get commands
-TEST_F(CtrlChannelDhcpv6SrvTest, getversion) {
+TEST_F(CtrlChannelDhcpv6SrvTest, getVersion) {
     createUnixChannelServer();
 
     std::string response;
@@ -851,6 +920,81 @@ TEST_F(CtrlChannelDhcpv6SrvTest, getversion) {
     EXPECT_TRUE(response.find("GTEST_VERSION") != string::npos);
 }
 
+// This test verifies that the DHCP server handles status-get commands
+TEST_F(CtrlChannelDhcpv6SrvTest, statusGet) {
+    createUnixChannelServer();
+
+    // start_ is initialized by init.
+    ASSERT_THROW(server_->init("/no/such/file"), BadValue);
+
+    std::string response_txt;
+
+    // Send the version-get command
+    sendUnixCommand("{ \"command\": \"status-get\" }", response_txt);
+    ConstElementPtr response;
+    ASSERT_NO_THROW(response = Element::fromJSON(response_txt));
+    ASSERT_TRUE(response);
+    ASSERT_EQ(Element::map, response->getType());
+    EXPECT_EQ(2, response->size());
+    ConstElementPtr result = response->get("result");
+    ASSERT_TRUE(result);
+    ASSERT_EQ(Element::integer, result->getType());
+    EXPECT_EQ(0, result->intValue());
+    ConstElementPtr arguments = response->get("arguments");
+    ASSERT_EQ(Element::map, arguments->getType());
+
+    // The returned pid should be the pid of our process.
+    auto found_pid = arguments->get("pid");
+    ASSERT_TRUE(found_pid);
+    EXPECT_EQ(static_cast<int64_t>(getpid()), found_pid->intValue());
+
+    // It is hard to check the actual uptime (and reload) as it is based
+    // on current time. Let's just make sure it is within a reasonable
+    // range.
+    auto found_uptime = arguments->get("uptime");
+    ASSERT_TRUE(found_uptime);
+    EXPECT_LE(found_uptime->intValue(), 5);
+    EXPECT_GE(found_uptime->intValue(), 0);
+
+    auto found_reload = arguments->get("reload");
+    ASSERT_TRUE(found_reload);
+    EXPECT_LE(found_reload->intValue(), 5);
+    EXPECT_GE(found_reload->intValue(), 0);
+}
+
+// This test verifies that the DHCP server handles server-tag-get command
+TEST_F(CtrlChannelDhcpv6SrvTest, serverTagGet) {
+    createUnixChannelServer();
+
+    std::string response;
+    std::string expected;
+
+    // Send the server-tag-get command
+    sendUnixCommand("{ \"command\": \"server-tag-get\" }", response);
+    expected = "{ \"arguments\": { \"server-tag\": \"\" }, \"result\": 0 }";
+    EXPECT_EQ(expected, response);
+
+    // Set a value to the server tag
+    CfgMgr::instance().getCurrentCfg()->setServerTag("foobar");
+
+    // Retry...
+    sendUnixCommand("{ \"command\": \"server-tag-get\" }", response);
+    expected = "{ \"arguments\": { \"server-tag\": \"foobar\" }, \"result\": 0 }";
+}
+
+// This test verifies that the DHCP server handles config-backend-pull command
+TEST_F(CtrlChannelDhcpv6SrvTest, configBackendPull) {
+    createUnixChannelServer();
+
+    std::string response;
+    std::string expected;
+
+    // Send the config-backend-pull command. Note there is no configured backed.
+    sendUnixCommand("{ \"command\": \"config-backend-pull\" }", response);
+    expected = "{ \"result\": 3, \"text\": \"No config backend.\" }";
+    EXPECT_EQ(expected, response);
+}
+
 // This test verifies that the DHCP server immediately reclaims expired
 // leases on leases-reclaim command
 TEST_F(CtrlChannelDhcpv6SrvTest, controlLeasesReclaim) {
@@ -860,11 +1004,11 @@ TEST_F(CtrlChannelDhcpv6SrvTest, controlLeasesReclaim) {
     // (valid lifetime = 60, cltt = now - 100).
     DuidPtr duid0(new DUID(DUID::fromText("00:01:02:03:04:05:06").getDuid()));
     Lease6Ptr lease0(new Lease6(Lease::TYPE_NA, IOAddress("3000::1"),
-                                duid0, 1, 50, 60, 10, 20, SubnetID(1)));
+                                duid0, 1, 50, 60, SubnetID(1)));
     lease0->cltt_ = time(NULL) - 100;
     DuidPtr duid1(new DUID(DUID::fromText("01:02:03:04:05:06:07").getDuid()));
     Lease6Ptr lease1(new Lease6(Lease::TYPE_NA, IOAddress("3000::2"),
-                                duid1, 1, 50, 60, 10, 20, SubnetID(1)));
+                                duid1, 1, 50, 60, SubnetID(1)));
     lease1->cltt_ = time(NULL) - 100;
 
     // Add leases to the database.
@@ -922,11 +1066,11 @@ TEST_F(CtrlChannelDhcpv6SrvTest, controlLeasesReclaimRemove) {
     // (valid lifetime = 60, cltt = now - 100).
     DuidPtr duid0(new DUID(DUID::fromText("00:01:02:03:04:05:06").getDuid()));
     Lease6Ptr lease0(new Lease6(Lease::TYPE_NA, IOAddress("3000::1"),
-                                duid0, 1, 50, 60, 10, 20, SubnetID(1)));
+                                duid0, 1, 50, 60, SubnetID(1)));
     lease0->cltt_ = time(NULL) - 100;
     DuidPtr duid1(new DUID(DUID::fromText("01:02:03:04:05:06:07").getDuid()));
     Lease6Ptr lease1(new Lease6(Lease::TYPE_NA, IOAddress("3000::2"),
-                                duid1, 1, 50, 60, 10, 20, SubnetID(1)));
+                                duid1, 1, 50, 60, SubnetID(1)));
     lease1->cltt_ = time(NULL) - 100;
 
     // Add leases to the database.
@@ -973,7 +1117,44 @@ TEST_F(CtrlChannelDhcpv6SrvTest, controlChannelStats) {
     // Check statistic-get-all
     sendUnixCommand("{ \"command\" : \"statistic-get-all\", "
                     "  \"arguments\": {}}", response);
-    EXPECT_EQ("{ \"arguments\": {  }, \"result\": 0 }", response);
+
+    std::set<std::string> initial_stats = {
+        "pkt6-received",
+        "pkt6-solicit-received",
+        "pkt6-advertise-received",
+        "pkt6-request-received",
+        "pkt6-reply-received",
+        "pkt6-renew-received",
+        "pkt6-rebind-received",
+        "pkt6-decline-received",
+        "pkt6-release-received",
+        "pkt6-infrequest-received",
+        "pkt6-dhcpv4-query-received",
+        "pkt6-dhcpv4-response-received",
+        "pkt6-unknown-received",
+        "pkt6-sent",
+        "pkt6-advertise-sent",
+        "pkt6-reply-sent",
+        "pkt6-dhcpv4-response-sent",
+        "pkt6-parse-failed",
+        "pkt6-receive-drop"
+    };
+
+    std::ostringstream s;
+    s << "{ \"arguments\": { ";
+    for (auto st = initial_stats.begin(); st != initial_stats.end();) {
+        s << "\"" << *st << "\": [ [ 0, \"";
+        s << isc::util::ptimeToText(StatsMgr::instance().getObservation(*st)->getInteger().second);
+        s << "\" ] ]";
+        if (++st != initial_stats.end()) {
+            s << ", ";
+        }
+    }
+    s << " }, \"result\": 0 }";
+
+    auto stats_get_all = s.str();
+
+    EXPECT_EQ(stats_get_all, response);
 
     // Check statistic-reset
     sendUnixCommand("{ \"command\" : \"statistic-reset\", "
@@ -1000,11 +1181,39 @@ TEST_F(CtrlChannelDhcpv6SrvTest, controlChannelStats) {
                     "  \"arguments\": {}}", response);
     EXPECT_EQ("{ \"result\": 0, \"text\": \"All statistics removed.\" }",
               response);
+
+    // Check statistic-sample-age-set
+    sendUnixCommand("{ \"command\" : \"statistic-sample-age-set\", "
+                    "  \"arguments\": {"
+                    "  \"name\":\"bogus\", \"duration\": 1245 }}", response);
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"No 'bogus' statistic found\" }",
+              response);
+
+    // Check statistic-sample-age-set-all
+    sendUnixCommand("{ \"command\" : \"statistic-sample-age-set-all\", "
+                    "  \"arguments\": {"
+                    "  \"duration\": 1245 }}", response);
+    EXPECT_EQ("{ \"result\": 0, \"text\": \"All statistics duration limit are set.\" }",
+              response);
+
+    // Check statistic-sample-count-set
+    sendUnixCommand("{ \"command\" : \"statistic-sample-count-set\", "
+                    "  \"arguments\": {"
+                    "  \"name\":\"bogus\", \"max-samples\": 100 }}", response);
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"No 'bogus' statistic found\" }",
+              response);
+
+    // Check statistic-sample-count-set-all
+    sendUnixCommand("{ \"command\" : \"statistic-sample-count-set-all\", "
+                    "  \"arguments\": {"
+                    "  \"max-samples\": 100 }}", response);
+    EXPECT_EQ("{ \"result\": 0, \"text\": \"All statistics count limit are set.\" }",
+              response);
 }
 
 // Tests that the server properly responds to shtudown command sent
 // via ControlChannel
-TEST_F(CtrlChannelDhcpv6SrvTest, commandsList) {
+TEST_F(CtrlChannelDhcpv6SrvTest, listCommands) {
     createUnixChannelServer();
     std::string response;
 
@@ -1015,7 +1224,9 @@ TEST_F(CtrlChannelDhcpv6SrvTest, commandsList) {
 
     // We expect the server to report at least the following commands:
     checkListCommands(rsp, "build-report");
+    checkListCommands(rsp, "config-backend-pull");
     checkListCommands(rsp, "config-get");
+    checkListCommands(rsp, "config-reload");
     checkListCommands(rsp, "config-set");
     checkListCommands(rsp, "config-test");
     checkListCommands(rsp, "config-write");
@@ -1023,6 +1234,7 @@ TEST_F(CtrlChannelDhcpv6SrvTest, commandsList) {
     checkListCommands(rsp, "leases-reclaim");
     checkListCommands(rsp, "libreload");
     checkListCommands(rsp, "version-get");
+    checkListCommands(rsp, "server-tag-get");
     checkListCommands(rsp, "shutdown");
     checkListCommands(rsp, "statistic-get");
     checkListCommands(rsp, "statistic-get-all");
@@ -1030,30 +1242,10 @@ TEST_F(CtrlChannelDhcpv6SrvTest, commandsList) {
     checkListCommands(rsp, "statistic-remove-all");
     checkListCommands(rsp, "statistic-reset");
     checkListCommands(rsp, "statistic-reset-all");
-}
-
-// Tests if the server returns its configuration using config-get.
-// Note there are separate tests that verify if toElement() called by the
-// get-config handler are actually converting the configuration correctly.
-TEST_F(CtrlChannelDhcpv6SrvTest, configGet) {
-    createUnixChannelServer();
-    std::string response;
-
-    sendUnixCommand("{ \"command\": \"config-get\" }", response);
-    ConstElementPtr rsp;
-
-    // The response should be a valid JSON.
-    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
-    ASSERT_TRUE(rsp);
-
-    int status;
-    ConstElementPtr cfg = parseAnswer(status, rsp);
-    EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
-
-    // Ok, now roughly check if the response seems legit.
-    ASSERT_TRUE(cfg);
-    ASSERT_EQ(Element::map, cfg->getType());
-    EXPECT_TRUE(cfg->get("Dhcp6"));
+    checkListCommands(rsp, "statistic-sample-age-set");
+    checkListCommands(rsp, "statistic-sample-age-set-all");
+    checkListCommands(rsp, "statistic-sample-count-set");
+    checkListCommands(rsp, "statistic-sample-count-set-all");
 }
 
 // Tests if config-write can be called without any parameters.
@@ -1098,7 +1290,7 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configReloadMissingFile) {
     sendUnixCommand("{ \"command\": \"config-reload\" }", response);
 
     // Verify the reload was rejected.
-    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed:"
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed: "
               "configuration error using file 'test6.json': Unable to open file "
               "test6.json\" }",
               response);
@@ -1117,14 +1309,14 @@ TEST_F(CtrlChannelDhcpv6SrvTest, configReloadBrokenFile) {
     // Although Kea is smart, its AI routines are not smart enough to handle
     // this one... at least not yet.
     ofstream f("test7.json", ios::trunc);
-    f << "gimme some addr, bro!";
+    f << "gimme some addrs, bro!";
     f.close();
 
     // Now tell Kea to reload its config.
     sendUnixCommand("{ \"command\": \"config-reload\" }", response);
 
     // Verify the reload will fail.
-    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed:"
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed: "
               "configuration error using file 'test7.json': "
               "test7.json:1.1: Invalid character: g\" }",
               response);
@@ -1484,12 +1676,12 @@ TEST_F(CtrlChannelDhcpv6SrvTest, connectionTimeoutPartialCommand) {
 
     // Check that the server has signalled a timeout.
     EXPECT_EQ("{ \"result\": 1, \"text\": "
-              "\"Connection over control channel timed out,"
-              " discarded partial command of 19 bytes\" }", response);
+              "\"Connection over control channel timed out, "
+              "discarded partial command of 19 bytes\" }", response);
 }
 
 // This test verifies that the server signals timeout if the transmission
-// takes too long, having received no data.
+// takes too long, having received no data from the client.
 TEST_F(CtrlChannelDhcpv6SrvTest, connectionTimeoutNoData) {
     createUnixChannelServer();
 

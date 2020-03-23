@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,8 +27,10 @@ HttpRequest::HttpRequest()
       context_(new HttpRequestContext()) {
 }
 
-HttpRequest::HttpRequest(const Method& method, const std::string& uri,
-                         const HttpVersion& version)
+HttpRequest::HttpRequest(const Method& method,
+                         const std::string& uri,
+                         const HttpVersion& version,
+                         const HostHttpHeader& host_header)
     : HttpMessage(OUTBOUND), required_methods_(),
       method_(Method::HTTP_METHOD_UNKNOWN),
       context_(new HttpRequestContext()) {
@@ -36,6 +38,11 @@ HttpRequest::HttpRequest(const Method& method, const std::string& uri,
     context()->uri_ = uri;
     context()->http_version_major_ = version.major_;
     context()->http_version_minor_ = version.minor_;
+    // The Host header is mandatory in HTTP/1.1 and should be placed before
+    // any other headers. We also include it for HTTP/1.0 as it doesn't
+    // harm to include it.
+    context()->headers_.push_back(HttpHeaderContext(host_header.getName(),
+                                                    host_header.getValue()));
 }
 
 void
@@ -166,10 +173,25 @@ HttpRequest::toString() const {
     // HTTP method, URI and version number.
     s << toBriefString() << crlf;
 
+    // Host header must go first.
+    HttpHeaderPtr host_header;
+    try {
+        host_header = getHeader("Host");
+        if (host_header) {
+            s << host_header->getName() << ": " << host_header->getValue() << crlf;
+        }
+
+    } catch (...) {
+        // impossible condition
+    }
+
+    // Add all other headers.
     for (auto header_it = headers_.cbegin(); header_it != headers_.cend();
          ++header_it) {
-        s << header_it->second->getName() << ": " << header_it->second->getValue()
-          << crlf;
+        if (header_it->second->getName() != "Host") {
+            s << header_it->second->getName() << ": " << header_it->second->getValue()
+              << crlf;
+        }
     }
 
     s << crlf;

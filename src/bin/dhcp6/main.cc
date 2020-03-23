@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,15 +7,15 @@
 #include <config.h>
 #include <kea_version.h>
 
+#include <cfgrpt/config_report.h>
 #include <dhcp6/ctrl_dhcp6_srv.h>
 #include <dhcp6/dhcp6_log.h>
 #include <dhcp6/parser_context.h>
 #include <dhcp6/json_config_parser.h>
 #include <dhcpsrv/cfgmgr.h>
+#include <exceptions/exceptions.h>
 #include <log/logger_support.h>
 #include <log/logger_manager.h>
-#include <exceptions/exceptions.h>
-#include <cfgrpt/config_report.h>
 #include <process/daemon.h>
 
 #include <boost/lexical_cast.hpp>
@@ -37,9 +37,8 @@ using namespace std;
 /// Dhcpv6Srv and other classes, see \ref dhcpv6Session.
 
 namespace {
-const char* const DHCP6_NAME = "kea-dhcp6";
 
-const char* const DHCP6_LOGGER_NAME = "kea-dhcp6";
+const char* const DHCP6_NAME = "kea-dhcp6";
 
 /// @brief Prints Kea Usage and exits
 ///
@@ -49,31 +48,39 @@ usage() {
     cerr << "Kea DHCPv6 server, version " << VERSION << endl;
     cerr << endl;
     cerr << "Usage: " << DHCP6_NAME
-         << " -[v|V|W] [-d] [-{c|t} cfgfile] [-p port_number]" << endl;
+         << " -[v|V|W] [-d] [-{c|t} cfgfile] [-p number] [-P number]" << endl;
     cerr << "  -v: print version number and exit." << endl;
     cerr << "  -V: print extended version and exit" << endl;
     cerr << "  -W: display the configuration report and exit" << endl;
     cerr << "  -d: debug mode with extra verbosity (former -v)" << endl;
     cerr << "  -c file: specify configuration file" << endl;
     cerr << "  -t file: check the configuration file syntax and exit" << endl;
-    cerr << "  -p number: specify non-standard port number 1-65535 "
+    cerr << "  -p number: specify non-standard server port number 1-65535 "
          << "(useful for testing only)" << endl;
+    cerr << "  -P number: specify non-standard client port number 1-65535 "
+         << "(useful for testing only)" << endl;
+    cerr << "  -N number: specify thread count 0-65535 "
+         << "(0 means multi-threading disabled)" << endl;
     exit(EXIT_FAILURE);
 }
-} // end of anonymous namespace
+}  // namespace
 
 int
 main(int argc, char* argv[]) {
     int ch;
-    int port_number = DHCP6_SERVER_PORT; // The default. Any other values are
-                                         // useful for testing only.
+    // The default. Any other values are useful for testing only.
+    int server_port_number = DHCP6_SERVER_PORT;
+    // Not zero values are useful for testing only.
+    int client_port_number = 0;
+    // Number of threads. 0 means multi-threading disabled
+    int thread_count = 0;
     bool verbose_mode = false; // Should server be verbose?
     bool check_mode = false;   // Check syntax
 
     // The standard config file
     std::string config_file("");
 
-    while ((ch = getopt(argc, argv, "dvVWc:p:t:")) != -1) {
+    while ((ch = getopt(argc, argv, "dvVWc:p:P:N:t:")) != -1) {
         switch (ch) {
         case 'd':
             verbose_mode = true;
@@ -99,17 +106,47 @@ main(int argc, char* argv[]) {
             config_file = optarg;
             break;
 
-        case 'p': // port number
+        case 'p': // server port number
             try {
-                port_number = boost::lexical_cast<int>(optarg);
+                server_port_number = boost::lexical_cast<int>(optarg);
             } catch (const boost::bad_lexical_cast &) {
-                cerr << "Failed to parse port number: [" << optarg
+                cerr << "Failed to parse server port number: [" << optarg
                      << "], 1-65535 allowed." << endl;
                 usage();
             }
-            if (port_number <= 0 || port_number > 65535) {
-                cerr << "Failed to parse port number: [" << optarg
+            if (server_port_number <= 0 || server_port_number > 65535) {
+                cerr << "Failed to parse server port number: [" << optarg
                      << "], 1-65535 allowed." << endl;
+                usage();
+            }
+            break;
+
+        case 'P': // client port number
+            try {
+                client_port_number = boost::lexical_cast<int>(optarg);
+            } catch (const boost::bad_lexical_cast &) {
+                cerr << "Failed to parse client port number: [" << optarg
+                     << "], 1-65535 allowed." << endl;
+                usage();
+            }
+            if (client_port_number <= 0 || client_port_number > 65535) {
+                cerr << "Failed to parse client port number: [" << optarg
+                     << "], 1-65535 allowed." << endl;
+                usage();
+            }
+            break;
+
+        case 'N': // number of threads
+            try {
+                thread_count = boost::lexical_cast<int>(optarg);
+            } catch (const boost::bad_lexical_cast &) {
+                cerr << "Failed to parse thread count number: [" << optarg
+                     << "], 0-65535 allowed." << endl;
+                usage();
+            }
+            if (thread_count < 0 || thread_count > 65535) {
+                cerr << "Failed to parse thread count number: [" << optarg
+                     << "], 0-65535 allowed." << endl;
                 usage();
             }
             break;
@@ -174,11 +211,8 @@ main(int argc, char* argv[]) {
                 cerr << "Error encountered: " << answer->stringValue() << endl;
                 return (EXIT_FAILURE);
             }
-
-
-            return (EXIT_SUCCESS);
         } catch (const std::exception& ex) {
-            cerr << "Syntax check failed with " << ex.what() << endl;
+            cerr << "Syntax check failed with: " << ex.what() << endl;
         }
         return (EXIT_FAILURE);
     }
@@ -188,32 +222,32 @@ main(int argc, char* argv[]) {
         // It is important that we set a default logger name because this name
         // will be used when the user doesn't provide the logging configuration
         // in the Kea configuration file.
-        Daemon::setDefaultLoggerName(DHCP6_LOGGER_NAME);
+        Daemon::setDefaultLoggerName(DHCP6_ROOT_LOGGER_NAME);
 
         // Initialize logging.  If verbose, we'll use maximum verbosity.
-        Daemon::loggerInit(DHCP6_LOGGER_NAME, verbose_mode);
-
+        Daemon::loggerInit(DHCP6_ROOT_LOGGER_NAME, verbose_mode);
         LOG_DEBUG(dhcp6_logger, DBG_DHCP6_START, DHCP6_START_INFO)
-            .arg(getpid()).arg(port_number).arg(verbose_mode ? "yes" : "no");
+            .arg(getpid())
+            .arg(server_port_number)
+            .arg(client_port_number)
+            .arg(verbose_mode ? "yes" : "no");
 
         LOG_INFO(dhcp6_logger, DHCP6_STARTING).arg(VERSION);
 
         // Create the server instance.
-        ControlledDhcpv6Srv server(port_number);
+        ControlledDhcpv6Srv server(server_port_number, client_port_number);
 
         // Remember verbose-mode
         server.setVerbose(verbose_mode);
 
-        // Create our PID file
+        // Create our PID file.
         server.setProcName(DHCP6_NAME);
         server.setConfigFile(config_file);
         server.createPIDFile();
 
         try {
-            // Initialize the server, e.g. establish control session
-            // Read a configuration file
+            // Initialize the server.
             server.init(config_file);
-
         } catch (const std::exception& ex) {
 
             try {
@@ -255,7 +289,6 @@ main(int argc, char* argv[]) {
         }
         ret = EXIT_FAILURE;
     } catch (const std::exception& ex) {
-
         // First, we print the error on stderr (that should always work)
         cerr << DHCP6_NAME << "Fatal error during start up: " << ex.what()
              << endl;

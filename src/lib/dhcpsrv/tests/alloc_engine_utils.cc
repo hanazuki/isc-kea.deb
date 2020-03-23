@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -44,7 +44,7 @@ namespace test {
 bool testStatistics(const std::string& stat_name, const int64_t exp_value,
                     const SubnetID subnet_id) {
     try {
-        std::string name = (subnet_id == SUBNET_ID_UNUSED ? stat_name : 
+        std::string name = (subnet_id == SUBNET_ID_UNUSED ? stat_name :
                             StatsMgr::generateName("subnet", subnet_id, stat_name));
         ObservationPtr observation = StatsMgr::instance().getObservation(name);
         if (observation) {
@@ -80,7 +80,7 @@ AllocEngine4Test::testReuseLease4(const AllocEnginePtr& engine,
         // If an existing lease was specified, we need to add it to the
         // database. Let's wipe any leases for that address (if any). We
         // ignore any errors (previous lease may not exist)
-        LeaseMgrFactory::instance().deleteLease(existing_lease->addr_);
+        LeaseMgrFactory::instance().deleteLease(existing_lease);
 
         // Let's add it.
         ASSERT_TRUE(LeaseMgrFactory::instance().addLease(existing_lease));
@@ -119,7 +119,7 @@ AllocEngine4Test::generateDeclinedLease(const std::string& addr,
     HWAddrPtr hwaddr(new HWAddr());
     time_t now = time(NULL);
     Lease4Ptr declined(new Lease4(addr, hwaddr, ClientIdPtr(), 495,
-                                  100, 200, now, subnet_->getID()));
+                                  now, subnet_->getID()));
     declined->decline(probation_period);
     declined->cltt_ = now - probation_period + expired;
     return (declined);
@@ -271,6 +271,58 @@ AllocEngine6Test::simpleAlloc6Test(const Pool6Ptr& pool, const IOAddress& hint,
 }
 
 Lease6Ptr
+AllocEngine6Test::simpleAlloc6Test(const Pool6Ptr& pool, const IOAddress& hint,
+                                   uint32_t preferred, uint32_t valid,
+                                   uint32_t exp_preferred, uint32_t exp_valid) {
+    Lease::Type type = pool->getType();
+    uint8_t expected_len = pool->getLength();
+
+    boost::scoped_ptr<AllocEngine> engine;
+    EXPECT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 100)));
+    // We can't use ASSERT macros in non-void methods
+    EXPECT_TRUE(engine);
+    if (!engine) {
+        return (Lease6Ptr());
+    }
+
+    Pkt6Ptr query(new Pkt6(DHCPV6_REQUEST, 1234));
+
+    AllocEngine::ClientContext6 ctx(subnet_, duid_, false, false, "", false, query);
+    ctx.hwaddr_ = hwaddr_;
+    ctx.addHostIdentifier(Host::IDENT_HWADDR, hwaddr_->hwaddr_);
+    ctx.currentIA().iaid_ = iaid_;
+    ctx.currentIA().type_ = type;
+    ctx.currentIA().addHint(hint, expected_len, preferred, valid);
+    subnet_->setPreferred(Triplet<uint32_t>(200, 300, 400));
+    subnet_->setValid(Triplet<uint32_t>(300, 400, 500));
+
+    // Set some non-standard callout status to make sure it doesn't affect the
+    // allocation.
+    ctx.callout_handle_ = HooksManager::createCalloutHandle();
+    ctx.callout_handle_->setStatus(CalloutHandle::NEXT_STEP_SKIP);
+
+    findReservation(*engine, ctx);
+    Lease6Ptr lease;
+    EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+
+    // Check that we got a lease
+    EXPECT_TRUE(lease);
+    if (!lease) {
+        return (Lease6Ptr());
+    }
+
+    // Do all checks on the lease
+    checkLease6(duid_, lease, type, expected_len, true, true);
+
+    // Check expected preferred and valid lifetimes.
+    EXPECT_EQ(exp_preferred, lease->preferred_lft_);
+    EXPECT_EQ(exp_valid, lease->valid_lft_);
+
+    return (lease);
+}
+
+Lease6Ptr
 AllocEngine6Test::simpleAlloc6Test(const Pool6Ptr& pool, const DuidPtr& duid,
                                    const IOAddress& hint, bool fake, bool in_pool) {
     Lease::Type type = pool->getType();
@@ -392,7 +444,7 @@ AllocEngine6Test::allocWithUsedHintTest(Lease::Type type, IOAddress used_addr,
     DuidPtr duid2 = boost::shared_ptr<DUID>(new DUID(vector<uint8_t>(8, 0xff)));
     time_t now = time(NULL);
     Lease6Ptr used(new Lease6(type, used_addr,
-                              duid2, 1, 2, 3, 4, now, subnet_->getID()));
+                              duid2, 1, 2, now, subnet_->getID()));
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(used));
 
     // Another client comes in and request an address that is in pool, but
@@ -482,7 +534,7 @@ AllocEngine6Test::testReuseLease6(const AllocEnginePtr& engine,
         // If an existing lease was specified, we need to add it to the
         // database. Let's wipe any leases for that address (if any). We
         // ignore any errors (previous lease may not exist)
-        LeaseMgrFactory::instance().deleteLease(existing_lease->addr_);
+        LeaseMgrFactory::instance().deleteLease(existing_lease);
 
         // Let's add it.
         ASSERT_TRUE(LeaseMgrFactory::instance().addLease(existing_lease));
@@ -520,7 +572,7 @@ AllocEngine6Test::generateDeclinedLease(const std::string& addr,
                                         time_t probation_period,
                                         int32_t expired) {
     Lease6Ptr declined(new Lease6(Lease::TYPE_NA, IOAddress(addr),
-                       duid_, iaid_, 100, 100, 100, 100, subnet_->getID()));
+                       duid_, iaid_, 100, 100, subnet_->getID()));
 
     time_t now = time(NULL);
     declined->decline(probation_period);
@@ -580,6 +632,6 @@ AllocEngine4Test::AllocEngine4Test() {
     ctx_.query_.reset(new Pkt4(DHCPREQUEST, 1234));
 }
 
-}; // namespace test
-}; // namespace dhcp
-}; // namespace isc
+}  // namespace test
+}  // namespace dhcp
+}  // namespace isc

@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -55,7 +55,11 @@ protected:
 // The list of types we want to test.
 typedef testing::Types<generic::DS, generic::DLV> Implementations;
 
+#ifdef TYPED_TEST_SUITE
+TYPED_TEST_SUITE(Rdata_DS_LIKE_Test, Implementations);
+#else
 TYPED_TEST_CASE(Rdata_DS_LIKE_Test, Implementations);
+#endif
 
 TYPED_TEST(Rdata_DS_LIKE_Test, createFromText) {
     // It's valid for the digest's presentation format to contain
@@ -129,7 +133,7 @@ TYPED_TEST(Rdata_DS_LIKE_Test, assignment_DS_LIKE) {
     EXPECT_EQ(0, copy3.compare(this->rdata_ds_like));
 
     // Self assignment
-    copy = copy;
+    copy = *&copy;
     EXPECT_EQ(0, copy.compare(this->rdata_ds_like));
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -101,7 +101,7 @@ extern isc::log::Logger packet6_logger;
 /// @brief Logger for options parser.
 ///
 /// This logger is used to issue log messages related to processing of the
-/// DHCP options 
+/// DHCP options.
 extern isc::log::Logger options6_logger;
 
 /// @brief Logger for Hostname or FQDN processing.

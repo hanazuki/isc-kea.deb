@@ -1,4 +1,6 @@
-# Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+#!/bin/sh
+
+# Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -22,6 +24,8 @@ mysql_execute() {
         mysql -N -B "$@" -e "${QUERY}"
         retcode=$?
     else
+        # Shellcheck complains about variables not being set. They're set in the script that calls this script.
+        # shellcheck disable=SC2154
         mysql -N -B --host="${db_host}" --database="${db_name}" --user="${db_user}" --password="${db_password}" -e "${QUERY}"
         retcode=$?
     fi
@@ -62,11 +66,11 @@ pgsql_execute() {
     QUERY=$1
     shift
     if [ $# -gt 0 ]; then
-        echo "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t -h localhost -q "$@"
+        echo "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" -q "$@"
         retcode=$?
     else
         export PGPASSWORD=$db_password
-        echo "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t -h localhost -q -U "${db_user}" -d "${db_name}"
+        echo "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" -q -U "${db_user}" -d "${db_name}"
         retcode=$?
     fi
     return $retcode
@@ -86,11 +90,11 @@ pgsql_execute_script() {
     file=$1
     shift
     if [ $# -gt 0 ]; then
-        psql --set ON_ERROR_STOP=1 -A -t -h localhost -q -f "${file}" "$@"
+        psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" -q -f "${file}" "$@"
         retcode=$?
     else
         export PGPASSWORD=$db_password
-        psql --set ON_ERROR_STOP=1 -A -t -h localhost -q -U "${db_user}" -d "${db_name}" -f "${file}"
+        psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" -q -U "${db_user}" -d "${db_name}" -f "${file}"
         retcode=$?
     fi
     return $retcode

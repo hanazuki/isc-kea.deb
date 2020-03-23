@@ -58,6 +58,7 @@ d2_unittests_SOURCES += d2_controller_unittests.cc
 d2_unittests_SOURCES += d2_simple_parser_unittest.cc
 d2_unittests_SOURCES += parser_unittest.cc parser_unittest.h
 d2_unittests_SOURCES += get_config_unittest.cc
+d2_unittests_SOURCES += d2_command_unittest.cc
 
 d2_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 d2_unittests_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS)
@@ -90,7 +91,6 @@ d2_unittests_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/log/libkea-log.la
-d2_unittests_LDADD += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/util/libkea-util.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 d2_unittests_LDADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS)

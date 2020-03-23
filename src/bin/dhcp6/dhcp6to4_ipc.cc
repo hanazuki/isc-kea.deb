@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,6 +27,8 @@ using namespace isc::hooks;
 namespace isc {
 namespace dhcp {
 
+uint16_t Dhcp6to4Ipc::client_port = 0;
+
 Dhcp6to4Ipc::Dhcp6to4Ipc() : Dhcp4o6IpcBase() {}
 
 Dhcp6to4Ipc& Dhcp6to4Ipc::instance() {
@@ -52,7 +54,7 @@ void Dhcp6to4Ipc::open() {
     }
 }
 
-void Dhcp6to4Ipc::handler() {
+void Dhcp6to4Ipc::handler(int /* fd */) {
     Dhcp6to4Ipc& ipc = Dhcp6to4Ipc::instance();
     Pkt6Ptr pkt;
 
@@ -93,7 +95,10 @@ void Dhcp6to4Ipc::handler() {
     // want to know if it is a relayed message (vs. internal message type).
     // getType() always returns the type of internal message.
     uint8_t msg_type = buf[0];
-    if ((msg_type == DHCPV6_RELAY_FORW) || (msg_type == DHCPV6_RELAY_REPL)) {
+    if (client_port) {
+        pkt->setRemotePort(client_port);
+    } else if ((msg_type == DHCPV6_RELAY_FORW) ||
+               (msg_type == DHCPV6_RELAY_REPL)) {
         pkt->setRemotePort(relay_port ? relay_port : DHCP6_SERVER_PORT);
     } else {
         pkt->setRemotePort(DHCP6_CLIENT_PORT);

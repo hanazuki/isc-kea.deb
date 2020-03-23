@@ -5,23 +5,29 @@ Primary developers:
  - Tomek Mrugalski (lead developer: DHCPv4, DHCPv6 components, prefix
                     delegation, memfile, database interface, core libdhcp++,
                     host reservation, MAC extraction in DHCPv6,
-                    statistics manager, kea-shell, netconf)
+                    statistics manager, kea-shell, netconf, flex/bison
+                    parsers, flex-id, documentation)
  - Stephen Morris (Hooks, MySQL)
  - Marcin Siodelski (DHCPv4, DHCPv6 components, options handling, perfdhcp,
                      host reservation, lease file cleanup, lease expiration,
-                     control agent, shared networks, high availability)
- - Thomas Markwalder (DDNS, user_chk, global host reservations)
+                     control agent, shared networks, high availability,
+                     config backend)
+ - Thomas Markwalder (DDNS, user_chk, global host reservations, stat commands,
+                     congestion handling, config backend)
  - Jeremy C. Reed (documentation, build system, testing, release engineering)
  - Wlodek Wencel (testing, release engineering)
  - Francis Dupont (crypto, flex/bison parsers, perfdhcp, control agent,
-                   radius, netconf)
+                   radius, netconf, config backend)
+ - Brian Reid     (logo design)
  - Shawn Routhier (lease file cleanup)
- - Michal Nowikowski (testing)
+ - Michal Nowikowski (testing, hammer, release engineering)
+ - Razvan Becheriu (cassandra, sysrepo)
+ - Suzanne Goldlust (documentation)
 
 Primary area of work mentioned in parentheses. The list is in a roughly
 chronological order.
 
-Kea is using parts of the code of now defunct BIND 10 project. The following
+Kea uses parts of the code of the now-defunct BIND 10 project. The following
 people contributed to BIND 10 code:
 
 Chen Zhengzhang
@@ -70,6 +76,8 @@ We have received the following contributions:
 
  - Adam Osuchowski, Silesian University of Technology
    2014-09: Examples corrected in Kea ARM
+   2019-02: Hooks installation directory fixed.
+   2019-02: Possible syntax error in keactrl fixed.
 
  - Nicolas Chaigneau, Capgemini
    2014-09: Fix for interfaces with multiple addresses in perfdhcp
@@ -186,6 +194,8 @@ We have received the following contributions:
 
  - Franciszek Gorski
    2018-10: Makefile bug fixed
+   2019-07: Statistics enhancements
+   2019-09: Statistics initialization enhancements
 
  - Suzanne Goldlust
    2018-10: API documentation
@@ -193,15 +203,8 @@ We have received the following contributions:
  - lpaserati, Thorsten Krohn
    2018-11: Two bugfixes in kea-admin
 
-Kea uses log4cplus (http://sourceforge.net/projects/log4cplus/) for logging,
-Boost (http://www.boost.org/) library for almost everything, and can use Botan
-(http://botan.randombit.net/) or OpenSSL (https://www.openssl.org/) for
-cryptographic operations. It can also optionally use PostgreSQL
-(http://www.postgresql.org/) and/or MySQL (http://www.mysql.com/) and/or
-Cassandra (http://cassandra.apache.org/) as a database.
-Sysrepo (http://www.sysrepo.org/) and libyang (https://github.com/CESNET/libyang)
-required when netconf is used as configuration backend.
+ - Kristoffer Larsen
+   2019-10: Changes in alloc_engine_messages.mes are now picked up correctly.
 
-Kea can use googletest for unit-tests (https://github.com/google/googletest).
-
-Kea uses ISC Forge (https://github.com/isc-projects/forge/) for conformance testing.
+ - Niclas Rosenvik
+   2020-01: Fix in the gtest detection scripts.

@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -210,8 +210,9 @@ TEST_F(HAImplTest, buffer4Receive) {
 
     // The client class should be assigned to the message to indicate that the
     // server1 should process this message.
-    ASSERT_EQ(1, query4->getClasses().size());
-    EXPECT_EQ("HA_server1", *(query4->getClasses().cbegin()));
+    ASSERT_EQ(2, query4->getClasses().size());
+    EXPECT_TRUE(query4->inClass("ALL"));
+    EXPECT_TRUE(query4->inClass("HA_server1"));
 
     // Check that the message has been parsed. The DHCP message type should
     // be set in this case.
@@ -298,8 +299,9 @@ TEST_F(HAImplTest, buffer6Receive) {
 
     // The client class should be assigned to the message to indicate that the
     // server1 should process this message.
-    ASSERT_EQ(1, query6->getClasses().size());
-    EXPECT_EQ("HA_server1", *(query6->getClasses().cbegin()));
+    ASSERT_EQ(2, query6->getClasses().size());
+    EXPECT_TRUE(query6->inClass("ALL"));
+    EXPECT_TRUE(query6->inClass("HA_server1"));
 
     // Check that the message has been parsed. The DHCP message type should
     // be set in this case.
@@ -351,7 +353,7 @@ TEST_F(HAImplTest, leases4Committed) {
     HWAddrPtr hwaddr(new HWAddr(std::vector<uint8_t>(6, 1), HTYPE_ETHER));
     Lease4Ptr lease4(new Lease4(IOAddress("192.1.2.3"), hwaddr,
                                 static_cast<const uint8_t*>(0), 0,
-                                60, 30, 40, 0, 1));
+                                60, 0, 1));
     leases4->push_back(lease4);
     callout_handle->setArgument("leases4", leases4);
 
@@ -417,7 +419,7 @@ TEST_F(HAImplTest, leases6Committed) {
     // updates.
     DuidPtr duid(new DUID(std::vector<uint8_t>(8, 2)));
     Lease6Ptr lease6(new Lease6(Lease::TYPE_NA, IOAddress("2001:db8:1::cafe"), duid,
-                                1234, 50, 60, 30, 40, 1));
+                                1234, 50, 60, 1));
     leases6->push_back(lease6);
     callout_handle->setArgument("leases6", leases6);
 
@@ -533,5 +535,84 @@ TEST_F(HAImplTest, continueHandler) {
     checkAnswer(response, CONTROL_RESULT_SUCCESS, "HA state machine is not paused.");
 }
 
+// Tests status-get command processed handler.
+TEST_F(HAImplTest, statusGet) {
+    HAImpl ha_impl;
+    ASSERT_NO_THROW(ha_impl.configure(createValidJsonConfiguration()));
+
+    // Starting the service is required prior to running any callouts.
+    NetworkStatePtr network_state(new NetworkState(NetworkState::DHCPv4));
+    ASSERT_NO_THROW(ha_impl.startService(io_service_, network_state,
+                                         HAServerType::DHCPv4));
+
+    std::string name = "status-get";
+    ConstElementPtr response =
+        Element::fromJSON("{ \"arguments\": { \"pid\": 1 }, \"result\": 0 }");
+
+    CalloutHandlePtr callout_handle = HooksManager::createCalloutHandle();
+
+    callout_handle->setArgument("name", name);
+    callout_handle->setArgument("response", response);
+
+    ASSERT_NO_THROW(ha_impl.commandProcessed(*callout_handle));
+
+    ConstElementPtr got;
+    callout_handle->getArgument("response", got);
+    ASSERT_TRUE(got);
+
+    std::string expected =
+        "{"
+        "    \"arguments\": {"
+        "        \"ha-servers\": {"
+        "            \"local\": {"
+        "                \"role\": \"primary\","
+        "                \"scopes\": [  ],"
+        "                \"state\": \"waiting\""
+        "            },"
+        "            \"remote\": {"
+        "                \"age\": 0,"
+        "                \"in-touch\": false,"
+        "                \"last-scopes\": [ ],"
+        "                \"last-state\": \"\","
+        "                \"role\": \"secondary\""
+        "            }"
+        "        },"
+        "        \"pid\": 1"
+        "    },"
+        "    \"result\": 0"
+        "}";
+    EXPECT_TRUE(isEquivalent(got, Element::fromJSON(expected)));
+}
+
+// Test ha-maintenance-notify command handler.
+TEST_F(HAImplTest, maintenanceNotify) {
+    HAImpl ha_impl;
+    ASSERT_NO_THROW(ha_impl.configure(createValidJsonConfiguration()));
+
+    // Starting the service is required prior to running any callouts.
+    NetworkStatePtr network_state(new NetworkState(NetworkState::DHCPv4));
+    ASSERT_NO_THROW(ha_impl.startService(io_service_, network_state,
+                                         HAServerType::DHCPv4));
+
+    ConstElementPtr command = Element::fromJSON(
+        "{"
+        "    \"command\": \"ha-maintenance-notify\","
+        "    \"arguments\": {"
+        "        \"cancel\": false"
+        "    }"
+         "}"
+    );
+
+    CalloutHandlePtr callout_handle = HooksManager::createCalloutHandle();
+    callout_handle->setArgument("command", command);
+
+    ASSERT_NO_THROW(ha_impl.maintenanceNotifyHandler(*callout_handle));
+
+    ConstElementPtr response;
+    callout_handle->getArgument("response", response);
+    ASSERT_TRUE(response);
+
+    checkAnswer(response, CONTROL_RESULT_SUCCESS, "Server is in-maintenance state.");
+}
 
 }

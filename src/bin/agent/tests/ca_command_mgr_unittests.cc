@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,12 +16,13 @@
 #include <cc/command_interpreter.h>
 #include <cc/data.h>
 #include <process/testutils/d_test_stubs.h>
-#include <util/threads/thread.h>
 #include <boost/bind.hpp>
 #include <boost/pointer_cast.hpp>
 #include <gtest/gtest.h>
+#include <testutils/sandbox.h>
 #include <cstdlib>
 #include <vector>
+#include <thread>
 
 using namespace isc::agent;
 using namespace isc::asiolink;
@@ -29,9 +30,6 @@ using namespace isc::data;
 using namespace isc::process;
 
 namespace {
-
-/// @brief Test unix socket file name.
-const std::string TEST_SOCKET = "test-socket";
 
 /// @brief Test timeout in ms.
 const long TEST_TIMEOUT = 10000;
@@ -43,6 +41,7 @@ const long TEST_TIMEOUT = 10000;
 /// Meanwhile, this is just a placeholder for the tests.
 class CtrlAgentCommandMgrTest : public DControllerTest {
 public:
+    isc::test::Sandbox sandbox;
 
     /// @brief Constructor.
     ///
@@ -111,17 +110,15 @@ public:
     /// If the KEA_SOCKET_TEST_DIR environment variable is specified, the
     /// socket file is created in the location pointed to by this variable.
     /// Otherwise, it is created in the build directory.
-    static std::string unixSocketFilePath() {
-        std::ostringstream s;
+    std::string unixSocketFilePath() {
+        std::string socket_path;
         const char* env = getenv("KEA_SOCKET_TEST_DIR");
         if (env) {
-            s << std::string(env);
+            socket_path = std::string(env) + "/test-socket";
         } else {
-            s << TEST_DATA_BUILDDIR;
+            socket_path = sandbox.join("test-socket");
         }
-
-        s << "/" << TEST_SOCKET;
-        return (s.str());
+        return (socket_path);
     }
 
     /// @brief Removes unix socket descriptor.
@@ -231,8 +228,7 @@ public:
         // to this we need to run the server side socket at the same time as the
         // client. Running IO service in a thread guarantees that the server
         //responds as soon as it receives the control command.
-        isc::util::thread::Thread th(boost::bind(&IOService::run,
-                                                 getIOService().get()));
+        std::thread th(boost::bind(&IOService::run, getIOService().get()));
 
 
         // Wait for the IO service in thread to actually run.
@@ -246,7 +242,7 @@ public:
         getIOService()->stop();
 
         // Wait for the thread to finish.
-        th.wait();
+        th.join();
 
         // Cancel all asynchronous operations on the server.
         server_socket_->stopServer();
@@ -296,12 +292,27 @@ TEST_F(CtrlAgentCommandMgrTest, forwardToDHCPv6Server) {
     testForward("dhcp6", "dhcp6", isc::config::CONTROL_RESULT_SUCCESS);
 }
 
+/// Check that control command is successfully forwarded to the D2 server.
+TEST_F(CtrlAgentCommandMgrTest, forwardToD2Server) {
+    testForward("d2", "d2", isc::config::CONTROL_RESULT_SUCCESS);
+}
+
 /// Check that the same command is forwarded to multiple servers.
 TEST_F(CtrlAgentCommandMgrTest, forwardToBothDHCPServers) {
     configureControlSocket("dhcp6");
 
     testForward("dhcp4", "dhcp4,dhcp6", isc::config::CONTROL_RESULT_SUCCESS,
                 isc::config::CONTROL_RESULT_SUCCESS, -1, 2);
+}
+
+/// Check that the same command is forwarded to all servers.
+TEST_F(CtrlAgentCommandMgrTest, forwardToAllServers) {
+    configureControlSocket("dhcp6");
+    configureControlSocket("d2");
+
+    testForward("dhcp4", "dhcp4,dhcp6,d2", isc::config::CONTROL_RESULT_SUCCESS,
+                isc::config::CONTROL_RESULT_SUCCESS,
+                isc::config::CONTROL_RESULT_SUCCESS, 3);
 }
 
 /// Check that the command may forwarded to the second server even if
@@ -373,7 +384,7 @@ TEST_F(CtrlAgentCommandMgrTest, forwardListCommands) {
     // to this we need to run the server side socket at the same time.
     // Running IO service in a thread guarantees that the server responds
     // as soon as it receives the control command.
-    isc::util::thread::Thread th(boost::bind(&IOService::run, getIOService().get()));
+    std::thread th(boost::bind(&IOService::run, getIOService().get()));
 
     // Wait for the IO service in thread to actually run.
     server_socket_->waitForRunning();
@@ -386,7 +397,7 @@ TEST_F(CtrlAgentCommandMgrTest, forwardListCommands) {
     getIOService()->stop();
 
     // Wait for the thread to finish.
-    th.wait();
+    th.join();
 
     // Cancel all asynchronous operations on the server.
     server_socket_->stopServer();

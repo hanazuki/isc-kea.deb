@@ -1,4 +1,4 @@
--- Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+-- Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 
 -- This Source Code Form is subject to the terms of the Mozilla Public
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -876,7 +876,40 @@ UPDATE schema_version
 
 -- Schema 5.0 specification ends here.
 
--- Commit the script transaction.
+-- Upgrade to schema 5.1 begins here:
+
+-- Put the auth key in hexadecimal (double size but far more user friendly).
+ALTER TABLE hosts ALTER COLUMN auth_key TYPE VARCHAR(32);
+
+-- Set schema 5.1 version
+UPDATE schema_version
+   SET version = '5', minor = '1';
+
+-- Schema 5.1 specification ends here.
+
+-- Upgrade to schema 6.0 begins here:
+
+START TRANSACTION;
+
+-- Create a lower case hostname index for hosts.
+CREATE INDEX hosts_by_hostname ON hosts (lower(hostname))
+WHERE hostname IS NOT NULL;
+
+-- Create a hostname index for lease4.
+CREATE INDEX lease4_by_hostname ON lease4 (lower(hostname))
+WHERE hostname IS NOT NULL;
+
+-- Create a hostname index for lease6.
+CREATE INDEX lease6_by_hostname ON lease6 (lower(hostname))
+WHERE hostname IS NOT NULL;
+
+-- Set 6.0 schema version.
+UPDATE schema_version
+    SET version = '6', minor = '0';
+
+-- Schema 5.1a specification ends here.
+
+-- Commit the script transaction
 COMMIT;
 
 -- Notes:

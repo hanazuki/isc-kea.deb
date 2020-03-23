@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2017 Deutsche Telekom AG.
 //
 // Authors: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -18,9 +18,7 @@
 #include <config.h>
 
 #include <dhcpsrv/benchmarks/generic_lease_mgr_benchmark.h>
-
 #include <dhcpsrv/lease_mgr_factory.h>
-#include <dhcpsrv/testutils/cql_schema.h>
 
 #include <chrono>
 #include <iomanip>
@@ -29,7 +27,6 @@
 #include <vector>
 
 using namespace isc::asiolink;
-using namespace isc::dhcp::test;
 using namespace std;
 using namespace std::chrono;
 
@@ -37,8 +34,7 @@ namespace isc {
 namespace dhcp {
 namespace bench {
 
-GenericLeaseMgrBenchmark::GenericLeaseMgrBenchmark()
-    : lmptr_(NULL) {
+GenericLeaseMgrBenchmark::GenericLeaseMgrBenchmark() : lmptr_(NULL) {
 }
 
 GenericLeaseMgrBenchmark::~GenericLeaseMgrBenchmark() {
@@ -169,8 +165,6 @@ GenericLeaseMgrBenchmark::prepareLeases6(size_t const& lease_count) {
         const string prefix = string("2001:db8::") + n_lease;
         Lease6Ptr lease(new Lease6());
         lease->addr_ = IOAddress(prefix);
-        lease->t1_ = i;
-        lease->t2_ = i;
         lease->type_ = static_cast<Lease::Type>(i % 3);  // NA, TA or PD
         lease->prefixlen_ = i % 128;
         lease->iaid_ = i;

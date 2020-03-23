@@ -94,6 +94,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -107,8 +108,7 @@ DIST_COMMON = $(srcdir)/Makefile.am \
 	$(libkea_util_encode_include_HEADERS) \
 	$(libkea_util_include_HEADERS) \
 	$(libkea_util_io_include_HEADERS) \
-	$(libkea_util_random_include_HEADERS) \
-	$(libkea_util_threads_include_HEADERS) $(am__DIST_COMMON)
+	$(libkea_util_random_include_HEADERS) $(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
@@ -144,17 +144,17 @@ am__installdirs = "$(DESTDIR)$(libdir)" \
 	"$(DESTDIR)$(libkea_util_encode_includedir)" \
 	"$(DESTDIR)$(libkea_util_includedir)" \
 	"$(DESTDIR)$(libkea_util_io_includedir)" \
-	"$(DESTDIR)$(libkea_util_random_includedir)" \
-	"$(DESTDIR)$(libkea_util_threads_includedir)"
+	"$(DESTDIR)$(libkea_util_random_includedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 libkea_util_la_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 am__dirstamp = $(am__leading_dot)dirstamp
 am_libkea_util_la_OBJECTS = boost_time_utils.lo csv_file.lo \
 	filename.lo labeled_value.lo memory_segment_local.lo \
-	pid_file.lo process_spawn.lo signal_set.lo state_model.lo \
-	stopwatch.lo stopwatch_impl.lo strutil.lo time_utilities.lo \
-	versioned_csv_file.lo watch_socket.lo encode/base_n.lo \
+	multi_threading_mgr.lo pid_file.lo process_spawn.lo \
+	signal_set.lo state_model.lo stopwatch.lo stopwatch_impl.lo \
+	strutil.lo time_utilities.lo versioned_csv_file.lo \
+	watch_socket.lo watched_thread.lo encode/base_n.lo \
 	random/qid_gen.lo
 libkea_util_la_OBJECTS = $(am_libkea_util_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -235,8 +235,7 @@ am__can_run_installinfo = \
 HEADERS = $(libkea_util_encode_include_HEADERS) \
 	$(libkea_util_include_HEADERS) \
 	$(libkea_util_io_include_HEADERS) \
-	$(libkea_util_random_include_HEADERS) \
-	$(libkea_util_threads_include_HEADERS)
+	$(libkea_util_random_include_HEADERS)
 RECURSIVE_CLEAN_TARGETS = mostlyclean-recursive clean-recursive	\
   distclean-recursive maintainer-clean-recursive
 am__recursive_targets = \
@@ -308,7 +307,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -329,7 +327,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -339,6 +336,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -348,7 +346,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -399,6 +396,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -416,17 +414,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -486,29 +484,31 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 AUTOMAKE_OPTIONS = subdir-objects
-SUBDIRS = . io unittests tests python threads
+SUBDIRS = . io unittests tests python
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
 	$(BOOST_INCLUDES)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 lib_LTLIBRARIES = libkea-util.la
 libkea_util_la_SOURCES = boost_time_utils.h boost_time_utils.cc \
-	buffer.h io_utilities.h csv_file.h csv_file.cc filename.h \
-	filename.cc hash.h labeled_value.h labeled_value.cc \
+	buffer.h io_utilities.h csv_file.h csv_file.cc doubles.h \
+	filename.h filename.cc hash.h labeled_value.h labeled_value.cc \
 	memory_segment.h memory_segment_local.h \
-	memory_segment_local.cc optional_value.h pid_file.h \
-	pid_file.cc pointer_util.h process_spawn.h process_spawn.cc \
+	memory_segment_local.cc multi_threading_mgr.h \
+	multi_threading_mgr.cc optional.h pid_file.h pid_file.cc \
+	pointer_util.h process_spawn.h process_spawn.cc \
 	range_utilities.h signal_set.cc signal_set.h staged_value.h \
 	state_model.cc state_model.h stopwatch.cc stopwatch.h \
 	stopwatch_impl.cc stopwatch_impl.h strutil.h strutil.cc \
-	time_utilities.h time_utilities.cc versioned_csv_file.h \
-	versioned_csv_file.cc watch_socket.cc watch_socket.h \
+	thread_pool.h time_utilities.h time_utilities.cc \
+	versioned_csv_file.h versioned_csv_file.cc watch_socket.cc \
+	watch_socket.h watched_thread.cc watched_thread.h \
 	encode/base16_from_binary.h encode/base32hex.h encode/base64.h \
 	encode/base32hex_from_binary.h encode/base_n.cc encode/hex.h \
 	encode/binary_from_base32hex.h encode/binary_from_base16.h \
 	random/qid_gen.h random/qid_gen.cc \
 	random/random_number_generator.h
 libkea_util_la_LIBADD = $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
-libkea_util_la_LDFLAGS = -no-undefined -version-info 5:0:0
+libkea_util_la_LDFLAGS = -no-undefined -version-info 10:0:1
 CLEANFILES = *.gcno *.gcda
 
 # Specify the headers for copying into the installation directory tree.
@@ -517,13 +517,14 @@ libkea_util_include_HEADERS = \
 	boost_time_utils.h \
 	buffer.h \
 	csv_file.h \
+	doubles.h \
 	filename.h \
 	hash.h \
 	io_utilities.h \
 	labeled_value.h \
 	memory_segment.h \
 	memory_segment_local.h \
-	optional_value.h \
+	optional.h \
 	pid_file.h \
 	pointer_util.h \
 	process_spawn.h \
@@ -536,7 +537,8 @@ libkea_util_include_HEADERS = \
 	strutil.h \
 	time_utilities.h \
 	versioned_csv_file.h \
-	watch_socket.h
+	watch_socket.h \
+	watched_thread.h
 
 libkea_util_encode_includedir = $(pkgincludedir)/util/encode
 libkea_util_encode_include_HEADERS = \
@@ -553,19 +555,12 @@ libkea_util_io_include_HEADERS = \
 	io/fd.h \
 	io/fd_share.h \
 	io/pktinfo_utilities.h \
-	io/sockaddr_util.h \
-	io/socketsession.h
+	io/sockaddr_util.h
 
 libkea_util_random_includedir = $(pkgincludedir)/util/random
 libkea_util_random_include_HEADERS = \
 	random/qid_gen.h \
 	random/random_number_generator.h
-
-libkea_util_threads_includedir = $(pkgincludedir)/util/threads
-libkea_util_threads_include_HEADERS = \
-	threads/sync.h \
-	threads/thread.h \
-	threads/watched_thread.h
 
 all: all-recursive
 
@@ -670,6 +665,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/filename.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/labeled_value.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memory_segment_local.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/multi_threading_mgr.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pid_file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/process_spawn.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/signal_set.Plo@am__quote@
@@ -680,6 +676,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/time_utilities.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/versioned_csv_file.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/watch_socket.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/watched_thread.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@encode/$(DEPDIR)/base_n.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@random/$(DEPDIR)/qid_gen.Plo@am__quote@
 
@@ -798,27 +795,6 @@ uninstall-libkea_util_random_includeHEADERS:
 	@list='$(libkea_util_random_include_HEADERS)'; test -n "$(libkea_util_random_includedir)" || list=; \
 	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
 	dir='$(DESTDIR)$(libkea_util_random_includedir)'; $(am__uninstall_files_from_dir)
-install-libkea_util_threads_includeHEADERS: $(libkea_util_threads_include_HEADERS)
-	@$(NORMAL_INSTALL)
-	@list='$(libkea_util_threads_include_HEADERS)'; test -n "$(libkea_util_threads_includedir)" || list=; \
-	if test -n "$$list"; then \
-	  echo " $(MKDIR_P) '$(DESTDIR)$(libkea_util_threads_includedir)'"; \
-	  $(MKDIR_P) "$(DESTDIR)$(libkea_util_threads_includedir)" || exit 1; \
-	fi; \
-	for p in $$list; do \
-	  if test -f "$$p"; then d=; else d="$(srcdir)/"; fi; \
-	  echo "$$d$$p"; \
-	done | $(am__base_list) | \
-	while read files; do \
-	  echo " $(INSTALL_HEADER) $$files '$(DESTDIR)$(libkea_util_threads_includedir)'"; \
-	  $(INSTALL_HEADER) $$files "$(DESTDIR)$(libkea_util_threads_includedir)" || exit $$?; \
-	done
-
-uninstall-libkea_util_threads_includeHEADERS:
-	@$(NORMAL_UNINSTALL)
-	@list='$(libkea_util_threads_include_HEADERS)'; test -n "$(libkea_util_threads_includedir)" || list=; \
-	files=`for p in $$list; do echo $$p; done | sed -e 's|^.*/||'`; \
-	dir='$(DESTDIR)$(libkea_util_threads_includedir)'; $(am__uninstall_files_from_dir)
 
 # This directory's subdirectories are mostly independent; you can cd
 # into them and run 'make' without going through this Makefile.
@@ -979,7 +955,7 @@ check: check-recursive
 all-am: Makefile $(LTLIBRARIES) $(HEADERS)
 installdirs: installdirs-recursive
 installdirs-am:
-	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(libkea_util_encode_includedir)" "$(DESTDIR)$(libkea_util_includedir)" "$(DESTDIR)$(libkea_util_io_includedir)" "$(DESTDIR)$(libkea_util_random_includedir)" "$(DESTDIR)$(libkea_util_threads_includedir)"; do \
+	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(libkea_util_encode_includedir)" "$(DESTDIR)$(libkea_util_includedir)" "$(DESTDIR)$(libkea_util_io_includedir)" "$(DESTDIR)$(libkea_util_random_includedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
 install: install-recursive
@@ -1043,8 +1019,7 @@ info-am:
 install-data-am: install-libkea_util_encode_includeHEADERS \
 	install-libkea_util_includeHEADERS \
 	install-libkea_util_io_includeHEADERS \
-	install-libkea_util_random_includeHEADERS \
-	install-libkea_util_threads_includeHEADERS
+	install-libkea_util_random_includeHEADERS
 
 install-dvi: install-dvi-recursive
 
@@ -1094,8 +1069,7 @@ uninstall-am: uninstall-libLTLIBRARIES \
 	uninstall-libkea_util_encode_includeHEADERS \
 	uninstall-libkea_util_includeHEADERS \
 	uninstall-libkea_util_io_includeHEADERS \
-	uninstall-libkea_util_random_includeHEADERS \
-	uninstall-libkea_util_threads_includeHEADERS
+	uninstall-libkea_util_random_includeHEADERS
 
 .MAKE: $(am__recursive_targets) install-am install-strip
 
@@ -1111,8 +1085,7 @@ uninstall-am: uninstall-libLTLIBRARIES \
 	install-libkea_util_encode_includeHEADERS \
 	install-libkea_util_includeHEADERS \
 	install-libkea_util_io_includeHEADERS \
-	install-libkea_util_random_includeHEADERS \
-	install-libkea_util_threads_includeHEADERS install-man \
+	install-libkea_util_random_includeHEADERS install-man \
 	install-pdf install-pdf-am install-ps install-ps-am \
 	install-strip installcheck installcheck-am installdirs \
 	installdirs-am maintainer-clean maintainer-clean-generic \
@@ -1122,8 +1095,7 @@ uninstall-am: uninstall-libLTLIBRARIES \
 	uninstall-libkea_util_encode_includeHEADERS \
 	uninstall-libkea_util_includeHEADERS \
 	uninstall-libkea_util_io_includeHEADERS \
-	uninstall-libkea_util_random_includeHEADERS \
-	uninstall-libkea_util_threads_includeHEADERS
+	uninstall-libkea_util_random_includeHEADERS
 
 .PRECIOUS: Makefile
 

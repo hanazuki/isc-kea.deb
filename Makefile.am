@@ -4,7 +4,7 @@ ACLOCAL_AMFLAGS = -I m4macros ${ACLOCAL_FLAGS}
 
 # We now build doc after src/, because docgen, a tool to generate API
 # documentation requires libkea-exceptions and libkea-cc.
-SUBDIRS = compatcheck tools . ext src doc m4macros @PREMIUM_DIR@ @CONTRIB_DIR@
+SUBDIRS = tools . ext src doc m4macros @PREMIUM_DIR@ @CONTRIB_DIR@
 
 USE_LCOV=@USE_LCOV@
 LCOV=@LCOV@
@@ -13,6 +13,7 @@ DISTCHECK_GTEST_CONFIGURE_FLAG=@DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG=@DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG=@DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG=@DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG=@DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG=@DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG=@DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG=@DISTCHECK_CONTRIB_CONFIGURE_FLAG@
@@ -37,6 +38,9 @@ DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_BOOST_CONFIGURE_FLAG)
 # Keep the log4cplus path too
 DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG)
 
+# Keep perfdhcp if enabled
+DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_PERFDHCP_CONFIGURE_FLAG)
+
 # Keep kea-shell if enabled
 DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_KEA_SHELL_CONFIGURE_FLAG)
 
@@ -49,7 +53,7 @@ DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_CONTRIB_CONFIGURE_FLAG)
 # keerp the sysrepo config
 DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_SYSREPO_CONFIGURE_FLAG)
 
-dist_doc_DATA = AUTHORS COPYING ChangeLog README
+dist_doc_DATA = AUTHORS COPYING ChangeLog README CONTRIBUTING.md
 
 .PHONY: check-valgrind check-valgrind-suppress
 
@@ -142,19 +146,22 @@ cppcheck:
 		--template '{file}:{line}: check_fail: {message} ({severity},{id})' \
 		src
 
+# this is a shortcut that builds only documentation dependecies and documentation itself
+docs:
+	$(MAKE) -C doc/sphinx
+
+
 # These steps are necessary during installation
 install-exec-hook:
 	mkdir -p $(DESTDIR)${localstatedir}/log/
-	mkdir -p $(DESTDIR)${localstatedir}/run/${PACKAGE_NAME}
+	mkdir -p $(DESTDIR)${localstatedir}/lib/${PACKAGE_NAME}
+	mkdir -p $(DESTDIR)${runstatedir}/${PACKAGE_NAME}
 
 EXTRA_DIST  = tools/path_replacer.sh
 EXTRA_DIST += tools/mk_cfgrpt.sh
 
 #### include external sources in the distributed tarball:
 EXTRA_DIST += ext/coroutine/coroutine.hpp
-
-pkgconfigdir = $(libdir)/pkgconfig
-pkgconfig_DATA = dns++.pc
 
 CLEANFILES = $(abs_top_builddir)/logger_lockfile
 

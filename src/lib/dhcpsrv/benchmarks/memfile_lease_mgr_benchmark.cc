@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,13 +8,13 @@
 
 #include <dhcpsrv/benchmarks/generic_lease_mgr_benchmark.h>
 #include <dhcpsrv/benchmarks/parameters.h>
-#include <dhcpsrv/memfile_lease_mgr.h>
 #include <dhcpsrv/lease_mgr_factory.h>
+#include <dhcpsrv/memfile_lease_mgr.h>
 #include <dhcpsrv/testutils/lease_file_io.h>
 
+using namespace isc::dhcp;
 using namespace isc::dhcp::bench;
 using namespace isc::dhcp::test;
-using namespace isc::dhcp;
 using namespace std;
 
 namespace {
@@ -22,12 +22,10 @@ namespace {
 /// @brief This is a fixture class used for benchmarking Memfile lease backend
 class MemfileLeaseMgrBenchmark : public GenericLeaseMgrBenchmark {
 public:
-
     /// @brief Constructor
     ///
     /// Sets the files used for writing lease files.
-    MemfileLeaseMgrBenchmark()
-        : io4_(""), io6_("") {
+    MemfileLeaseMgrBenchmark() : io4_(""), io6_("") {
     }
 
     /// @brief Setup routine.
@@ -54,6 +52,11 @@ public:
         lmptr_ = &(LeaseMgrFactory::instance());
     }
 
+    void SetUp(::benchmark::State& s) override {
+        ::benchmark::State const& cs = s;
+        SetUp(cs);
+    }
+
     /// @brief Creates instance of the backend.
     ///
     /// @param u Universe (v4 or V6).
@@ -61,8 +64,8 @@ public:
         try {
             LeaseMgrFactory::create(getConfigString(u));
         } catch (...) {
-            std::cerr << "*** ERROR: unable to create instance of the Memfile\n"
-                " lease database backend.\n";
+            std::cerr << "*** ERROR: unable to create instance of the Memfile "
+                      << "lease database backend." << std::endl;
             throw;
         }
         lmptr_ = &(LeaseMgrFactory::instance());
@@ -80,8 +83,8 @@ public:
     /// @return Configuration string for @c LeaseMgrFactory.
     static std::string getConfigString(Universe u) {
         std::ostringstream s;
-        s << "type=memfile " << (u == V4 ? "universe=4 " : "universe=6 ") << "name="
-          << getLeaseFilePath(u == V4 ? "leasefile4_0.csv" : "leasefile6_0.csv")
+        s << "type=memfile " << (u == V4 ? "universe=4 " : "universe=6 ")
+          << "name=" << getLeaseFilePath(u == V4 ? "leasefile4_0.csv" : "leasefile6_0.csv")
           << " lfc-interval=0";
         return (s.str());
     }
@@ -125,7 +128,7 @@ public:
             lmptr_->rollback();
         } catch (...) {
             std::cerr << "WARNING: rollback has failed. This is surprising as "
-                "memfile doesn't support rollback." << std::endl;
+                      << "memfile doesn't support rollback." << std::endl;
         }
 
         LeaseMgrFactory::destroy();
@@ -133,6 +136,11 @@ public:
         // Remove lease files and products of Lease File Cleanup.
         removeFiles(getLeaseFilePath("leasefile4_0.csv"));
         removeFiles(getLeaseFilePath("leasefile6_0.csv"));
+    }
+
+    void TearDown(::benchmark::State& s) override {
+        ::benchmark::State const& cs = s;
+        TearDown(cs);
     }
 
     /// @brief Object providing access to v4 lease IO.
@@ -271,7 +279,6 @@ BENCHMARK_DEFINE_F(MemfileLeaseMgrBenchmark, getExpiredLeases6)(benchmark::State
         benchGetExpiredLeases6();
     }
 }
-
 
 /// The following macros define run parameters for previously defined
 /// memfile benchmarks.

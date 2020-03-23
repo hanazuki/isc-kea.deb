@@ -106,18 +106,19 @@ TESTS = $(am__EXEEXT_1)
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_8 = $(MYSQL_LIBS)
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_9 = $(PGSQL_LIBS)
 @HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_10 = $(CQL_LIBS)
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_11 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_12 = $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_13 = $(top_builddir)/src/lib/cql/testutils/libcqltest.la
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_14 = $(top_builddir)/src/lib/mysql/libkea-mysql.la
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_15 = $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_16 = $(top_builddir)/src/lib/cql/libkea-cql.la
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_11 = $(top_builddir)/src/lib/mysql/libkea-mysql.la \
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@	$(top_builddir)/src/lib/mysql/testutils/libmysqltest.la
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_12 = $(top_builddir)/src/lib/pgsql/libkea-pgsql.la \
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@	$(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la
+@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_13 = $(top_builddir)/src/lib/cql/libkea-cql.la \
+@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cql/testutils/libcqltest.la
 noinst_PROGRAMS = $(am__EXEEXT_2)
 subdir = src/lib/dhcpsrv/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -170,12 +171,12 @@ am__libdhcpsrv_unittests_SOURCES_DIST = run_unittests.cc \
 	alloc_engine_expiration_unittest.cc \
 	alloc_engine_hooks_unittest.cc alloc_engine4_unittest.cc \
 	alloc_engine6_unittest.cc callout_handle_store_unittest.cc \
-	cfg_db_access_unittest.cc cfg_duid_unittest.cc \
-	cfg_expiration_unittest.cc cfg_host_operations_unittest.cc \
-	cfg_hosts_unittest.cc cfg_iface_unittest.cc \
-	cfg_mac_source_unittest.cc cfg_option_unittest.cc \
-	cfg_option_def_unittest.cc cfg_rsoo_unittest.cc \
-	cfg_shared_networks4_unittest.cc \
+	cb_ctl_dhcp_unittest.cc cfg_db_access_unittest.cc \
+	cfg_duid_unittest.cc cfg_expiration_unittest.cc \
+	cfg_host_operations_unittest.cc cfg_hosts_unittest.cc \
+	cfg_iface_unittest.cc cfg_mac_source_unittest.cc \
+	cfg_option_unittest.cc cfg_option_def_unittest.cc \
+	cfg_rsoo_unittest.cc cfg_shared_networks4_unittest.cc \
 	cfg_shared_networks6_unittest.cc cfg_subnets4_unittest.cc \
 	cfg_subnets6_unittest.cc cfgmgr_unittest.cc \
 	client_class_def_unittest.cc \
@@ -201,7 +202,8 @@ am__libdhcpsrv_unittests_SOURCES_DIST = run_unittests.cc \
 	shared_networks_list_parser_unittest.cc srv_config_unittest.cc \
 	subnet_unittest.cc test_get_callout_handle.cc \
 	test_get_callout_handle.h triplet_unittest.cc test_utils.cc \
-	test_utils.h timer_mgr_unittest.cc network_state_unittest.cc
+	test_utils.h timer_mgr_unittest.cc network_state_unittest.cc \
+	network_unittest.cc
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__objects_1 = libdhcpsrv_unittests-mysql_lease_mgr_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@	libdhcpsrv_unittests-mysql_host_data_source_unittest.$(OBJEXT)
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__objects_2 = libdhcpsrv_unittests-pgsql_lease_mgr_unittest.$(OBJEXT) \
@@ -216,6 +218,7 @@ am__libdhcpsrv_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-alloc_engine4_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-alloc_engine6_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-callout_handle_store_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	libdhcpsrv_unittests-cb_ctl_dhcp_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-cfg_db_access_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-cfg_duid_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-cfg_expiration_unittest.$(OBJEXT) \
@@ -269,35 +272,32 @@ am__libdhcpsrv_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-triplet_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-test_utils.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-timer_mgr_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	libdhcpsrv_unittests-network_state_unittest.$(OBJEXT)
+@HAVE_GTEST_TRUE@	libdhcpsrv_unittests-network_state_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	libdhcpsrv_unittests-network_unittest.$(OBJEXT)
 libdhcpsrv_unittests_OBJECTS = $(am_libdhcpsrv_unittests_OBJECTS)
 am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@libdhcpsrv_unittests_DEPENDENCIES = $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
-@HAVE_GTEST_TRUE@	$(am__append_11) $(am__append_12) \
-@HAVE_GTEST_TRUE@	$(am__append_13) \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
-@HAVE_GTEST_TRUE@	$(am__append_14) $(am__append_15) \
-@HAVE_GTEST_TRUE@	$(am__append_16) \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
+@HAVE_GTEST_TRUE@	$(am__append_11) $(am__append_12) \
+@HAVE_GTEST_TRUE@	$(am__append_13) \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 libdhcpsrv_unittests_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
@@ -468,7 +468,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -489,7 +488,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -499,6 +497,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -508,7 +507,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -559,6 +557,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -576,17 +575,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -694,6 +693,7 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	alloc_engine4_unittest.cc \
 @HAVE_GTEST_TRUE@	alloc_engine6_unittest.cc \
 @HAVE_GTEST_TRUE@	callout_handle_store_unittest.cc \
+@HAVE_GTEST_TRUE@	cb_ctl_dhcp_unittest.cc \
 @HAVE_GTEST_TRUE@	cfg_db_access_unittest.cc \
 @HAVE_GTEST_TRUE@	cfg_duid_unittest.cc \
 @HAVE_GTEST_TRUE@	cfg_expiration_unittest.cc \
@@ -741,7 +741,7 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	test_get_callout_handle.h triplet_unittest.cc \
 @HAVE_GTEST_TRUE@	test_utils.cc test_utils.h \
 @HAVE_GTEST_TRUE@	timer_mgr_unittest.cc \
-@HAVE_GTEST_TRUE@	network_state_unittest.cc
+@HAVE_GTEST_TRUE@	network_state_unittest.cc network_unittest.cc
 @HAVE_GTEST_TRUE@libdhcpsrv_unittests_CPPFLAGS = $(AM_CPPFLAGS) \
 @HAVE_GTEST_TRUE@	$(GTEST_INCLUDES) $(am__append_5) \
 @HAVE_GTEST_TRUE@	$(am__append_6) $(am__append_7)
@@ -751,31 +751,27 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	$(am__append_8) $(am__append_9) \
 @HAVE_GTEST_TRUE@	$(am__append_10)
 @HAVE_GTEST_TRUE@libdhcpsrv_unittests_LDADD = $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
-@HAVE_GTEST_TRUE@	$(am__append_11) $(am__append_12) \
-@HAVE_GTEST_TRUE@	$(am__append_13) \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
-@HAVE_GTEST_TRUE@	$(am__append_14) $(am__append_15) \
-@HAVE_GTEST_TRUE@	$(am__append_16) \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
+@HAVE_GTEST_TRUE@	$(am__append_11) $(am__append_12) \
+@HAVE_GTEST_TRUE@	$(am__append_13) \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) \
 @HAVE_GTEST_TRUE@	$(BOOST_LIBS) $(GTEST_LDADD)
 all: all-recursive
@@ -862,6 +858,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-alloc_engine_hooks_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-alloc_engine_utils.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-callout_handle_store_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-cb_ctl_dhcp_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-cfg_db_access_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-cfg_duid_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-cfg_expiration_unittest.Po@am__quote@
@@ -907,6 +904,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-mysql_lease_mgr_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-ncr_generator_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-network_state_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-network_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-pgsql_host_data_source_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-pgsql_lease_mgr_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-pool_unittest.Po@am__quote@
@@ -1061,6 +1059,20 @@ libdhcpsrv_unittests-callout_handle_store_unittest.obj: callout_handle_store_uni
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='callout_handle_store_unittest.cc' object='libdhcpsrv_unittests-callout_handle_store_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-callout_handle_store_unittest.obj `if test -f 'callout_handle_store_unittest.cc'; then $(CYGPATH_W) 'callout_handle_store_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/callout_handle_store_unittest.cc'; fi`
+
+libdhcpsrv_unittests-cb_ctl_dhcp_unittest.o: cb_ctl_dhcp_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-cb_ctl_dhcp_unittest.o -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-cb_ctl_dhcp_unittest.Tpo -c -o libdhcpsrv_unittests-cb_ctl_dhcp_unittest.o `test -f 'cb_ctl_dhcp_unittest.cc' || echo '$(srcdir)/'`cb_ctl_dhcp_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrv_unittests-cb_ctl_dhcp_unittest.Tpo $(DEPDIR)/libdhcpsrv_unittests-cb_ctl_dhcp_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cb_ctl_dhcp_unittest.cc' object='libdhcpsrv_unittests-cb_ctl_dhcp_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-cb_ctl_dhcp_unittest.o `test -f 'cb_ctl_dhcp_unittest.cc' || echo '$(srcdir)/'`cb_ctl_dhcp_unittest.cc
+
+libdhcpsrv_unittests-cb_ctl_dhcp_unittest.obj: cb_ctl_dhcp_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-cb_ctl_dhcp_unittest.obj -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-cb_ctl_dhcp_unittest.Tpo -c -o libdhcpsrv_unittests-cb_ctl_dhcp_unittest.obj `if test -f 'cb_ctl_dhcp_unittest.cc'; then $(CYGPATH_W) 'cb_ctl_dhcp_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/cb_ctl_dhcp_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrv_unittests-cb_ctl_dhcp_unittest.Tpo $(DEPDIR)/libdhcpsrv_unittests-cb_ctl_dhcp_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cb_ctl_dhcp_unittest.cc' object='libdhcpsrv_unittests-cb_ctl_dhcp_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-cb_ctl_dhcp_unittest.obj `if test -f 'cb_ctl_dhcp_unittest.cc'; then $(CYGPATH_W) 'cb_ctl_dhcp_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/cb_ctl_dhcp_unittest.cc'; fi`
 
 libdhcpsrv_unittests-cfg_db_access_unittest.o: cfg_db_access_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-cfg_db_access_unittest.o -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-cfg_db_access_unittest.Tpo -c -o libdhcpsrv_unittests-cfg_db_access_unittest.o `test -f 'cfg_db_access_unittest.cc' || echo '$(srcdir)/'`cfg_db_access_unittest.cc
@@ -1873,6 +1885,20 @@ libdhcpsrv_unittests-network_state_unittest.obj: network_state_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='network_state_unittest.cc' object='libdhcpsrv_unittests-network_state_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-network_state_unittest.obj `if test -f 'network_state_unittest.cc'; then $(CYGPATH_W) 'network_state_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/network_state_unittest.cc'; fi`
+
+libdhcpsrv_unittests-network_unittest.o: network_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-network_unittest.o -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-network_unittest.Tpo -c -o libdhcpsrv_unittests-network_unittest.o `test -f 'network_unittest.cc' || echo '$(srcdir)/'`network_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrv_unittests-network_unittest.Tpo $(DEPDIR)/libdhcpsrv_unittests-network_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='network_unittest.cc' object='libdhcpsrv_unittests-network_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-network_unittest.o `test -f 'network_unittest.cc' || echo '$(srcdir)/'`network_unittest.cc
+
+libdhcpsrv_unittests-network_unittest.obj: network_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-network_unittest.obj -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-network_unittest.Tpo -c -o libdhcpsrv_unittests-network_unittest.obj `if test -f 'network_unittest.cc'; then $(CYGPATH_W) 'network_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/network_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrv_unittests-network_unittest.Tpo $(DEPDIR)/libdhcpsrv_unittests-network_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='network_unittest.cc' object='libdhcpsrv_unittests-network_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-network_unittest.obj `if test -f 'network_unittest.cc'; then $(CYGPATH_W) 'network_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/network_unittest.cc'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

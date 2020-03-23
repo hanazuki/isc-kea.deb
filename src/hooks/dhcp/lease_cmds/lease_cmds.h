@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -80,6 +80,88 @@ public:
     /// @return result of the operation
     int
     leaseAddHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease6-bulk-apply command handler
+    ///
+    /// This command conveys information about multiple leases to be added,
+    /// updated or deleted. This command should be used instead of lease6-add,
+    /// lease6-update and lease6-del when it is desired to apply multiple
+    /// lease changes within a single transaction. This is much faster and
+    /// should be used in cases when the performance is critical. This
+    /// command was added as a result of our experience with High Availability
+    /// where multiple IPv6 addresses and/or prefixes can be allocated for
+    /// a single DHCPv6 packet.
+    ///
+    /// Example structure of the command:
+    ///
+    /// {
+    ///     "command": "lease6-bulk-apply",
+    ///     "arguments": {
+    ///         "deleted-leases": [
+    ///             {
+    ///                 "subnet-id": 66,
+    ///                 "ip-address": "2001:db8:abcd::",
+    ///                 "type": "IA_PD",
+    ///                 ...
+    ///             },
+    ///             {
+    ///                 "subnet-id": 66,
+    ///                 "ip-address": "2001:db8:abcd::234",
+    ///                 "type": "IA_NA",
+    ///                 ...
+    ///             }
+    ///         ],
+    ///         "leases": [
+    ///             {
+    ///                 "subnet-id": 66,
+    ///                 "ip-address": "2001:db8:cafe::",
+    ///                 "type": "IA_PD",
+    ///                 ...
+    ///             },
+    ///             {
+    ///                 "subnet-id": 66,
+    ///                 "ip-address": "2001:db8:abcd::333",
+    ///                 "type": "IA_NA",
+    ///                 ...
+    ///             }
+    ///         ]
+    ///     }
+    /// }
+    ///
+    /// The response indicates which of the leases failed to be applied.
+    /// For example:
+    ///
+    /// {
+    ///     "result": 0,
+    ///     "text": IPv6 leases bulk apply completed.
+    ///     "arguments": {
+    ///         "failed-deleted-leases": [
+    ///             {
+    ///                 "subnet-id": 66,
+    ///                 "ip-address": "2001:db8:abcd::",
+    ///                 "type": "IA_PD"
+    ///             }
+    ///         ],
+    ///         "failed-leases": [
+    ///             {
+    ///                 "subnet-id": 66,
+    ///                 "ip-address": "2001:db8:cafe::",
+    ///                 "type": "IA_PD",
+    ///                 ...
+    ///             }
+    ///         ]
+    ///     }
+    /// }
+    ///
+    /// The command handler first attempts to delete all leases listed in
+    /// the "deleted-leases" list. Next, it adds the leases listed in the
+    /// "leases" list. If any of these leases already exists, it is updated.
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// add command JSON text in the "command" argument
+    /// @return result of the operation
+    int
+    lease6BulkApplyHandler(hooks::CalloutHandle& handle);
 
     /// @brief lease4-get, lease6-get command handler
     ///
@@ -175,6 +257,87 @@ public:
     /// error occurs, 3 if no leases are returned.
     int
     leaseGetPageHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease4-get-by-hw-address command handler
+    ///
+    /// This command attempts to retrieve all IPv4 leases with a particular
+    /// hardware address.
+    ///
+    /// Example command:
+    /// {
+    ///     "command": "lease4-get-by-hw-address",
+    ///     "arguments": {
+    ///         "hwaddr": "00:01:02:03:04:05"
+    ///     }
+    /// }
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByHwAddressHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease4-get-by-client-id command handler
+    ///
+    /// This command attempts to retrieve all IPv4 leases with a particular
+    /// Client Id.
+    ///
+    /// Example command:
+    /// {
+    ///     "command": "lease4-get-by-client-id",
+    ///     "arguments": {
+    ///         "client-id": "this-is-a-client"
+    ///     }
+    /// }
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByClientIdHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease6-get-by-duid command handler
+    ///
+    /// This command attempts to retrieve all IPv6 leases with a particular
+    /// DUID.
+    ///
+    /// Example command:
+    /// {
+    ///     "command": "lease6-get-by-duid",
+    ///     "arguments": {
+    ///         "duid": "01:02:03:04:05:06:07:08"
+    ///     }
+    /// }
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByDuidHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease4-get-by-hostname and lease6-get-by-hostname commands
+    /// handler
+    ///
+    /// These commands attempt to retrieve all IPv4 or Ipv6 leases with
+    /// a particular hostname.
+    ///
+    /// Example command for v4:
+    /// {
+    ///     "command": "lease4-get-by-hostname",
+    ///     "arguments": {
+    ///         "hostname": "urania.example.org"
+    ///     }
+    /// }
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByHostnameHandler(hooks::CalloutHandle& handle);
 
     /// @brief lease4-del command handler
     ///

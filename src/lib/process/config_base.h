@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,8 @@
 #include <cc/user_context.h>
 #include <process/config_ctl_info.h>
 #include <process/logging_info.h>
+#include <util/optional.h>
+#include <boost/date_time/posix_time/posix_time.hpp>
 
 namespace isc {
 namespace process {
@@ -33,7 +35,7 @@ public:
     /// @name Modifiers and accesors for the configuration objects.
     ///
     /// @warning References to the objects returned by accessors are only
-    /// valid during the lifetime of the @c SrvConfig object which
+    /// valid during the lifetime of the @c ConfigBase object which
     /// returned them.
     ///
     //@{
@@ -57,13 +59,35 @@ public:
     /// @param other the other configuration to compare to
     bool equals(const ConfigBase& other) const;
 
+    /// @brief Merges specified configuration into this configuration.
+    ///
+    /// This method merges logging and config control configuration into
+    /// this configuration. The new logging configuration replaces the
+    /// existing configuration if the new logging configuration is
+    /// non-empty. The new config control configuration replaces the
+    /// existing configuration if the new logging configuration is
+    /// non-null and non-empty.
+    ///
+    /// @warning The call to @c merge may modify the data in the @c other
+    /// object. Therefore, the caller must not rely on the data held
+    /// in the @c other object after the call to @c merge. Also, the
+    /// data held in @c other must not be modified after the call to
+    /// @c merge because it may affect the merged configuration.
+    ///
+    /// If a derivation of this class implements the @c merge method
+    /// it should call @c ConfigBase::merge.
+    ///
+    /// @param other the other configuration to be merged into this
+    /// configuration.
+    virtual void merge(ConfigBase& other);
+
     /// @brief Converts to Element representation
     ///
     /// This creates a Map element with the following content (expressed
     /// as JSON):
     /// {{{
     /// {
-    ///     "Logging": {
+    ///     "Server": {
     ///         :
     ///     }
     /// }
@@ -96,6 +120,33 @@ public:
         config_ctl_info_ = config_ctl_info;
     }
 
+    /// @brief Sets the server's logical name
+    ///
+    /// @param server_tag a unique string name which identifies this server
+    /// from any other configured servers
+    void setServerTag(const util::Optional<std::string>& server_tag) {
+        server_tag_ = server_tag;
+    }
+
+    /// @brief Returns the server's logical name
+    ///
+    /// @return string containing the server's tag
+    util::Optional<std::string> getServerTag() const {
+        return (server_tag_);
+    }
+
+    /// @brief Returns the last commit timestamp.
+    /// @return the last commit timestamp.
+    boost::posix_time::ptime getLastCommitTime() const {
+        return (last_commit_time_);
+    }
+
+    /// @brief Sets the last commit timestamp.
+    /// @param last_commit_time last commit timestamp.
+    void setLastCommitTime(const boost::posix_time::ptime& last_commit_time) {
+        last_commit_time_ = last_commit_time;
+    }
+
 protected:
     /// @brief Copies the current configuration to a new configuration.
     ///
@@ -113,9 +164,15 @@ private:
 
     /// @brief Configuration control information.
     process::ConfigControlInfoPtr config_ctl_info_;
+
+    /// @brief Logical name of the server
+    util::Optional<std::string> server_tag_;
+
+    /// @brief Stores the last commit timestamp.
+    boost::posix_time::ptime last_commit_time_;
 };
 
-/// @brief Non-const pointer to the @c SrvConfig.
+/// @brief Non-const pointer to the @c ConfigBase.
 typedef boost::shared_ptr<ConfigBase> ConfigPtr;
 
 };

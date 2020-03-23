@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,13 +6,14 @@
 
 #include <config.h>
 
-#include <iostream>
+#include <perfdhcp/perf_pkt6.h>
+#include <perfdhcp/pkt_transform.h>
+
 #include <exceptions/exceptions.h>
 #include <dhcp/libdhcp++.h>
 #include <dhcp/dhcp6.h>
 
-#include "perf_pkt6.h"
-#include "pkt_transform.h"
+#include <iostream>
 
 using namespace std;
 using namespace isc;

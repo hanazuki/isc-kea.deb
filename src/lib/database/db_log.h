@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -43,7 +43,6 @@ extern const int DB_DBG_TRACE_DETAIL;
 
 /// @brief Common database library logger.
 extern isc::log::Logger database_logger;
-
 
 ///@{
 /// @brief Database messages
@@ -101,7 +100,7 @@ public:
 /// @brief Database logger stack
 typedef std::list<DbLogger> DbLoggerStack;
 
-/// @brief Global database logger stack (initialized to dhcpsrv logger)
+/// @brief Global database logger stack (initialized to database logger)
 extern DbLoggerStack db_logger_stack;
 
 /// @brief Check database logger stack

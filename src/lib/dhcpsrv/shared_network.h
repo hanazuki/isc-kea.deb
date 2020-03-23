@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,12 +9,11 @@
 
 #include <asiolink/io_address.h>
 #include <cc/data.h>
-#include <exceptions/exceptions.h>
-#include <dhcpsrv/assignable_network.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/subnet_id.h>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/multi_index/mem_fun.hpp>
+#include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/indexed_by.hpp>
 #include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/random_access_index.hpp>
@@ -28,33 +27,51 @@ namespace dhcp {
 /// @brief A tag for accessing random access index.
 struct SharedNetworkRandomAccessIndexTag { };
 
+/// @brief A tag for accessing index by id.
+struct SharedNetworkIdIndexTag { };
+
 /// @brief A tag for accessing index by shared network name.
 struct SharedNetworkNameIndexTag { };
 
 /// @brief A tag for accessing index by server identifier.
 struct SharedNetworkServerIdIndexTag { };
 
+/// @brief Tag for the index for searching by shared network modification
+/// time.
+struct SharedNetworkModificationTimeIndexTag { };
+
+class SharedNetwork4;
+
+/// @brief Pointer to @ref SharedNetwork4 object.
+typedef boost::shared_ptr<SharedNetwork4> SharedNetwork4Ptr;
+
 /// @brief Shared network holding IPv4 subnets.
 ///
 /// Specialization of the @ref Network4 class for IPv4 shared networks.
-class SharedNetwork4 : public Network4,
-                       public boost::enable_shared_from_this<SharedNetwork4>,
-                       public AssignableNetwork {
+class SharedNetwork4 : public virtual Network4,
+                       public boost::enable_shared_from_this<SharedNetwork4> {
 public:
 
     /// @brief Constructor.
     ///
     /// Sets name of the shared network.
+    ///
+    /// @param name Name of the shared network.
     explicit SharedNetwork4(const std::string& name)
         : name_(name), subnets_() {
     }
 
-    /// @brief Returns shared pointer to this network.
+    /// @brief Factory function creating an instance of the @c SharedNetwork4.
     ///
-    /// This method is required by the parent @ref AssignableNetwork class.
+    /// This function should be used to create an instance of the shared
+    /// network within a hooks library in cases when the library may be
+    /// unloaded before the object is destroyed. This ensures that the
+    /// ownership of the object by the Kea process is retained.
     ///
-    /// @return Shared pointer to this object.
-    virtual NetworkPtr sharedFromThis();
+    /// @param name Name of the shared network.
+    ///
+    /// @return Pointer to the @c SharedNetwork4 instance.
+    static SharedNetwork4Ptr create(const std::string& name);
 
     /// @brief Returns a name of the shared network.
     std::string getName() const {
@@ -79,6 +96,19 @@ public:
     /// shared network.
     void add(const Subnet4Ptr& subnet);
 
+    /// @brief Replaces IPv4 subnet in a shared network.
+    ///
+    /// This method replaces a subnet by another subnet with the same ID.
+    /// The prefix should be the same too.
+    ///
+    /// @param subnet Pointer to a subnet replacing the subnet with the same ID
+    /// in this shared network.
+    /// @throw isc::BadValue if subnet is null.
+    /// @throw InvalidOperation if a subnet is already associated with some
+    /// shared network.
+    /// @return true if the operation succeeded, false otherwise.
+    bool replace(const Subnet4Ptr& subnet);
+
     /// @brief Removes subnet from a shared network.
     ///
     /// @param subnet_id Identifier of a subnet to be removed.
@@ -102,6 +132,14 @@ public:
     /// @return Shared pointer to a subnet using this id or null pointer
     /// if such subnet doesn't exist within shared network.
     Subnet4Ptr getSubnet(const SubnetID& subnet_id) const;
+
+    /// @brief Returns a subnet for a specified subnet prefix.
+    ///
+    /// @param subnet_prefix Subnet prefix.
+    ///
+    /// @return Shared pointer to a subnet using this prefix or null pointer
+    /// if such subnet doesn't exist within shared network.
+    Subnet4Ptr getSubnet(const std::string& subnet_prefix) const;
 
     /// @brief Retrieves next available IPv4 subnet within shared network.
     ///
@@ -145,6 +183,24 @@ public:
     /// if no better subnet was found.
     Subnet4Ptr getPreferredSubnet(const Subnet4Ptr& selected_subnet) const;
 
+    /// @brief Checks if the shared network includes a subnet with
+    /// the match client ID flag set to true.
+    ///
+    /// @param first_subnet Pointer to the subnet from which iteration starts.
+    /// @param client_classes List of classes that the client belongs to.
+    /// @return true if the shared network includes at least one subnet
+    /// guarded by a given class with the match client ID flag set to true.
+    /// False otherwise.
+    static
+    bool subnetsIncludeMatchClientId(const Subnet4Ptr& first_subnet,
+                                     const ClientClasses& client_classes);
+
+    /// @brief Check if the shared network includes a subnet with
+    /// not global host reservation mode.
+    ///
+    /// @return First subnet which has not a global host reservation mode.
+    Subnet4Ptr subnetsAllHRGlobal() const;
+
     /// @brief Unparses shared network object.
     ///
     /// @return A pointer to unparsed shared network configuration.
@@ -158,9 +214,6 @@ private:
     /// @brief Collection of IPv4 subnets within shared network.
     Subnet4Collection subnets_;
 };
-
-/// @brief Pointer to @ref SharedNetwork4 object.
-typedef boost::shared_ptr<SharedNetwork4> SharedNetwork4Ptr;
 
 /// @brief Multi index container holding shared networks.
 ///
@@ -176,29 +229,45 @@ typedef boost::multi_index_container<
         boost::multi_index::random_access<
             boost::multi_index::tag<SharedNetworkRandomAccessIndexTag>
         >,
-        // Second index allows for access by shared network's name.
+        // Second index allows for access by shared network id.
+        boost::multi_index::hashed_non_unique<
+            boost::multi_index::tag<SharedNetworkIdIndexTag>,
+            boost::multi_index::const_mem_fun<data::BaseStampedElement, uint64_t,
+                                              &data::BaseStampedElement::getId>
+        >,
+        // Third index allows for access by shared network's name.
         boost::multi_index::ordered_unique<
             boost::multi_index::tag<SharedNetworkNameIndexTag>,
             boost::multi_index::const_mem_fun<SharedNetwork4, std::string,
                                               &SharedNetwork4::getName>
         >,
-        // Third index allows for access by server identifier specified for the
+        // Fourth index allows for access by server identifier specified for the
         // network.
         boost::multi_index::ordered_non_unique<
             boost::multi_index::tag<SharedNetworkServerIdIndexTag>,
             boost::multi_index::const_mem_fun<Network4, asiolink::IOAddress,
                                               &Network4::getServerId>
+        >,
+        // Fifth index allows for searching using subnet modification time.
+        boost::multi_index::ordered_non_unique<
+            boost::multi_index::tag<SharedNetworkModificationTimeIndexTag>,
+            boost::multi_index::const_mem_fun<data::BaseStampedElement,
+                                              boost::posix_time::ptime,
+                                              &data::BaseStampedElement::getModificationTime>
         >
-
     >
 > SharedNetwork4Collection;
+
+class SharedNetwork6;
+
+/// @brief Pointer to @ref SharedNetwork6 object.
+typedef boost::shared_ptr<SharedNetwork6> SharedNetwork6Ptr;
 
 /// @brief Shared network holding IPv6 subnets.
 ///
 /// Specialization of the @ref Network6 class for IPv6 shared networks.
-class SharedNetwork6 : public Network6,
-                       public boost::enable_shared_from_this<SharedNetwork6>,
-                       public AssignableNetwork {
+class SharedNetwork6 : public virtual Network6,
+                       public boost::enable_shared_from_this<SharedNetwork6> {
 public:
 
     /// @brief Constructor.
@@ -208,12 +277,17 @@ public:
         : name_(name), subnets_() {
     }
 
-    /// @brief Returns shared pointer to this network.
+    /// @brief Factory function creating an instance of the @c SharedNetwork6.
     ///
-    /// This method is required by the parent @ref AssignableNetwork class.
+    /// This function should be used to create an instance of the shared
+    /// network within a hooks library in cases when the library may be
+    /// unloaded before the object is destroyed. This ensures that the
+    /// ownership of the object by the Kea process is retained.
     ///
-    /// @return Shared pointer to this object.
-    virtual NetworkPtr sharedFromThis();
+    /// @param name Name of the shared network.
+    ///
+    /// @return Pointer to the @c SharedNetwork6 instance.
+    static SharedNetwork6Ptr create(const std::string& name);
 
     /// @brief Returns a name of the shared network.
     std::string getName() const {
@@ -238,6 +312,19 @@ public:
     /// shared network.
     void add(const Subnet6Ptr& subnet);
 
+    /// @brief Replaces IPv6 subnet in a shared network.
+    ///
+    /// This method replaces a subnet by another subnet with the same ID.
+    /// The prefix should be the same too.
+    ///
+    /// @param subnet Pointer to a subnet replacing the subnet with the same ID
+    /// in this shared network.
+    /// @throw isc::BadValue if subnet is null.
+    /// @throw InvalidOperation if a subnet is already associated with some
+    /// shared network.
+    /// @return true if the operation succeeded, false otherwise.
+    bool replace(const Subnet6Ptr& subnet);
+
     /// @brief Removes subnet from a shared network.
     ///
     /// @param subnet_id Identifier of a subnet to be removed.
@@ -261,6 +348,14 @@ public:
     /// @return Shared pointer to a subnet using this id or null pointer
     /// if such subnet doesn't exist within shared network.
     Subnet6Ptr getSubnet(const SubnetID& subnet_id) const;
+
+    /// @brief Returns a subnet for a specified subnet prefix.
+    ///
+    /// @param subnet_prefix Subnet prefix.
+    ///
+    /// @return Shared pointer to a subnet using this prefix or null pointer
+    /// if such subnet doesn't exist within shared network.
+    Subnet6Ptr getSubnet(const std::string& subnet_prefix) const;
 
     /// @brief Retrieves next available IPv6 subnet within shared network.
     ///
@@ -304,6 +399,12 @@ public:
     Subnet6Ptr getPreferredSubnet(const Subnet6Ptr& selected_subnet,
                                   const Lease::Type& lease_type) const;
 
+    /// @brief Check if the shared network includes a subnet with
+    /// not global host reservation mode.
+    ///
+    /// @return First subnet which has not a global host reservation mode.
+    Subnet6Ptr subnetsAllHRGlobal() const;
+
     /// @brief Unparses shared network object.
     ///
     /// @return A pointer to unparsed shared network configuration.
@@ -317,9 +418,6 @@ private:
     /// @brief Collection of IPv6 subnets within shared network.
     Subnet6Collection subnets_;
 };
-
-/// @brief Pointer to @ref SharedNetwork6 object.
-typedef boost::shared_ptr<SharedNetwork6> SharedNetwork6Ptr;
 
 /// @brief Multi index container holding shared networks.
 ///
@@ -335,14 +433,62 @@ typedef boost::multi_index_container<
         boost::multi_index::random_access<
             boost::multi_index::tag<SharedNetworkRandomAccessIndexTag>
         >,
-        // Second index allows for access by shared network's name.
+        // Second index allows for access by shared network id.
+        boost::multi_index::hashed_non_unique<
+            boost::multi_index::tag<SharedNetworkIdIndexTag>,
+            boost::multi_index::const_mem_fun<data::BaseStampedElement, uint64_t,
+                                              &data::BaseStampedElement::getId>
+        >,
+        // Third index allows for access by shared network's name.
         boost::multi_index::ordered_unique<
             boost::multi_index::tag<SharedNetworkNameIndexTag>,
             boost::multi_index::const_mem_fun<SharedNetwork6, std::string,
                                               &SharedNetwork6::getName>
+        >,
+        // Fourth index allows for searching using subnet modification time.
+        boost::multi_index::ordered_non_unique<
+            boost::multi_index::tag<SharedNetworkModificationTimeIndexTag>,
+            boost::multi_index::const_mem_fun<data::BaseStampedElement,
+                                              boost::posix_time::ptime,
+                                              &data::BaseStampedElement::getModificationTime>
         >
     >
 > SharedNetwork6Collection;
+
+/// @brief A class containing static convenience methods to fetch the shared
+/// networks from the containers.
+///
+/// @tparam ReturnPtrType Type of the returned object, i.e. @c SharedNetwork4Ptr
+/// or @c SharedNetwork6Ptr.
+/// @tparam CollectionType One of the @c SharedNetwork4Collection or
+/// @c SharedNetwork6Collection.
+template<typename ReturnPtrType, typename CollectionType>
+class SharedNetworkFetcher {
+public:
+
+    /// @brief Fetches shared network by name.
+    ///
+    /// @param collection Const reference to the collection from which the shared
+    /// network is to be fetched.
+    /// @param name Name of the shared network to be fetched.
+    /// @return Pointer to the fetched shared network or null if no such shared
+    /// network could be found.
+    static ReturnPtrType get(const CollectionType& collection, const std::string& name) {
+        auto& index = collection.template get<SharedNetworkNameIndexTag>();
+        auto sn = index.find(name);
+        if (sn != index.end()) {
+            return (*sn);
+        }
+        // No network found. Return null pointer.
+        return (ReturnPtrType());
+    }
+};
+
+/// @brief Type of the @c SharedNetworkFetcher used for IPv4.
+using SharedNetworkFetcher4 = SharedNetworkFetcher<SharedNetwork4Ptr, SharedNetwork4Collection>;
+
+/// @brief Type of the @c SharedNetworkFetcher used for IPv6.
+using SharedNetworkFetcher6 = SharedNetworkFetcher<SharedNetwork6Ptr, SharedNetwork6Collection>;
 
 } // end of namespace isc::dhcp
 } // end of namespace isc

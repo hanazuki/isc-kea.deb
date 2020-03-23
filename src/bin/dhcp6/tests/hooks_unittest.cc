@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -566,8 +566,6 @@ public:
     /// The following values are used by the callout to override
     /// renewed lease parameters
     static const uint32_t override_iaid_;
-    static const uint32_t override_t1_;
-    static const uint32_t override_t2_;
     static const uint32_t override_preferred_;
     static const uint32_t override_valid_;
 
@@ -587,8 +585,6 @@ public:
         EXPECT_TRUE(callback_lease6_);
         // Let's override some values in the lease
         callback_lease6_->iaid_          = override_iaid_;
-        callback_lease6_->t1_            = override_t1_;
-        callback_lease6_->t2_            = override_t2_;
         callback_lease6_->preferred_lft_ = override_preferred_;
         callback_lease6_->valid_lft_     = override_valid_;
 
@@ -596,8 +592,6 @@ public:
         EXPECT_TRUE(callback_ia_na_);
         // Override the values to be sent to the client as well
         callback_ia_na_->setIAID(override_iaid_);
-        callback_ia_na_->setT1(override_t1_);
-        callback_ia_na_->setT2(override_t2_);
 
         callback_argument_names_ = callout_handle.getArgumentNames();
         return (0);
@@ -651,8 +645,6 @@ public:
         EXPECT_TRUE(callback_lease6_);
         // Let's override some values in the lease
         callback_lease6_->iaid_          = override_iaid_;
-        callback_lease6_->t1_            = override_t1_;
-        callback_lease6_->t2_            = override_t2_;
         callback_lease6_->preferred_lft_ = override_preferred_;
         callback_lease6_->valid_lft_     = override_valid_;
 
@@ -660,8 +652,6 @@ public:
         EXPECT_TRUE(callback_ia_na_);
         // Override the values to be sent to the client as well
         callback_ia_na_->setIAID(override_iaid_);
-        callback_ia_na_->setT1(override_t1_);
-        callback_ia_na_->setT2(override_t2_);
 
         callback_argument_names_ = callout_handle.getArgumentNames();
         return (0);
@@ -848,7 +838,7 @@ public:
         handle.getArgument("id_value", id_test);
 
         // Ok, now set the identifier.
-        std::vector<uint8_t> id = { 0x66, 0x6f, 0x6f }; // foo
+        std::vector<uint8_t> id = { 0x66, 0x6f, 0x6f };  // foo
         handle.setArgument("id_value", id);
         handle.setArgument("id_type", Host::IDENT_FLEX);
 
@@ -949,8 +939,6 @@ public:
 // The following parameters are used by callouts to override
 // renewed lease parameters
 const uint32_t HooksDhcpv6SrvTest::override_iaid_ = 1000;
-const uint32_t HooksDhcpv6SrvTest::override_t1_ = 1001;
-const uint32_t HooksDhcpv6SrvTest::override_t2_ = 1002;
 const uint32_t HooksDhcpv6SrvTest::override_preferred_ = 1003;
 const uint32_t HooksDhcpv6SrvTest::override_valid_ = 1004;
 
@@ -2694,7 +2682,7 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6Renew) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during RENEW.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -2704,10 +2692,8 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6Renew) {
                                                         addr);
     ASSERT_TRUE(l);
 
-    // Check that T1, T2, preferred, valid and cltt really set and not using
+    // Check that preferred, valid and cltt really set and not using
     // previous (500, 501, etc.) values
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -2755,8 +2741,9 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6Renew) {
     ASSERT_TRUE(tmp);
 
     // Check that IA_NA was returned and that there's an address included
-    boost::shared_ptr<Option6IAAddr> addr_opt = checkIA_NA(reply, 234, subnet_->getT1(),
-                                                           subnet_->getT2());
+    boost::shared_ptr<Option6IAAddr> addr_opt;
+    ASSERT_NO_FATAL_FAILURE(addr_opt = checkIA_NA(reply, 234, subnet_->getT1(),
+                                                  subnet_->getT2()));
 
     ASSERT_TRUE(addr_opt);
     // Check that the lease is really in the database
@@ -2798,7 +2785,7 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Renew) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during RENEW.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -2808,10 +2795,8 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Renew) {
                                                         addr);
     ASSERT_TRUE(l);
 
-    // Check that T1, T2, preferred, valid and cltt really set and not using
+    // Check that preferred, valid and cltt really set and not using
     // previous (500, 501, etc.) values
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -2830,6 +2815,15 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Renew) {
     // Server-id is mandatory in RENEW
     req->addOption(srv.getServerID());
 
+    // Turn on tee time calculation so we can see the effect of overriding
+    // the lease life time.
+    subnet_->setCalculateTeeTimes(true);
+    Triplet<uint32_t> unspecified;
+    subnet_->setT1(unspecified);
+    subnet_->setT2(unspecified);
+    subnet_->setT1Percent(0.60);
+    subnet_->setT2Percent(0.80);
+
     // Pass it to the server and hope for a REPLY
     Pkt6Ptr reply = srv.processRenew(req);
     ASSERT_TRUE(reply);
@@ -2841,7 +2835,8 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Renew) {
     ASSERT_TRUE(tmp);
 
     // Check that IA_NA was returned and that there's an address included
-    boost::shared_ptr<Option6IAAddr> addr_opt = checkIA_NA(reply, 1000, 1001, 1002);
+    boost::shared_ptr<Option6IAAddr> addr_opt;
+    ASSERT_NO_FATAL_FAILURE(addr_opt = checkIA_NA(reply, 1000, 602, 802));
 
     ASSERT_TRUE(addr_opt);
     // Check that the lease is really in the database
@@ -2849,14 +2844,10 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Renew) {
     ASSERT_TRUE(l);
 
     // Check that we chose the distinct override values
-    ASSERT_NE(override_t1_,        subnet_->getT1());
-    ASSERT_NE(override_t2_,        subnet_->getT2());
     ASSERT_NE(override_preferred_, subnet_->getPreferred());
     EXPECT_NE(override_valid_,     subnet_->getValid());
 
-    // Check that T1, T2, preferred, valid were overridden the the callout
-    EXPECT_EQ(override_t1_, l->t1_);
-    EXPECT_EQ(override_t2_, l->t2_);
+    // Check that preferred, valid were overridden the the callout
     EXPECT_EQ(override_preferred_, l->preferred_lft_);
     EXPECT_EQ(override_valid_, l->valid_lft_);
 
@@ -2866,7 +2857,9 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Renew) {
     // Equality or difference by 1 between cltt and expected is ok.
     EXPECT_GE(1, abs(cltt - expected));
 
-    EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(addr_opt->getAddress()));
+    Lease6Ptr deleted_lease(new Lease6());
+    deleted_lease->addr_ = addr_opt->getAddress();
+    EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(deleted_lease));
 
     // Check if the callout handle state was reset after the callout.
     checkCalloutHandleReset(req);
@@ -2894,7 +2887,7 @@ TEST_F(HooksDhcpv6SrvTest, skipLease6Renew) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during RENEW.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -2904,10 +2897,8 @@ TEST_F(HooksDhcpv6SrvTest, skipLease6Renew) {
                                                         addr);
     ASSERT_TRUE(l);
 
-    // Check that T1, T2, preferred, valid and cltt really set and not using
+    // Check that preferred, valid and cltt are really set and not using
     // previous (500, 501, etc.) values
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -2937,8 +2928,6 @@ TEST_F(HooksDhcpv6SrvTest, skipLease6Renew) {
 
     // Check that the old values are still there and they were not
     // updated by the renewal
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -3324,7 +3313,7 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6Release) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during RENEW.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -3405,7 +3394,7 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6ReleasePD) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during RENEW.
     Lease6Ptr lease(new Lease6(Lease::TYPE_PD, prefix, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 80));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -3487,7 +3476,7 @@ TEST_F(HooksDhcpv6SrvTest, skipLease6Release) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during RENEW.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -3554,7 +3543,7 @@ TEST_F(HooksDhcpv6SrvTest, dropLease6Release) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during RENEW.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -3821,7 +3810,7 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6Rebind) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during REBIND.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -3831,10 +3820,8 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6Rebind) {
                                                         addr);
     ASSERT_TRUE(l);
 
-    // Check that T1, T2, preferred, valid and cltt really set and not using
+    // Check that preferred, valid and cltt really set and not using
     // previous (500, 501, etc.) values
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -3880,8 +3867,9 @@ TEST_F(HooksDhcpv6SrvTest, basicLease6Rebind) {
     ASSERT_TRUE(tmp);
 
     // Check that IA_NA was returned and that there's an address included
-    boost::shared_ptr<Option6IAAddr> addr_opt = checkIA_NA(reply, 234, subnet_->getT1(),
-                                                           subnet_->getT2());
+    boost::shared_ptr<Option6IAAddr> addr_opt;
+    ASSERT_NO_FATAL_FAILURE(addr_opt = checkIA_NA(reply, 234, subnet_->getT1(),
+                                                  subnet_->getT2()));
 
     ASSERT_TRUE(addr_opt);
     // Check that the lease is really in the database
@@ -3920,7 +3908,7 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Rebind) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during REBIND.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -3932,8 +3920,6 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Rebind) {
 
     // Check that T1, T2, preferred, valid and cltt really set and not using
     // previous (500, 501, etc.) values
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -3949,6 +3935,15 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Rebind) {
     req->addOption(ia);
     req->addOption(clientid);
 
+    // Turn on tee time calculation so we can see the effect of overriding
+    // the lease life time.
+    subnet_->setCalculateTeeTimes(true);
+    Triplet<uint32_t> unspecified;
+    subnet_->setT1(unspecified);
+    subnet_->setT2(unspecified);
+    subnet_->setT1Percent(0.60);
+    subnet_->setT2Percent(0.80);
+
     // Pass it to the server and hope for a REPLY
     Pkt6Ptr reply = srv.processRebind(req);
     ASSERT_TRUE(reply);
@@ -3960,7 +3955,9 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Rebind) {
     ASSERT_TRUE(tmp);
 
     // Check that IA_NA was returned and that there's an address included
-    boost::shared_ptr<Option6IAAddr> addr_opt = checkIA_NA(reply, 1000, 1001, 1002);
+    // Note we also verify that T1 and T2 were calculated correctly.
+    boost::shared_ptr<Option6IAAddr> addr_opt;
+    ASSERT_NO_FATAL_FAILURE(addr_opt = checkIA_NA(reply, 1000, 602, 802));
 
     ASSERT_TRUE(addr_opt);
     // Check that the lease is really in the database
@@ -3968,14 +3965,10 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Rebind) {
     ASSERT_TRUE(l);
 
     // Check that we chose the distinct override values
-    ASSERT_NE(override_t1_,        subnet_->getT1());
-    ASSERT_NE(override_t2_,        subnet_->getT2());
     ASSERT_NE(override_preferred_, subnet_->getPreferred());
     EXPECT_NE(override_valid_,     subnet_->getValid());
 
-    // Check that T1, T2, preferred, valid were overridden the the callout
-    EXPECT_EQ(override_t1_, l->t1_);
-    EXPECT_EQ(override_t2_, l->t2_);
+    // Check that preferred and  valid were overridden in the callout
     EXPECT_EQ(override_preferred_, l->preferred_lft_);
     EXPECT_EQ(override_valid_, l->valid_lft_);
 
@@ -3985,7 +3978,9 @@ TEST_F(HooksDhcpv6SrvTest, leaseUpdateLease6Rebind) {
     // Equality or difference by 1 between cltt and expected is ok.
     EXPECT_GE(1, abs(cltt - expected));
 
-    EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(addr_opt->getAddress()));
+    lease.reset(new Lease6());
+    lease->addr_ = addr_opt->getAddress();
+    EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 
     // Check if the callout handle state was reset after the callout.
     checkCalloutHandleReset(req);
@@ -4013,7 +4008,7 @@ TEST_F(HooksDhcpv6SrvTest, skipLease6Rebind) {
     // Note that preferred, valid, T1 and T2 timers and CLTT are set to invalid
     // value on purpose. They should be updated during REBIND.
     Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid_, iaid,
-                               501, 502, 503, 504, subnet_->getID(),
+                               501, 502, subnet_->getID(),
                                HWAddrPtr(), 0));
     lease->cltt_ = 1234;
     ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
@@ -4023,10 +4018,8 @@ TEST_F(HooksDhcpv6SrvTest, skipLease6Rebind) {
                                                         addr);
     ASSERT_TRUE(l);
 
-    // Check that T1, T2, preferred, valid and cltt really set and not using
+    // Check that preferred, valid and cltt really set and not using
     // previous (500, 501, etc.) values
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -4053,8 +4046,6 @@ TEST_F(HooksDhcpv6SrvTest, skipLease6Rebind) {
 
     // Check that the old values are still there and they were not
     // updated by the rebinding
-    EXPECT_NE(l->t1_, subnet_->getT1());
-    EXPECT_NE(l->t2_, subnet_->getT2());
     EXPECT_NE(l->preferred_lft_, subnet_->getPreferred());
     EXPECT_NE(l->valid_lft_, subnet_->getValid());
     EXPECT_NE(l->cltt_, time(NULL));
@@ -4774,7 +4765,8 @@ TEST_F(HooksDhcpv6SrvTest, host6Identifier) {
     ASSERT_TRUE(tmp);
 
     // Check that IA_NA was returned and that there's an address included
-    boost::shared_ptr<Option6IAAddr> addr_opt = checkIA_NA(adv, 234, 1000, 2000);
+    boost::shared_ptr<Option6IAAddr> addr_opt;
+    ASSERT_NO_FATAL_FAILURE(addr_opt = checkIA_NA(adv, 234, 1000, 2000));
 
     ASSERT_TRUE(addr_opt);
     ASSERT_EQ("2001:db8::f00", addr_opt->getAddress().toText());
@@ -4854,7 +4846,8 @@ TEST_F(HooksDhcpv6SrvTest, host6Identifier_hwaddr) {
     ASSERT_TRUE(tmp);
 
     // Check that IA_NA was returned and that there's an address included
-    boost::shared_ptr<Option6IAAddr> addr_opt = checkIA_NA(adv, 234, 1000, 2000);
+    boost::shared_ptr<Option6IAAddr> addr_opt;
+    ASSERT_NO_FATAL_FAILURE(addr_opt = checkIA_NA(adv, 234, 1000, 2000));
 
     ASSERT_TRUE(addr_opt);
     ASSERT_EQ("2001:db8::f00", addr_opt->getAddress().toText());
@@ -4969,4 +4962,4 @@ TEST_F(LoadUnloadDhcpv6SrvTest, Dhcpv6SrvConfigured) {
                                 "3io_contextjson_confignetwork_stateserver_config"));
 }
 
-}   // end of anonymous namespace
+}  // namespace

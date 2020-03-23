@@ -107,6 +107,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -164,15 +165,16 @@ am__dhcp4_unittests_SOURCES_DIST = d2_unittest.h d2_unittest.cc \
 	dhcp4_unittests.cc dhcp4_srv_unittest.cc dhcp4_test_utils.cc \
 	dhcp4_test_utils.h direct_client_unittest.cc \
 	ctrl_dhcp4_srv_unittest.cc classify_unittest.cc \
-	config_parser_unittest.cc fqdn_unittest.cc marker_file.cc \
-	dhcp4_client.cc dhcp4_client.h hooks_unittest.cc \
-	inform_unittest.cc dora_unittest.cc host_options_unittest.cc \
-	release_unittest.cc parser_unittest.cc \
-	out_of_range_unittest.cc decline_unittest.cc \
-	kea_controller_unittest.cc dhcp4to6_ipc_unittest.cc \
-	simple_parser4_unittest.cc get_config_unittest.cc \
-	get_config_unittest.h shared_network_unittest.cc \
-	host_unittest.cc
+	config_backend_unittest.cc config_parser_unittest.cc \
+	fqdn_unittest.cc marker_file.cc dhcp4_client.cc dhcp4_client.h \
+	hooks_unittest.cc inform_unittest.cc dora_unittest.cc \
+	host_options_unittest.cc release_unittest.cc \
+	parser_unittest.cc out_of_range_unittest.cc \
+	decline_unittest.cc kea_controller_unittest.cc \
+	dhcp4to6_ipc_unittest.cc simple_parser4_unittest.cc \
+	get_config_unittest.cc get_config_unittest.h \
+	shared_network_unittest.cc host_unittest.cc \
+	vendor_opts_unittest.cc
 @HAVE_GTEST_TRUE@am_dhcp4_unittests_OBJECTS =  \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-d2_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-dhcp4_unittests.$(OBJEXT) \
@@ -181,6 +183,7 @@ am__dhcp4_unittests_SOURCES_DIST = d2_unittest.h d2_unittest.cc \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-direct_client_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-ctrl_dhcp4_srv_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-classify_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp4_unittests-config_backend_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-config_parser_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-fqdn_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-marker_file.$(OBJEXT) \
@@ -198,36 +201,35 @@ am__dhcp4_unittests_SOURCES_DIST = d2_unittest.h d2_unittest.cc \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-simple_parser4_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-get_config_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp4_unittests-shared_network_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp4_unittests-host_unittest.$(OBJEXT)
+@HAVE_GTEST_TRUE@	dhcp4_unittests-host_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp4_unittests-vendor_opts_unittest.$(OBJEXT)
 nodist_dhcp4_unittests_OBJECTS =
 dhcp4_unittests_OBJECTS = $(am_dhcp4_unittests_OBJECTS) \
 	$(nodist_dhcp4_unittests_OBJECTS)
 am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@dhcp4_unittests_DEPENDENCIES =  \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/bin/dhcp4/libdhcp4.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(am__append_5) $(am__append_6) \
 @HAVE_GTEST_TRUE@	$(am__append_7) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dns/libkea-dns++.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -362,7 +364,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -383,7 +384,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -393,6 +393,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -402,7 +403,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -453,6 +453,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -470,17 +471,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -543,7 +544,7 @@ top_srcdir = @top_srcdir@
 # if we are using file based configuration approach.
 SHTESTS = dhcp4_process_tests.sh
 noinst_SCRIPTS = dhcp4_process_tests.sh
-EXTRA_DIST = dhcp4_process_tests.sh.in
+EXTRA_DIST = dhcp4_process_tests.sh.in get_config_unittest.cc.skel
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
 	-I$(top_srcdir)/src -I$(top_builddir)/src \
 	-I$(top_srcdir)/src/bin -I$(top_builddir)/src/bin \
@@ -595,6 +596,7 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	dhcp4_test_utils.h direct_client_unittest.cc \
 @HAVE_GTEST_TRUE@	ctrl_dhcp4_srv_unittest.cc \
 @HAVE_GTEST_TRUE@	classify_unittest.cc \
+@HAVE_GTEST_TRUE@	config_backend_unittest.cc \
 @HAVE_GTEST_TRUE@	config_parser_unittest.cc fqdn_unittest.cc \
 @HAVE_GTEST_TRUE@	marker_file.cc dhcp4_client.cc dhcp4_client.h \
 @HAVE_GTEST_TRUE@	hooks_unittest.cc inform_unittest.cc \
@@ -605,7 +607,8 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	dhcp4to6_ipc_unittest.cc \
 @HAVE_GTEST_TRUE@	simple_parser4_unittest.cc \
 @HAVE_GTEST_TRUE@	get_config_unittest.cc get_config_unittest.h \
-@HAVE_GTEST_TRUE@	shared_network_unittest.cc host_unittest.cc
+@HAVE_GTEST_TRUE@	shared_network_unittest.cc host_unittest.cc \
+@HAVE_GTEST_TRUE@	vendor_opts_unittest.cc
 @HAVE_GTEST_TRUE@nodist_dhcp4_unittests_SOURCES = marker_file.h test_libraries.h
 @HAVE_GTEST_TRUE@dhcp4_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@dhcp4_unittests_LDFLAGS = $(AM_LDFLAGS) \
@@ -614,29 +617,27 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	$(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@dhcp4_unittests_LDADD =  \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/bin/dhcp4/libdhcp4.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(am__append_5) $(am__append_6) \
 @HAVE_GTEST_TRUE@	$(am__append_7) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dns/libkea-dns++.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) \
@@ -724,6 +725,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-classify_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-config_backend_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-config_parser_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-ctrl_dhcp4_srv_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-d2_unittest.Po@am__quote@
@@ -748,6 +750,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-release_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-shared_network_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-simple_parser4_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp4_unittests-vendor_opts_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libco1_la-callout_library_1.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libco2_la-callout_library_2.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libco3_la-callout_library_3.Plo@am__quote@
@@ -891,6 +894,20 @@ dhcp4_unittests-classify_unittest.obj: classify_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='classify_unittest.cc' object='dhcp4_unittests-classify_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp4_unittests-classify_unittest.obj `if test -f 'classify_unittest.cc'; then $(CYGPATH_W) 'classify_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/classify_unittest.cc'; fi`
+
+dhcp4_unittests-config_backend_unittest.o: config_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp4_unittests-config_backend_unittest.o -MD -MP -MF $(DEPDIR)/dhcp4_unittests-config_backend_unittest.Tpo -c -o dhcp4_unittests-config_backend_unittest.o `test -f 'config_backend_unittest.cc' || echo '$(srcdir)/'`config_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp4_unittests-config_backend_unittest.Tpo $(DEPDIR)/dhcp4_unittests-config_backend_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_backend_unittest.cc' object='dhcp4_unittests-config_backend_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp4_unittests-config_backend_unittest.o `test -f 'config_backend_unittest.cc' || echo '$(srcdir)/'`config_backend_unittest.cc
+
+dhcp4_unittests-config_backend_unittest.obj: config_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp4_unittests-config_backend_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp4_unittests-config_backend_unittest.Tpo -c -o dhcp4_unittests-config_backend_unittest.obj `if test -f 'config_backend_unittest.cc'; then $(CYGPATH_W) 'config_backend_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_backend_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp4_unittests-config_backend_unittest.Tpo $(DEPDIR)/dhcp4_unittests-config_backend_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_backend_unittest.cc' object='dhcp4_unittests-config_backend_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp4_unittests-config_backend_unittest.obj `if test -f 'config_backend_unittest.cc'; then $(CYGPATH_W) 'config_backend_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_backend_unittest.cc'; fi`
 
 dhcp4_unittests-config_parser_unittest.o: config_parser_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp4_unittests-config_parser_unittest.o -MD -MP -MF $(DEPDIR)/dhcp4_unittests-config_parser_unittest.Tpo -c -o dhcp4_unittests-config_parser_unittest.o `test -f 'config_parser_unittest.cc' || echo '$(srcdir)/'`config_parser_unittest.cc
@@ -1143,6 +1160,20 @@ dhcp4_unittests-host_unittest.obj: host_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='host_unittest.cc' object='dhcp4_unittests-host_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp4_unittests-host_unittest.obj `if test -f 'host_unittest.cc'; then $(CYGPATH_W) 'host_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/host_unittest.cc'; fi`
+
+dhcp4_unittests-vendor_opts_unittest.o: vendor_opts_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp4_unittests-vendor_opts_unittest.o -MD -MP -MF $(DEPDIR)/dhcp4_unittests-vendor_opts_unittest.Tpo -c -o dhcp4_unittests-vendor_opts_unittest.o `test -f 'vendor_opts_unittest.cc' || echo '$(srcdir)/'`vendor_opts_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp4_unittests-vendor_opts_unittest.Tpo $(DEPDIR)/dhcp4_unittests-vendor_opts_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='vendor_opts_unittest.cc' object='dhcp4_unittests-vendor_opts_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp4_unittests-vendor_opts_unittest.o `test -f 'vendor_opts_unittest.cc' || echo '$(srcdir)/'`vendor_opts_unittest.cc
+
+dhcp4_unittests-vendor_opts_unittest.obj: vendor_opts_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp4_unittests-vendor_opts_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp4_unittests-vendor_opts_unittest.Tpo -c -o dhcp4_unittests-vendor_opts_unittest.obj `if test -f 'vendor_opts_unittest.cc'; then $(CYGPATH_W) 'vendor_opts_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/vendor_opts_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp4_unittests-vendor_opts_unittest.Tpo $(DEPDIR)/dhcp4_unittests-vendor_opts_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='vendor_opts_unittest.cc' object='dhcp4_unittests-vendor_opts_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp4_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp4_unittests-vendor_opts_unittest.obj `if test -f 'vendor_opts_unittest.cc'; then $(CYGPATH_W) 'vendor_opts_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/vendor_opts_unittest.cc'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

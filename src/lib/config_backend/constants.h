@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,7 +16,11 @@ namespace cb {
 /// fetched variable length data in them.
 ///
 //@{
-constexpr unsigned long SUBNET_PREFIX_BUF_LENGTH = 32;
+constexpr unsigned long SUBNET4_PREFIX_BUF_LENGTH = 32;
+
+constexpr unsigned long SUBNET6_PREFIX_BUF_LENGTH = 64;
+
+constexpr unsigned long POOL_ADDRESS6_BUF_LENGTH = 45;
 
 constexpr unsigned long DHCP4O6_INTERFACE_BUF_LENGTH = 128;
 
@@ -29,6 +33,8 @@ constexpr unsigned long BOOT_FILE_NAME_BUF_LENGTH = 512;
 constexpr unsigned long CLIENT_CLASS_BUF_LENGTH = 128;
 
 constexpr unsigned long INTERFACE_BUF_LENGTH = 128;
+
+constexpr unsigned long INTERFACE_ID_BUF_LENGTH = 128;
 
 constexpr unsigned long RELAY_BUF_LENGTH = 65536;
 
@@ -55,6 +61,16 @@ constexpr unsigned long OPTION_RECORD_TYPES_BUF_LENGTH = 512;
 constexpr unsigned long GLOBAL_PARAMETER_NAME_BUF_LENGTH = 128;
 
 constexpr unsigned long GLOBAL_PARAMETER_VALUE_BUF_LENGTH = 65536;
+
+constexpr unsigned long AUDIT_ENTRY_OBJECT_TYPE_BUF_LENGTH = 256;
+
+constexpr unsigned long AUDIT_ENTRY_LOG_MESSAGE_BUF_LENGTH = 65536;
+
+constexpr unsigned long SERVER_TAG_BUF_LENGTH = 256;
+
+constexpr unsigned long SERVER_DESCRIPTION_BUF_LENGTH = 65536;
+
+constexpr unsigned long DNS_NAME_BUF_LENGTH = 255;
 
 //*}
 

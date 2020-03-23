@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -22,10 +22,14 @@
 
 using namespace isc;
 using namespace isc::asiolink;
+using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::ha;
 using namespace isc::ha::test;
 using namespace isc::http;
+using namespace boost::posix_time;
+using namespace boost::gregorian;
+
 
 namespace {
 
@@ -99,7 +103,42 @@ TEST_F(CommunicationStateTest, partnerState) {
 
     // An attempt to set unsupported value should result in exception.
     EXPECT_THROW(state_.setPartnerState("unsupported"), BadValue);
+}
 
+// Verifies that the partner's scopes are set and retrieved correctly.
+TEST_F(CommunicationStateTest, partnerScopes) {
+    // Initially, the scopes should be empty.
+    ASSERT_TRUE(state_.getPartnerScopes().empty());
+
+    // Set new partner scopes.
+    ASSERT_NO_THROW(
+        state_.setPartnerScopes(Element::fromJSON("[ \"server1\", \"server2\" ]"))
+    );
+
+    // Get them back.
+    auto returned = state_.getPartnerScopes();
+    EXPECT_EQ(2, returned.size());
+    EXPECT_EQ(1, returned.count("server1"));
+    EXPECT_EQ(1, returned.count("server2"));
+
+    // Override the scopes.
+    ASSERT_NO_THROW(
+        state_.setPartnerScopes(Element::fromJSON("[ \"server1\" ]"))
+    );
+    returned = state_.getPartnerScopes();
+    EXPECT_EQ(1, returned.size());
+    EXPECT_EQ(1, returned.count("server1"));
+
+    // Clear the scopes.
+    ASSERT_NO_THROW(
+        state_.setPartnerScopes(Element::fromJSON("[ ]"))
+    );
+    returned = state_.getPartnerScopes();
+    EXPECT_TRUE(returned.empty());
+
+    // An attempt to set invalid JSON should fail.
+    EXPECT_THROW(state_.setPartnerScopes(Element::fromJSON("{ \"not-a-list\": 1 }")),
+                 BadValue);
 }
 
 // Verifies that the object is poked right after construction.
@@ -368,14 +407,43 @@ TEST_F(CommunicationStateTest, clockSkew) {
 // This test verifies that the clock skew value is formatted correctly
 // for logging.
 TEST_F(CommunicationStateTest, logFormatClockSkew) {
-    // Partner time is ahead by 15s.
-    state_.clock_skew_ += boost::posix_time::time_duration(0, 0, 15);
-    EXPECT_EQ("15s ahead", state_.logFormatClockSkew());
+    // Make sure logFormatClockSkew() does not throw if called prior
+    // the first call to setPartnerTime().
+    std::string log;
+    ASSERT_NO_THROW(log = state_.logFormatClockSkew());
+    EXPECT_EQ(std::string("skew not initialized"), log);
 
-    // Partner time is behind by 1m23s.
-    state_.setPartnerTime(HttpDateTime().rfc1123Format());
-    state_.clock_skew_ -= boost::posix_time::time_duration(0, 1, 23);
-    EXPECT_EQ("83s behind", state_.logFormatClockSkew());
+    // Get current time.
+    boost::posix_time::ptime now = HttpDateTime().getPtime();
+
+    // Partner time is ahead by 15s.
+    boost::posix_time::time_duration offset(0,0,15);
+    state_.setPartnerTime(HttpDateTime(now + offset).rfc1123Format());
+    ASSERT_NO_THROW(log = state_.logFormatClockSkew());
+
+    // We don't check the exact string for obvious reasons.
+    EXPECT_TRUE(log.find("15s ahead") != std::string::npos) <<
+                " log content wrong: " << log;
+
+
+    // Partner time is behind by 15s.
+    state_.setPartnerTime(HttpDateTime(now - offset).rfc1123Format());
+    ASSERT_NO_THROW(log = state_.logFormatClockSkew());
+    // We don't check the exact string for obvious reasons.
+    EXPECT_TRUE(log.find("15s behind") != std::string::npos) <<
+                " log content wrong: " << log;
+
+    offset = hours(18) + minutes(37) + seconds(15);
+    ptime mytime(date(2019, Jul, 23), offset);
+
+    state_.my_time_at_skew_ = mytime;
+    state_.partner_time_at_skew_ = mytime + seconds(25);
+    state_.clock_skew_ = seconds(25);
+    ASSERT_NO_THROW(log = state_.logFormatClockSkew());
+    std::string expected("my time: 2019-07-23 18:37:15, "
+                         "partner's time: 2019-07-23 18:37:40, "
+                         "partner's clock is 25s ahead");
+    EXPECT_EQ(expected, log);
 }
 
 }

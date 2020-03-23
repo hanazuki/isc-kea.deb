@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #include <config.h>
 
 #include <communication_state.h>
+#include <exceptions/exceptions.h>
 #include <ha_service_states.h>
 #include <exceptions/exceptions.h>
 #include <dhcp/dhcp4.h>
@@ -15,12 +16,14 @@
 #include <dhcp/pkt4.h>
 #include <dhcp/pkt6.h>
 #include <http/date_time.h>
+#include <util/boost_time_utils.h>
 #include <boost/bind.hpp>
 #include <boost/pointer_cast.hpp>
 #include <sstream>
 #include <utility>
 
 using namespace isc::asiolink;
+using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::http;
 using namespace boost::posix_time;
@@ -45,8 +48,9 @@ CommunicationState::CommunicationState(const IOServicePtr& io_service,
                                        const HAConfigPtr& config)
     : io_service_(io_service), config_(config), timer_(), interval_(0),
       poke_time_(boost::posix_time::microsec_clock::universal_time()),
-      heartbeat_impl_(0), partner_state_(-1), clock_skew_(0, 0, 0, 0),
-      last_clock_skew_warn_() {
+      heartbeat_impl_(0), partner_state_(-1), partner_scopes_(),
+      clock_skew_(0, 0, 0, 0), last_clock_skew_warn_(),
+      my_time_at_skew_(), partner_time_at_skew_() {
 }
 
 CommunicationState::~CommunicationState() {
@@ -55,26 +59,35 @@ CommunicationState::~CommunicationState() {
 
 void
 CommunicationState::setPartnerState(const std::string& state) {
-    if (state == "hot-standby") {
-        partner_state_ = HA_HOT_STANDBY_ST;
-    } else if (state == "load-balancing") {
-        partner_state_ = HA_LOAD_BALANCING_ST;
-    } else if (state == "partner-down") {
-        partner_state_ = HA_PARTNER_DOWN_ST;
-    } else if (state == "ready") {
-        partner_state_ = HA_READY_ST;
-    } else if (state == "syncing") {
-        partner_state_ = HA_SYNCING_ST;
-    } else if (state == "terminated") {
-        partner_state_ = HA_TERMINATED_ST;
-    } else if (state == "waiting") {
-        partner_state_ = HA_WAITING_ST;
-    } else if (state == "unavailable") {
-        partner_state_ = HA_UNAVAILABLE_ST;
-    } else {
+    try {
+        partner_state_ = stringToState(state);
+
+    } catch (...) {
         isc_throw(BadValue, "unsupported HA partner state returned "
                   << state);
     }
+}
+
+void
+CommunicationState::setPartnerScopes(ConstElementPtr new_scopes) {
+    if (!new_scopes || (new_scopes->getType() != Element::list)) {
+        isc_throw(BadValue, "unable to record partner's HA scopes because"
+                  " the received value is not a valid JSON list");
+    }
+
+    std::set<std::string> partner_scopes;
+    for (auto i = 0; i < new_scopes->size(); ++i) {
+        auto scope = new_scopes->get(i);
+        if (scope->getType() != Element::string) {
+            isc_throw(BadValue, "unable to record partner's HA scopes because"
+                      " the received scope value is not a valid JSON string");
+        }
+        auto scope_str = scope->stringValue();
+        if (!scope_str.empty()) {
+            partner_scopes.insert(scope_str);
+        }
+    }
+    partner_scopes_ = partner_scopes;
 }
 
 void
@@ -216,26 +229,37 @@ CommunicationState::isClockSkewGreater(const long seconds) const {
 
 void
 CommunicationState::setPartnerTime(const std::string& time_text) {
-    HttpDateTime partner_time = HttpDateTime().fromRfc1123(time_text);
-    HttpDateTime current_time = HttpDateTime();
-
-    clock_skew_ = partner_time.getPtime() - current_time.getPtime();
+    partner_time_at_skew_ = HttpDateTime().fromRfc1123(time_text).getPtime();
+    my_time_at_skew_ = HttpDateTime().getPtime();
+    clock_skew_ = partner_time_at_skew_ - my_time_at_skew_;
 }
 
 std::string
 CommunicationState::logFormatClockSkew() const {
-    std::ostringstream s;
+    std::ostringstream os;
+
+    if ((my_time_at_skew_.is_not_a_date_time()) ||
+        (partner_time_at_skew_.is_not_a_date_time())) {
+        // Guard against being called before times have been set.
+        // Otherwise we'll get out-range exceptions.
+        return ("skew not initialized");
+    }
+
+    // Note HttpTime resolution is only to seconds, so we use fractional
+    // precision of zero when logging.
+    os << "my time: " << util::ptimeToText(my_time_at_skew_, 0)
+       << ", partner's time: " << util::ptimeToText(partner_time_at_skew_, 0)
+       << ", partner's clock is ";
 
     // If negative clock skew, the partner's time is behind our time.
     if (clock_skew_.is_negative()) {
-        s << clock_skew_.invert_sign().total_seconds() << "s behind";
-
+        os << clock_skew_.invert_sign().total_seconds() << "s behind";
     } else {
         // Partner's time is ahead of ours.
-        s << clock_skew_.total_seconds() << "s ahead";
+        os << clock_skew_.total_seconds() << "s ahead";
     }
 
-    return (s.str());
+    return (os.str());
 }
 
 CommunicationState4::CommunicationState4(const IOServicePtr& io_service,

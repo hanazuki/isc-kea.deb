@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -40,6 +40,11 @@ public:
     /// 01:02:03:04:05:06:07:08:09:0A:XX where the XX is a number between
     /// 0 and 0x32.
     CfgHostsTest();
+
+    /// @brief Destructor.
+    ///
+    /// This destructor resets global state after tests are run.
+    ~CfgHostsTest();
 
     /// @brief Increases last byte of an address.
     ///
@@ -86,6 +91,10 @@ CfgHostsTest::CfgHostsTest() {
         IOAddress addrb(addrb_template + i);
         addressesb_.push_back(addrb);
     }
+}
+
+CfgHostsTest::~CfgHostsTest() {
+    CfgMgr::instance().setFamily(AF_INET);
 }
 
 IOAddress
@@ -204,6 +213,143 @@ TEST_F(CfgHostsTest, getAllRepeatingHosts) {
                            duids_[i + 25]->getDuid().size());
         EXPECT_TRUE(hosts.empty());
     }
+}
+
+// This test checks that hosts in the same subnet can be retrieved from
+// the host configuration.
+TEST_F(CfgHostsTest, getAll4BySubnet) {
+    CfgHosts cfg;
+    // Add 25 hosts identified by HW address in the same subnet.
+    for (unsigned i = 0; i < 25; ++i) {
+        cfg.add(HostPtr(new Host(hwaddrs_[i]->toText(false),
+                                 "hw-address",
+                                 SubnetID(1), SubnetID(1),
+                                 addressesa_[i])));
+    }
+
+    // Check that other subnets are empty.
+    HostCollection hosts = cfg.getAll4(SubnetID(100));
+    EXPECT_EQ(0, hosts.size());
+
+    // Try to retrieve all added reservations.
+    hosts = cfg.getAll4(SubnetID(1));
+    ASSERT_EQ(25, hosts.size());
+    for (unsigned i = 0; i < 25; ++i) {
+        EXPECT_EQ(1, hosts[i]->getIPv4SubnetID());
+        EXPECT_EQ(addressesa_[i].toText(),
+                  hosts[i]->getIPv4Reservation().toText());
+    }
+}
+
+// This test checks that hosts in the same subnet can be retrieved from
+// the host configuration.
+TEST_F(CfgHostsTest, getAll6BySubnet) {
+    CfgHosts cfg;
+    // Add 25 hosts identified by DUID in the same subnet.
+    for (unsigned i = 0; i < 25; ++i) {
+        HostPtr host = HostPtr(new Host(duids_[i]->toText(), "duid",
+                                        SubnetID(1), SubnetID(1),
+                                        IOAddress("0.0.0.0")));
+        host->addReservation(IPv6Resrv(IPv6Resrv::TYPE_NA,
+                                       increase(IOAddress("2001:db8:1::1"),
+                                                i)));
+        cfg.add(host);
+    }
+
+    // Check that other subnets are empty.
+    HostCollection hosts = cfg.getAll6(SubnetID(100));
+    EXPECT_EQ(0, hosts.size());
+
+    // Try to retrieve all added reservations.
+    hosts = cfg.getAll6(SubnetID(1));
+    ASSERT_EQ(25, hosts.size());
+    for (unsigned i = 0; i < 25; ++i) {
+        EXPECT_EQ(1, hosts[i]->getIPv6SubnetID());
+        IPv6ResrvRange reservations =
+            hosts[i]->getIPv6Reservations(IPv6Resrv::TYPE_NA);
+        ASSERT_EQ(1, std::distance(reservations.first, reservations.second));
+        EXPECT_EQ(increase(IOAddress("2001:db8:1::1"), i),
+                  reservations.first->second.getPrefix());
+    }
+}
+
+// This test checks that hosts in the same subnet can be retrieved from
+// the host configuration by pages.
+TEST_F(CfgHostsTest, getPage4) {
+    CfgHosts cfg;
+    // Add 25 hosts identified by DUID in the same subnet.
+    for (unsigned i = 0; i < 25; ++i) {
+        cfg.add(HostPtr(new Host(duids_[i]->toText(), "duid",
+                                 SubnetID(1), SubnetID(1),
+                                 addressesa_[i])));
+    }
+    size_t idx(0);
+    uint64_t host_id(0);
+    HostPageSize page_size(10);
+
+    // Check that other subnets are empty.
+    HostCollection page = cfg.getPage4(SubnetID(100), idx, host_id, page_size);
+    EXPECT_EQ(0, page.size());
+
+    // Try to retrieve all added reservations.
+    // Get first page.
+    page = cfg.getPage4(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+
+    // Get second and last pages.
+    page = cfg.getPage4(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+    page = cfg.getPage4(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(5, page.size());
+    host_id = page[4]->getHostId();
+
+    // Verify we have everything.
+    page = cfg.getPage4(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(0, page.size());
+}
+
+// This test checks that hosts in the same subnet can be retrieved from
+// the host configuration by pages.
+TEST_F(CfgHostsTest, getPage6) {
+    CfgHosts cfg;
+    // Add 25 hosts identified by HW address in the same subnet.
+    for (unsigned i = 0; i < 25; ++i) {
+        HostPtr host = HostPtr(new Host(hwaddrs_[i]->toText(false),
+                                        "hw-address",
+                                        SubnetID(1), SubnetID(1),
+                                        IOAddress("0.0.0.0")));
+        host->addReservation(IPv6Resrv(IPv6Resrv::TYPE_NA,
+                                       increase(IOAddress("2001:db8:1::1"),
+                                                i)));
+        cfg.add(host);
+    }
+    size_t idx(0);
+    uint64_t host_id(0);
+    HostPageSize page_size(10);
+
+    // Check that other subnets are empty.
+    HostCollection page = cfg.getPage6(SubnetID(100), idx, host_id, page_size);
+    EXPECT_EQ(0, page.size());
+
+    // Try to retrieve all added reservations.
+    // Get first page.
+    page = cfg.getPage6(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+
+    // Get second and last pages.
+    page = cfg.getPage6(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+    page = cfg.getPage6(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(5, page.size());
+    host_id = page[4]->getHostId();
+
+    // Verify we have everything.
+    page = cfg.getPage6(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(0, page.size());
 }
 
 // This test checks that all reservations for the specified IPv4 address can

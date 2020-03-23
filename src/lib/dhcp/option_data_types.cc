@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 #include <dhcp/option_data_types.h>
 #include <dns/labelsequence.h>
 #include <dns/name.h>
+#include <util/strutil.h>
 #include <util/encode/hex.h>
 #include <algorithm>
 #include <limits>
@@ -574,8 +575,17 @@ std::string
 OptionDataTypeUtil::readString(const std::vector<uint8_t>& buf) {
     std::string value;
     if (!buf.empty()) {
-        value.insert(value.end(), buf.begin(), buf.end());
+        // Per RFC 2132, section 2 we need to drop trailing NULLs
+        auto begin = buf.begin();
+        auto end = util::str::seekTrimmed(begin, buf.end(), 0x0);
+        if (std::distance(begin, end) == 0) {
+            isc_throw(isc::OutOfRange, "string value carried by the option "
+                      << " contained only NULLs");
+        }
+
+        value.insert(value.end(), begin, end);
     }
+
     return (value);
 }
 

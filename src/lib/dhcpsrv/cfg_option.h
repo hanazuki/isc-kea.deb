@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,9 +12,11 @@
 #include <cc/cfg_to_element.h>
 #include <cc/stamped_element.h>
 #include <cc/user_context.h>
+#include <dhcpsrv/cfg_option_def.h>
 #include <dhcpsrv/key_from_key.h>
 #include <boost/multi_index_container.hpp>
 #include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
 #include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/member.hpp>
@@ -25,6 +27,11 @@
 
 namespace isc {
 namespace dhcp {
+
+class OptionDescriptor;
+
+/// A pointer to option descriptor.
+typedef boost::shared_ptr<OptionDescriptor> OptionDescriptorPtr;
 
 /// @brief Option descriptor.
 ///
@@ -71,36 +78,65 @@ public:
 
     /// @brief Constructor.
     ///
-    /// @param opt option
-    /// @param persist if true option is always sent.
-    /// @param formatted_value option value in the textual format. Default
+    /// @param opt option instance.
+    /// @param persist if true, option is always sent.
+    /// @param formatted_value option value in the textual format (optional).
     /// @param user_context user context (optional).
-    /// value is empty indicating that the value is not set.
     OptionDescriptor(const OptionPtr& opt, bool persist,
                      const std::string& formatted_value = "",
                      data::ConstElementPtr user_context = data::ConstElementPtr())
-        : option_(opt), persistent_(persist),
+        : data::StampedElement(), option_(opt), persistent_(persist),
           formatted_value_(formatted_value),
           space_name_() {
         setContext(user_context);
     };
 
-    /// @brief Constructor
+    /// @brief Constructor.
     ///
     /// @param persist if true option is always sent.
     OptionDescriptor(bool persist)
-        : option_(OptionPtr()), persistent_(persist),
+        : data::StampedElement(), option_(OptionPtr()), persistent_(persist),
           formatted_value_(), space_name_() {};
 
     /// @brief Constructor.
     ///
-    /// @param desc descriptor
+    /// @param desc option descriptor to be copied.
     OptionDescriptor(const OptionDescriptor& desc)
-        : option_(desc.option_), persistent_(desc.persistent_),
+        : data::StampedElement(desc),
+          option_(desc.option_),
+          persistent_(desc.persistent_),
           formatted_value_(desc.formatted_value_),
           space_name_(desc.space_name_) {
         setContext(desc.getContext());
     };
+
+    /// @brief Factory function creating an instance of the @c OptionDescriptor.
+    ///
+    /// @param opt option instance.
+    /// @param persist if true, option is always sent.
+    /// @param formatted_value option value in the textual format (optional).
+    /// @param user_context user context (optional).
+    ///
+    /// @return Pointer to the @c OptionDescriptor instance.
+    static OptionDescriptorPtr create(const OptionPtr& opt,
+                                      bool persist,
+                                      const std::string& formatted_value = "",
+                                      data::ConstElementPtr user_context =
+                                      data::ConstElementPtr());
+
+    /// @brief Factory function creating an instance of the @c OptionDescriptor.
+    ///
+    /// @param persist if true option is always sent.
+    ///
+    /// @return Pointer to the @c OptionDescriptor instance.
+    static OptionDescriptorPtr create(bool persist);
+
+    /// @brief Factory function creating an instance of the @c OptionDescriptor.
+    ///
+    /// @param desc option descriptor to be copied.
+    ///
+    /// @return Pointer to the @c OptionDescriptor instance.
+    static OptionDescriptorPtr create(const OptionDescriptor& desc);
 
     /// @brief Checks if the one descriptor is equal to another.
     ///
@@ -127,9 +163,6 @@ public:
         return (!equals(other));
     }
 };
-
-/// A pointer to option descriptor.
-typedef boost::shared_ptr<OptionDescriptor> OptionDescriptorPtr;
 
 /// @brief Multi index container for DHCP option descriptors.
 ///
@@ -198,6 +231,23 @@ typedef boost::multi_index_container<
                 bool,
                 &OptionDescriptor::persistent_
             >
+        >,
+        // Start definition of index #3.
+        // Use BaseStampedElement::getModificationTime as a key.
+        boost::multi_index::ordered_non_unique<
+            boost::multi_index::const_mem_fun<
+                data::BaseStampedElement,
+                boost::posix_time::ptime,
+                &data::BaseStampedElement::getModificationTime
+            >
+        >,
+
+        // Start definition of index #4.
+        // Use BaseStampedElement::getId as a key.
+        boost::multi_index::hashed_non_unique<
+            boost::multi_index::tag<OptionIdIndexTag>,
+            boost::multi_index::const_mem_fun<data::BaseStampedElement, uint64_t,
+                                              &data::BaseStampedElement::getId>
         >
     >
 > OptionContainer;
@@ -306,10 +356,12 @@ public:
     /// @param persistent Boolean value which specifies if the option should
     /// be sent to the client regardless if requested (true), or nor (false)
     /// @param option_space Option space name.
+    /// @param id Optional database id to be associated with the option.
     ///
     /// @throw isc::BadValue if the option space is invalid.
     void add(const OptionPtr& option, const bool persistent,
-             const std::string& option_space);
+             const std::string& option_space,
+             const uint64_t id = 0);
 
     /// @brief A variant of the @ref CfgOption::add method which takes option
     /// descriptor as an argument.
@@ -321,14 +373,102 @@ public:
     /// @throw isc::BadValue if the option space is invalid.
     void add(const OptionDescriptor& desc, const std::string& option_space);
 
+    /// @brief Replaces the instance of an option within this collection
+    ///
+    /// This method locates the option within the given space and replaces
+    /// it with a copy of the given descriptor.  This effectively updates
+    /// the contents without altering the container indexing.
+    ///
+    /// @param desc Option descriptor holding option instance and other
+    /// parameters pertaining to the option.
+    /// @param option_space Option space name.
+    ///
+    /// @throw isc::BadValue if the descriptor's option instance is null,
+    /// if  space is invalid, or if the option does not already exist
+    /// in the given space.
+    void replace(const OptionDescriptor& desc, const std::string& option_space);
+
+    /// @brief Merges another option configuration into this one.
+    ///
+    /// This method calls @c mergeTo() to add this configuration's
+    /// options into @c other (skipping any duplicates).  Next it calls
+    /// @c createDescriptorOption() for each option descriptor in the
+    /// merged set.  This (re)-creates each descriptor's option based on
+    /// the merged set of opt definitions. Finally, it calls
+    /// @c copyTo() to overwrite this configuration's options with
+    /// the merged set in @c other.
+    ///
+    /// @warning The merge operation will affect the @c other configuration.
+    /// Therefore, the caller must not rely on the data held in the @c other
+    /// object after the call to @c merge. Also, the data held in @c other must
+    /// not be modified after the call to @c merge because it may affect the
+    /// merged configuration.
+    ///
+    /// @param cfg_def set of of user-defined option definitions to use
+    /// when merging.
+    /// @param other option configuration to merge in.
+    void merge(CfgOptionDefPtr cfg_def, CfgOption& other);
+
+    /// @brief Re-create the option in each descriptor based on given definitions
+    ///
+    /// Invokes @c createDescriptorOption() on each option descriptor in
+    /// each option space, passing in the the given dictionary of option
+    /// definitions.  If the descriptor's option is re-created, then the
+    /// descriptor is updated by calling @c replace().
+    ///
+    /// @param cfg_def set of of user-defined option definitions to use
+    /// when creating option instances.
+    void createOptions(CfgOptionDefPtr cfg_def);
+
+    /// @brief Creates an option descriptor's option based on a set of option defs
+    ///
+    /// This function's primary use is to create definition specific options for
+    /// option descriptors fetched from a configuration backend, as part of a
+    /// configuration merge.
+    ///
+    /// Given an OptionDescriptor whose option_ member contains a generic option
+    /// (i.e has a code and/or data), this function will attempt to find a matching
+    /// definition and then use that definition's factory to create an option
+    /// instance specific to that definition.   It will then replace the descriptor's
+    /// generic option with the specific option.
+    ///
+    /// Three sources of definitions are searched, in the following order:
+    ///
+    /// 1. Standard option definitions (@c LIBDHCP::getOptionDef))
+    /// 2. Vendor option definitions (@c LIBDHCP::getVendorOptionDef))
+    /// 3. User specified definitions passed in via cfg_def parameter.
+    ///
+    /// The code will use the first matching definition found.  It then applies
+    /// the following rules:
+    ///
+    /// -# If no definition is found but the descriptor conveys a non-empty
+    /// formatted value, throw an error.
+    /// -# If not definition is found and there is no formatted value, return
+    /// This leaves intact the generic option in the descriptor.
+    /// -# If a definition is found and there is no formatted value, pass the
+    /// descriptor's generic option's data into the definition's factory. Replace
+    /// the descriptor's option with the newly created option.
+    /// -# If a definition is found and there is a formatted value, split
+    /// the value into vector of values and pass that into the definition's
+    /// factory. Replace the descriptor's option with the newly created option.
+    ///
+    /// @param cfg_def the user specified definitions to use
+    /// @param space the option space name of the option
+    /// @param opt_desc OptionDescriptor describing the option.
+    ///
+    /// @return True if the descriptor's option instance was replaced.
+    /// @throw InvalidOperation if the descriptor conveys a formatted value and
+    /// there is no definition matching the option code in the given space, or
+    /// if the definition factory invocation fails.
+    static bool createDescriptorOption(CfgOptionDefPtr cfg_def, const std::string& space,
+                             OptionDescriptor& opt_desc);
+
     /// @brief Merges this configuration to another configuration.
     ///
     /// This method iterates over the configuration items held in this
     /// configuration and copies them to the configuration specified
     /// as a parameter. If an item exists in the destination it is not
     /// copied.
-    ///
-    /// @note: this method is not longer used so should become private.
     ///
     /// @param [out] other Configuration object to merge to.
     void mergeTo(CfgOption& other) const;
@@ -404,6 +544,49 @@ public:
         return (*od_itr);
     }
 
+    /// @brief Deletes option for the specified option space and option code.
+    ///
+    /// If the option is encapsulated within some non top level option space,
+    /// it is also deleted from all option instances encapsulating this
+    /// option space.
+    ///
+    /// @param option_space Option space name.
+    /// @param option_code Code of the option to be returned.
+    ///
+    /// @return Number of deleted options.
+    size_t del(const std::string& option_space, const uint16_t option_code);
+
+    /// @brief Deletes vendor option for the specified vendor id.
+    ///
+    /// @param vendor_id Vendor identifier.
+    /// @param option_code Option code.
+    ///
+    /// @return Number of deleted options.
+    size_t del(const uint32_t vendor_id, const uint16_t option_code);
+
+    /// @brief Deletes all options having a given database id.
+    ///
+    /// Note that there are cases when there will be multiple options
+    /// having the same id (typically id of 0). When configuration backend
+    /// is in use it sets the unique ids from the database. In cases when
+    /// the configuration backend is not used, the ids default to 0.
+    /// Passing the id of 0 would result in deleting all options that were
+    /// not added via the database.
+    ///
+    /// Both regular and vendor specific options are deleted with this
+    /// method.
+    ///
+    /// This method internally calls @c encapsulate() after deleting
+    /// options having the given id.
+    ///
+    /// @param id Identifier of the options to be deleted.
+    ///
+    /// @return Number of deleted options. Note that if a single option
+    /// instance is encapsulated by multiple options it adds 1 to the
+    /// number of deleted options even though the same instance is
+    /// deleted from multiple higher level options.
+    size_t del(const uint64_t id);
+
     /// @brief Returns a list of configured option space names.
     ///
     /// The returned option space names exclude vendor option spaces,
@@ -433,6 +616,16 @@ public:
     ///
     /// @return a pointer to unparsed configuration
     virtual isc::data::ElementPtr toElement() const;
+
+    /// @brief Unparse a configuration object with optionally including
+    /// the metadata.
+    ///
+    /// @param include_metadata boolean value indicating if the metadata
+    /// should be included (if true) or not (if false).
+    ///
+    /// @return A pointer to the unparsed configuration.
+    isc::data::ElementPtr
+    toElementWithMetadata(const bool include_metadata) const;
 
 private:
 

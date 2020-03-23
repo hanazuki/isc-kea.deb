@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,7 +24,6 @@
 #include <dhcp/option_int.h>
 #include <dhcp/option_int_array.h>
 #include <dhcp/option_opaque_data_tuples.h>
-#include <dhcp/option_space.h>
 #include <dhcp/option_string.h>
 #include <dhcp/option_vendor.h>
 #include <dhcp/option_vendor_class.h>
@@ -437,7 +436,7 @@ TEST_F(LibDhcpTest, unpackOptions6) {
 
     EXPECT_NO_THROW ({
             LibDHCP::unpackOptions6(OptionBuffer(buf.begin(), buf.begin() + sizeof(v6packed)),
-                                    "dhcp6", options);
+                                    DHCP6_OPTION_SPACE, options);
     });
 
     EXPECT_EQ(options.size(), 6); // there should be 5 options
@@ -551,12 +550,10 @@ TEST_F(LibDhcpTest, unpackEmptyOption6) {
     LibDHCP::commitRuntimeOptionDefs();
 
     // Create the buffer holding the structure of the empty option.
-    const uint8_t raw_data[] = {
+    OptionBuffer buf = {
       0x04, 0x00,                // option code = 1024
       0x00, 0x00                 // option length = 0
     };
-    size_t raw_data_len = sizeof(raw_data) / sizeof(uint8_t);
-    OptionBuffer buf(raw_data, raw_data + raw_data_len);
 
     // Parse options.
     OptionCollection options;
@@ -599,7 +596,7 @@ TEST_F(LibDhcpTest, unpackSubOptions6) {
     LibDHCP::commitRuntimeOptionDefs();
 
     // Create the buffer holding the structure of options.
-    const char raw_data[] = {
+    OptionBuffer buf = {
         // First option starts here.
         0x00, 0x01,   // option code = 1
         0x00, 0x0F,   // option length = 15
@@ -613,7 +610,6 @@ TEST_F(LibDhcpTest, unpackSubOptions6) {
         0x00, 0x01,  // option length = 1
         0x00 // This option carries a single uint8 value and has no sub options.
     };
-    OptionBuffer buf(raw_data, raw_data + sizeof(raw_data));
 
     // Parse options.
     OptionCollection options;
@@ -783,7 +779,8 @@ TEST_F(LibDhcpTest, unpackOptions4) {
     list<uint16_t> deferred;
 
     ASSERT_NO_THROW(
-        LibDHCP::unpackOptions4(v4packed, "dhcp4", options, deferred);
+        LibDHCP::unpackOptions4(v4packed, DHCP4_OPTION_SPACE, options,
+                                deferred, false);
     );
 
     isc::dhcp::OptionCollection::const_iterator x = options.find(12);
@@ -919,18 +916,16 @@ TEST_F(LibDhcpTest, unpackEmptyOption4) {
     LibDHCP::commitRuntimeOptionDefs();
 
     // Create the buffer holding the structure of the empty option.
-    const uint8_t raw_data[] = {
+    OptionBuffer buf = {
       0xFE,                     // option code = 254
       0x00                      // option length = 0
     };
-    size_t raw_data_len = sizeof(raw_data) / sizeof(uint8_t);
-    OptionBuffer buf(raw_data, raw_data + raw_data_len);
 
     // Parse options.
     OptionCollection options;
     list<uint16_t> deferred;
     ASSERT_NO_THROW(LibDHCP::unpackOptions4(buf, DHCP4_OPTION_SPACE,
-                                            options, deferred));
+                                            options, deferred, false));
 
     // There should be one option.
     ASSERT_EQ(1, options.size());
@@ -969,7 +964,7 @@ TEST_F(LibDhcpTest, unpackSubOptions4) {
     LibDHCP::commitRuntimeOptionDefs();
 
     // Create the buffer holding the structure of options.
-    const uint8_t raw_data[] = {
+    OptionBuffer buf = {
         // First option starts here.
         0x01,                   // option code = 1
         0x0B,                   // option length = 11
@@ -984,14 +979,12 @@ TEST_F(LibDhcpTest, unpackSubOptions4) {
         0x00                    // This option carries a single uint8
                                 // value and has no sub options.
     };
-    size_t raw_data_len = sizeof(raw_data) / sizeof(uint8_t);
-    OptionBuffer buf(raw_data, raw_data + raw_data_len);
 
     // Parse options.
     OptionCollection options;
     list<uint16_t> deferred;
     ASSERT_NO_THROW(LibDHCP::unpackOptions4(buf, "space-foobar",
-                                            options, deferred));
+                                            options, deferred, false));
 
     // There should be one top level option.
     ASSERT_EQ(1, options.size());
@@ -1015,6 +1008,299 @@ TEST_F(LibDhcpTest, unpackSubOptions4) {
     EXPECT_EQ(1, option_bar->getType());
     EXPECT_EQ(0x0, option_bar->getValue());
 }
+
+// Verifies that options 0 (PAD) and 255 (END) are handled as PAD and END
+// in and only in the dhcp4 space.
+TEST_F(LibDhcpTest, unpackPadEnd) {
+    // Create option definition for the container.
+    OptionDefinitionPtr opt_def(new OptionDefinition("container", 200,
+                                                     "empty", "my-space"));
+    // Create option definition for option 0.
+    OptionDefinitionPtr opt_def0(new OptionDefinition("zero", 0, "uint8"));
+
+    // Create option definition for option 255.
+    OptionDefinitionPtr opt_def255(new OptionDefinition("max", 255, "uint8"));
+
+    // Create option definition for another option.
+    OptionDefinitionPtr opt_def2(new OptionDefinition("my-option", 1,
+                                                      "string"));
+
+    // Register created option definitions as runtime option definitions.
+    OptionDefSpaceContainer defs;
+    ASSERT_NO_THROW(defs.addItem(opt_def, DHCP4_OPTION_SPACE));
+    ASSERT_NO_THROW(defs.addItem(opt_def0, "my-space"));
+    ASSERT_NO_THROW(defs.addItem(opt_def255, "my-space"));
+    ASSERT_NO_THROW(defs.addItem(opt_def2, "my-space"));
+    LibDHCP::setRuntimeOptionDefs(defs);
+    LibDHCP::commitRuntimeOptionDefs();
+
+    // Create the buffer holding the structure of options.
+    OptionBuffer buf = {
+        // Add a PAD
+        0x00,                         // option code = 0 (PAD)
+        // Container option starts here.
+        0xc8,                         // option code = 200 (container)
+        0x0b,                         // option length = 11
+        // Suboption 0.
+        0x00, 0x01, 0x00,             // code = 0, length = 1, content = 0
+        // Suboption 255.
+        0xff, 0x01, 0xff,             // code = 255, length = 1, content = 255
+        // Suboption 1.
+        0x01, 0x03, 0x66, 0x6f, 0x6f, // code = 1, length = 2, content = "foo"
+        // END
+        0xff,
+        // Extra bytes at tail.
+        0x01, 0x02, 0x03, 0x04
+    };
+
+    // Parse options.
+    OptionCollection options;
+    list<uint16_t> deferred;
+    size_t offset = 0;
+    ASSERT_NO_THROW(offset = LibDHCP::unpackOptions4(buf, DHCP4_OPTION_SPACE,
+                                                     options, deferred, false));
+
+    // Returned offset should point to the END.
+    EXPECT_EQ(0xff, buf[offset]);
+
+    // There should be one top level option.
+    ASSERT_EQ(1, options.size());
+
+    // Get it.
+    OptionPtr option = options.begin()->second;
+    ASSERT_TRUE(option);
+    EXPECT_EQ(200, option->getType());
+
+    // There should be 3 suboptions.
+    ASSERT_EQ(3, option->getOptions().size());
+
+    // Get suboption 0.
+    boost::shared_ptr<OptionInt<uint8_t> > sub0 =
+        boost::dynamic_pointer_cast<OptionInt<uint8_t> >
+            (option->getOption(0));
+    ASSERT_TRUE(sub0);
+    EXPECT_EQ(0, sub0->getType());
+    EXPECT_EQ(0, sub0->getValue());
+
+    // Get suboption 255.
+    boost::shared_ptr<OptionInt<uint8_t> > sub255 =
+        boost::dynamic_pointer_cast<OptionInt<uint8_t> >
+            (option->getOption(255));
+    ASSERT_TRUE(sub255);
+    EXPECT_EQ(255, sub255->getType());
+    EXPECT_EQ(255, sub255->getValue());
+
+    // Get suboption 1.
+    boost::shared_ptr<OptionString> sub =
+        boost::dynamic_pointer_cast<OptionString>(option->getOption(1));
+    ASSERT_TRUE(sub);
+    EXPECT_EQ(1, sub->getType());
+    EXPECT_EQ("foo", sub->getValue());
+}
+
+// Verfies that option 0 (PAD) is handled as PAD in option 43 (so when
+// flexible pad end flag is true) only when option 0 (PAD) is not defined.
+TEST_F(LibDhcpTest, option43Pad) {
+    string space = "my-option43-space";
+
+    // Create option definition for option 1.
+    OptionDefinitionPtr opt_def1(new OptionDefinition("one", 1, "binary"));
+
+    // Create option definition for option 2.
+    OptionDefinitionPtr opt_def2(new OptionDefinition("two", 2, "uint8"));
+
+    // Register created option definitions as runtime option definitions.
+    OptionDefSpaceContainer defs;
+    ASSERT_NO_THROW(defs.addItem(opt_def1, space));
+    ASSERT_NO_THROW(defs.addItem(opt_def2, space));
+    LibDHCP::setRuntimeOptionDefs(defs);
+    LibDHCP::commitRuntimeOptionDefs();
+
+    // Create the buffer holding an option 43 content.
+    OptionBuffer buf = {
+        // Suboption 0,
+        0x00, 0x01, 0x00,             // code = 0, length = 1, content = 0
+                                      // or option code = 0 (PAD) followed by
+                                      // code = 1, length = 0
+        // Suboption 2.
+        0x02, 0x01, 0x01,             // code = 2, length = 1, content = 1
+    };
+
+    // Parse options.
+    OptionCollection options;
+    list<uint16_t> deferred;
+    size_t offset = 0;
+    ASSERT_NO_THROW(offset = LibDHCP::unpackOptions4(buf, space,
+                                                     options, deferred, true));
+
+    // There should be 2 suboptions (1 and 2) because no sub-option 0
+    // was defined so code 0 means PAD.
+    ASSERT_EQ(2, options.size());
+
+    // Get suboption 1.
+    OptionPtr sub1 = options.begin()->second;
+    ASSERT_TRUE(sub1);
+    EXPECT_EQ(1, sub1->getType());
+    EXPECT_EQ(0, sub1->len() - sub1->getHeaderLen());
+
+    // Get suboption 2.
+    boost::shared_ptr<OptionInt<uint8_t> > sub2 =
+        boost::dynamic_pointer_cast<OptionInt<uint8_t> >
+            (options.rbegin()->second);
+    ASSERT_TRUE(sub2);
+    EXPECT_EQ(2, sub2->getType());
+    EXPECT_EQ(1, sub2->getValue());
+
+    // Create option definition for option 0 and register it.
+    OptionDefinitionPtr opt_def0(new OptionDefinition("zero", 0, "uint8"));
+    ASSERT_NO_THROW(defs.addItem(opt_def0, space));
+    LibDHCP::clearRuntimeOptionDefs();
+    LibDHCP::setRuntimeOptionDefs(defs);
+    LibDHCP::commitRuntimeOptionDefs();
+
+    options.clear();
+    offset = 0;
+    ASSERT_NO_THROW(offset = LibDHCP::unpackOptions4(buf, space,
+                                                     options, deferred, true));
+
+    // There should be 2 suboptions (0 and 1).
+    EXPECT_EQ(2, options.size());
+
+    // Get suboption 0
+    boost::shared_ptr<OptionInt<uint8_t> > sub0 =
+        boost::dynamic_pointer_cast<OptionInt<uint8_t> >
+            (options.begin()->second);
+    ASSERT_TRUE(sub0);
+    EXPECT_EQ(0, sub0->getType());
+    EXPECT_EQ(0, sub0->getValue());
+
+    // Get suboption 2.
+    sub2 =
+        boost::dynamic_pointer_cast<OptionInt<uint8_t> >
+            (options.rbegin()->second);
+    ASSERT_TRUE(sub2);
+    EXPECT_EQ(2, sub2->getType());
+    EXPECT_EQ(1, sub2->getValue());
+}
+
+// Verfies that option 255 (END) is handled as END in option 43 (so when
+//flexible pad end flag is true) only when option 255 (END) is not defined.
+TEST_F(LibDhcpTest, option43End) {
+    string space = "my-option43-space";
+
+    // Create the buffer holding an option 43 content.
+    OptionBuffer buf = {
+        // Suboption 255,
+        0xff, 0x01, 0x02              // code = 255, length = 1, content = 2
+    };
+
+    // Parse options.
+    OptionCollection options;
+    list<uint16_t> deferred;
+    size_t offset = 0;
+    ASSERT_NO_THROW(offset = LibDHCP::unpackOptions4(buf, space,
+                                                     options, deferred, true));
+
+    // Parsing should stop at the first byte.
+    EXPECT_EQ(0, offset);
+
+    // There should be 0 suboptions.
+    EXPECT_EQ(0, options.size());
+
+
+    // Create option definition for option 255.
+    OptionDefinitionPtr opt_def255(new OptionDefinition("max", 255, "uint8"));
+
+    // Register created option definition as runtime option definitions.
+    OptionDefSpaceContainer defs;
+    ASSERT_NO_THROW(defs.addItem(opt_def255, space));
+    LibDHCP::setRuntimeOptionDefs(defs);
+    LibDHCP::commitRuntimeOptionDefs();
+
+    options.clear();
+    offset = 0;
+    ASSERT_NO_THROW(offset = LibDHCP::unpackOptions4(buf, space,
+                                                     options, deferred, true));
+
+    // There should be 1 suboption.
+    ASSERT_EQ(1, options.size());
+
+    // Get suboption 255.
+    boost::shared_ptr<OptionInt<uint8_t> > sub255 =
+        boost::dynamic_pointer_cast<OptionInt<uint8_t> >
+            (options.begin()->second);
+    ASSERT_TRUE(sub255);
+    EXPECT_EQ(255, sub255->getType());
+    EXPECT_EQ(2, sub255->getValue());
+}
+
+// Verify the option 43 END bug is fixed (#950: option code 255 was not
+// parse at END, now it is not parse at END only when an option code 255
+// is defined in the corresponding option space).
+TEST_F(LibDhcpTest, option43Factory) {
+    // Create the buffer holding the structure of option 43 content.
+    OptionBuffer buf = {
+        // Suboption 1.
+        0x01, 0x00,                     // option code = 1, option length = 0
+        // END
+        0xff
+    };
+
+    // Get last resort definition.
+    OptionDefinitionPtr def =
+        LibDHCP::getLastResortOptionDef(DHCP4_OPTION_SPACE, 43);
+    ASSERT_TRUE(def);
+
+    // Apply the definition.
+    OptionPtr option;
+    ASSERT_NO_THROW(option = def->optionFactory(Option::V4, 43, buf));
+    ASSERT_TRUE(option);
+    EXPECT_EQ(DHO_VENDOR_ENCAPSULATED_OPTIONS, option->getType());
+    EXPECT_EQ(def->getEncapsulatedSpace(), option->getEncapsulatedSpace());
+
+    // There should be 1 suboption.
+    EXPECT_EQ(1, option->getOptions().size());
+
+    // Get suboption 1.
+    OptionPtr sub1 = option->getOption(1);
+    ASSERT_TRUE(sub1);
+    EXPECT_EQ(1, sub1->getType());
+    EXPECT_EQ(0, sub1->len() - sub1->getHeaderLen());
+
+    // Of course no suboption 255.
+    EXPECT_FALSE(option->getOption(255));
+}
+
+// Verifies that an Host Name (option 12), will be dropped when empty,
+// while subsequent options will still be unpacked.
+TEST_F(LibDhcpTest, emptyHostName) {
+
+    uint8_t opts[] = {
+        12,  0,             // Empty Hostname
+        60,  3, 10, 11, 12  // Class Id
+    };
+
+    vector<uint8_t> packed(opts, opts + sizeof(opts));
+    isc::dhcp::OptionCollection options; // list of options
+    list<uint16_t> deferred;
+
+    ASSERT_NO_THROW(
+        LibDHCP::unpackOptions4(packed, "dhcp4", options, deferred, false);
+    );
+
+    // Host Name should not exist, we quietly drop it when empty.
+    isc::dhcp::OptionCollection::const_iterator x = options.find(12);
+    ASSERT_TRUE(x == options.end());
+
+    // Verify Option 60 exists correctly
+    x = options.find(60);
+    ASSERT_FALSE(x == options.end());
+    EXPECT_EQ(60, x->second->getType());
+    ASSERT_EQ(3, x->second->getData().size());
+    EXPECT_EQ(5, x->second->len());
+    EXPECT_EQ(0, memcmp(&x->second->getData()[0], opts + 4, 3));
+};
+
 
 TEST_F(LibDhcpTest, stdOptionDefs4) {
 
@@ -1555,7 +1841,7 @@ TEST_F(LibDhcpTest, stdOptionDefs6) {
     LibDhcpTest::testStdOptionDefs6(D6O_VENDOR_OPTS, vopt_buf.begin(),
                                     vopt_buf.end(),
                                     typeid(OptionVendor),
-                                    "vendor-opts-space");
+                                    VENDOR_OPTION_SPACE);
 
     LibDhcpTest::testStdOptionDefs6(D6O_INTERFACE_ID, begin, end,
                                     typeid(Option));
@@ -1742,23 +2028,11 @@ TEST_F(LibDhcpTest, stdOptionDefs6) {
     LibDhcpTest::testStdOptionDefs6(D6O_IPV6_ADDRESS_ANDSF, begin, end,
                                     typeid(Option6AddrLst));
 
-    LibDhcpTest::testStdOptionDefs6(D6O_PUBLIC_KEY, begin, end,
-                                    typeid(Option));
-
-    LibDhcpTest::testStdOptionDefs6(D6O_CERTIFICATE, begin, end,
-                                    typeid(Option));
-
-    LibDhcpTest::testStdOptionDefs6(D6O_SIGNATURE, begin, end,
-                                    typeid(OptionCustom));
-
-    LibDhcpTest::testStdOptionDefs6(D6O_TIMESTAMP, begin, begin + 8,
-                                    typeid(Option));
-
     // RFC7598 options
     LibDhcpTest::testOptionDefs6(MAPE_V6_OPTION_SPACE, D6O_S46_RULE, begin, end,
-                                 typeid(OptionCustom), "s46-rule-options");
+                                 typeid(OptionCustom), V4V6_RULE_OPTION_SPACE);
     LibDhcpTest::testOptionDefs6(MAPT_V6_OPTION_SPACE, D6O_S46_RULE, begin, end,
-                                 typeid(OptionCustom), "s46-rule-options");
+                                 typeid(OptionCustom), V4V6_RULE_OPTION_SPACE);
     LibDhcpTest::testOptionDefs6(MAPE_V6_OPTION_SPACE, D6O_S46_BR, begin, end,
                                  typeid(OptionCustom));
     LibDhcpTest::testOptionDefs6(LW_V6_OPTION_SPACE, D6O_S46_BR, begin, end,
@@ -1767,18 +2041,18 @@ TEST_F(LibDhcpTest, stdOptionDefs6) {
                                  typeid(OptionCustom));
     LibDhcpTest::testOptionDefs6(LW_V6_OPTION_SPACE, D6O_S46_V4V6BIND, begin,
                                  end, typeid(OptionCustom),
-                                 "s46-v4v6bind-options");
+                                 V4V6_BIND_OPTION_SPACE);
     LibDhcpTest::testOptionDefs6(V4V6_RULE_OPTION_SPACE, D6O_S46_PORTPARAMS,
                                  begin, end, typeid(OptionCustom), "");
     LibDhcpTest::testStdOptionDefs6(D6O_S46_CONT_MAPE, begin, end,
                                     typeid(OptionCustom),
-                                    "s46-cont-mape-options");
+                                    MAPE_V6_OPTION_SPACE);
     LibDhcpTest::testStdOptionDefs6(D6O_S46_CONT_MAPT, begin, end,
                                     typeid(OptionCustom),
-                                    "s46-cont-mapt-options");
+                                    MAPT_V6_OPTION_SPACE);
     LibDhcpTest::testStdOptionDefs6(D6O_S46_CONT_LW, begin, end,
                                     typeid(OptionCustom),
-                                    "s46-cont-lw-options");
+                                    LW_V6_OPTION_SPACE);
 
 }
 
@@ -1817,7 +2091,7 @@ TEST_F(LibDhcpTest, getOptionDefByName4) {
 // be searched by option name.
 TEST_F(LibDhcpTest, getVendorOptionDefByName6) {
     const OptionDefContainerPtr& defs =
-        LibDHCP::getVendorOption6Defs(VENDOR_ID_CABLE_LABS);
+        LibDHCP::getVendorOptionDefs(Option::V6, VENDOR_ID_CABLE_LABS);
     ASSERT_TRUE(defs);
     for (OptionDefContainer::const_iterator def = defs->begin();
          def != defs->end(); ++def) {
@@ -1833,7 +2107,7 @@ TEST_F(LibDhcpTest, getVendorOptionDefByName6) {
 // be searched by option name.
 TEST_F(LibDhcpTest, getVendorOptionDefByName4) {
     const OptionDefContainerPtr& defs =
-        LibDHCP::getVendorOption4Defs(VENDOR_ID_CABLE_LABS);
+        LibDHCP::getVendorOptionDefs(Option::V4, VENDOR_ID_CABLE_LABS);
     ASSERT_TRUE(defs);
     for (OptionDefContainer::const_iterator def = defs->begin();
          def != defs->end(); ++def) {
@@ -1978,7 +2252,7 @@ TEST_F(LibDhcpTest, vendorClass6) {
     isc::util::encode::decodeHex(vendor_class_hex, bin);
 
     ASSERT_NO_THROW ({
-            LibDHCP::unpackOptions6(bin, "dhcp6", options);
+            LibDHCP::unpackOptions6(bin, DHCP6_OPTION_SPACE, options);
         });
 
     EXPECT_EQ(options.size(), 1); // There should be 1 option.
@@ -2041,7 +2315,7 @@ TEST_F(LibDhcpTest, option43) {
     ASSERT_TRUE(def);
     EXPECT_FALSE(def->getArrayType());
     EXPECT_EQ(43, def->getCode());
-    EXPECT_EQ("vendor-encapsulated-options-space", def->getEncapsulatedSpace());
+    EXPECT_EQ(VENDOR_ENCAPSULATED_OPTION_SPACE, def->getEncapsulatedSpace());
     EXPECT_EQ("vendor-encapsulated-options", def->getName());
     EXPECT_EQ(0, def->getRecordFields().size());
     EXPECT_EQ(OptionDataType::OPT_EMPTY_TYPE, def->getType());
@@ -2097,7 +2371,7 @@ TEST_F(LibDhcpTest, sw46options) {
 
     OptionBuffer buf(mape_bin);
 
-    size_t parsed;
+    size_t parsed = 0;
 
     EXPECT_NO_THROW (parsed = LibDHCP::unpackOptions6(buf, "dhcp6", options));
     EXPECT_EQ(mape_bin.size(), parsed);
@@ -2156,4 +2430,4 @@ TEST_F(LibDhcpTest, sw46options) {
     EXPECT_EQ("type=00093, len=00004: 8 (uint8) len=6,psid=63 (psid)", portparam->toText());
 }
 
-} // end of anonymous space
+}  // namespace

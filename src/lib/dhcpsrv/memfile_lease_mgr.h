@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,6 +18,8 @@
 
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
+
+#include <mutex>
 
 namespace isc {
 namespace dhcp {
@@ -72,8 +74,8 @@ class LFCSetup;
 /// parameter in the database access string. The [path] is the
 /// absolute path to the file (including file name). If this parameter
 /// is not specified, the default location in the installation
-/// directory is used: var/kea/kea-leases4.csv and
-/// var/kea/kea-leases6.csv.
+/// directory is used: <install-dir>/var/lib/kea/kea-leases4.csv and
+/// <install-dir>/var/lib/kea/kea-leases6.csv.
 class Memfile_LeaseMgr : public LeaseMgr {
 public:
 
@@ -142,11 +144,15 @@ public:
     /// @brief Adds an IPv4 lease.
     ///
     /// @param lease lease to be added
+    ///
+    /// @result true if the lease was added, false if not
     virtual bool addLease(const Lease4Ptr& lease);
 
     /// @brief Adds an IPv6 lease.
     ///
     /// @param lease lease to be added
+    ///
+    /// @result true if the lease was added, false if not
     virtual bool addLease(const Lease6Ptr& lease);
 
     /// @brief Returns existing IPv4 lease for specified IPv4 address.
@@ -156,7 +162,7 @@ public:
     ///
     /// @param addr An address of the searched lease.
     ///
-    /// @return a collection of leases
+    /// @return a pointer to the lease (or NULL if a lease is not found)
     virtual Lease4Ptr getLease4(const isc::asiolink::IOAddress& addr) const;
 
     /// @brief Returns existing IPv4 leases for specified hardware address.
@@ -190,6 +196,8 @@ public:
     /// @brief Returns existing IPv4 lease for specified client-id
     ///
     /// @param client_id client identifier
+    ///
+    /// @return lease collection
     virtual Lease4Collection getLease4(const ClientId& client_id) const;
 
     /// @brief Returns IPv4 lease for specified client-id/hwaddr/subnet-id tuple
@@ -228,6 +236,13 @@ public:
     ///
     /// @return Lease collection (may be empty if no IPv4 lease found).
     virtual Lease4Collection getLeases4(SubnetID subnet_id) const;
+
+    /// @brief Returns all IPv4 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv4 lease found).
+    virtual Lease4Collection getLeases4(const std::string& hostname) const;
 
     /// @brief Returns all IPv4 leases.
     ///
@@ -270,7 +285,7 @@ public:
     /// @param type specifies lease type: (NA, TA or PD)
     /// @param addr An address of the searched lease.
     ///
-    /// @return smart pointer to the lease (or NULL if a lease is not found)
+    /// @return a pointer to the lease (or NULL if a lease is not found)
     virtual Lease6Ptr getLease6(Lease::Type type,
                                 const isc::asiolink::IOAddress& addr) const;
 
@@ -283,7 +298,8 @@ public:
     ///
     /// @return collection of IPv6 leases
     virtual Lease6Collection getLeases6(Lease::Type type,
-                                        const DUID& duid, uint32_t iaid) const;
+                                        const DUID& duid,
+                                        uint32_t iaid) const;
 
     /// @brief Returns existing IPv6 lease for a given DUID + IA + subnet-id +
     /// lease type combination.
@@ -297,7 +313,8 @@ public:
     /// @param subnet_id identifier of the subnet the lease must belong to
     ///
     /// @return lease collection (may be empty if no lease is found)
-    virtual Lease6Collection getLeases6(Lease::Type type, const DUID& duid,
+    virtual Lease6Collection getLeases6(Lease::Type type,
+                                        const DUID& duid,
                                         uint32_t iaid,
                                         SubnetID subnet_id) const;
 
@@ -308,6 +325,13 @@ public:
     /// @return Lease collection (may be empty if no IPv6 lease found).
     virtual Lease6Collection getLeases6(SubnetID subnet_id) const;
 
+    /// @brief Returns all IPv6 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv6 lease found).
+    virtual Lease6Collection getLeases6(const std::string& hostname) const;
+
     /// @brief Returns all IPv6 leases.
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
@@ -315,11 +339,9 @@ public:
 
     /// @brief Returns IPv6 leases for the DUID.
     ///
-    /// @todo: implement an optimised of the query using index.
-    /// @return Lease collection (may be empty if no IPv6 lease found) 
-    /// for the DUID.
+    /// @param duid client DUID
     virtual Lease6Collection getLeases6(const DUID& duid) const;
-    
+
     /// @brief Returns range of IPv6 leases using paging.
     ///
     /// This method implements paged browsing of the lease database. The first
@@ -394,13 +416,19 @@ public:
     /// If no such lease is present, an exception will be thrown.
     virtual void updateLease6(const Lease6Ptr& lease6);
 
-    /// @brief Deletes a lease.
+    /// @brief Deletes an IPv4 lease.
     ///
-    /// @param addr Address of the lease to be deleted. (This can be IPv4 or
-    ///        IPv6.)
+    /// @param lease IPv4 lease being deleted.
     ///
-    /// @return true if deletion was successful, false if no such lease exists
-    virtual bool deleteLease(const isc::asiolink::IOAddress& addr);
+    /// @return true if deletion was successful, false if no such lease exists.
+    virtual bool deleteLease(const Lease4Ptr& lease);
+
+    /// @brief Deletes an IPv6 lease.
+    ///
+    /// @param lease IPv6 lease being deleted.
+    ///
+    /// @return true if deletion was successful, false if no such lease exists.
+    virtual bool deleteLease(const Lease6Ptr& lease);
 
     /// @brief Deletes all expired-reclaimed DHCPv4 leases.
     ///
@@ -426,6 +454,7 @@ public:
     /// subnet.
     ///
     /// @param subnet_id identifier of the subnet
+    ///
     /// @return number of leases removed.
     virtual size_t wipeLeases4(const SubnetID& subnet_id);
 
@@ -435,10 +464,237 @@ public:
     /// subnet.
     ///
     /// @param subnet_id identifier of the subnet
+    ///
     /// @return number of leases removed.
     virtual size_t wipeLeases6(const SubnetID& subnet_id);
 
 private:
+
+    /// @name Internal methods called holding the mutex in multi threading
+    /// mode.
+    ///@{
+
+    /// @brief Adds an IPv4 lease,
+    ///
+    /// @param lease lease to be added
+    ///
+    /// @result true if the lease was added, false if not
+    bool addLeaseInternal(const Lease4Ptr& lease);
+
+    /// @brief Adds an IPv6 lease.
+    ///
+    /// @param lease lease to be added
+    ///
+    /// @result true if the lease was added, false if not
+    bool addLeaseInternal(const Lease6Ptr& lease);
+
+    /// @brief Returns existing IPv4 lease for specified IPv4 address.
+    ///
+    /// @param addr An address of the searched lease.
+    ///
+    /// @return a pointer to the lease (or NULL if a lease is not found)
+    Lease4Ptr getLease4Internal(const isc::asiolink::IOAddress& addr) const;
+
+    /// @brief Gets existing IPv4 leases for specified hardware address.
+    ///
+    /// @param hwaddr hardware address of the client
+    /// @param collection lease collection
+    void getLease4Internal(const isc::dhcp::HWAddr& hwaddr,
+                           Lease4Collection& collection) const;
+
+    /// @brief Returns existing IPv4 lease for specified hardware address
+    ///        and a subnet
+    ///
+    /// @param hwaddr hardware address of the client
+    /// @param subnet_id identifier of the subnet that lease must belong to
+    ///
+    /// @return a pointer to the lease (or NULL if a lease is not found)
+    Lease4Ptr getLease4Internal(const HWAddr& hwaddr,
+                                SubnetID subnet_id) const;
+
+    /// @brief Gets existing IPv4 lease for specified client-id
+    ///
+    /// @param client_id client identifier
+    /// @param collection lease collection
+    void getLease4Internal(const ClientId& client_id,
+                           Lease4Collection& collection) const;
+
+    /// @brief Returns IPv4 lease for specified client-id/hwaddr/subnet-id tuple
+    ///
+    /// @param clientid client identifier
+    /// @param hwaddr hardware address of the client
+    /// @param subnet_id identifier of the subnet that lease must belong to
+    ///
+    /// @return a pointer to the lease (or NULL if a lease is not found)
+    Lease4Ptr getLease4Internal(const ClientId& clientid,
+                                const HWAddr& hwaddr,
+                                SubnetID subnet_id) const;
+
+    /// @brief Returns existing IPv4 lease for specified client-id
+    ///
+    /// @param clientid client identifier
+    /// @param subnet_id identifier of the subnet that lease must belong to
+    ///
+    /// @return a pointer to the lease (or NULL if a lease is not found)
+    Lease4Ptr getLease4Internal(const ClientId& clientid,
+                                SubnetID subnet_id) const;
+
+    /// @brief Gets all IPv4 leases for the particular subnet identifier.
+    ///
+    /// @param subnet_id subnet identifier.
+    /// @param collection lease collection
+    void getLeases4Internal(SubnetID subnet_id,
+                            Lease4Collection& collection) const;
+
+    /// @brief Returns all IPv4 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    /// @param collection lease collection
+    void getLeases4Internal(const std::string& hostname,
+                            Lease4Collection& collection) const;
+
+    /// @brief Gets all IPv4 leases.
+    ///
+    /// @param collection lease collection
+    void getLeases4Internal(Lease4Collection& collection) const;
+
+    /// @brief Returns range of IPv4 leases using paging.
+    ///
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param collection lease collection
+    void getLeases4Internal(const asiolink::IOAddress& lower_bound_address,
+                            const LeasePageSize& page_size,
+                            Lease4Collection& collection) const;
+
+    /// @brief Returns existing IPv6 lease for a given IPv6 address.
+    ///
+    /// @param type specifies lease type: (NA, TA or PD)
+    /// @param addr An address of the searched lease.
+    ///
+    /// @return a pointer to the lease (or NULL if a lease is not found)
+    Lease6Ptr getLease6Internal(Lease::Type type,
+                                const isc::asiolink::IOAddress& addr) const;
+
+    /// @brief Returns existing IPv6 lease for a given DUID + IA + lease type
+    /// combination
+    ///
+    /// @param type specifies lease type: (NA, TA or PD)
+    /// @param duid client DUID
+    /// @param iaid IA identifier
+    /// @param collection lease collection
+    void getLeases6Internal(Lease::Type type,
+                            const DUID& duid,
+                            uint32_t iaid,
+                            Lease6Collection& collection) const;
+
+    /// @brief Returns existing IPv6 lease for a given DUID + IA + subnet-id +
+    /// lease type combination.
+    ///
+    /// @param type specifies lease type: (NA, TA or PD)
+    /// @param duid client DUID
+    /// @param iaid IA identifier
+    /// @param subnet_id identifier of the subnet the lease must belong to
+    /// @param collection lease collection
+    void getLeases6Internal(Lease::Type type,
+                            const DUID& duid,
+                            uint32_t iaid,
+                            SubnetID subnet_id,
+                            Lease6Collection& collection) const;
+
+    /// @brief Returns all IPv6 leases for the particular subnet identifier.
+    ///
+    /// @param subnet_id subnet identifier.
+    /// @param collection lease collection
+    void getLeases6Internal(SubnetID subnet_id,
+                            Lease6Collection& collection) const;
+
+    /// @brief Returns all IPv6 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    /// @param collection lease collection
+    void getLeases6Internal(const std::string& hostname,
+                            Lease6Collection& collection) const;
+
+    /// @brief Returns all IPv6 leases.
+    ///
+    /// @param collection lease collection
+    void getLeases6Internal(Lease6Collection& collection) const;
+
+    /// @brief Returns IPv6 leases for the DUID.
+    ///
+    /// @param duid client DUID
+    /// @param collection lease collection
+    void getLeases6Internal(const DUID& duid,
+                            Lease6Collection& collection) const;
+
+    /// @brief Returns range of IPv6 leases using paging.
+    ///
+    /// @param lower_bound_address IPv6 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param collection lease collection
+    void getLeases6Internal(const asiolink::IOAddress& lower_bound_address,
+                            const LeasePageSize& page_size,
+                            Lease6Collection& collection) const;
+
+    /// @brief Returns a collection of expired DHCPv4 leases.
+    ///
+    /// @param [out] expired_leases A container to which expired leases returned
+    /// by the database backend are added.
+    /// @param max_leases A maximum number of leases to be returned. If this
+    /// value is set to 0, all expired (but not reclaimed) leases are returned.
+    void getExpiredLeases4Internal(Lease4Collection& expired_leases,
+                                   const size_t max_leases) const;
+
+    /// @brief Returns a collection of expired DHCPv6 leases.
+    ///
+    /// @param [out] expired_leases A container to which expired leases returned
+    /// by the database backend are added.
+    /// @param max_leases A maximum number of leases to be returned. If this
+    /// value is set to 0, all expired (but not reclaimed) leases are returned.
+    void getExpiredLeases6Internal(Lease6Collection& expired_leases,
+                                   const size_t max_leases) const;
+
+    /// @brief Updates IPv4 lease.
+    ///
+    /// @param lease4 The lease to be updated.
+    void updateLease4Internal(const Lease4Ptr& lease4);
+
+    /// @brief Updates IPv6 lease.
+    ///
+    /// @param lease6 The lease to be updated.
+    void updateLease6Internal(const Lease6Ptr& lease6);
+
+    /// @brief Deletes an IPv4 lease.
+    ///
+    /// @param lease IPv4 lease being deleted.
+    ///
+    /// @return true if deletion was successful, false if no such lease exists.
+    bool deleteLeaseInternal(const Lease4Ptr& addr);
+
+    /// @brief Deletes an IPv6 lease.
+    ///
+    /// @param lease IPv6 lease being deleted.
+    ///
+    /// @return true if deletion was successful, false if no such lease exists.
+    bool deleteLeaseInternal(const Lease6Ptr& addr);
+
+    /// @brief Removes specified IPv4 leases.
+    ///
+    /// @param subnet_id identifier of the subnet
+    ///
+    /// @return The number of deleted leases
+    size_t wipeLeases4Internal(const SubnetID& subnet_id);
+
+    /// @brief Removed specified IPv6 leases.
+    ///
+    /// @param subnet_id identifier of the subnet
+    ///
+    /// @return The number of deleted leases
+    size_t wipeLeases6Internal(const SubnetID& subnet_id);
+    ///@}
 
     /// @brief Deletes all expired-reclaimed leases.
     ///
@@ -846,9 +1102,12 @@ private:
     db::DatabaseConnection conn_;
 
     //@}
+
+    /// @brief Manager mutex
+    boost::scoped_ptr<std::mutex> mutex_;
 };
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+}  // namespace dhcp
+}  // namespace isc
 
 #endif // MEMFILE_LEASE_MGR_H

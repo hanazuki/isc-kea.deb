@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,14 +12,16 @@
 #include <dhcpsrv/dhcpsrv_log.h>
 #include <dhcpsrv/mysql_lease_mgr.h>
 #include <mysql/mysql_connection.h>
+#include <util/multi_threading_mgr.h>
 
 #include <boost/array.hpp>
+#include <boost/make_shared.hpp>
 #include <boost/static_assert.hpp>
 #include <mysqld_error.h>
 
 #include <iostream>
 #include <iomanip>
-#include <limits.h>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <time.h>
@@ -29,6 +31,7 @@ using namespace isc::asiolink;
 using namespace isc::db;
 using namespace isc::dhcp;
 using namespace isc::data;
+using namespace isc::util;
 using namespace std;
 
 /// @file
@@ -93,12 +96,12 @@ const size_t USER_CONTEXT_MAX_LEN = 8192;
 boost::array<TaggedStatement, MySqlLeaseMgr::NUM_STATEMENTS>
 tagged_statements = { {
     {MySqlLeaseMgr::DELETE_LEASE4,
-                    "DELETE FROM lease4 WHERE address = ?"},
+                    "DELETE FROM lease4 WHERE address = ? AND expire = ?"},
     {MySqlLeaseMgr::DELETE_LEASE4_STATE_EXPIRED,
                     "DELETE FROM lease4 "
                         "WHERE state = ? AND expire < ?"},
     {MySqlLeaseMgr::DELETE_LEASE6,
-                    "DELETE FROM lease6 WHERE address = ?"},
+                    "DELETE FROM lease6 WHERE address = ? AND expire = ?"},
     {MySqlLeaseMgr::DELETE_LEASE6_STATE_EXPIRED,
                     "DELETE FROM lease6 "
                         "WHERE state = ? AND expire < ?"},
@@ -159,13 +162,22 @@ tagged_statements = { {
                         "state, user_context "
                             "FROM lease4 "
                             "WHERE subnet_id = ?"},
+    {MySqlLeaseMgr::GET_LEASE4_HOSTNAME,
+                    "SELECT address, hwaddr, client_id, "
+                        "valid_lifetime, expire, subnet_id, "
+                        "fqdn_fwd, fqdn_rev, hostname, "
+                        "state, user_context "
+                            "FROM lease4 "
+                            "WHERE hostname = ?"},
     {MySqlLeaseMgr::GET_LEASE4_EXPIRE,
                     "SELECT address, hwaddr, client_id, "
                         "valid_lifetime, expire, subnet_id, "
                         "fqdn_fwd, fqdn_rev, hostname, "
                         "state, user_context "
                             "FROM lease4 "
-                            "WHERE state != ? AND expire < ? "
+                            "WHERE state != ? "
+                            "AND valid_lifetime != 4294967295 "
+                            "AND expire < ? "
                             "ORDER BY expire ASC "
                             "LIMIT ?"},
     {MySqlLeaseMgr::GET_LEASE6,
@@ -233,6 +245,15 @@ tagged_statements = { {
                         "state, user_context "
                             "FROM lease6 "
                             "WHERE duid = ?"},
+    {MySqlLeaseMgr::GET_LEASE6_HOSTNAME,
+                    "SELECT address, duid, valid_lifetime, "
+                        "expire, subnet_id, pref_lifetime, "
+                        "lease_type, iaid, prefix_len, "
+                        "fqdn_fwd, fqdn_rev, hostname, "
+                        "hwaddr, hwtype, hwaddr_source, "
+                        "state, user_context "
+                            "FROM lease6 "
+                            "WHERE hostname = ?"},
     {MySqlLeaseMgr::GET_LEASE6_EXPIRE,
                     "SELECT address, duid, valid_lifetime, "
                         "expire, subnet_id, pref_lifetime, "
@@ -241,7 +262,9 @@ tagged_statements = { {
                         "hwaddr, hwtype, hwaddr_source, "
                         "state, user_context "
                             "FROM lease6 "
-                            "WHERE state != ? AND expire < ? "
+                            "WHERE state != ? "
+                            "AND valid_lifetime != 4294967295 "
+                            "AND expire < ? "
                             "ORDER BY expire ASC "
                             "LIMIT ?"},
     {MySqlLeaseMgr::INSERT_LEASE4,
@@ -264,7 +287,7 @@ tagged_statements = { {
                         "subnet_id = ?, fqdn_fwd = ?, fqdn_rev = ?, "
                         "hostname = ?, "
                         "state = ?, user_context = ? "
-                            "WHERE address = ?"},
+                            "WHERE address = ? AND expire = ?"},
     {MySqlLeaseMgr::UPDATE_LEASE6,
                     "UPDATE lease6 SET address = ?, duid = ?, "
                         "valid_lifetime = ?, expire = ?, subnet_id = ?, "
@@ -272,38 +295,33 @@ tagged_statements = { {
                         "prefix_len = ?, fqdn_fwd = ?, fqdn_rev = ?, "
                         "hostname = ?, hwaddr = ?, hwtype = ?, hwaddr_source = ?, "
                         "state = ?, user_context = ? "
-                            "WHERE address = ?"},
+                            "WHERE address = ? AND expire = ?"},
     {MySqlLeaseMgr::ALL_LEASE4_STATS,
-     "SELECT subnet_id, state, leases as state_count"
-     "  FROM lease4_stat ORDER BY subnet_id, state"},
-
+                    "SELECT subnet_id, state, leases as state_count "
+                        "FROM lease4_stat ORDER BY subnet_id, state"},
     {MySqlLeaseMgr::SUBNET_LEASE4_STATS,
-     "SELECT subnet_id, state, leases as state_count"
-     "  FROM lease4_stat "
-     "  WHERE subnet_id = ? "
-     "  ORDER BY state"},
-
+                    "SELECT subnet_id, state, leases as state_count "
+                        "FROM lease4_stat "
+                        "WHERE subnet_id = ? "
+                        "ORDER BY state"},
     {MySqlLeaseMgr::SUBNET_RANGE_LEASE4_STATS,
-     "SELECT subnet_id, state, leases as state_count"
-     "  FROM lease4_stat "
-     "  WHERE subnet_id >= ? and subnet_id <= ? "
-     "  ORDER BY subnet_id, state"},
-
+                    "SELECT subnet_id, state, leases as state_count "
+                        "FROM lease4_stat "
+                        "WHERE subnet_id >= ? and subnet_id <= ? "
+                        "ORDER BY subnet_id, state"},
     {MySqlLeaseMgr::ALL_LEASE6_STATS,
-     "SELECT subnet_id, lease_type, state, leases as state_count"
-     "  FROM lease6_stat ORDER BY subnet_id, lease_type, state" },
-
+                    "SELECT subnet_id, lease_type, state, leases as state_count "
+                        "FROM lease6_stat ORDER BY subnet_id, lease_type, state"},
     {MySqlLeaseMgr::SUBNET_LEASE6_STATS,
-     "SELECT subnet_id, lease_type, state, leases as state_count"
-     "  FROM lease6_stat "
-     "  WHERE subnet_id = ? "
-     "  ORDER BY lease_type, state" },
-
+                    "SELECT subnet_id, lease_type, state, leases as state_count "
+                        "FROM lease6_stat "
+                        "WHERE subnet_id = ? "
+                        "ORDER BY lease_type, state"},
     {MySqlLeaseMgr::SUBNET_RANGE_LEASE6_STATS,
-     "SELECT subnet_id, lease_type, state, leases as state_count"
-     "  FROM lease6_stat "
-     "  WHERE subnet_id >= ? and subnet_id <= ? "
-     "  ORDER BY subnet_id, lease_type, state" }
+                    "SELECT subnet_id, lease_type, state, leases as state_count "
+                        "FROM lease6_stat "
+                        "WHERE subnet_id >= ? and subnet_id <= ? "
+                        "ORDER BY subnet_id, lease_type, state"}
     }
 };
 
@@ -321,6 +339,7 @@ namespace dhcp {
 
 class MySqlLeaseExchange {
 public:
+
     /// @brief Set error indicators
     ///
     /// Sets the error indicator for each of the MYSQL_BIND elements.  It points
@@ -336,7 +355,7 @@ public:
                                    size_t count) {
         for (size_t i = 0; i < count; ++i) {
             error[i] = MLM_FALSE;
-            bind[i].error = reinterpret_cast<char*>(&error[i]);
+            bind[i].error = reinterpret_cast<my_bool*>(&error[i]);
         }
     }
 
@@ -393,6 +412,7 @@ class MySqlLease4Exchange : public MySqlLeaseExchange {
     static const size_t LEASE_COLUMNS = 11;
 
 public:
+
     /// @brief Constructor
     ///
     /// The initialization of the variables here is only to satisfy cppcheck -
@@ -509,7 +529,7 @@ public:
                 bind_[2].buffer_length = client_id_length_;
                 bind_[2].length = &client_id_length_;
                 // bind_[2].is_null = &MLM_FALSE; // commented out for performance
-                                                 // reasons, see memset() above
+                                                  // reasons, see memset() above
             } else {
                 bind_[2].buffer_type = MYSQL_TYPE_NULL;
                 // According to http://dev.mysql.com/doc/refman/5.5/en/
@@ -535,7 +555,12 @@ public:
             // expiry time (expire).  The relationship is given by:
             //
             // expire = cltt_ + valid_lft_
-            MySqlConnection::convertToDatabaseTime(lease_->cltt_, lease_->valid_lft_,
+            // Avoid overflow
+            uint32_t valid_lft = lease_->valid_lft_;
+            if (valid_lft == Lease::INFINITY_LFT) {
+                valid_lft = 0;
+            }
+            MySqlConnection::convertToDatabaseTime(lease_->cltt_, valid_lft,
                                                    expire_);
             bind_[4].buffer_type = MYSQL_TYPE_TIMESTAMP;
             bind_[4].buffer = reinterpret_cast<char*>(&expire_);
@@ -575,7 +600,7 @@ public:
             // bind_[8].is_null = &MLM_FALSE; // commented out for performance
                                               // reasons, see memset() above
 
-            // state: uint32_t.
+            // state: uint32_t
             bind_[9].buffer_type = MYSQL_TYPE_LONG;
             bind_[9].buffer = reinterpret_cast<char*>(&lease_->state_);
             bind_[9].is_unsigned = MLM_TRUE;
@@ -586,7 +611,7 @@ public:
             ConstElementPtr ctx = lease->getContext();
             if (ctx) {
                 bind_[10].buffer_type = MYSQL_TYPE_STRING;
-                string ctx_txt = ctx->str();
+                std::string ctx_txt = ctx->str();
                 strncpy(user_context_, ctx_txt.c_str(), USER_CONTEXT_MAX_LEN - 1);
                 bind_[10].buffer = user_context_;
                 bind_[10].buffer_length = ctx_txt.length();
@@ -618,7 +643,6 @@ public:
     /// Creates a MYSQL_BIND array to receive Lease4 data from the database.
     /// After data is successfully received, getLeaseData() can be used to copy
     /// it to a Lease6 object.
-    ///
     std::vector<MYSQL_BIND> createBindForReceive() {
 
         // Initialize MYSQL_BIND array.
@@ -654,7 +678,7 @@ public:
         // bind_[2].is_null = &MLM_FALSE; // commented out for performance
                                           // reasons, see memset() above
 
-        // lease_time: unsigned int
+        // valid lifetime: unsigned int
         bind_[3].buffer_type = MYSQL_TYPE_LONG;
         bind_[3].buffer = reinterpret_cast<char*>(&valid_lifetime_);
         bind_[3].is_unsigned = MLM_TRUE;
@@ -701,20 +725,20 @@ public:
         // bind_[8].is_null = &MLM_FALSE; // commented out for performance
                                           // reasons, see memset() above
 
-        // state:  uint32_t
+        // state: uint32_t
         bind_[9].buffer_type = MYSQL_TYPE_LONG;
         bind_[9].buffer = reinterpret_cast<char*>(&state_);
         bind_[9].is_unsigned = MLM_TRUE;
         // bind_[9].is_null = &MLM_FALSE; // commented out for performance
                                           // reasons, see memset() above
 
-        // user_context: text null
+        // user_context: text
         user_context_null_ = MLM_FALSE;
         user_context_length_ = sizeof(user_context_);
         bind_[10].buffer_type = MYSQL_TYPE_STRING;
         bind_[10].buffer = reinterpret_cast<char*>(user_context_);
         bind_[10].buffer_length = user_context_length_;
-        bind_[10].length= &user_context_length_;
+        bind_[10].length = &user_context_length_;
         bind_[10].is_null = &user_context_null_;
 
         // Add the error flags
@@ -725,7 +749,7 @@ public:
 
         // Add the data to the vector.  Note the end element is one after the
         // end of the array.
-        return(std::vector<MYSQL_BIND>(&bind_[0], &bind_[LEASE_COLUMNS]));
+        return (std::vector<MYSQL_BIND>(&bind_[0], &bind_[LEASE_COLUMNS]));
     }
 
     /// @brief Copy Received Data into Lease4 Object
@@ -740,7 +764,12 @@ public:
         // Convert times received from the database to times for the lease
         // structure
         time_t cltt = 0;
-        MySqlConnection::convertFromDatabaseTime(expire_, valid_lifetime_, cltt);
+        // Recover from overflow
+        uint32_t valid_lft = valid_lifetime_;
+        if (valid_lft == Lease::INFINITY_LFT) {
+            valid_lft = 0;
+        }
+        MySqlConnection::convertFromDatabaseTime(expire_, valid_lft, cltt);
 
         if (client_id_null_ == MLM_TRUE) {
             // There's no client-id, so we pass client-id_length_ set to 0
@@ -752,7 +781,7 @@ public:
         std::string hostname(hostname_buffer_,
                              hostname_buffer_ + hostname_length_);
 
-        /// Set hardware address if it was set
+        // Set hardware address if it was set
         HWAddrPtr hwaddr;
         if (hwaddr_null_ == MLM_FALSE) {
             hwaddr.reset(new HWAddr(hwaddr_buffer_, hwaddr_length_, HTYPE_ETHER));
@@ -775,11 +804,12 @@ public:
             }
         }
 
-        // note that T1 and T2 are not stored
-        Lease4Ptr lease(new Lease4(addr4_, hwaddr,
-                                     client_id_buffer_, client_id_length_,
-                                     valid_lifetime_, 0, 0, cltt, subnet_id_,
-                                     fqdn_fwd_, fqdn_rev_, hostname));
+        Lease4Ptr lease(boost::make_shared<Lease4>(addr4_, hwaddr,
+                                                   client_id_buffer_,
+                                                   client_id_length_,
+                                                   valid_lifetime_, cltt,
+                                                   subnet_id_, fqdn_fwd_,
+                                                   fqdn_rev_, hostname));
 
         // Set state.
         lease->state_ = state_;
@@ -810,30 +840,30 @@ private:
     // Note: All array lengths are equal to the corresponding variable in the
     //       schema.
     // Note: Arrays are declared fixed length for speed of creation
-    uint32_t               addr4_;                     ///< IPv4 address
-    MYSQL_BIND             bind_[LEASE_COLUMNS];       ///< Bind array
-    std::string            columns_[LEASE_COLUMNS];    ///< Column names
-    my_bool                error_[LEASE_COLUMNS];      ///< Error array
-    std::vector<uint8_t>   hwaddr_;                    ///< Hardware address
-    uint8_t                hwaddr_buffer_[HWAddr::MAX_HWADDR_LEN]; ///< Hardware address buffer
-    unsigned long          hwaddr_length_;             ///< Hardware address length
-    my_bool                hwaddr_null_;               ///< Used when HWAddr is null
-    std::vector<uint8_t>   client_id_;                 ///< Client identification
-    uint8_t                client_id_buffer_[ClientId::MAX_CLIENT_ID_LEN]; ///< Client ID buffer
-    unsigned long          client_id_length_;          ///< Client ID address length
-    my_bool                client_id_null_;            ///< Is Client ID null?
-    MYSQL_TIME             expire_;                    ///< Lease expiry time
-    Lease4Ptr              lease_;                     ///< Pointer to lease object
-    uint32_t               subnet_id_;                 ///< Subnet identification
-    uint32_t               valid_lifetime_;            ///< Lease time
-    my_bool                fqdn_fwd_;                  ///< Has forward DNS update been performed
-    my_bool                fqdn_rev_;                  ///< Has reverse DNS update been performed
-    char                   hostname_buffer_[HOSTNAME_MAX_LEN]; ///< Client hostname
-    unsigned long          hostname_length_;           ///< Client hostname length
-    uint32_t               state_;                     ///< Lease state
-    char                   user_context_[USER_CONTEXT_MAX_LEN]; ///< User context
-    unsigned long          user_context_length_;       ///< User context length
-    my_bool                user_context_null_;         ///< Is user context null?
+    uint32_t             addr4_;                                         ///< IPv4 address
+    MYSQL_BIND           bind_[LEASE_COLUMNS];                           ///< Bind array
+    std::string          columns_[LEASE_COLUMNS];                        ///< Column names
+    my_bool              error_[LEASE_COLUMNS];                          ///< Error array
+    Lease4Ptr            lease_;                                         ///< Pointer to lease object
+    std::vector<uint8_t> hwaddr_;                                        ///< Hardware address
+    uint8_t              hwaddr_buffer_[HWAddr::MAX_HWADDR_LEN];         ///< Hardware address buffer
+    unsigned long        hwaddr_length_;                                 ///< Length of Hardware address
+    my_bool              hwaddr_null_;                                   ///< Used when Hardware address is null
+    std::vector<uint8_t> client_id_;                                     ///< Client identification
+    uint8_t              client_id_buffer_[ClientId::MAX_CLIENT_ID_LEN]; ///< Client ID buffer
+    unsigned long        client_id_length_;                              ///< Client ID address length
+    my_bool              client_id_null_;                                ///< Used when Client ID is null
+    MYSQL_TIME           expire_;                                        ///< Lease expire time
+    uint32_t             subnet_id_;                                     ///< Subnet identification
+    uint32_t             valid_lifetime_;                                ///< Lease time
+    my_bool              fqdn_fwd_;                                      ///< Has forward DNS update been performed
+    my_bool              fqdn_rev_;                                      ///< Has reverse DNS update been performed
+    char                 hostname_buffer_[HOSTNAME_MAX_LEN];             ///< Client hostname
+    unsigned long        hostname_length_;                               ///< Length of client hostname
+    uint32_t             state_;                                         ///< Lease state
+    char                 user_context_[USER_CONTEXT_MAX_LEN];            ///< User context
+    unsigned long        user_context_length_;                           ///< Length of user context
+    my_bool              user_context_null_;                             ///< Used when user context is null
 };
 
 /// @brief Exchange MySQL and Lease6 Data
@@ -854,16 +884,17 @@ class MySqlLease6Exchange : public MySqlLeaseExchange {
     static const size_t LEASE_COLUMNS = 17;
 
 public:
+
     /// @brief Constructor
     ///
     /// The initialization of the variables here is only to satisfy cppcheck -
     /// all variables are initialized/set in the methods before they are used.
-    MySqlLease6Exchange() : addr6_length_(0), duid_length_(0),
-                            iaid_(0), lease_type_(0), prefixlen_(0),
+    MySqlLease6Exchange() : addr6_length_(0), hwaddr_length_(0),
+                            hwaddr_null_(MLM_FALSE), duid_length_(0),
+                            iaid_(0), lease_type_(0), prefix_len_(0),
                             pref_lifetime_(0), subnet_id_(0), valid_lifetime_(0),
                             fqdn_fwd_(false), fqdn_rev_(false),
-                            hostname_length_(0), hwaddr_length_(0),
-                            hwaddr_null_(MLM_FALSE), hwtype_(0), hwaddr_source_(0),
+                            hostname_length_(0), hwtype_(0), hwaddr_source_(0),
                             state_(0), user_context_length_(0),
                             user_context_null_(MLM_FALSE) {
         memset(addr6_buffer_, 0, sizeof(addr6_buffer_));
@@ -965,10 +996,15 @@ public:
             // expire: timestamp
             // The lease structure holds the client last transmission time (cltt_)
             // For convenience for external tools, this is converted to lease
-            /// expiry time (expire).  The relationship is given by:
+            // expiry time (expire).  The relationship is given by:
             //
             // expire = cltt_ + valid_lft_
-            MySqlConnection::convertToDatabaseTime(lease_->cltt_, lease_->valid_lft_,
+            // Avoid overflow
+            uint32_t valid_lft = lease_->valid_lft_;
+            if (valid_lft == Lease::INFINITY_LFT) {
+                valid_lft = 0;
+            }
+            MySqlConnection::convertToDatabaseTime(lease_->cltt_, valid_lft,
                                                    expire_);
             bind_[3].buffer_type = MYSQL_TYPE_TIMESTAMP;
             bind_[3].buffer = reinterpret_cast<char*>(&expire_);
@@ -1069,7 +1105,7 @@ public:
                 bind_[12].is_null = &hwaddr_null_;
             }
 
-            // hwtype
+            // hardware type: unsigned short int (16 bits)
             if (hwaddr) {
                 hwtype_ = lease->hwaddr_->htype_;
                 bind_[13].buffer_type = MYSQL_TYPE_SHORT;
@@ -1088,7 +1124,7 @@ public:
                 bind_[13].is_null = &hwaddr_null_;
             }
 
-            /// Hardware source
+            // hardware source: unsigned int (32 bits)
             if (hwaddr) {
                 hwaddr_source_ = lease->hwaddr_->source_;
                 bind_[14].buffer_type = MYSQL_TYPE_LONG;
@@ -1107,7 +1143,7 @@ public:
                 bind_[14].is_null = &hwaddr_null_;
             }
 
-            // state:  uint32_t
+            // state: uint32_t
             bind_[15].buffer_type = MYSQL_TYPE_LONG;
             bind_[15].buffer = reinterpret_cast<char*>(&lease_->state_);
             bind_[15].is_unsigned = MLM_TRUE;
@@ -1118,7 +1154,7 @@ public:
             ConstElementPtr ctx = lease->getContext();
             if (ctx) {
                 bind_[16].buffer_type = MYSQL_TYPE_STRING;
-                string ctx_txt = ctx->str();
+                std::string ctx_txt = ctx->str();
                 strncpy(user_context_, ctx_txt.c_str(), USER_CONTEXT_MAX_LEN - 1);
                 bind_[16].buffer = user_context_;
                 bind_[16].buffer_length = ctx_txt.length();
@@ -1183,7 +1219,7 @@ public:
         // bind_[1].is_null = &MLM_FALSE; // commented out for performance
                                           // reasons, see memset() above
 
-        // lease_time: unsigned int
+        // valid lifetime: unsigned int
         bind_[2].buffer_type = MYSQL_TYPE_LONG;
         bind_[2].buffer = reinterpret_cast<char*>(&valid_lifetime_);
         bind_[2].is_unsigned = MLM_TRUE;
@@ -1227,7 +1263,7 @@ public:
 
         // prefix_len: unsigned tinyint
         bind_[8].buffer_type = MYSQL_TYPE_TINY;
-        bind_[8].buffer = reinterpret_cast<char*>(&prefixlen_);
+        bind_[8].buffer = reinterpret_cast<char*>(&prefix_len_);
         bind_[8].is_unsigned = MLM_TRUE;
         // bind_[8].is_null = &MLM_FALSE; // commented out for performance
                                           // reasons, see memset() above
@@ -1274,20 +1310,20 @@ public:
         bind_[14].buffer = reinterpret_cast<char*>(&hwaddr_source_);
         bind_[14].is_unsigned = MLM_TRUE;
 
-        // state:  uint32_t
+        // state: uint32_t
         bind_[15].buffer_type = MYSQL_TYPE_LONG;
         bind_[15].buffer = reinterpret_cast<char*>(&state_);
         bind_[15].is_unsigned = MLM_TRUE;
         // bind_[15].is_null = &MLM_FALSE; // commented out for performance
                                            // reasons, see memset() above
 
-        // user_context: text null
+        // user_context: text
         user_context_null_ = MLM_FALSE;
         user_context_length_ = sizeof(user_context_);
         bind_[16].buffer_type = MYSQL_TYPE_STRING;
         bind_[16].buffer = reinterpret_cast<char*>(user_context_);
         bind_[16].buffer_length = user_context_length_;
-        bind_[16].length= &user_context_length_;
+        bind_[16].length = &user_context_length_;
         bind_[16].is_null = &user_context_null_;
 
         // Add the error flags
@@ -1298,7 +1334,7 @@ public:
 
         // Add the data to the vector.  Note the end element is one after the
         // end of the array.
-        return(std::vector<MYSQL_BIND>(&bind_[0], &bind_[LEASE_COLUMNS]));
+        return (std::vector<MYSQL_BIND>(&bind_[0], &bind_[LEASE_COLUMNS]));
     }
 
     /// @brief Copy Received Data into Lease6 Object
@@ -1317,7 +1353,7 @@ public:
         // Create the IOAddress object corresponding to the received data.
         addr6_buffer_[addr6_length_] = '\0';
         std::string address = addr6_buffer_;
-        isc::asiolink::IOAddress addr(address);
+        IOAddress addr(address);
 
         // Set the lease type in a variable of the appropriate data type, which
         // has been initialized with an arbitrary (but valid) value.
@@ -1350,7 +1386,7 @@ public:
         std::string hostname(hostname_buffer_,
                              hostname_buffer_ + hostname_length_);
 
-        /// Set hardware address if it was set
+        // Set hardware address if it was set
         HWAddrPtr hwaddr;
         if (hwaddr_null_ == MLM_FALSE) {
             hwaddr.reset(new HWAddr(hwaddr_buffer_, hwaddr_length_, hwtype_));
@@ -1376,13 +1412,21 @@ public:
 
         // Create the lease and set the cltt (after converting from the
         // expire time retrieved from the database).
-        Lease6Ptr result(new Lease6(type, addr, duid_ptr, iaid_,
-                                    pref_lifetime_, valid_lifetime_, 0, 0,
-                                    subnet_id_, fqdn_fwd_, fqdn_rev_,
-                                    hostname, hwaddr, prefixlen_));
+        Lease6Ptr result(boost::make_shared<Lease6>(type, addr, duid_ptr, iaid_,
+                                                    pref_lifetime_,
+                                                    valid_lifetime_, subnet_id_,
+                                                    fqdn_fwd_, fqdn_rev_,
+                                                    hostname, hwaddr,
+                                                    prefix_len_));
         time_t cltt = 0;
-        MySqlConnection::convertFromDatabaseTime(expire_, valid_lifetime_, cltt);
+        // Recover from overflow
+        uint32_t valid_lft = valid_lifetime_;
+        if (valid_lft == Lease::INFINITY_LFT) {
+            valid_lft = 0;
+        }
+        MySqlConnection::convertFromDatabaseTime(expire_, valid_lft, cltt);
         result->cltt_ = cltt;
+        result->old_cltt_ = cltt;
 
         // Set state.
         result->state_ = state_;
@@ -1409,41 +1453,41 @@ public:
     }
 
 private:
+
     // Note: All array lengths are equal to the corresponding variable in the
     // schema.
     // Note: arrays are declared fixed length for speed of creation
-    std::string            addr6_;                     ///< String form of address
-    char                   addr6_buffer_[ADDRESS6_TEXT_MAX_LEN + 1]; ///< Character
-                                                       ///< array form of V6 address
-    unsigned long          addr6_length_;              ///< Length of the address
-    MYSQL_BIND             bind_[LEASE_COLUMNS];       ///< Bind array
-    std::string            columns_[LEASE_COLUMNS];    ///< Column names
-    std::vector<uint8_t>   duid_;                      ///< Client identification
-    uint8_t                duid_buffer_[DUID::MAX_DUID_LEN]; ///< Buffer form of DUID
-    unsigned long          duid_length_;               ///< Length of the DUID
-    my_bool                error_[LEASE_COLUMNS];      ///< Error indicators
-    MYSQL_TIME             expire_;                    ///< Lease expiry time
-    uint32_t               iaid_;                      ///< Identity association ID
-    Lease6Ptr              lease_;                     ///< Pointer to lease object
-    uint8_t                lease_type_;                ///< Lease type
-    uint8_t                prefixlen_;                 ///< Prefix length
-    uint32_t               pref_lifetime_;             ///< Preferred lifetime
-    uint32_t               subnet_id_;                 ///< Subnet identification
-    uint32_t               valid_lifetime_;            ///< Lease time
-    my_bool                fqdn_fwd_;                  ///< Has forward DNS update been performed
-    my_bool                fqdn_rev_;                  ///< Has reverse DNS update been performed
-    char                   hostname_buffer_[HOSTNAME_MAX_LEN]; ///< Client hostname
-    unsigned long          hostname_length_;           ///< Client hostname length
-    uint8_t                hwaddr_buffer_[HWAddr::MAX_HWADDR_LEN]; ///< Buffer form of Hardware address
-    std::vector<uint8_t>   hwaddr_;                    ///< Hardware address (optional)
-    unsigned long          hwaddr_length_;             ///< Aux. variable denoting hwaddr_ size()
-    my_bool                hwaddr_null_;               ///< Used when HWAddr is null
-    uint16_t               hwtype_;                    ///< Hardware type
-    uint32_t               hwaddr_source_;             ///< Source of the hardware address
-    uint32_t               state_;                     ///< Lease state.
-    char                   user_context_[USER_CONTEXT_MAX_LEN]; ///< User context
-    unsigned long          user_context_length_;       ///< User context length
-    my_bool                user_context_null_;         ///< Is user context null?
+    std::string          addr6_;                                   ///< Address
+    char                 addr6_buffer_[ADDRESS6_TEXT_MAX_LEN + 1]; ///< Address buffer
+    unsigned long        addr6_length_;                            ///< Length of address
+    MYSQL_BIND           bind_[LEASE_COLUMNS];                     ///< Bind array
+    std::string          columns_[LEASE_COLUMNS];                  ///< Column names
+    my_bool              error_[LEASE_COLUMNS];                    ///< Error array
+    Lease6Ptr            lease_;                                   ///< Pointer to lease object
+    std::vector<uint8_t> hwaddr_;                                  ///< Hardware address
+    uint8_t              hwaddr_buffer_[HWAddr::MAX_HWADDR_LEN];   ///< Hardware address buffer
+    unsigned long        hwaddr_length_;                           ///< Length of Hardware address
+    my_bool              hwaddr_null_;                             ///< Used when Hardware address is null
+    std::vector<uint8_t> duid_;                                    ///< DUID
+    uint8_t              duid_buffer_[DUID::MAX_DUID_LEN];         ///< DUID buffer
+    unsigned long        duid_length_;                             ///< Length of DUID
+    MYSQL_TIME           expire_;                                  ///< Lease expire time
+    uint32_t             iaid_;                                    ///< Identity association ID
+    uint8_t              lease_type_;                              ///< Lease type
+    uint8_t              prefix_len_;                              ///< Prefix length
+    uint32_t             pref_lifetime_;                           ///< Preferred lifetime
+    uint32_t             subnet_id_;                               ///< Subnet identification
+    uint32_t             valid_lifetime_;                          ///< Lease time
+    my_bool              fqdn_fwd_;                                ///< Has forward DNS update been performed
+    my_bool              fqdn_rev_;                                ///< Has reverse DNS update been performed
+    char                 hostname_buffer_[HOSTNAME_MAX_LEN];       ///< Client hostname
+    unsigned long        hostname_length_;                         ///< Length of client hostname
+    uint16_t             hwtype_;                                  ///< Hardware type
+    uint32_t             hwaddr_source_;                           ///< Source of the hardware address
+    uint32_t             state_;                                   ///< Lease state
+    char                 user_context_[USER_CONTEXT_MAX_LEN];      ///< User context
+    unsigned long        user_context_length_;                     ///< Length of user context
+    my_bool              user_context_null_;                       ///< Used when user context is null
 };
 
 /// @brief MySql derivation of the statistical lease data query
@@ -1452,9 +1496,10 @@ private:
 /// lease storage.  It does so by executing a query which returns a result
 /// containing one row per monitored state per lease type per
 /// subnet, ordered by subnet id in ascending order.
-///
+
 class MySqlLeaseStatsQuery : public LeaseStatsQuery {
 public:
+
     /// @brief Constructor to query for all subnets' stats
     ///
     ///  The query created will return statistics for all subnets
@@ -1470,7 +1515,7 @@ public:
           // Set the number of columns in the bind array based on fetch_type
           // This is the number of columns expected in the result set
           bind_(fetch_type_ ? 4 : 3),
-          subnet_id_(0), lease_type_(0), lease_state_(0), state_count_(0) {
+          subnet_id_(0), lease_type_(0), state_(0), state_count_(0) {
           validateStatement();
     }
 
@@ -1490,7 +1535,7 @@ public:
           // Set the number of columns in the bind array based on fetch_type
           // This is the number of columns expected in the result set
           bind_(fetch_type_ ? 4 : 3),
-          subnet_id_(0), lease_type_(0), lease_state_(0), state_count_(0) {
+          subnet_id_(0), lease_type_(0), state_(0), state_count_(0) {
           validateStatement();
     }
 
@@ -1514,7 +1559,7 @@ public:
           // Set the number of columns in the bind array based on fetch_type
           // This is the number of columns expected in the result set
           bind_(fetch_type_ ? 4 : 3),
-          subnet_id_(0), lease_type_(0), lease_state_(0), state_count_(0) {
+          subnet_id_(0), lease_type_(0), state_(0), state_count_(0) {
           validateStatement();
     }
 
@@ -1573,7 +1618,7 @@ public:
 
         // state: uint32_t
         bind_[col].buffer_type = MYSQL_TYPE_LONG;
-        bind_[col].buffer = reinterpret_cast<char*>(&lease_state_);
+        bind_[col].buffer = reinterpret_cast<char*>(&state_);
         bind_[col].is_unsigned = MLM_TRUE;
         ++col;
 
@@ -1614,7 +1659,7 @@ public:
         if (status == MLM_MYSQL_FETCH_SUCCESS) {
             row.subnet_id_ = static_cast<SubnetID>(subnet_id_);
             row.lease_type_ = static_cast<Lease::Type>(lease_type_);
-            row.lease_state_ = lease_state_;
+            row.lease_state_ = state_;
             row.state_count_ = state_count_;
             have_row = true;
         } else if (status != MYSQL_NO_DATA) {
@@ -1625,6 +1670,7 @@ public:
     }
 
 private:
+
     /// @brief Validate the statement index passed to the constructor
     /// Safely fetch the statement from the connection based on statement index
     /// @throw  BadValue if statement index is out of range
@@ -1654,23 +1700,65 @@ private:
 
     /// @brief Receives subnet ID when fetching a row
     uint32_t subnet_id_;
+
     /// @brief Receives the lease type when fetching a row
     uint32_t lease_type_;
+
     /// @brief Receives the lease state when fetching a row
-    uint32_t lease_state_;
+    uint32_t state_;
+
     /// @brief Receives the state count when fetching a row
     int64_t state_count_;
 };
 
+// MySqlLeaseContext Constructor
+
+MySqlLeaseContext::MySqlLeaseContext(const DatabaseConnection::ParameterMap& parameters)
+    : conn_(parameters) {
+}
+
+// MySqlLeaseContextAlloc Constructor and Destructor
+
+MySqlLeaseMgr::MySqlLeaseContextAlloc::MySqlLeaseContextAlloc(
+    const MySqlLeaseMgr& mgr) : ctx_(), mgr_(mgr) {
+
+    if (MultiThreadingMgr::instance().getMode()) {
+        // multi-threaded
+        {
+            // we need to protect the whole pool_ operation, hence extra scope {}
+            lock_guard<mutex> lock(mgr_.pool_->mutex_);
+            if (!mgr_.pool_->pool_.empty()) {
+                ctx_ = mgr_.pool_->pool_.back();
+                mgr_.pool_->pool_.pop_back();
+            }
+        }
+        if (!ctx_) {
+            ctx_ = mgr_.createContext();
+        }
+    } else {
+        // single-threaded
+        if (mgr_.pool_->pool_.empty()) {
+            isc_throw(Unexpected, "No available MySQL lease context?!");
+        }
+        ctx_ = mgr_.pool_->pool_.back();
+    }
+}
+
+MySqlLeaseMgr::MySqlLeaseContextAlloc::~MySqlLeaseContextAlloc() {
+    if (MultiThreadingMgr::instance().getMode()) {
+        // multi-threaded
+        lock_guard<mutex> lock(mgr_.pool_->mutex_);
+        mgr_.pool_->pool_.push_back(ctx_);
+    }
+    // If running in single-threaded mode, there's nothing to do here.
+}
+
 // MySqlLeaseMgr Constructor and Destructor
 
 MySqlLeaseMgr::MySqlLeaseMgr(const MySqlConnection::ParameterMap& parameters)
-    : conn_(parameters) {
+    : parameters_(parameters) {
 
-    // Open the database.
-    conn_.openDatabase();
-
-    // Test schema version before we try to prepare statements.
+    // Validate schema version first.
     std::pair<uint32_t, uint32_t> code_version(MYSQL_SCHEMA_VERSION_MAJOR,
                                                MYSQL_SCHEMA_VERSION_MINOR);
     std::pair<uint32_t, uint32_t> db_version = getVersion();
@@ -1678,32 +1766,47 @@ MySqlLeaseMgr::MySqlLeaseMgr(const MySqlConnection::ParameterMap& parameters)
         isc_throw(DbOpenError,
                   "MySQL schema version mismatch: need version: "
                       << code_version.first << "." << code_version.second
-                      << " found version:  " << db_version.first << "."
+                      << " found version: " << db_version.first << "."
                       << db_version.second);
     }
+
+    // Create an initial context.
+    pool_.reset(new MySqlLeaseContextPool());
+    pool_->pool_.push_back(createContext());
+}
+
+MySqlLeaseMgr::~MySqlLeaseMgr() {
+}
+
+// Create context.
+
+MySqlLeaseContextPtr
+MySqlLeaseMgr::createContext() const {
+    MySqlLeaseContextPtr ctx(new MySqlLeaseContext(parameters_));
+
+    // Open the database.
+    ctx->conn_.openDatabase();
 
     // Enable autocommit.  To avoid a flush to disk on every commit, the global
     // parameter innodb_flush_log_at_trx_commit should be set to 2.  This will
     // cause the changes to be written to the log, but flushed to disk in the
     // background every second.  Setting the parameter to that value will speed
     // up the system, but at the risk of losing data if the system crashes.
-    my_bool result = mysql_autocommit(conn_.mysql_, 1);
+    my_bool result = mysql_autocommit(ctx->conn_.mysql_, 1);
     if (result != 0) {
-        isc_throw(DbOperationError, mysql_error(conn_.mysql_));
+        isc_throw(DbOperationError, mysql_error(ctx->conn_.mysql_));
     }
 
     // Prepare all statements likely to be used.
-    conn_.prepareStatements(tagged_statements.begin(), tagged_statements.end());
+    ctx->conn_.prepareStatements(tagged_statements.begin(),
+                                 tagged_statements.end());
 
     // Create the exchange objects for use in exchanging data between the
     // program and the database.
-    exchange4_.reset(new MySqlLease4Exchange());
-    exchange6_.reset(new MySqlLease6Exchange());
-}
+    ctx->exchange4_.reset(new MySqlLease4Exchange());
+    ctx->exchange6_.reset(new MySqlLease6Exchange());
 
-MySqlLeaseMgr::~MySqlLeaseMgr() {
-    // There is no need to close the database in this destructor: it is
-    // closed in the destructor of the mysql_ member variable.
+    return (ctx);
 }
 
 std::string
@@ -1720,24 +1823,25 @@ MySqlLeaseMgr::getDBVersion() {
 // statement, then call common code to execute the statement.
 
 bool
-MySqlLeaseMgr::addLeaseCommon(StatementIndex stindex,
+MySqlLeaseMgr::addLeaseCommon(MySqlLeaseContextPtr& ctx,
+                              StatementIndex stindex,
                               std::vector<MYSQL_BIND>& bind) {
 
     // Bind the parameters to the statement
-    int status = mysql_stmt_bind_param(conn_.statements_[stindex], &bind[0]);
-    checkError(status, stindex, "unable to bind parameters");
+    int status = mysql_stmt_bind_param(ctx->conn_.statements_[stindex], &bind[0]);
+    checkError(ctx, status, stindex, "unable to bind parameters");
 
     // Execute the statement
-    status = mysql_stmt_execute(conn_.statements_[stindex]);
+    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
     if (status != 0) {
 
         // Failure: check for the special case of duplicate entry.  If this is
         // the case, we return false to indicate that the row was not added.
         // Otherwise we throw an exception.
-        if (mysql_errno(conn_.mysql_) == ER_DUP_ENTRY) {
+        if (mysql_errno(ctx->conn_.mysql_) == ER_DUP_ENTRY) {
             return (false);
         }
-        checkError(status, stindex, "unable to execute");
+        checkError(ctx, status, stindex, "unable to execute");
     }
 
     // Insert succeeded
@@ -1746,27 +1850,45 @@ MySqlLeaseMgr::addLeaseCommon(StatementIndex stindex,
 
 bool
 MySqlLeaseMgr::addLease(const Lease4Ptr& lease) {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_ADD_ADDR4).arg(lease->addr_.toText());
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_ADD_ADDR4)
+        .arg(lease->addr_.toText());
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
 
     // Create the MYSQL_BIND array for the lease
-    std::vector<MYSQL_BIND> bind = exchange4_->createBindForSend(lease);
+    std::vector<MYSQL_BIND> bind = ctx->exchange4_->createBindForSend(lease);
 
     // ... and drop to common code.
-    return (addLeaseCommon(INSERT_LEASE4, bind));
+    auto result = addLeaseCommon(ctx, INSERT_LEASE4, bind);
+
+    lease->old_cltt_ = lease->cltt_;
+    lease->old_valid_lft_ = lease->valid_lft_;
+
+    return (result);
 }
 
 bool
 MySqlLeaseMgr::addLease(const Lease6Ptr& lease) {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_ADD_ADDR6).arg(lease->addr_.toText())
-              .arg(lease->type_);
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_ADD_ADDR6)
+        .arg(lease->addr_.toText())
+        .arg(lease->type_);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
 
     // Create the MYSQL_BIND array for the lease
-    std::vector<MYSQL_BIND> bind = exchange6_->createBindForSend(lease);
+    std::vector<MYSQL_BIND> bind = ctx->exchange6_->createBindForSend(lease);
 
     // ... and drop to common code.
-    return (addLeaseCommon(INSERT_LEASE6, bind));
+    auto result = addLeaseCommon(ctx, INSERT_LEASE6, bind);
+
+    lease->old_cltt_ = lease->cltt_;
+    lease->old_valid_lft_ = lease->valid_lft_;
+
+    return (result);
 }
 
 // Extraction of leases from the database.
@@ -1795,78 +1917,81 @@ MySqlLeaseMgr::addLease(const Lease6Ptr& lease) {
 // holding zero or one leases into an appropriate Lease object.
 
 template <typename Exchange, typename LeaseCollection>
-void MySqlLeaseMgr::getLeaseCollection(StatementIndex stindex,
-                                       MYSQL_BIND* bind,
-                                       Exchange& exchange,
-                                       LeaseCollection& result,
-                                       bool single) const {
-
+void
+MySqlLeaseMgr::getLeaseCollection(MySqlLeaseContextPtr& ctx,
+                                  StatementIndex stindex,
+                                  MYSQL_BIND* bind,
+                                  Exchange& exchange,
+                                  LeaseCollection& result,
+                                  bool single) const {
     int status;
 
     if (bind) {
         // Bind the selection parameters to the statement
-        status = mysql_stmt_bind_param(conn_.statements_[stindex], bind);
-        checkError(status, stindex, "unable to bind WHERE clause parameter");
+        status = mysql_stmt_bind_param(ctx->conn_.statements_[stindex], bind);
+        checkError(ctx, status, stindex, "unable to bind WHERE clause parameter");
     }
 
     // Set up the MYSQL_BIND array for the data being returned and bind it to
     // the statement.
     std::vector<MYSQL_BIND> outbind = exchange->createBindForReceive();
-    status = mysql_stmt_bind_result(conn_.statements_[stindex], &outbind[0]);
-    checkError(status, stindex, "unable to bind SELECT clause parameters");
+    status = mysql_stmt_bind_result(ctx->conn_.statements_[stindex], &outbind[0]);
+    checkError(ctx, status, stindex, "unable to bind SELECT clause parameters");
 
     // Execute the statement
-    status = mysql_stmt_execute(conn_.statements_[stindex]);
-    checkError(status, stindex, "unable to execute");
+    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
+    checkError(ctx, status, stindex, "unable to execute");
 
     // Ensure that all the lease information is retrieved in one go to avoid
     // overhead of going back and forth between client and server.
-    status = mysql_stmt_store_result(conn_.statements_[stindex]);
-    checkError(status, stindex, "unable to set up for storing all results");
+    status = mysql_stmt_store_result(ctx->conn_.statements_[stindex]);
+    checkError(ctx, status, stindex, "unable to set up for storing all results");
 
     // Set up the fetch "release" object to release resources associated
     // with the call to mysql_stmt_fetch when this method exits, then
     // retrieve the data.
-    MySqlFreeResult fetch_release(conn_.statements_[stindex]);
+    MySqlFreeResult fetch_release(ctx->conn_.statements_[stindex]);
     int count = 0;
-    while ((status = mysql_stmt_fetch(conn_.statements_[stindex])) == 0) {
+    while ((status = mysql_stmt_fetch(ctx->conn_.statements_[stindex])) == 0) {
         try {
             result.push_back(exchange->getLeaseData());
 
         } catch (const isc::BadValue& ex) {
             // Rethrow the exception with a bit more data.
             isc_throw(BadValue, ex.what() << ". Statement is <" <<
-                      conn_.text_statements_[stindex] << ">");
+                      ctx->conn_.text_statements_[stindex] << ">");
         }
 
         if (single && (++count > 1)) {
             isc_throw(MultipleRecords, "multiple records were found in the "
                       "database where only one was expected for query "
-                      << conn_.text_statements_[stindex]);
+                      << ctx->conn_.text_statements_[stindex]);
         }
     }
 
     // How did the fetch end?
     if (status == 1) {
         // Error - unable to fetch results
-        checkError(status, stindex, "unable to fetch results");
+        checkError(ctx, status, stindex, "unable to fetch results");
     } else if (status == MYSQL_DATA_TRUNCATED) {
         // Data truncated - throw an exception indicating what was at fault
-        isc_throw(DataTruncated, conn_.text_statements_[stindex]
+        isc_throw(DataTruncated, ctx->conn_.text_statements_[stindex]
                   << " returned truncated data: columns affected are "
                   << exchange->getErrorColumns());
     }
 }
 
-void MySqlLeaseMgr::getLease(StatementIndex stindex, MYSQL_BIND* bind,
-                             Lease4Ptr& result) const {
+void
+MySqlLeaseMgr::getLease(MySqlLeaseContextPtr& ctx,
+                        StatementIndex stindex, MYSQL_BIND* bind,
+                        Lease4Ptr& result) const {
     // Create appropriate collection object and get all leases matching
     // the selection criteria.  The "single" parameter is true to indicate
     // that the called method should throw an exception if multiple
     // matching records are found: this particular method is called when only
     // one or zero matches is expected.
     Lease4Collection collection;
-    getLeaseCollection(stindex, bind, exchange4_, collection, true);
+    getLeaseCollection(ctx, stindex, bind, ctx->exchange4_, collection, true);
 
     // Return single record if present, else clear the lease.
     if (collection.empty()) {
@@ -1876,15 +2001,17 @@ void MySqlLeaseMgr::getLease(StatementIndex stindex, MYSQL_BIND* bind,
     }
 }
 
-void MySqlLeaseMgr::getLease(StatementIndex stindex, MYSQL_BIND* bind,
-                             Lease6Ptr& result) const {
+void
+MySqlLeaseMgr::getLease(MySqlLeaseContextPtr& ctx,
+                        StatementIndex stindex, MYSQL_BIND* bind,
+                        Lease6Ptr& result) const {
     // Create appropriate collection object and get all leases matching
     // the selection criteria.  The "single" parameter is true to indicate
     // that the called method should throw an exception if multiple
     // matching records are found: this particular method is called when only
     // one or zero matches is expected.
     Lease6Collection collection;
-    getLeaseCollection(stindex, bind, exchange6_, collection, true);
+    getLeaseCollection(ctx, stindex, bind, ctx->exchange6_, collection, true);
 
     // Return single record if present, else clear the lease.
     if (collection.empty()) {
@@ -1898,9 +2025,9 @@ void MySqlLeaseMgr::getLease(StatementIndex stindex, MYSQL_BIND* bind,
 // criteria.
 
 Lease4Ptr
-MySqlLeaseMgr::getLease4(const isc::asiolink::IOAddress& addr) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_ADDR4).arg(addr.toText());
+MySqlLeaseMgr::getLease4(const IOAddress& addr) const {
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_ADDR4)
+        .arg(addr.toText());
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[1];
@@ -1913,15 +2040,20 @@ MySqlLeaseMgr::getLease4(const isc::asiolink::IOAddress& addr) const {
 
     // Get the data
     Lease4Ptr result;
-    getLease(GET_LEASE4_ADDR, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLease(ctx, GET_LEASE4_ADDR, inbind, result);
 
     return (result);
 }
 
 Lease4Collection
 MySqlLeaseMgr::getLease4(const HWAddr& hwaddr) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_HWADDR).arg(hwaddr.toText());
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_HWADDR)
+        .arg(hwaddr.toText());
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[1];
@@ -1949,16 +2081,21 @@ MySqlLeaseMgr::getLease4(const HWAddr& hwaddr) const {
 
     // Get the data
     Lease4Collection result;
-    getLeaseCollection(GET_LEASE4_HWADDR, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE4_HWADDR, inbind, result);
 
     return (result);
 }
 
 Lease4Ptr
 MySqlLeaseMgr::getLease4(const HWAddr& hwaddr, SubnetID subnet_id) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_SUBID_HWADDR)
-        .arg(subnet_id).arg(hwaddr.toText());
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_SUBID_HWADDR)
+        .arg(subnet_id)
+        .arg(hwaddr.toText());
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[2];
@@ -1990,15 +2127,20 @@ MySqlLeaseMgr::getLease4(const HWAddr& hwaddr, SubnetID subnet_id) const {
 
     // Get the data
     Lease4Ptr result;
-    getLease(GET_LEASE4_HWADDR_SUBID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLease(ctx, GET_LEASE4_HWADDR_SUBID, inbind, result);
 
     return (result);
 }
 
 Lease4Collection
 MySqlLeaseMgr::getLease4(const ClientId& clientid) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_CLIENTID).arg(clientid.toText());
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_CLIENTID)
+        .arg(clientid.toText());
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[1];
@@ -2021,7 +2163,12 @@ MySqlLeaseMgr::getLease4(const ClientId& clientid) const {
 
     // Get the data
     Lease4Collection result;
-    getLeaseCollection(GET_LEASE4_CLIENTID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE4_CLIENTID, inbind, result);
 
     return (result);
 }
@@ -2038,9 +2185,9 @@ MySqlLeaseMgr::getLease4(const ClientId&, const HWAddr&, SubnetID) const {
 
 Lease4Ptr
 MySqlLeaseMgr::getLease4(const ClientId& clientid, SubnetID subnet_id) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_SUBID_CLIENTID)
-              .arg(subnet_id).arg(clientid.toText());
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_SUBID_CLIENTID)
+        .arg(subnet_id)
+        .arg(clientid.toText());
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[2];
@@ -2067,7 +2214,12 @@ MySqlLeaseMgr::getLease4(const ClientId& clientid, SubnetID subnet_id) const {
 
     // Get the data
     Lease4Ptr result;
-    getLease(GET_LEASE4_CLIENTID_SUBID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLease(ctx, GET_LEASE4_CLIENTID_SUBID, inbind, result);
 
     return (result);
 }
@@ -2088,7 +2240,38 @@ MySqlLeaseMgr::getLeases4(SubnetID subnet_id) const {
 
     // ... and get the data
     Lease4Collection result;
-    getLeaseCollection(GET_LEASE4_SUBID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE4_SUBID, inbind, result);
+
+    return (result);
+}
+
+Lease4Collection
+MySqlLeaseMgr::getLeases4(const std::string& hostname) const {
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_HOSTNAME4)
+        .arg(hostname);
+
+    // Set up the WHERE clause value
+    MYSQL_BIND inbind[1];
+    memset(inbind, 0, sizeof(inbind));
+
+    // Hostname
+    inbind[0].buffer_type = MYSQL_TYPE_STRING;
+    inbind[0].buffer = const_cast<char*>(hostname.c_str());
+    inbind[0].buffer_length = hostname.length();
+
+    // ... and get the data
+    Lease4Collection result;
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE4_HOSTNAME, inbind, result);
 
     return (result);
 }
@@ -2098,13 +2281,18 @@ MySqlLeaseMgr::getLeases4() const {
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET4);
 
     Lease4Collection result;
-    getLeaseCollection(GET_LEASE4, 0, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE4, 0, result);
 
     return (result);
 }
 
 Lease4Collection
-MySqlLeaseMgr::getLeases4(const asiolink::IOAddress& lower_bound_address,
+MySqlLeaseMgr::getLeases4(const IOAddress& lower_bound_address,
                           const LeasePageSize& page_size) const {
     // Expecting IPv4 address.
     if (!lower_bound_address.isV4()) {
@@ -2135,17 +2323,22 @@ MySqlLeaseMgr::getLeases4(const asiolink::IOAddress& lower_bound_address,
 
     // Get the leases
     Lease4Collection result;
-    getLeaseCollection(GET_LEASE4_PAGE, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE4_PAGE, inbind, result);
 
     return (result);
 }
 
 Lease6Ptr
 MySqlLeaseMgr::getLease6(Lease::Type lease_type,
-                         const isc::asiolink::IOAddress& addr) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_ADDR6).arg(addr.toText())
-              .arg(lease_type);
+                         const IOAddress& addr) const {
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_ADDR6)
+        .arg(addr.toText())
+        .arg(lease_type);
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[2];
@@ -2167,17 +2360,23 @@ MySqlLeaseMgr::getLease6(Lease::Type lease_type,
     inbind[1].is_unsigned = MLM_TRUE;
 
     Lease6Ptr result;
-    getLease(GET_LEASE6_ADDR, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLease(ctx, GET_LEASE6_ADDR, inbind, result);
 
     return (result);
 }
 
 Lease6Collection
-MySqlLeaseMgr::getLeases6(Lease::Type lease_type,
-                          const DUID& duid, uint32_t iaid) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_IAID_DUID).arg(iaid).arg(duid.toText())
-              .arg(lease_type);
+MySqlLeaseMgr::getLeases6(Lease::Type lease_type, const DUID& duid,
+                          uint32_t iaid) const {
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_IAID_DUID)
+        .arg(iaid)
+        .arg(duid.toText())
+        .arg(lease_type);
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[3];
@@ -2224,19 +2423,24 @@ MySqlLeaseMgr::getLeases6(Lease::Type lease_type,
 
     // ... and get the data
     Lease6Collection result;
-    getLeaseCollection(GET_LEASE6_DUID_IAID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE6_DUID_IAID, inbind, result);
 
     return (result);
 }
 
 Lease6Collection
-MySqlLeaseMgr::getLeases6(Lease::Type lease_type,
-                          const DUID& duid, uint32_t iaid,
-                          SubnetID subnet_id) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_IAID_SUBID_DUID)
-              .arg(iaid).arg(subnet_id).arg(duid.toText())
-              .arg(lease_type);
+MySqlLeaseMgr::getLeases6(Lease::Type lease_type, const DUID& duid,
+                          uint32_t iaid, SubnetID subnet_id) const {
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_IAID_SUBID_DUID)
+        .arg(iaid)
+        .arg(subnet_id)
+        .arg(duid.toText())
+        .arg(lease_type);
 
     // Set up the WHERE clause value
     MYSQL_BIND inbind[4];
@@ -2269,7 +2473,12 @@ MySqlLeaseMgr::getLeases6(Lease::Type lease_type,
 
     // ... and get the data
     Lease6Collection result;
-    getLeaseCollection(GET_LEASE6_DUID_IAID_SUBID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE6_DUID_IAID_SUBID, inbind, result);
 
     return (result);
 }
@@ -2290,26 +2499,36 @@ MySqlLeaseMgr::getLeases6(SubnetID subnet_id) const {
 
     // ... and get the data
     Lease6Collection result;
-    getLeaseCollection(GET_LEASE6_SUBID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE6_SUBID, inbind, result);
 
     return (result);
 }
 
 Lease6Collection
 MySqlLeaseMgr::getLeases6() const {
-   LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET6);
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET6);
 
     Lease6Collection result;
-    getLeaseCollection(GET_LEASE6, 0, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE6, 0, result);
 
     return (result);
 }
 
 Lease6Collection
 MySqlLeaseMgr::getLeases6(const DUID& duid) const {
-   LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_DUID)
-             .arg(duid.toText());
-   
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_DUID)
+        .arg(duid.toText());
+
     // Set up the WHERE clause value
     MYSQL_BIND inbind[1];
     memset(inbind, 0, sizeof(inbind));
@@ -2322,16 +2541,46 @@ MySqlLeaseMgr::getLeases6(const DUID& duid) const {
             const_cast<uint8_t*>(&duid_vector[0]));
     inbind[0].buffer_length = duid_length;
     inbind[0].length = &duid_length;
-    
+
     Lease6Collection result;
-    
-    getLeaseCollection(GET_LEASE6_DUID, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE6_DUID, inbind, result);
 
     return result;
 }
 
 Lease6Collection
-MySqlLeaseMgr::getLeases6(const asiolink::IOAddress& lower_bound_address,
+MySqlLeaseMgr::getLeases6(const std::string& hostname) const {
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_HOSTNAME6)
+        .arg(hostname);
+
+    // Set up the WHERE clause value
+    MYSQL_BIND inbind[1];
+    memset(inbind, 0, sizeof(inbind));
+
+    // Hostname
+    inbind[0].buffer_type = MYSQL_TYPE_STRING;
+    inbind[0].buffer = const_cast<char*>(hostname.c_str());
+    inbind[0].buffer_length = hostname.length();
+
+    // ... and get the data
+    Lease6Collection result;
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE6_HOSTNAME, inbind, result);
+
+    return (result);
+}
+
+Lease6Collection
+MySqlLeaseMgr::getLeases6(const IOAddress& lower_bound_address,
                           const LeasePageSize& page_size) const {
     // Expecting IPv6 address.
     if (!lower_bound_address.isV6()) {
@@ -2371,7 +2620,12 @@ MySqlLeaseMgr::getLeases6(const asiolink::IOAddress& lower_bound_address,
 
     // Get the leases
     Lease6Collection result;
-    getLeaseCollection(GET_LEASE6_PAGE, inbind, result);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    getLeaseCollection(ctx, GET_LEASE6_PAGE, inbind, result);
 
     return (result);
 }
@@ -2409,7 +2663,7 @@ MySqlLeaseMgr::getExpiredLeasesCommon(LeaseCollection& expired_leases,
 
     // Expiration timestamp.
     MYSQL_TIME expire_time;
-    conn_.convertToDatabaseTime(time(NULL), expire_time);
+    MySqlConnection::convertToDatabaseTime(time(NULL), expire_time);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire_time);
     inbind[1].buffer_length = sizeof(expire_time);
@@ -2422,8 +2676,12 @@ MySqlLeaseMgr::getExpiredLeasesCommon(LeaseCollection& expired_leases,
     inbind[2].buffer = reinterpret_cast<char*>(&limit);
     inbind[2].is_unsigned = MLM_TRUE;
 
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
     // Get the data
-    getLeaseCollection(statement_index, inbind, expired_leases);
+    getLeaseCollection(ctx, statement_index, inbind, expired_leases);
 }
 
 // Update lease methods.  These comprise common code that handles the actual
@@ -2432,83 +2690,126 @@ MySqlLeaseMgr::getExpiredLeasesCommon(LeaseCollection& expired_leases,
 
 template <typename LeasePtr>
 void
-MySqlLeaseMgr::updateLeaseCommon(StatementIndex stindex, MYSQL_BIND* bind,
+MySqlLeaseMgr::updateLeaseCommon(MySqlLeaseContextPtr& ctx,
+                                 StatementIndex stindex,
+                                 MYSQL_BIND* bind,
                                  const LeasePtr& lease) {
 
     // Bind the parameters to the statement
-    int status = mysql_stmt_bind_param(conn_.statements_[stindex], bind);
-    checkError(status, stindex, "unable to bind parameters");
+    int status = mysql_stmt_bind_param(ctx->conn_.statements_[stindex], bind);
+    checkError(ctx, status, stindex, "unable to bind parameters");
 
     // Execute
-    status = mysql_stmt_execute(conn_.statements_[stindex]);
-    checkError(status, stindex, "unable to execute");
+    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
+    checkError(ctx, status, stindex, "unable to execute");
 
     // See how many rows were affected.  The statement should only update a
     // single row.
-    int affected_rows = mysql_stmt_affected_rows(conn_.statements_[stindex]);
+    int affected_rows = mysql_stmt_affected_rows(ctx->conn_.statements_[stindex]);
+
+    // Check success case first as it is the most likely outcome.
+    if (affected_rows == 1) {
+        return;
+    }
+
+    // If no rows affected, lease doesn't exist.
     if (affected_rows == 0) {
         isc_throw(NoSuchLease, "unable to update lease for address " <<
-                  lease->addr_ << " as it does not exist");
-    } else if (affected_rows > 1) {
-        // Should not happen - primary key constraint should only have selected
-        // one row.
-        isc_throw(DbOperationError, "apparently updated more than one lease "
-                  "that had the address " << lease->addr_);
+                  lease->addr_.toText() << " as it does not exist");
     }
+
+    // Should not happen - primary key constraint should only have selected
+    // one row.
+    isc_throw(DbOperationError, "apparently updated more than one lease "
+              "that had the address " << lease->addr_.toText());
 }
 
 void
 MySqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
     const StatementIndex stindex = UPDATE_LEASE4;
 
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_UPDATE_ADDR4).arg(lease->addr_.toText());
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_UPDATE_ADDR4)
+        .arg(lease->addr_.toText());
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
 
     // Create the MYSQL_BIND array for the data being updated
-    std::vector<MYSQL_BIND> bind = exchange4_->createBindForSend(lease);
+    std::vector<MYSQL_BIND> bind = ctx->exchange4_->createBindForSend(lease);
 
     // Set up the WHERE clause and append it to the MYSQL_BIND array
-    MYSQL_BIND where;
-    memset(&where, 0, sizeof(where));
+    MYSQL_BIND inbind[2];
+    memset(inbind, 0, sizeof(inbind));
 
     uint32_t addr4 = lease->addr_.toUint32();
-    where.buffer_type = MYSQL_TYPE_LONG;
-    where.buffer = reinterpret_cast<char*>(&addr4);
-    where.is_unsigned = MLM_TRUE;
-    bind.push_back(where);
+    inbind[0].buffer_type = MYSQL_TYPE_LONG;
+    inbind[0].buffer = reinterpret_cast<char*>(&addr4);
+    inbind[0].is_unsigned = MLM_TRUE;
+
+    bind.push_back(inbind[0]);
+
+    MYSQL_TIME expire;
+    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+                                           expire);
+    inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
+    inbind[1].buffer = reinterpret_cast<char*>(&expire);
+    inbind[1].buffer_length = sizeof(expire);
+
+    bind.push_back(inbind[1]);
 
     // Drop to common update code
-    updateLeaseCommon(stindex, &bind[0], lease);
+    updateLeaseCommon(ctx, stindex, &bind[0], lease);
+
+    lease->old_cltt_ = lease->cltt_;
+    lease->old_valid_lft_ = lease->valid_lft_;
 }
 
 void
 MySqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
     const StatementIndex stindex = UPDATE_LEASE6;
 
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_UPDATE_ADDR6).arg(lease->addr_.toText())
-              .arg(lease->type_);
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_UPDATE_ADDR6)
+        .arg(lease->addr_.toText())
+        .arg(lease->type_);
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
 
     // Create the MYSQL_BIND array for the data being updated
-    std::vector<MYSQL_BIND> bind = exchange6_->createBindForSend(lease);
+    std::vector<MYSQL_BIND> bind = ctx->exchange6_->createBindForSend(lease);
 
-    // Set up the WHERE clause value
-    MYSQL_BIND where;
-    memset(&where, 0, sizeof(where));
+    // Set up the WHERE clause and append it to the MYSQL_BIND array
+    MYSQL_BIND inbind[2];
+    memset(inbind, 0, sizeof(inbind));
 
     std::string addr6 = lease->addr_.toText();
     unsigned long addr6_length = addr6.size();
 
     // See the earlier description of the use of "const_cast" when accessing
     // the address for an explanation of the reason.
-    where.buffer_type = MYSQL_TYPE_STRING;
-    where.buffer = const_cast<char*>(addr6.c_str());
-    where.buffer_length = addr6_length;
-    where.length = &addr6_length;
-    bind.push_back(where);
+    inbind[0].buffer_type = MYSQL_TYPE_STRING;
+    inbind[0].buffer = const_cast<char*>(addr6.c_str());
+    inbind[0].buffer_length = addr6_length;
+    inbind[0].length = &addr6_length;
+
+    bind.push_back(inbind[0]);
+
+    MYSQL_TIME expire;
+    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+                                           expire);
+    inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
+    inbind[1].buffer = reinterpret_cast<char*>(&expire);
+    inbind[1].buffer_length = sizeof(expire);
+
+    bind.push_back(inbind[1]);
 
     // Drop to common update code
-    updateLeaseCommon(stindex, &bind[0], lease);
+    updateLeaseCommon(ctx, stindex, &bind[0], lease);
+
+    lease->old_cltt_ = lease->cltt_;
+    lease->old_valid_lft_ = lease->valid_lft_;
 }
 
 // Delete lease methods.  Similar to other groups of methods, these comprise
@@ -2517,66 +2818,123 @@ MySqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
 // handles the common processing.
 
 uint64_t
-MySqlLeaseMgr::deleteLeaseCommon(StatementIndex stindex, MYSQL_BIND* bind) {
+MySqlLeaseMgr::deleteLeaseCommon(StatementIndex stindex,
+                                 MYSQL_BIND* bind) {
+
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
 
     // Bind the input parameters to the statement
-    int status = mysql_stmt_bind_param(conn_.statements_[stindex], bind);
-    checkError(status, stindex, "unable to bind WHERE clause parameter");
+    int status = mysql_stmt_bind_param(ctx->conn_.statements_[stindex], bind);
+    checkError(ctx, status, stindex, "unable to bind WHERE clause parameter");
 
     // Execute
-    status = mysql_stmt_execute(conn_.statements_[stindex]);
-    checkError(status, stindex, "unable to execute");
+    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
+    checkError(ctx, status, stindex, "unable to execute");
 
     // See how many rows were affected.  Note that the statement may delete
     // multiple rows.
-    return (static_cast<uint64_t>(mysql_stmt_affected_rows(conn_.statements_[stindex])));
+    return (static_cast<uint64_t>(mysql_stmt_affected_rows(ctx->conn_.statements_[stindex])));
 }
 
 bool
-MySqlLeaseMgr::deleteLease(const isc::asiolink::IOAddress& addr) {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_DELETE_ADDR).arg(addr.toText());
+MySqlLeaseMgr::deleteLease(const Lease4Ptr& lease) {
+    const IOAddress& addr = lease->addr_;
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_DELETE_ADDR)
+        .arg(addr.toText());
 
     // Set up the WHERE clause value
-    MYSQL_BIND inbind[1];
+    MYSQL_BIND inbind[2];
     memset(inbind, 0, sizeof(inbind));
 
-    if (addr.isV4()) {
-        uint32_t addr4 = addr.toUint32();
+    uint32_t addr4 = addr.toUint32();
 
-        inbind[0].buffer_type = MYSQL_TYPE_LONG;
-        inbind[0].buffer = reinterpret_cast<char*>(&addr4);
-        inbind[0].is_unsigned = MLM_TRUE;
+    inbind[0].buffer_type = MYSQL_TYPE_LONG;
+    inbind[0].buffer = reinterpret_cast<char*>(&addr4);
+    inbind[0].is_unsigned = MLM_TRUE;
 
-        return (deleteLeaseCommon(DELETE_LEASE4, inbind) > 0);
+    MYSQL_TIME expire;
+    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+                                           expire);
+    inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
+    inbind[1].buffer = reinterpret_cast<char*>(&expire);
+    inbind[1].buffer_length = sizeof(expire);
 
-    } else {
-        std::string addr6 = addr.toText();
-        unsigned long addr6_length = addr6.size();
+    auto affected_rows = deleteLeaseCommon(DELETE_LEASE4, inbind);
 
-        // See the earlier description of the use of "const_cast" when accessing
-        // the address for an explanation of the reason.
-        inbind[0].buffer_type = MYSQL_TYPE_STRING;
-        inbind[0].buffer = const_cast<char*>(addr6.c_str());
-        inbind[0].buffer_length = addr6_length;
-        inbind[0].length = &addr6_length;
-
-        return (deleteLeaseCommon(DELETE_LEASE6, inbind) > 0);
+    // Check success case first as it is the most likely outcome.
+    if (affected_rows == 1) {
+        return (true);
     }
+
+    // If no rows affected, lease doesn't exist.
+    if (affected_rows == 0) {
+        return (false);
+    }
+
+    // Should not happen - primary key constraint should only have selected
+    // one row.
+    isc_throw(DbOperationError, "apparently deleted more than one lease "
+              "that had the address " << lease->addr_.toText());
+}
+
+bool
+MySqlLeaseMgr::deleteLease(const Lease6Ptr& lease) {
+    const IOAddress& addr = lease->addr_;
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
+              DHCPSRV_MYSQL_DELETE_ADDR)
+        .arg(addr.toText());
+
+    // Set up the WHERE clause value
+    MYSQL_BIND inbind[2];
+    memset(inbind, 0, sizeof(inbind));
+
+    std::string addr6 = addr.toText();
+    unsigned long addr6_length = addr6.size();
+
+    // See the earlier description of the use of "const_cast" when accessing
+    // the address for an explanation of the reason.
+    inbind[0].buffer_type = MYSQL_TYPE_STRING;
+    inbind[0].buffer = const_cast<char*>(addr6.c_str());
+    inbind[0].buffer_length = addr6_length;
+    inbind[0].length = &addr6_length;
+
+    MYSQL_TIME expire;
+    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+                                           expire);
+    inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
+    inbind[1].buffer = reinterpret_cast<char*>(&expire);
+    inbind[1].buffer_length = sizeof(expire);
+
+    auto affected_rows = deleteLeaseCommon(DELETE_LEASE6, inbind);
+
+    // Check success case first as it is the most likely outcome.
+    if (affected_rows == 1) {
+        return (true);
+    }
+
+    // If no rows affected, lease doesn't exist.
+    if (affected_rows == 0) {
+        return (false);
+    }
+
+    // Should not happen - primary key constraint should only have selected
+    // one row.
+    isc_throw(DbOperationError, "apparently deleted more than one lease "
+              "that had the address " << lease->addr_.toText());
 }
 
 uint64_t
 MySqlLeaseMgr::deleteExpiredReclaimedLeases4(const uint32_t secs) {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_DELETE_EXPIRED_RECLAIMED4)
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_DELETE_EXPIRED_RECLAIMED4)
         .arg(secs);
     return (deleteExpiredReclaimedLeasesCommon(secs, DELETE_LEASE4_STATE_EXPIRED));
 }
 
 uint64_t
 MySqlLeaseMgr::deleteExpiredReclaimedLeases6(const uint32_t secs) {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_DELETE_EXPIRED_RECLAIMED6)
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_DELETE_EXPIRED_RECLAIMED6)
         .arg(secs);
     return (deleteExpiredReclaimedLeasesCommon(secs, DELETE_LEASE6_STATE_EXPIRED));
 }
@@ -2596,15 +2954,14 @@ MySqlLeaseMgr::deleteExpiredReclaimedLeasesCommon(const uint32_t secs,
 
     // Expiration timestamp.
     MYSQL_TIME expire_time;
-    conn_.convertToDatabaseTime(time(NULL) - static_cast<time_t>(secs), expire_time);
+    MySqlConnection::convertToDatabaseTime(time(NULL) - static_cast<time_t>(secs), expire_time);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire_time);
     inbind[1].buffer_length = sizeof(expire_time);
 
     // Get the number of deleted leases and log it.
     uint64_t deleted_leases = deleteLeaseCommon(statement_index, inbind);
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_DELETED_EXPIRED_RECLAIMED)
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_DELETED_EXPIRED_RECLAIMED)
         .arg(deleted_leases);
 
     return (deleted_leases);
@@ -2612,7 +2969,11 @@ MySqlLeaseMgr::deleteExpiredReclaimedLeasesCommon(const uint32_t secs,
 
 LeaseStatsQueryPtr
 MySqlLeaseMgr::startLeaseStatsQuery4() {
-    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(conn_,
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(ctx->conn_,
                                                       ALL_LEASE4_STATS,
                                                       false));
     query->start();
@@ -2621,28 +2982,41 @@ MySqlLeaseMgr::startLeaseStatsQuery4() {
 
 LeaseStatsQueryPtr
 MySqlLeaseMgr::startSubnetLeaseStatsQuery4(const SubnetID& subnet_id) {
-    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(conn_,
-                                                       SUBNET_LEASE4_STATS,
-                                                       false,
-                                                       subnet_id));
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(ctx->conn_,
+                                                      SUBNET_LEASE4_STATS,
+                                                      false,
+                                                      subnet_id));
     query->start();
     return(query);
 }
 
 LeaseStatsQueryPtr
 MySqlLeaseMgr::startSubnetRangeLeaseStatsQuery4(const SubnetID& first_subnet_id,
-                                                   const SubnetID& last_subnet_id) {
-    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(conn_,
-                                                       SUBNET_RANGE_LEASE4_STATS,
-                                                       false,
-                                                       first_subnet_id, last_subnet_id));
+                                                const SubnetID& last_subnet_id) {
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(ctx->conn_,
+                                                      SUBNET_RANGE_LEASE4_STATS,
+                                                      false,
+                                                      first_subnet_id,
+                                                      last_subnet_id));
     query->start();
     return(query);
 }
 
 LeaseStatsQueryPtr
 MySqlLeaseMgr::startLeaseStatsQuery6() {
-    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(conn_,
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(ctx->conn_,
                                                       ALL_LEASE6_STATS,
                                                       true));
     query->start();
@@ -2651,7 +3025,11 @@ MySqlLeaseMgr::startLeaseStatsQuery6() {
 
 LeaseStatsQueryPtr
 MySqlLeaseMgr::startSubnetLeaseStatsQuery6(const SubnetID& subnet_id) {
-    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(conn_,
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(ctx->conn_,
                                                       SUBNET_LEASE6_STATS,
                                                       true,
                                                       subnet_id));
@@ -2661,11 +3039,16 @@ MySqlLeaseMgr::startSubnetLeaseStatsQuery6(const SubnetID& subnet_id) {
 
 LeaseStatsQueryPtr
 MySqlLeaseMgr::startSubnetRangeLeaseStatsQuery6(const SubnetID& first_subnet_id,
-                                                   const SubnetID& last_subnet_id) {
-    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(conn_,
+                                                const SubnetID& last_subnet_id) {
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    LeaseStatsQueryPtr query(new MySqlLeaseStatsQuery(ctx->conn_,
                                                       SUBNET_RANGE_LEASE6_STATS,
                                                       true,
-                                                      first_subnet_id, last_subnet_id));
+                                                      first_subnet_id,
+                                                      last_subnet_id));
     query->start();
     return(query);
 }
@@ -2684,9 +3067,13 @@ MySqlLeaseMgr::wipeLeases6(const SubnetID& /*subnet_id*/) {
 
 std::string
 MySqlLeaseMgr::getName() const {
+    // Get a context
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
     std::string name = "";
     try {
-        name = conn_.getParameter("name");
+        name = ctx->conn_.getParameter("name");
     } catch (...) {
         // Return an empty name
     }
@@ -2700,84 +3087,26 @@ MySqlLeaseMgr::getDescription() const {
 
 std::pair<uint32_t, uint32_t>
 MySqlLeaseMgr::getVersion() const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MYSQL_GET_VERSION);
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_GET_VERSION);
 
-    // Allocate a new statement.
-    MYSQL_STMT *stmt = mysql_stmt_init(conn_.mysql_);
-    if (stmt == NULL) {
-        isc_throw(DbOperationError, "unable to allocate MySQL prepared "
-                "statement structure, reason: " << mysql_error(conn_.mysql_));
-    }
-
-    // Prepare the statement from SQL text.
-    const char* version_sql = "SELECT version, minor FROM schema_version";
-    int status = mysql_stmt_prepare(stmt, version_sql, strlen(version_sql));
-    if (status != 0) {
-        isc_throw(DbOperationError, "unable to prepare MySQL statement <"
-                  << version_sql << ">, reason: " << mysql_error(conn_.mysql_));
-    }
-
-    // Execute the prepared statement.
-    if (mysql_stmt_execute(stmt) != 0) {
-        isc_throw(DbOperationError, "cannot execute schema version query <"
-                  << version_sql << ">, reason: " << mysql_errno(conn_.mysql_));
-    }
-
-    // Bind the output of the statement to the appropriate variables.
-    MYSQL_BIND bind[2];
-    memset(bind, 0, sizeof(bind));
-
-    uint32_t major;
-    bind[0].buffer_type = MYSQL_TYPE_LONG;
-    bind[0].is_unsigned = 1;
-    bind[0].buffer = &major;
-    bind[0].buffer_length = sizeof(major);
-
-    uint32_t minor;
-    bind[1].buffer_type = MYSQL_TYPE_LONG;
-    bind[1].is_unsigned = 1;
-    bind[1].buffer = &minor;
-    bind[1].buffer_length = sizeof(minor);
-
-    if (mysql_stmt_bind_result(stmt, bind)) {
-        isc_throw(DbOperationError, "unable to bind result set for <"
-                << version_sql << ">, reason: " << mysql_errno(conn_.mysql_));
-    }
-
-    // Fetch the data.
-    if (mysql_stmt_fetch(stmt)) {
-        mysql_stmt_close(stmt);
-        isc_throw(DbOperationError, "unable to bind result set for <"
-                << version_sql << ">, reason: " << mysql_errno(conn_.mysql_));
-    }
-
-    // Discard the statement and its resources
-    mysql_stmt_close(stmt);
-
-    return (std::make_pair(major, minor));
+    return (MySqlConnection::getVersion(parameters_));
 }
 
 void
 MySqlLeaseMgr::commit() {
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_COMMIT);
-    if (mysql_commit(conn_.mysql_) != 0) {
-        isc_throw(DbOperationError, "commit failed: " << mysql_error(conn_.mysql_));
-    }
 }
 
 void
 MySqlLeaseMgr::rollback() {
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_MYSQL_ROLLBACK);
-    if (mysql_rollback(conn_.mysql_) != 0) {
-        isc_throw(DbOperationError, "rollback failed: " << mysql_error(conn_.mysql_));
-    }
 }
 
 void
-MySqlLeaseMgr::checkError(int status, StatementIndex index,
-                           const char* what) const {
-    conn_.checkError(status, index, what);
+MySqlLeaseMgr::checkError(MySqlLeaseContextPtr& ctx,
+                          int status, StatementIndex index,
+                          const char* what) const {
+    ctx->conn_.checkError(status, index, what);
 }
 
 }  // namespace dhcp

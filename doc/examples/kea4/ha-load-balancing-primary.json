@@ -23,7 +23,7 @@
     // API between the HA peers.
     "control-socket": {
         "socket-type": "unix",
-        "socket-name": "/tmp/kea-dhcp4-ctrl.sock"
+        "socket-name": "/tmp/kea4-ctrl-socket"
     },
 
     // Use Memfile lease database backend to store leases in a CSV file.
@@ -83,12 +83,12 @@
         // deliver lease updates to the server as well as synchronize the
         // lease database after failure.
         {
-            "library": "/opt/lib/hooks/libdhcp_lease_cmds.so",
+            "library": "/opt/lib/kea/hooks/libdhcp_lease_cmds.so",
             "parameters": { }
         },
         {
             // The HA hooks library should be loaded.
-            "library": "/opt/lib/hooks/libdhcp_ha.so",
+            "library": "/opt/lib/kea/hooks/libdhcp_ha.so",
             "parameters": {
                 // High Availability configuration is specified for the HA hook library.
                 // Each server should have the same HA configuration, except for the
@@ -127,7 +127,7 @@
                              // Control Agent must run along with our DHCPv4 server
                              // instance and the "http-host" and "http-port" must be
                              // set to the corresponding values.
-                             "url": "http://192.168.56.33:8080/",
+                             "url": "http://192.168.56.33:8000/",
                              // This server is primary. The other one must be
                              // secondary.
                              "role": "primary"
@@ -139,7 +139,7 @@
                              // channel can be reached. The Control Agent is required
                              // to run on the partner's machine with "http-host" and
                              // "http-port" values set to the corresponding values.
-                             "url": "http://192.168.56.66:8080/",
+                             "url": "http://192.168.56.66:8000/",
                              // The partner is a secondary. Our is primary.
                              "role": "secondary"
                          }
@@ -192,13 +192,10 @@
             // IP address.
             "relay": { "ip-address": "192.168.56.1" }
         }
-    ]
-},
+    ],
 
-// Logging configuration starts here.
-"Logging":
-{
-  "loggers": [
+    // Logging configuration starts here.
+    "loggers": [
     {
         // This section affects kea-dhcp4, which is the base logger for DHCPv4
         // component. It tells DHCPv4 server to write all log messages (on

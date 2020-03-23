@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2018 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -41,21 +41,24 @@ namespace dhcp {
 /// and that the Kea schema has been created within it.
 class CqlLeaseMgr : public LeaseMgr {
 public:
+
     /// @brief Constructor
     ///
     /// Uses the following keywords in the parameters passed to it to
     /// connect to the Cassandra cluster (if omitted, defaults specified in
     /// parentheses):
-    /// - name - Name of the keyspace to to connect to ("keatest")
-    /// - contact-points - IP addresses to connect ("127.0.0.1")
-    /// - user - Username under which to connect (empty)
-    /// - password - Password for "user" on the database (empty)
-    /// - port - TCP port (9042)
-    /// - reconnect-wait-time (2000)
-    /// - connect-timeout (5000)
-    /// - request-timeout (12000)
-    /// - tcp-keepalive (no)
-    /// - tcp-nodelay (no)
+    /// - keyspace: name of the database to which to connect (keatest)
+    /// - contact-points: IP addresses of the nodes to connect to (127.0.0.1)
+    /// - consistency: consistency level (quorum)
+    /// - serial-consistency: serial consistency level (serial)
+    /// - port: The TCP port to use (9042)
+    /// - user - credentials to use when connecting (no username)
+    /// - password - credentials to use when connecting (no password)
+    /// - reconnect-wait-time 2000
+    /// - connect-timeout 5000
+    /// - request-timeout 12000
+    /// - tcp-keepalive no
+    /// - tcp-nodelay no
     ///
     /// Finally, all the CQL commands are pre-compiled.
     ///
@@ -205,6 +208,13 @@ public:
     /// this backend.
     virtual Lease4Collection getLeases4(SubnetID subnet_id) const override;
 
+    /// @brief Returns all IPv4 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv4 lease found).
+    virtual Lease4Collection getLeases4(const std::string& hostname) const override;
+
     /// @brief Returns all IPv4 leases.
     ///
     /// @return Lease collection (may be empty if no IPv4 lease found).
@@ -307,6 +317,13 @@ public:
     /// this backend.
     virtual Lease6Collection getLeases6(SubnetID subnet_id) const override;
 
+    /// @brief Returns all IPv6 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv6 lease found).
+    virtual Lease6Collection getLeases6(const std::string& hostname) const override;
+
     /// @brief Returns all IPv6 leases.
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
@@ -318,7 +335,7 @@ public:
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
     virtual Lease6Collection getLeases6(const DUID& duid) const override;
-    
+
     /// @brief Returns range of IPv6 leases using paging.
     ///
     /// This method implements paged browsing of the lease database. The first
@@ -408,16 +425,19 @@ public:
     ///        failed.
     virtual void updateLease6(const Lease6Ptr& lease6) override;
 
-    /// @brief Deletes a lease.
+    /// @brief Deletes an IPv4 lease.
     ///
-    /// @param addr Address of the lease to be deleted. This can be an IPv4
-    ///             address or an IPv6 address.
+    /// @param lease IPv4 lease being deleted.
     ///
-    /// @return true if deletion was successful, false if no such lease exists
+    /// @return true if deletion was successful, false if no such lease exists.
+    bool deleteLease(const Lease4Ptr& lease) override final;
+
+    /// @brief Deletes an IPv6 lease.
     ///
-    /// @throw isc::db::DbOperationError An operation on the open database has
-    ///        failed.
-    virtual bool deleteLease(const isc::asiolink::IOAddress& addr) override;
+    /// @param lease IPv6 lease being deleted.
+    ///
+    /// @return true if deletion was successful, false if no such lease exists.
+    bool deleteLease(const Lease6Ptr& lease) override final;
 
     /// @brief Deletes all expired and reclaimed DHCPv4 leases.
     ///
@@ -562,6 +582,10 @@ public:
     virtual void rollback() override;
 
 private:
+
+    /// @brief Connection parameters
+    db::DatabaseConnection::ParameterMap parameters_;
+
     /// @brief Database connection object
     mutable db::CqlConnection dbconn_;
 };

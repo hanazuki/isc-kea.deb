@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -128,9 +128,9 @@ TEST(ParserTest, keywordDhcpDdns) {
             " \"ip-address\": \"192.168.77.1\", \n"
             " \"port\": 777 , \n "
             " \"ncr-protocol\": \"UDP\", \n"
-            "\"tsig-keys\": [], \n"
-            "\"forward-ddns\" : {}, \n"
-            "\"reverse-ddns\" : {} \n"
+            " \"tsig-keys\": [], \n"
+            " \"forward-ddns\" : {}, \n"
+            " \"reverse-ddns\" : {} \n"
             "} \n"
          "} \n";
      testParser(txt, D2ParserContext::PARSER_DHCPDDNS);

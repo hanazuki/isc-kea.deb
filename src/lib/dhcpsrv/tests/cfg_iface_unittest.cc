@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -483,7 +483,7 @@ TEST_F(CfgIfaceTest, unparse) {
     EXPECT_NO_THROW(cfg4.use(AF_INET, "eth1/192.0.2.3"));
     std::string comment = "{ \"comment\": \"foo\", \"bar\": 1 }";
     EXPECT_NO_THROW(cfg4.setContext(Element::fromJSON(comment)));
-    
+
     // Check unparse
     std::string expected =
         "{ \"comment\": \"foo\", "

@@ -1,4 +1,4 @@
-// Copyright (C) 2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 
 #include <stats/observation.h>
 #include <boost/shared_ptr.hpp>
+#include <mutex>
 #include <string>
 
 namespace isc {
@@ -28,30 +29,55 @@ public:
 /// all statistics related to a given subnet or all statistics related to a
 /// given network interface.
 struct StatContext {
- public:
+public:
 
-    /// @brief attempts to get an observation
+    /// @brief Attempts to get an observation
+    ///
     /// @param name name of the statistic
     /// @return appropriate Observation object (or NULL)
     ObservationPtr get(const std::string& name) const;
 
     /// @brief Adds a new observation
+    ///
     /// @param obs observation to be added
     /// @throw DuplicateStat if an observation with the same name exists already
     void add(const ObservationPtr& obs);
 
     /// @brief Attempts to delete an observation
+    ///
     /// @param name name of the observation to be deleted
     /// @return true if successful, false if no such statistic was found
     bool del(const std::string& name);
 
-    /// @brief Statistics container
+    /// @brief Returns the number of observations
     ///
-    /// It is public to allow various operations that require iterating over
-    /// all elements. In particular, two operations (setting all stats to 0;
-    /// reporting all stats) will take advantage of this. Alternatively, we
-    /// could make it protected and then return a pointer to it, but that
-    /// would defeat the purpose of the hermetization in the first place.
+    /// @return the number of observations
+    size_t size();
+
+    /// @brief Removes all observations
+    void clear();
+
+    /// @brief Resets all observations
+    void resetAll();
+
+    /// @brief Sets max sample count for all observations
+    ///
+    /// @param max_samples value to be set for all observations
+    void setMaxSampleCountAll(uint32_t max_samples);
+
+    /// @brief Sets duration for all observations
+    ///
+    /// @param duration value to be set for all observations
+    void setMaxSampleAgeAll(const StatsDuration& duration);
+
+    /// @brief Returns a map with all observations
+    ///
+    /// @return map with all observations
+    isc::data::ConstElementPtr getAll() const;
+
+private:
+
+    /// @brief Statistics container
     std::map<std::string, ObservationPtr> stats_;
 };
 

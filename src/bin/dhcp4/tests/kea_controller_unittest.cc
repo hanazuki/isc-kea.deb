@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,9 +16,11 @@
 #include <dhcp4/ctrl_dhcp4_srv.h>
 #include <dhcp4/parser_context.h>
 #include <dhcp4/tests/dhcp4_test_utils.h>
+#include <dhcpsrv/cb_ctl_dhcp4.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/lease_mgr_factory.h>
+#include <process/config_base.h>
 
 #ifdef HAVE_MYSQL
 #include <mysql/testutils/mysql_schema.h>
@@ -27,9 +29,11 @@
 #include <log/logger_support.h>
 #include <util/stopwatch.h>
 
+#include <boost/pointer_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <fstream>
 #include <iostream>
 #include <signal.h>
@@ -54,10 +58,103 @@ using namespace isc::hooks;
 
 namespace {
 
-class NakedControlledDhcpv4Srv: public ControlledDhcpv4Srv {
-    // "Naked" DHCPv4 server, exposes internal fields
+/// @brief Test implementation of the @c CBControlDHCPv4.
+///
+/// This implementation is installed on the test server instance. It
+/// overrides the implementation of the @c databaseConfigFetch function
+/// to verify arguments passed to this function and throw an exception
+/// when desired in the negative test scenarios. It doesn't do the
+/// actual configuration fetch as this is tested elswhere and would
+/// require setting up a database configuration backend.
+class TestCBControlDHCPv4 : public CBControlDHCPv4 {
 public:
-    NakedControlledDhcpv4Srv():ControlledDhcpv4Srv(0) { }
+
+    /// @brief Constructor.
+    TestCBControlDHCPv4()
+        : CBControlDHCPv4(), db_config_fetch_calls_(0),
+          enable_check_fetch_mode_(false), enable_throw_(false) {
+    }
+
+    /// @brief Stub implementation of the "fetch" function.
+    ///
+    /// If this is not the first invocation of this function, it
+    /// verifies that the @c fetch_mode has been correctly set to
+    /// @c FetchMode::FETCH_UPDATE.
+    ///
+    /// It also throws an exception when desired by a test, to
+    /// verify that the server gracefully handles such exception.
+    ///
+    /// @param fetch_mode value indicating if the method is called upon the
+    /// server start up or it is called to fetch configuration updates.
+    ///
+    /// @throw Unexpected when configured to do so.
+    virtual void databaseConfigFetch(const process::ConfigPtr&,
+                                     const FetchMode& fetch_mode) {
+        ++db_config_fetch_calls_;
+
+        if (enable_check_fetch_mode_) {
+            if ((db_config_fetch_calls_ <= 1) && (fetch_mode == FetchMode::FETCH_UPDATE)) {
+                ADD_FAILURE() << "databaseConfigFetch was called with the value "
+                    "of fetch_mode=FetchMode::FETCH_UPDATE upon the server configuration";
+
+            } else if ((db_config_fetch_calls_ > 1) && (fetch_mode == FetchMode::FETCH_ALL)) {
+                ADD_FAILURE() << "databaseConfigFetch was called with the value "
+                    "of fetch_mode=FetchMode::FETCH_ALL during fetching the updates";
+            }
+        }
+
+        if (enable_throw_) {
+            isc_throw(Unexpected, "testing if exceptions are corectly handled");
+        }
+    }
+
+    /// @brief Returns number of invocations of the @c databaseConfigFetch.
+    size_t getDatabaseConfigFetchCalls() const {
+        return (db_config_fetch_calls_);
+    }
+
+    /// @brief Enables checking of the @c fetch_mode value.
+    void enableCheckFetchMode() {
+        enable_check_fetch_mode_ = true;
+    }
+
+    /// @brief Enables the object to throw from @c databaseConfigFetch.
+    void enableThrow() {
+        enable_throw_ = true;
+    }
+
+private:
+
+    /// @brief Counter holding number of invocations of the @c databaseConfigFetch.
+    size_t db_config_fetch_calls_;
+
+    /// @brief Boolean flag indicated if the value of the @c fetch_mode
+    /// should be verified.
+    bool enable_check_fetch_mode_;
+
+    /// @brief Boolean flag indicating if the @c databaseConfigFetch should
+    /// throw.
+    bool enable_throw_;
+};
+
+/// @brief Shared pointer to the @c TestCBControlDHCPv4.
+typedef boost::shared_ptr<TestCBControlDHCPv4> TestCBControlDHCPv4Ptr;
+
+/// @brief "Naked" DHCPv4 server.
+///
+/// Exposes internal fields and installs stub implementation of the
+/// @c CBControlDHCPv4 object.
+class NakedControlledDhcpv4Srv: public ControlledDhcpv4Srv {
+public:
+
+    /// @brief Constructor.
+    NakedControlledDhcpv4Srv()
+        : ControlledDhcpv4Srv(0) {
+        // We're replacing the @c CBControlDHCPv4 instance with our
+        // stub implementation used in tests.
+        cb_control_.reset(new TestCBControlDHCPv4());
+    }
+
     using ControlledDhcpv4Srv::signal_handler_;
 };
 
@@ -98,13 +195,137 @@ public:
     ///
     /// @param io_service Pointer to the IO service to be ran.
     /// @param timeout_ms Amount of time after which the method returns.
-    void runTimersWithTimeout(const IOServicePtr& io_service, const long timeout_ms) {
+    /// @param cond Pointer to the function which if returns true it
+    /// stops the IO service and causes the function to return.
+    void runTimersWithTimeout(const IOServicePtr& io_service, const long timeout_ms,
+                              std::function<bool()> cond = std::function<bool()>()) {
         IntervalTimer timer(*io_service);
-        timer.setup([&io_service]() {
+        bool stopped = false;
+        timer.setup([&io_service, &stopped]() {
             io_service->stop();
+            stopped = true;
         }, timeout_ms, IntervalTimer::ONE_SHOT);
-        io_service->run();
+
+        // Run as long as the timeout hasn't occurred and the interrupting
+        // condition is not specified or not met.
+        while (!stopped && (!cond || !cond())) {
+            io_service->run_one();
+        }
         io_service->get_io_service().reset();
+    }
+
+    /// @brief This test verifies that the timer used to fetch the configuration
+    /// updates from the database works as expected.
+    void testConfigBackendTimer(const int config_wait_fetch_time,
+                                const bool throw_during_fetch = false,
+                                const bool call_command = false) {
+        std::ostringstream config;
+        config <<
+            "{ \"Dhcp4\": {"
+            "\"interfaces-config\": {"
+            "    \"interfaces\": [ ]"
+            "},"
+            "\"lease-database\": {"
+            "     \"type\": \"memfile\","
+            "     \"persist\": false"
+            "},"
+            "\"config-control\": {"
+            "     \"config-fetch-wait-time\": " << config_wait_fetch_time <<
+            "},"
+            "\"rebind-timer\": 2000, "
+            "\"renew-timer\": 1000, \n"
+            "\"subnet4\": [ ],"
+            "\"valid-lifetime\": 4000 }"
+            "}";
+        writeFile(TEST_FILE, config.str());
+
+        // Create an instance of the server and initialize it.
+        boost::scoped_ptr<NakedControlledDhcpv4Srv> srv;
+        ASSERT_NO_THROW(srv.reset(new NakedControlledDhcpv4Srv()));
+        ASSERT_NO_THROW(srv->init(TEST_FILE));
+
+        // Get the CBControlDHCPv4 object belonging to this server.
+        auto cb_control = boost::dynamic_pointer_cast<TestCBControlDHCPv4>(srv->getCBControl());
+
+        // Verify that the parameter passed to the databaseConfigFetch has an
+        // expected value.
+        cb_control->enableCheckFetchMode();
+
+        // Instruct our stub implementation of the CBControlDHCPv4 to throw as a
+        // result of fetch if desired.
+        if (throw_during_fetch) {
+            cb_control->enableThrow();
+        }
+
+        // So far there should be exactly one attempt to fetch the configuration
+        // from the backend. That's the attempt made upon startup.
+        EXPECT_EQ(1, cb_control->getDatabaseConfigFetchCalls());
+
+
+        if (call_command) {
+            // The case where there is no backend is tested in the
+            // controlled server tests so we have only to verify
+            // that the command calls the database config fetch.
+
+            // Count the startup.
+            EXPECT_EQ(cb_control->getDatabaseConfigFetchCalls(), 1);
+
+            ConstElementPtr result =
+                ControlledDhcpv4Srv::processCommand("config-backend-pull",
+                                                    ConstElementPtr());
+            EXPECT_EQ(cb_control->getDatabaseConfigFetchCalls(), 2);
+            std::string expected;
+
+            if (throw_during_fetch) {
+                expected = "{ \"result\": 1, \"text\": ";
+                expected += "\"On demand configuration update failed: ";
+                expected += "testing if exceptions are corectly handled\" }";
+            } else {
+                expected = "{ \"result\": 0, \"text\": ";
+                expected += "\"On demand configuration update successful.\" }";
+            }
+            EXPECT_EQ(expected, result->str());
+
+            // No good way to check the rescheduling...
+            ASSERT_NO_THROW(runTimersWithTimeout(srv->getIOService(), 20));
+
+            if (config_wait_fetch_time > 0) {
+                EXPECT_GE(cb_control->getDatabaseConfigFetchCalls(), 5);
+            } else {
+                EXPECT_EQ(cb_control->getDatabaseConfigFetchCalls(), 2);
+            }
+
+        } else if ((config_wait_fetch_time > 0) && (!throw_during_fetch)) {
+            // If we're configured to run the timer, we expect that it was
+            // invoked at least 3 times. This is sufficient to verify that
+            // the timer was scheduled and that the timer continued to run
+            // even when an exception occurred during fetch (that's why it
+            // is 3 not 2).
+            ASSERT_NO_THROW(runTimersWithTimeout(srv->getIOService(), 500,
+                [cb_control]() {
+                    // Interrupt the timers poll if we have recorded at
+                    // least 3 attempts to fetch the updates.
+                    return (cb_control->getDatabaseConfigFetchCalls() >= 3);
+                }));
+            EXPECT_GE(cb_control->getDatabaseConfigFetchCalls(), 3);
+
+        } else {
+            ASSERT_NO_THROW(runTimersWithTimeout(srv->getIOService(), 500));
+
+            if (throw_during_fetch) {
+                // If we're simulating the failure condition the number
+                // of consecutive failures should not exceed 10. Therefore
+                // the number of recorded fetches should be 12. One at
+                // startup, 10 failures and one that causes the timer
+                // to stop.
+                EXPECT_EQ(12, cb_control->getDatabaseConfigFetchCalls());
+
+            } else {
+                // If the server is not configured to schedule the timer,
+                // we should still have one fetch attempt recorded.
+                EXPECT_EQ(1, cb_control->getDatabaseConfigFetchCalls());
+            }
+        }
     }
 
     /// Name of a config file used during tests
@@ -501,7 +722,7 @@ TEST_F(JSONFileBackendTest, configBroken) {
 ///
 /// @todo: Unfortunately, we have this test disabled, because all loaded
 /// configs use memfile, which attempts to create lease file in
-/// /usr/local/var/kea/kea-leases4.csv. We have couple options here:
+/// /usr/local/var/lib/kea/kea-leases4.csv. We have couple options here:
 /// a) disable persistence in example configs - a very bad thing to do
 ///    as users will forget to reenable it and then will be surprised when their
 ///    leases disappear
@@ -582,7 +803,7 @@ TEST_F(JSONFileBackendTest, timers) {
     // current configuration.
     HWAddrPtr hwaddr_expired(new HWAddr(HWAddr::fromText("00:01:02:03:04:05")));
     Lease4Ptr lease_expired(new Lease4(IOAddress("10.0.0.1"), hwaddr_expired,
-                                       ClientIdPtr(), 60, 10, 20,
+                                       ClientIdPtr(), 60,
                                        time(NULL) - 100, SubnetID(1)));
 
     // Create expired-reclaimed lease. The lease has expired 1000 - 60 seconds
@@ -590,7 +811,7 @@ TEST_F(JSONFileBackendTest, timers) {
     // goes off.
     HWAddrPtr hwaddr_reclaimed(new HWAddr(HWAddr::fromText("01:02:03:04:05:06")));
     Lease4Ptr lease_reclaimed(new Lease4(IOAddress("10.0.0.2"), hwaddr_reclaimed,
-                                         ClientIdPtr(), 60, 10, 20,
+                                         ClientIdPtr(), 60,
                                          time(NULL) - 1000, SubnetID(1)));
     lease_reclaimed->state_ = Lease4::STATE_EXPIRED_RECLAIMED;
 
@@ -648,6 +869,46 @@ TEST_F(JSONFileBackendTest, defaultLeaseDbBackend) {
     EXPECT_NO_THROW(static_cast<void>(LeaseMgrFactory::instance()));
 }
 
+// This test verifies that the timer triggering configuration updates
+// is invoked according to the configured value of the
+// config-fetch-wait-time.
+TEST_F(JSONFileBackendTest, configBackendTimer) {
+    testConfigBackendTimer(1);
+}
+
+// This test verifies that the timer for triggering configuration updates
+// is not invoked when the value of the config-fetch-wait-time is set
+// to 0.
+TEST_F(JSONFileBackendTest, configBackendTimerDisabled) {
+    testConfigBackendTimer(0);
+}
+
+// This test verifies that the server will gracefully handle exceptions
+// thrown from the CBControlDHCPv4::databaseConfigFetch, i.e. will
+// reschedule the timer.
+TEST_F(JSONFileBackendTest, configBackendTimerWithThrow) {
+    // The true value instructs the test to throw during the fetch.
+    testConfigBackendTimer(1, true);
+}
+
+// This test verifies that the server will be updated by the
+// config-backend-pull command.
+TEST_F(JSONFileBackendTest, configBackendPullCommand) {
+    testConfigBackendTimer(0, false, true);
+}
+
+// This test verifies that the server will be updated by the
+// config-backend-pull command even when updates fail.
+TEST_F(JSONFileBackendTest, configBackendPullCommandWithThrow) {
+    testConfigBackendTimer(0, true, true);
+}
+
+// This test verifies that the server will be updated by the
+// config-backend-pull command and the timer rescheduled.
+TEST_F(JSONFileBackendTest, configBackendPullCommandWithTimer) {
+    testConfigBackendTimer(1, false, true);
+}
+
 // Starting tests which require MySQL backend availability. Those tests
 // will not be executed if Kea has been compiled without the
 // --with-mysql.
@@ -662,7 +923,7 @@ public:
     ///
     /// Recreates MySQL schema for a test.
     JSONFileBackendMySQLTest() : JSONFileBackendTest() {
-        destroyMySQLSchema();
+        // Ensure we have the proper schema with no transient data.
         createMySQLSchema();
     }
 
@@ -670,6 +931,7 @@ public:
     ///
     /// Destroys MySQL schema.
     virtual ~JSONFileBackendMySQLTest() {
+        // If data wipe enabled, delete transient data otherwise destroy the schema.
         destroyMySQLSchema();
     }
 

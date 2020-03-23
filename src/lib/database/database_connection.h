@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -36,6 +36,14 @@ public:
 class DbOperationError : public Exception {
 public:
     DbOperationError(const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) {}
+};
+
+/// @brief Exception thrown when connectivity has been lost and
+/// cannot be recovered.
+class DbUnrecoverableError : public Exception {
+public:
+    DbUnrecoverableError(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) {}
 };
 
@@ -97,7 +105,7 @@ public:
         return (retries_left_ ? --retries_left_ : false);
     }
 
-    /// @brief Returns the maximum number for retries allowed
+    /// @brief Returns the maximum number of retries allowed.
     unsigned int maxRetries() {
         return (max_retries_);
     }
@@ -243,7 +251,7 @@ private:
 
 };
 
-}; // end of isc::db namespace
-}; // end of isc namespace
+}  // namespace db
+}  // namespace isc
 
 #endif // DATABASE_CONNECTION_H

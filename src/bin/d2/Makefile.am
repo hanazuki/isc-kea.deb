@@ -10,11 +10,9 @@ if USE_STATIC_LINK
 AM_LDFLAGS = -static
 endif
 
-CLEANFILES  = *.gcno *.gcda d2_messages.h d2_messages.cc s-messages
+CLEANFILES  = *.gcno *.gcda
 
-man_MANS = kea-dhcp-ddns.8
-DISTCLEANFILES = $(man_MANS)
-EXTRA_DIST = $(man_MANS) kea-dhcp-ddns.xml d2.dox
+EXTRA_DIST = d2.dox
 EXTRA_DIST += d2_parser.yy
 
 EXTRA_DIST += images/abstract_app_classes.svg images/add_state_model.svg
@@ -25,27 +23,6 @@ EXTRA_DIST += images/nc_trans_sequence.svg images/remove_state_model.svg
 EXTRA_DIST += images/request_mgt_classes.svg images/state_model_classes.svg
 EXTRA_DIST += images/trans_classes.svg images/update_exec_classes.svg
 
-if GENERATE_DOCS
-kea-dhcp-ddns.8: kea-dhcp-ddns.xml
-	@XSLTPROC@ --novalid --xinclude --nonet -o $@ \
-        http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl \
-	$(srcdir)/kea-dhcp-ddns.xml
-
-else
-
-$(man_MANS):
-	@echo Man generation disabled.  Creating dummy $@.  Configure with --enable-generate-docs to enable it.
-	@echo Man generation disabled.  Remove this file, configure with --enable-generate-docs, and rebuild Kea > $@
-
-endif
-
-d2_messages.h d2_messages.cc: s-messages
-
-s-messages: d2_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/d2/d2_messages.mes
-	touch $@
-
-BUILT_SOURCES = d2_messages.h d2_messages.cc
 
 # convenience archive
 
@@ -69,8 +46,7 @@ libd2_la_SOURCES += nc_remove.cc nc_remove.h
 libd2_la_SOURCES += nc_trans.cc nc_trans.h
 libd2_la_SOURCES += d2_controller.cc d2_controller.h
 libd2_la_SOURCES += parser_context.cc parser_context.h parser_context_decl.h
-
-nodist_libd2_la_SOURCES = d2_messages.h d2_messages.cc
+libd2_la_SOURCES += d2_messages.h d2_messages.cc
 EXTRA_DIST += d2_messages.mes
 
 sbin_PROGRAMS = kea-dhcp-ddns
@@ -93,7 +69,6 @@ kea_dhcp_ddns_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 kea_dhcp_ddns_LDADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
 kea_dhcp_ddns_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 kea_dhcp_ddns_LDADD += $(top_builddir)/src/lib/log/libkea-log.la
-kea_dhcp_ddns_LDADD += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 kea_dhcp_ddns_LDADD += $(top_builddir)/src/lib/util/libkea-util.la
 kea_dhcp_ddns_LDADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 kea_dhcp_ddns_LDADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
@@ -101,6 +76,39 @@ kea_dhcp_ddns_LDADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 kea_dhcp_ddns_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS)
 
 kea_dhcp_ddnsdir = $(pkgdatadir)
+
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f d2_messages.h d2_messages.cc
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
+if GENERATE_MESSAGES
+
+# Define rule to build logging source files from message file
+messages: d2_messages.h d2_messages.cc
+	@echo Message files regenerated
+
+d2_messages.h d2_messages.cc: d2_messages.mes
+	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/d2/d2_messages.mes
+
+else
+
+messages d2_messages.h d2_messages.cc:
+	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
+
+endif
 
 if GENERATE_PARSER
 

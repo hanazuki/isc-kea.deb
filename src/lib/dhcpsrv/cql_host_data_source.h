@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2018 Deutsche Telekom AG.
 //
 // Author: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -57,18 +57,21 @@ class CqlHostDataSource : public BaseHostDataSource {
 public:
     /// @brief Constructor
     ///
-    /// Uses the following keywords in the parameters passed to it to connect
-    /// to the database:
-    /// - keyspace
-    /// - host
-    /// - user
-    /// - password
-    /// - contact-points
-    /// - reconnect-wait-time
-    /// - connect-timeout
-    /// - request-timeout
-    /// - tcp-keepalive
-    /// - tcp-nodelay
+    /// Uses the following keywords in the parameters passed to it to
+    /// connect to the Cassandra cluster (if omitted, defaults specified in
+    /// parentheses):
+    /// - keyspace: name of the database to which to connect (keatest)
+    /// - contact-points: IP addresses of the nodes to connect to (127.0.0.1)
+    /// - consistency: consistency level (quorum)
+    /// - serial-consistency: serial consistency level (serial)
+    /// - port: The TCP port to use (9042)
+    /// - user - credentials to use when connecting (no username)
+    /// - password - credentials to use when connecting (no password)
+    /// - reconnect-wait-time 2000
+    /// - connect-timeout 5000
+    /// - request-timeout 12000
+    /// - tcp-keepalive no
+    /// - tcp-nodelay no
     ///
     /// For details regarding those paraemters, see
     /// @ref isc::db::CqlConnection::openDatabase.
@@ -167,6 +170,99 @@ public:
     getAll(const Host::IdentifierType& identifier_type,
            const uint8_t* identifier_begin,
            const size_t identifier_len) const override;
+
+    /// @brief Return all hosts in a DHCPv4 subnet.
+    ///
+    /// This method returns all @ref Host objects which represent reservations
+    /// in a specified subnet.
+    ///
+    /// @param subnet_id subnet identifier to filter by
+    ///
+    /// @return Collection of const @ref Host objects.
+    virtual ConstHostCollection
+    getAll4(const SubnetID& subnet_id) const override;
+
+    /// @brief Return all hosts in a DHCPv6 subnet.
+    ///
+    /// This method returns all @ref Host objects which represent reservations
+    /// in a specified subnet.
+    ///
+    /// @param subnet_id subnet identifier to filter by
+    ///
+    /// @return Collection of const @ref Host objects.
+    virtual ConstHostCollection
+    getAll6(const SubnetID& subnet_id) const override;
+
+    /// @brief Return all hosts with a hostname.
+    ///
+    /// This method returns all @c Host objects which represent reservations
+    /// using a specified hostname.
+    ///
+    /// Cassandra uses the new indexed lower_case_hostname column.
+    ///
+    /// @param hostname The lower case hostname.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAllbyHostname(const std::string& hostname) const override;
+
+    /// @brief Return all hosts with a hostname in a DHCPv4 subnet.
+    ///
+    /// This method returns all @c Host objects which represent reservations
+    /// using a specified hostname in a specified subnet.
+    ///
+    /// @param hostname The lower case hostname.
+    /// @param subnet_id Subnet identifier.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAllbyHostname4(const std::string& hostname, const SubnetID& subnet_id) const override;
+
+    /// @brief Return all hosts with a hostname in a DHCPv6 subnet.
+    ///
+    /// This method returns all @c Host objects which represent reservations
+    /// using a specified hostname in a specified subnet.
+    ///
+    /// @param hostname The lower case hostname.
+    /// @param subnet_id Subnet identifier.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAllbyHostname6(const std::string& hostname, const SubnetID& subnet_id) const override;
+
+    /// @brief Returns range of hosts in a DHCPv4 subnet.
+    ///
+    /// Not implemented.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of const @c Host objects (may be empty).
+    virtual ConstHostCollection
+    getPage4(const SubnetID& subnet_id,
+             size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const override;
+
+    /// @brief Returns range of hosts in a DHCPv6 subnet.
+    ///
+    /// Not implemented.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of const @c Host objects (may be empty).
+    virtual ConstHostCollection
+    getPage6(const SubnetID& subnet_id,
+             size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const override;
 
     /// @brief Returns a collection of hosts using the specified IPv4 address.
     ///

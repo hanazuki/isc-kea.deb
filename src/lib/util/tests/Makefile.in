@@ -97,6 +97,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -117,19 +118,21 @@ PROGRAMS = $(noinst_PROGRAMS)
 am__run_unittests_SOURCES_DIST = run_unittests.cc \
 	base32hex_unittest.cc base64_unittest.cc \
 	boost_time_utils_unittest.cc buffer_unittest.cc \
-	csv_file_unittest.cc fd_share_tests.cc fd_tests.cc \
-	filename_unittest.cc hash_unittest.cc hex_unittest.cc \
-	io_utilities_unittest.cc labeled_value_unittest.cc \
-	memory_segment_local_unittest.cc \
+	csv_file_unittest.cc doubles_unittest.cc fd_share_tests.cc \
+	fd_tests.cc filename_unittest.cc hash_unittest.cc \
+	hex_unittest.cc io_utilities_unittest.cc \
+	labeled_value_unittest.cc memory_segment_local_unittest.cc \
 	memory_segment_common_unittest.h \
-	memory_segment_common_unittest.cc optional_value_unittest.cc \
+	memory_segment_common_unittest.cc \
+	multi_threading_mgr_unittest.cc optional_unittest.cc \
 	pid_file_unittest.cc process_spawn_unittest.cc \
 	qid_gen_unittest.cc random_number_generator_unittest.cc \
-	socketsession_unittest.cc staged_value_unittest.cc \
-	state_model_unittest.cc strutil_unittest.cc \
+	staged_value_unittest.cc state_model_unittest.cc \
+	strutil_unittest.cc thread_pool_unittest.cc \
 	time_utilities_unittest.cc range_utilities_unittest.cc \
 	signal_set_unittest.cc stopwatch_unittest.cc \
-	versioned_csv_file_unittest.cc watch_socket_unittests.cc
+	versioned_csv_file_unittest.cc watch_socket_unittests.cc \
+	watched_thread_unittest.cc
 @HAVE_GTEST_TRUE@am_run_unittests_OBJECTS =  \
 @HAVE_GTEST_TRUE@	run_unittests-run_unittests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-base32hex_unittest.$(OBJEXT) \
@@ -137,6 +140,7 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	run_unittests-boost_time_utils_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-buffer_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-csv_file_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	run_unittests-doubles_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-fd_share_tests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-fd_tests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-filename_unittest.$(OBJEXT) \
@@ -146,21 +150,23 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	run_unittests-labeled_value_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-memory_segment_local_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-memory_segment_common_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	run_unittests-optional_value_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	run_unittests-multi_threading_mgr_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	run_unittests-optional_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-pid_file_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-process_spawn_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-qid_gen_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-random_number_generator_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	run_unittests-socketsession_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-staged_value_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-state_model_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-strutil_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	run_unittests-thread_pool_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-time_utilities_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-range_utilities_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-signal_set_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-stopwatch_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-versioned_csv_file_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	run_unittests-watch_socket_unittests.$(OBJEXT)
+@HAVE_GTEST_TRUE@	run_unittests-watch_socket_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	run_unittests-watched_thread_unittest.$(OBJEXT)
 run_unittests_OBJECTS = $(am_run_unittests_OBJECTS)
 am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@run_unittests_DEPENDENCIES = $(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
@@ -338,7 +344,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -359,7 +364,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -369,6 +373,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -378,7 +383,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -429,6 +433,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -446,17 +451,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -535,25 +540,27 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	base32hex_unittest.cc base64_unittest.cc \
 @HAVE_GTEST_TRUE@	boost_time_utils_unittest.cc \
 @HAVE_GTEST_TRUE@	buffer_unittest.cc csv_file_unittest.cc \
-@HAVE_GTEST_TRUE@	fd_share_tests.cc fd_tests.cc \
-@HAVE_GTEST_TRUE@	filename_unittest.cc hash_unittest.cc \
-@HAVE_GTEST_TRUE@	hex_unittest.cc io_utilities_unittest.cc \
+@HAVE_GTEST_TRUE@	doubles_unittest.cc fd_share_tests.cc \
+@HAVE_GTEST_TRUE@	fd_tests.cc filename_unittest.cc \
+@HAVE_GTEST_TRUE@	hash_unittest.cc hex_unittest.cc \
+@HAVE_GTEST_TRUE@	io_utilities_unittest.cc \
 @HAVE_GTEST_TRUE@	labeled_value_unittest.cc \
 @HAVE_GTEST_TRUE@	memory_segment_local_unittest.cc \
 @HAVE_GTEST_TRUE@	memory_segment_common_unittest.h \
 @HAVE_GTEST_TRUE@	memory_segment_common_unittest.cc \
-@HAVE_GTEST_TRUE@	optional_value_unittest.cc \
-@HAVE_GTEST_TRUE@	pid_file_unittest.cc \
+@HAVE_GTEST_TRUE@	multi_threading_mgr_unittest.cc \
+@HAVE_GTEST_TRUE@	optional_unittest.cc pid_file_unittest.cc \
 @HAVE_GTEST_TRUE@	process_spawn_unittest.cc qid_gen_unittest.cc \
 @HAVE_GTEST_TRUE@	random_number_generator_unittest.cc \
-@HAVE_GTEST_TRUE@	socketsession_unittest.cc \
 @HAVE_GTEST_TRUE@	staged_value_unittest.cc \
 @HAVE_GTEST_TRUE@	state_model_unittest.cc strutil_unittest.cc \
+@HAVE_GTEST_TRUE@	thread_pool_unittest.cc \
 @HAVE_GTEST_TRUE@	time_utilities_unittest.cc \
 @HAVE_GTEST_TRUE@	range_utilities_unittest.cc \
 @HAVE_GTEST_TRUE@	signal_set_unittest.cc stopwatch_unittest.cc \
 @HAVE_GTEST_TRUE@	versioned_csv_file_unittest.cc \
-@HAVE_GTEST_TRUE@	watch_socket_unittests.cc
+@HAVE_GTEST_TRUE@	watch_socket_unittests.cc \
+@HAVE_GTEST_TRUE@	watched_thread_unittest.cc
 @HAVE_GTEST_TRUE@run_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@run_unittests_LDFLAGS = $(AM_LDFLAGS) $(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@run_unittests_LDADD = $(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
@@ -621,6 +628,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-boost_time_utils_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-buffer_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-csv_file_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-doubles_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-fd_share_tests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-fd_tests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-filename_unittest.Po@am__quote@
@@ -630,7 +638,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-labeled_value_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-memory_segment_common_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-memory_segment_local_unittest.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-optional_value_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-multi_threading_mgr_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-optional_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-pid_file_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-process_spawn_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-qid_gen_unittest.Po@am__quote@
@@ -638,14 +647,15 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-range_utilities_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-run_unittests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-signal_set_unittest.Po@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-socketsession_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-staged_value_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-state_model_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-stopwatch_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-strutil_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-thread_pool_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-time_utilities_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-versioned_csv_file_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-watch_socket_unittests.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-watched_thread_unittest.Po@am__quote@
 
 .cc.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -751,6 +761,20 @@ run_unittests-csv_file_unittest.obj: csv_file_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='csv_file_unittest.cc' object='run_unittests-csv_file_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-csv_file_unittest.obj `if test -f 'csv_file_unittest.cc'; then $(CYGPATH_W) 'csv_file_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/csv_file_unittest.cc'; fi`
+
+run_unittests-doubles_unittest.o: doubles_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-doubles_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-doubles_unittest.Tpo -c -o run_unittests-doubles_unittest.o `test -f 'doubles_unittest.cc' || echo '$(srcdir)/'`doubles_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-doubles_unittest.Tpo $(DEPDIR)/run_unittests-doubles_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='doubles_unittest.cc' object='run_unittests-doubles_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-doubles_unittest.o `test -f 'doubles_unittest.cc' || echo '$(srcdir)/'`doubles_unittest.cc
+
+run_unittests-doubles_unittest.obj: doubles_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-doubles_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-doubles_unittest.Tpo -c -o run_unittests-doubles_unittest.obj `if test -f 'doubles_unittest.cc'; then $(CYGPATH_W) 'doubles_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/doubles_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-doubles_unittest.Tpo $(DEPDIR)/run_unittests-doubles_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='doubles_unittest.cc' object='run_unittests-doubles_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-doubles_unittest.obj `if test -f 'doubles_unittest.cc'; then $(CYGPATH_W) 'doubles_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/doubles_unittest.cc'; fi`
 
 run_unittests-fd_share_tests.o: fd_share_tests.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-fd_share_tests.o -MD -MP -MF $(DEPDIR)/run_unittests-fd_share_tests.Tpo -c -o run_unittests-fd_share_tests.o `test -f 'fd_share_tests.cc' || echo '$(srcdir)/'`fd_share_tests.cc
@@ -878,19 +902,33 @@ run_unittests-memory_segment_common_unittest.obj: memory_segment_common_unittest
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-memory_segment_common_unittest.obj `if test -f 'memory_segment_common_unittest.cc'; then $(CYGPATH_W) 'memory_segment_common_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/memory_segment_common_unittest.cc'; fi`
 
-run_unittests-optional_value_unittest.o: optional_value_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-optional_value_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-optional_value_unittest.Tpo -c -o run_unittests-optional_value_unittest.o `test -f 'optional_value_unittest.cc' || echo '$(srcdir)/'`optional_value_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-optional_value_unittest.Tpo $(DEPDIR)/run_unittests-optional_value_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='optional_value_unittest.cc' object='run_unittests-optional_value_unittest.o' libtool=no @AMDEPBACKSLASH@
+run_unittests-multi_threading_mgr_unittest.o: multi_threading_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-multi_threading_mgr_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-multi_threading_mgr_unittest.Tpo -c -o run_unittests-multi_threading_mgr_unittest.o `test -f 'multi_threading_mgr_unittest.cc' || echo '$(srcdir)/'`multi_threading_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-multi_threading_mgr_unittest.Tpo $(DEPDIR)/run_unittests-multi_threading_mgr_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='multi_threading_mgr_unittest.cc' object='run_unittests-multi_threading_mgr_unittest.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-optional_value_unittest.o `test -f 'optional_value_unittest.cc' || echo '$(srcdir)/'`optional_value_unittest.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-multi_threading_mgr_unittest.o `test -f 'multi_threading_mgr_unittest.cc' || echo '$(srcdir)/'`multi_threading_mgr_unittest.cc
 
-run_unittests-optional_value_unittest.obj: optional_value_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-optional_value_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-optional_value_unittest.Tpo -c -o run_unittests-optional_value_unittest.obj `if test -f 'optional_value_unittest.cc'; then $(CYGPATH_W) 'optional_value_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/optional_value_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-optional_value_unittest.Tpo $(DEPDIR)/run_unittests-optional_value_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='optional_value_unittest.cc' object='run_unittests-optional_value_unittest.obj' libtool=no @AMDEPBACKSLASH@
+run_unittests-multi_threading_mgr_unittest.obj: multi_threading_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-multi_threading_mgr_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-multi_threading_mgr_unittest.Tpo -c -o run_unittests-multi_threading_mgr_unittest.obj `if test -f 'multi_threading_mgr_unittest.cc'; then $(CYGPATH_W) 'multi_threading_mgr_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/multi_threading_mgr_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-multi_threading_mgr_unittest.Tpo $(DEPDIR)/run_unittests-multi_threading_mgr_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='multi_threading_mgr_unittest.cc' object='run_unittests-multi_threading_mgr_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-optional_value_unittest.obj `if test -f 'optional_value_unittest.cc'; then $(CYGPATH_W) 'optional_value_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/optional_value_unittest.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-multi_threading_mgr_unittest.obj `if test -f 'multi_threading_mgr_unittest.cc'; then $(CYGPATH_W) 'multi_threading_mgr_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/multi_threading_mgr_unittest.cc'; fi`
+
+run_unittests-optional_unittest.o: optional_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-optional_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-optional_unittest.Tpo -c -o run_unittests-optional_unittest.o `test -f 'optional_unittest.cc' || echo '$(srcdir)/'`optional_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-optional_unittest.Tpo $(DEPDIR)/run_unittests-optional_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='optional_unittest.cc' object='run_unittests-optional_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-optional_unittest.o `test -f 'optional_unittest.cc' || echo '$(srcdir)/'`optional_unittest.cc
+
+run_unittests-optional_unittest.obj: optional_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-optional_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-optional_unittest.Tpo -c -o run_unittests-optional_unittest.obj `if test -f 'optional_unittest.cc'; then $(CYGPATH_W) 'optional_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/optional_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-optional_unittest.Tpo $(DEPDIR)/run_unittests-optional_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='optional_unittest.cc' object='run_unittests-optional_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-optional_unittest.obj `if test -f 'optional_unittest.cc'; then $(CYGPATH_W) 'optional_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/optional_unittest.cc'; fi`
 
 run_unittests-pid_file_unittest.o: pid_file_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-pid_file_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-pid_file_unittest.Tpo -c -o run_unittests-pid_file_unittest.o `test -f 'pid_file_unittest.cc' || echo '$(srcdir)/'`pid_file_unittest.cc
@@ -948,20 +986,6 @@ run_unittests-random_number_generator_unittest.obj: random_number_generator_unit
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-random_number_generator_unittest.obj `if test -f 'random_number_generator_unittest.cc'; then $(CYGPATH_W) 'random_number_generator_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/random_number_generator_unittest.cc'; fi`
 
-run_unittests-socketsession_unittest.o: socketsession_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-socketsession_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-socketsession_unittest.Tpo -c -o run_unittests-socketsession_unittest.o `test -f 'socketsession_unittest.cc' || echo '$(srcdir)/'`socketsession_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-socketsession_unittest.Tpo $(DEPDIR)/run_unittests-socketsession_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='socketsession_unittest.cc' object='run_unittests-socketsession_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-socketsession_unittest.o `test -f 'socketsession_unittest.cc' || echo '$(srcdir)/'`socketsession_unittest.cc
-
-run_unittests-socketsession_unittest.obj: socketsession_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-socketsession_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-socketsession_unittest.Tpo -c -o run_unittests-socketsession_unittest.obj `if test -f 'socketsession_unittest.cc'; then $(CYGPATH_W) 'socketsession_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/socketsession_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-socketsession_unittest.Tpo $(DEPDIR)/run_unittests-socketsession_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='socketsession_unittest.cc' object='run_unittests-socketsession_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-socketsession_unittest.obj `if test -f 'socketsession_unittest.cc'; then $(CYGPATH_W) 'socketsession_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/socketsession_unittest.cc'; fi`
-
 run_unittests-staged_value_unittest.o: staged_value_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-staged_value_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-staged_value_unittest.Tpo -c -o run_unittests-staged_value_unittest.o `test -f 'staged_value_unittest.cc' || echo '$(srcdir)/'`staged_value_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-staged_value_unittest.Tpo $(DEPDIR)/run_unittests-staged_value_unittest.Po
@@ -1003,6 +1027,20 @@ run_unittests-strutil_unittest.obj: strutil_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='strutil_unittest.cc' object='run_unittests-strutil_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-strutil_unittest.obj `if test -f 'strutil_unittest.cc'; then $(CYGPATH_W) 'strutil_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/strutil_unittest.cc'; fi`
+
+run_unittests-thread_pool_unittest.o: thread_pool_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-thread_pool_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-thread_pool_unittest.Tpo -c -o run_unittests-thread_pool_unittest.o `test -f 'thread_pool_unittest.cc' || echo '$(srcdir)/'`thread_pool_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-thread_pool_unittest.Tpo $(DEPDIR)/run_unittests-thread_pool_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='thread_pool_unittest.cc' object='run_unittests-thread_pool_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-thread_pool_unittest.o `test -f 'thread_pool_unittest.cc' || echo '$(srcdir)/'`thread_pool_unittest.cc
+
+run_unittests-thread_pool_unittest.obj: thread_pool_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-thread_pool_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-thread_pool_unittest.Tpo -c -o run_unittests-thread_pool_unittest.obj `if test -f 'thread_pool_unittest.cc'; then $(CYGPATH_W) 'thread_pool_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/thread_pool_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-thread_pool_unittest.Tpo $(DEPDIR)/run_unittests-thread_pool_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='thread_pool_unittest.cc' object='run_unittests-thread_pool_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-thread_pool_unittest.obj `if test -f 'thread_pool_unittest.cc'; then $(CYGPATH_W) 'thread_pool_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/thread_pool_unittest.cc'; fi`
 
 run_unittests-time_utilities_unittest.o: time_utilities_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-time_utilities_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-time_utilities_unittest.Tpo -c -o run_unittests-time_utilities_unittest.o `test -f 'time_utilities_unittest.cc' || echo '$(srcdir)/'`time_utilities_unittest.cc
@@ -1087,6 +1125,20 @@ run_unittests-watch_socket_unittests.obj: watch_socket_unittests.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='watch_socket_unittests.cc' object='run_unittests-watch_socket_unittests.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-watch_socket_unittests.obj `if test -f 'watch_socket_unittests.cc'; then $(CYGPATH_W) 'watch_socket_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/watch_socket_unittests.cc'; fi`
+
+run_unittests-watched_thread_unittest.o: watched_thread_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-watched_thread_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-watched_thread_unittest.Tpo -c -o run_unittests-watched_thread_unittest.o `test -f 'watched_thread_unittest.cc' || echo '$(srcdir)/'`watched_thread_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-watched_thread_unittest.Tpo $(DEPDIR)/run_unittests-watched_thread_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='watched_thread_unittest.cc' object='run_unittests-watched_thread_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-watched_thread_unittest.o `test -f 'watched_thread_unittest.cc' || echo '$(srcdir)/'`watched_thread_unittest.cc
+
+run_unittests-watched_thread_unittest.obj: watched_thread_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-watched_thread_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-watched_thread_unittest.Tpo -c -o run_unittests-watched_thread_unittest.obj `if test -f 'watched_thread_unittest.cc'; then $(CYGPATH_W) 'watched_thread_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/watched_thread_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-watched_thread_unittest.Tpo $(DEPDIR)/run_unittests-watched_thread_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='watched_thread_unittest.cc' object='run_unittests-watched_thread_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-watched_thread_unittest.obj `if test -f 'watched_thread_unittest.cc'; then $(CYGPATH_W) 'watched_thread_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/watched_thread_unittest.cc'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

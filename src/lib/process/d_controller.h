@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -123,9 +123,10 @@ public:
     /// 1. parse command line arguments
     /// 2. instantiate and initialize the application process
     /// 3. load the configuration file
-    /// 4. initialize signal handling
-    /// 5. start and wait on the application process event loop
-    /// 6. exit to the caller
+    /// 4. record the start timestamp
+    /// 5. initialize signal handling
+    /// 6. start and wait on the application process event loop
+    /// 7. exit to the caller
     ///
     /// It is intended to be called from main() and be given the command line
     /// arguments.
@@ -186,9 +187,6 @@ public:
     ///
     /// @code
     ///  { "<module-name>": {<module-config>}
-    ///
-    ///   # Logging element is optional
-    ///   ,"Logging": {<logger config}
     ///  }
     ///
     ///  where:
@@ -204,12 +202,11 @@ public:
     /// file content using an alternate parser.  If it returns an empty pointer
     /// than the JSON parsing providing by Element::fromJSONFile() is called.
     ///
-    /// Once parsed, the method looks for the Element "Logging" and, if present
-    /// uses it to configure logging.
-    ///
-    /// It then extracts the set of configuration elements for the
-    /// module-name that matches the controller's app_name_ and passes that
-    /// set into @c updateConfig() (or @c checkConfig()).
+    /// Once parsed, the method extracts the set of configuration
+    /// elements for the module-name that matches the controller's app_name_,
+    /// looks for the loggers entry and, if present uses it to configure
+    /// logging. It then passes that set into @c updateConfig() (or
+    /// @c checkConfig()).
     ///
     /// The file may contain an arbitrary number of other modules.
     ///
@@ -297,6 +294,30 @@ public:
     configTestHandler(const std::string& command,
                       isc::data::ConstElementPtr args);
 
+    /// @brief handler for config-reload command
+    ///
+    /// This method handles the config-reload command, which reloads
+    /// the configuration file.
+    ///
+    /// @param command (ignored)
+    /// @param args (ignored)
+    /// @return status of the command
+    isc::data::ConstElementPtr
+    configReloadHandler(const std::string& command,
+                        isc::data::ConstElementPtr args);
+
+    /// @brief handler for config-set command
+    ///
+    /// This method handles the config-set command, which loads
+    /// configuration specified in args parameter.
+    ///
+    /// @param command (ignored)
+    /// @param args configuration to be checked.
+    /// @return status of the command
+    isc::data::ConstElementPtr
+    configSetHandler(const std::string& command,
+                     isc::data::ConstElementPtr args);
+
     /// @brief handler for 'shutdown' command
     ///
     /// This method handles shutdown command. It initiates the shutdown procedure
@@ -307,6 +328,31 @@ public:
     isc::data::ConstElementPtr
     shutdownHandler(const std::string& command,
                     isc::data::ConstElementPtr args);
+
+    /// @brief handler for server-tag-get command
+    ///
+    /// This method handles the server-tag-get command, which retrieves
+    /// the current server tag and returns it in response.
+    ///
+    /// @param command (ignored)
+    /// @param args (ignored)
+    /// @return current configuration wrapped in a response
+    isc::data::ConstElementPtr
+    serverTagGetHandler(const std::string& command,
+                        isc::data::ConstElementPtr args);
+
+    /// @brief handler for status-get command
+    ///
+    /// This method handles the status-get command, which retrieves
+    /// the server process information i.e. the pid and returns it in
+    /// response.
+    ///
+    /// @param command (ignored)
+    /// @param args (ignored)
+    /// @return process information wrapped in a response
+    isc::data::ConstElementPtr
+    statusGetHandler(const std::string& command,
+                     isc::data::ConstElementPtr args);
 
 protected:
     /// @brief Virtual method that provides derivations the opportunity to
@@ -580,6 +626,15 @@ protected:
     /// invoked.
     /// @return a string containing additional version info
     virtual std::string getVersionAddendum() { return (""); }
+
+    /// @brief Deals with other (i.e. not application name) global objects.
+    ///
+    /// Code shared between configuration handlers:
+    ///  - check obsolete or unknown (aka unsupported) objects.
+    ///  - relocate Logging.
+    ///
+    /// @param args Command arguments.
+    void handleOtherObjects(isc::data::ConstElementPtr args);
 
 private:
     /// @brief Name of the service under control.

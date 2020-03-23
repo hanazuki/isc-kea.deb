@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,9 +7,11 @@
 #ifndef MYSQL_BINDING_H
 #define MYSQL_BINDING_H
 
+#include <asiolink/io_address.h>
 #include <cc/data.h>
 #include <database/database_connection.h>
 #include <exceptions/exceptions.h>
+#include <util/optional.h>
 #include <boost/date_time/posix_time/conversion.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/shared_ptr.hpp>
@@ -121,6 +123,13 @@ struct MySqlBindingTraits<uint64_t> {
     static const enum_field_types column_type = MYSQL_TYPE_LONGLONG;
     static const size_t length = 8;
     static const bool am_unsigned = true;
+};
+
+template<>
+struct MySqlBindingTraits<float> {
+    static const enum_field_types column_type = MYSQL_TYPE_FLOAT;
+    static const size_t length = 4;
+    static const bool am_unsigned = false;
 };
 
 /// @brief Forward declaration of @c MySqlBinding class.
@@ -270,6 +279,30 @@ public:
         return (getInteger<T>());
     }
 
+    /// @brief Returns float value held in the binding.
+    ///
+    /// Call @c MySqlBinding::amNull to verify that the value is not
+    /// null prior to calling this method.
+    ///
+    /// @throw InvalidOperation if the value is NULL or the binding
+    /// type does not match the template parameter.
+    ///
+    /// @return Float value.
+    float getFloat() const;
+
+    /// @brief Returns boolean value held in the binding.
+    ///
+    /// Call @c MySqlBinding::amNull to verify that the value is not
+    /// null prior to calling this method.
+    ///
+    /// @throw InvalidOperation if the value is NULL or the binding
+    /// type is not uint8_t.
+    ///
+    /// @return Boolean value.
+    bool getBool() const {
+        return (static_cast<bool>(getInteger<uint8_t>()));
+    }
+
     /// @brief Returns timestamp value held in the binding.
     ///
     /// Call @c MySqlBinding::amNull to verify that the value is not
@@ -278,7 +311,7 @@ public:
     /// @throw InvalidOperation if the value is NULL or the binding
     /// type is not @c MYSQL_TYPE_TIMESTAMP.
     ///
-    /// @return Timestamp converted to posix time.
+    /// @return Timestamp converted to POSIX time.
     boost::posix_time::ptime getTimestamp() const;
 
     /// @brief Returns timestamp value held in the binding.
@@ -289,7 +322,7 @@ public:
     ///
     /// @throw InvalidOperation if the binding type is not @c MYSQL_TYPE_TIMESTAMP.
     ///
-    /// @return Timestamp converted to posix time.
+    /// @return Timestamp converted to POSIX time.
     boost::posix_time::ptime
     getTimestampOrDefault(const boost::posix_time::ptime& default_value) const;
 
@@ -316,12 +349,12 @@ public:
     static MySqlBindingPtr createString(const std::string& value);
 
     /// @brief Conditionally creates binding of text type for sending
-    /// data if provided value is not empty.
+    /// data if provided value is unspecified.
     ///
     /// @param value String value to be sent to the database.
     ///
     /// @return Pointer to the created binding.
-    static MySqlBindingPtr condCreateString(const std::string& value);
+    static MySqlBindingPtr condCreateString(const util::Optional<std::string>& value);
 
     /// @brief Creates binding of blob type for receiving data.
     ///
@@ -380,18 +413,64 @@ public:
     }
 
     /// @brief Conditionally creates binding of numeric type for sending
-    /// data if provided value is not 0.
+    /// data if provided value is specified.
     ///
-    /// @tparam Numeric type corresponding to the binding type, e.g.
+    /// @tparam T Numeric type corresponding to the binding type, e.g.
     /// @c uint8_t, @c uint16_t etc.
     ///
     /// @param value Numeric value to be sent to the database.
     ///
     /// @return Pointer to the created binding.
     template<typename T>
-    static MySqlBindingPtr condCreateInteger(T value) {
-        return (value == 0 ? createNull() : createInteger(value));
+    static MySqlBindingPtr condCreateInteger(const util::Optional<T>& value) {
+        return (value.unspecified() ? createNull() : createInteger<T>(value.get()));
     }
+
+    /// @brief Creates binding having a float type for sending data.
+    ///
+    /// @param value Float value to be sent to the database.
+    ///
+    /// @return Pointer to the created binding.
+    static MySqlBindingPtr createFloat(const float value);
+
+    /// @brief Conditionally creates binding of float type for sending data if
+    /// provided value is specified.
+    ///
+    /// @tparam T Floating point type to be converted to float.
+    ///
+    /// @param value Value to be stored in the database as float.
+    ///
+    /// @return Pointer to the created binding.
+    template<typename T>
+    static MySqlBindingPtr condCreateFloat(const util::Optional<T>& value) {
+        return (value.unspecified() ? createNull() :
+                createInteger<float> (static_cast<float>(value.get())));
+    }
+
+    /// @brief Creates binding having a bool type for sending data.
+    ///
+    /// @param value Boolean value to be sent to the database.
+    ///
+    /// @return Pointer to the created binding holding an @c uint8_t
+    /// value representing the boolean value.
+    static MySqlBindingPtr createBool(const bool value);
+
+    /// @brief Conditionally creates binding of @c uint8_t type representing
+    /// a boolean value if provided value is specified.
+    ///
+    /// @param value Boolean value for which the binding should be created.
+    ///
+    /// @return Pointer to the created binding.
+    static MySqlBindingPtr condCreateBool(const util::Optional<bool>& value);
+
+    /// @brief Conditionally creates binding of @c uint32_t type representing
+    /// an IPv4 address if provided value is specified.
+    ///
+    /// @param value @c IOAddress encapsulating an IPv4 address.
+    ///
+    /// @return Pointer to the created binding.
+    static MySqlBindingPtr
+    condCreateIPv4Address(const util::Optional<asiolink::IOAddress>& value);
 
     /// @brief Creates binding of timestamp type for receiving data.
     ///
@@ -419,6 +498,14 @@ public:
     /// @param output_time Reference to MYSQL_TIME object where converted time
     ///        will be put.
     static void convertToDatabaseTime(const time_t input_time,
+                                      MYSQL_TIME& output_time);
+
+    /// @brief Converts POSIX time value to database time.
+    ///
+    /// @param input_time A POSIX time value representing local time.
+    /// @param output_time Reference to MYSQL_TIME object where converted time
+    ///        will be put.
+    static void convertToDatabaseTime(const boost::posix_time::ptime& input_time,
                                       MYSQL_TIME& output_time);
 
     /// @brief Converts Lease Time to Database Times
@@ -465,12 +552,12 @@ public:
                                         uint32_t valid_lifetime,
                                         time_t& cltt);
 
-    /// @brief Converts database time to posix time.
+    /// @brief Converts database time to POSIX time.
     ///
     /// @param database_time Reference to MYSQL_TIME object where database
     /// time is stored.
     ///
-    /// @return Database time converted to posix time.
+    /// @return Database time converted to local POSIX time.
     static boost::posix_time::ptime
     convertFromDatabaseTime(const MYSQL_TIME& database_time);
 
@@ -482,7 +569,7 @@ private:
     /// created using static factory functions.
     ///
     /// @param buffer_type MySQL buffer type as defined in MySQL C API.
-    /// @param length Buffer length. 
+    /// @param length Buffer length.
     MySqlBinding(enum_field_types buffer_type, const size_t length);
 
     /// @brief Assigns new value to a buffer.
@@ -532,7 +619,7 @@ private:
     /// @brief Converts timestamp to database time value and copies it to
     /// the buffer.
     ///
-    /// @param timestamp Timestamp value as posix time.
+    /// @param timestamp Timestamp value as POSIX time.
     void setTimestampValue(const boost::posix_time::ptime& timestamp);
 
     /// @brief Checks if the data accessor called is matching the type

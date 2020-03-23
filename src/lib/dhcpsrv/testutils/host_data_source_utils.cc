@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -109,9 +109,9 @@ HostDataSourceUtils::initializeHost6(std::string address,
 
     HostPtr host(new Host(&ident[0], ident.size(), identifier, subnet4, subnet6,
                           IOAddress("0.0.0.0")));
-    
+
     host->setKey(AuthKey(auth_key));
-    
+
     if (!prefix) {
         // Create IPv6 reservation (for an address)
         IPv6Resrv resv(IPv6Resrv::TYPE_NA, IOAddress(address), 128);

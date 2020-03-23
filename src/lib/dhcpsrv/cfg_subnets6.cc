@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,21 +38,148 @@ CfgSubnets6::add(const Subnet6Ptr& subnet) {
 
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE, DHCPSRV_CFGMGR_ADD_SUBNET6)
               .arg(subnet->toText());
-    subnets_.push_back(subnet);
+    static_cast<void>(subnets_.push_back(subnet));
+}
+
+Subnet6Ptr
+CfgSubnets6::replace(const Subnet6Ptr& subnet) {
+    // Get the subnet with the same ID.
+    const SubnetID& subnet_id = subnet->getID();
+    auto& index = subnets_.template get<SubnetSubnetIdIndexTag>();
+    auto subnet_it = index.find(subnet_id);
+    if (subnet_it == index.end()) {
+        isc_throw(BadValue, "There is no IPv6 subnet with ID " << subnet_id);
+    }
+    Subnet6Ptr old = *subnet_it;
+    bool ret = index.replace(subnet_it, subnet);
+
+    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE, DHCPSRV_CFGMGR_UPDATE_SUBNET6)
+        .arg(subnet_id).arg(ret);
+    if (ret) {
+        return (old);
+    } else {
+        return (Subnet6Ptr());
+    }
 }
 
 void
 CfgSubnets6::del(const ConstSubnet6Ptr& subnet) {
+    del(subnet->getID());
+}
+
+void
+CfgSubnets6::del(const SubnetID& subnet_id) {
     auto& index = subnets_.get<SubnetSubnetIdIndexTag>();
-    auto subnet_it = index.find(subnet->getID());
+    auto subnet_it = index.find(subnet_id);
     if (subnet_it == index.end()) {
-        isc_throw(BadValue, "no subnet with ID of '" << subnet->getID()
+        isc_throw(BadValue, "no subnet with ID of '" << subnet_id
                   << "' found");
     }
+
+    Subnet6Ptr subnet = *subnet_it;
+
     index.erase(subnet_it);
 
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE, DHCPSRV_CFGMGR_DEL_SUBNET6)
         .arg(subnet->toText());
+}
+
+void
+CfgSubnets6::merge(CfgOptionDefPtr cfg_def, CfgSharedNetworks6Ptr networks,
+                   CfgSubnets6& other) {
+    auto& index_id = subnets_.get<SubnetSubnetIdIndexTag>();
+    auto& index_prefix = subnets_.get<SubnetPrefixIndexTag>();
+
+    // Iterate over the subnets to be merged. They will replace the existing
+    // subnets with the same id. All new subnets will be inserted into the
+    // configuration into which we're merging.
+    auto other_subnets = other.getAll();
+    for (auto other_subnet = other_subnets->begin();
+         other_subnet != other_subnets->end();
+         ++other_subnet) {
+
+        // Check if there is a subnet with the same ID.
+        auto subnet_it = index_id.find((*other_subnet)->getID());
+        if (subnet_it != index_id.end()) {
+
+            // Subnet found.
+            auto existing_subnet = *subnet_it;
+
+            // If the existing subnet and other subnet
+            // are the same instance skip it.
+            if (existing_subnet == *other_subnet) {
+                continue;
+            }
+
+            // We're going to replace the existing subnet with the other
+            // version. If it belongs to a shared network, we need
+            // remove it from that network.
+            SharedNetwork6Ptr network;
+            existing_subnet->getSharedNetwork(network);
+            if (network) {
+                network->del(existing_subnet->getID());
+            }
+
+            // Now we remove the existing subnet.
+            index_id.erase(subnet_it);
+        }
+
+        // Check if there is a subnet with the same prefix.
+        auto subnet_prefix_it = index_prefix.find((*other_subnet)->toText());
+        if (subnet_prefix_it != index_prefix.end()) {
+
+            // Subnet found.
+            auto existing_subnet = *subnet_prefix_it;
+
+            // Updating the id can lead to problems... e.g. reservation
+            // for the previous subnet ID.
+            // @todo: check reservations
+
+            // We're going to replace the existing subnet with the other
+            // version. If it belongs to a shared network, we need
+            // remove it from that network.
+            SharedNetwork6Ptr network;
+            existing_subnet->getSharedNetwork(network);
+            if (network) {
+                network->del(existing_subnet->getID());
+            }
+
+            // Now we remove the existing subnet.
+            index_prefix.erase(subnet_prefix_it);
+        }
+
+        // Create the subnet's options based on the given definitions.
+        (*other_subnet)->getCfgOption()->createOptions(cfg_def);
+
+        // Create the options for pool based on the given definitions.
+        for (auto pool : (*other_subnet)->getPoolsWritable(Lease::TYPE_NA)) {
+            pool->getCfgOption()->createOptions(cfg_def);
+        }
+
+        for (auto pool : (*other_subnet)->getPoolsWritable(Lease::TYPE_PD)) {
+            pool->getCfgOption()->createOptions(cfg_def);
+        }
+
+        // Add the "other" subnet to the our collection of subnets.
+        static_cast<void>(subnets_.push_back(*other_subnet));
+
+        // If it belongs to a shared network, find the network and
+        // add the subnet to it
+        std::string network_name = (*other_subnet)->getSharedNetworkName();
+        if (!network_name.empty()) {
+            SharedNetwork6Ptr network = networks->getByName(network_name);
+            if (network) {
+                network->add(*other_subnet);
+            } else {
+                // This implies the shared-network collection we were given
+                // is out of sync with the subnets we were given.
+                isc_throw(InvalidOperation, "Cannot assign subnet ID of "
+                          << (*other_subnet)->getID()
+                          << " to shared network: " << network_name
+                          << ", network does not exist");
+            }
+        }
+    }
 }
 
 ConstSubnet6Ptr
@@ -147,15 +274,27 @@ CfgSubnets6::selectSubnet(const asiolink::IOAddress& address,
 
             // If the specified address matches a relay address, return this
             // subnet.
-            if (is_relay_address &&
-                ((*subnet)->hasRelayAddress(address)) &&
-                (*subnet)->clientSupported(client_classes)) {
+            if ((*subnet)->hasRelays()) {
+                if (!(*subnet)->hasRelayAddress(address)) {
+                    continue;
+                }
+
+            } else {
+                SharedNetwork6Ptr network;
+                (*subnet)->getSharedNetwork(network);
+                if (!network || !network->hasRelayAddress(address)) {
+                    continue;
+                }
+            }
+
+            if ((*subnet)->clientSupported(client_classes)) {
+                // The relay address is matching the one specified for a subnet
+                // or its shared network.
                 LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE,
                           DHCPSRV_CFGMGR_SUBNET6_RELAY)
                     .arg((*subnet)->toText()).arg(address.toText());
                 return (*subnet);
             }
-
         }
     }
 
@@ -188,7 +327,7 @@ CfgSubnets6::selectSubnet(const std::string& iface_name,
             // If interface name matches with the one specified for the subnet
             // and the client is not rejected based on the classification,
             // return the subnet.
-            if ((iface_name == (*subnet)->getIface()) &&
+            if (((*subnet)->getIface() == iface_name) &&
                 (*subnet)->clientSupported(client_classes)) {
 
                 LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE,

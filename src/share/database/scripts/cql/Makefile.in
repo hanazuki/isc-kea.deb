@@ -93,6 +93,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -105,7 +106,8 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
-CONFIG_CLEAN_FILES = upgrade_1.0_to_2.0.sh upgrade_2.0_to_3.0.sh
+CONFIG_CLEAN_FILES = upgrade_1.0_to_2.0.sh upgrade_2.0_to_3.0.sh \
+	upgrade_3.0_to_4.0.sh upgrade_4.0_to_5.0.sh wipe_data.sh
 CONFIG_CLEAN_VPATH_FILES =
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -193,7 +195,9 @@ CTAGS = ctags
 DIST_SUBDIRS = $(SUBDIRS)
 am__DIST_COMMON = $(srcdir)/Makefile.in \
 	$(srcdir)/upgrade_1.0_to_2.0.sh.in \
-	$(srcdir)/upgrade_2.0_to_3.0.sh.in
+	$(srcdir)/upgrade_2.0_to_3.0.sh.in \
+	$(srcdir)/upgrade_3.0_to_4.0.sh.in \
+	$(srcdir)/upgrade_4.0_to_5.0.sh.in $(srcdir)/wipe_data.sh.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -236,7 +240,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -257,7 +260,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -267,6 +269,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -276,7 +279,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -327,6 +329,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -344,17 +347,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -416,7 +419,8 @@ top_srcdir = @top_srcdir@
 SUBDIRS = .
 sqlscriptsdir = ${datarootdir}/${PACKAGE_NAME}/scripts/cql
 sqlscripts_DATA = dhcpdb_create.cql dhcpdb_drop.cql \
-	upgrade_1.0_to_2.0.sh upgrade_2.0_to_3.0.sh soft_wipe.cql
+	upgrade_1.0_to_2.0.sh upgrade_2.0_to_3.0.sh \
+	upgrade_3.0_to_4.0.sh upgrade_4.0_to_5.0.sh wipe_data.sh
 EXTRA_DIST = ${sqlscripts_DATA}
 all: all-recursive
 
@@ -453,6 +457,12 @@ $(am__aclocal_m4_deps):
 upgrade_1.0_to_2.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_1.0_to_2.0.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 upgrade_2.0_to_3.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_2.0_to_3.0.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+upgrade_3.0_to_4.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_3.0_to_4.0.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+upgrade_4.0_to_5.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_4.0_to_5.0.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+wipe_data.sh: $(top_builddir)/config.status $(srcdir)/wipe_data.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 
 mostlyclean-libtool:

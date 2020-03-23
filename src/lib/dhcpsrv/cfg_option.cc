@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,9 @@
 #include <dhcp/dhcp6.h>
 #include <dhcp/option_space.h>
 #include <util/encode/hex.h>
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
+#include <boost/make_shared.hpp>
 #include <string>
 #include <sstream>
 #include <vector>
@@ -19,6 +22,24 @@ using namespace isc::data;
 
 namespace isc {
 namespace dhcp {
+
+OptionDescriptorPtr
+OptionDescriptor::create(const OptionPtr& opt, bool persist,
+                         const std::string& formatted_value,
+                         ConstElementPtr user_context) {
+    return (boost::make_shared<OptionDescriptor>(opt, persist, formatted_value,
+                                                 user_context));
+}
+
+OptionDescriptorPtr
+OptionDescriptor::create(bool persist) {
+    return (boost::make_shared<OptionDescriptor>(persist));
+}
+
+OptionDescriptorPtr
+OptionDescriptor::create(const OptionDescriptor& desc) {
+    return (boost::make_shared<OptionDescriptor>(desc));
+}
 
 bool
 OptionDescriptor::equals(const OptionDescriptor& other) const {
@@ -44,8 +65,13 @@ CfgOption::equals(const CfgOption& other) const {
 
 void
 CfgOption::add(const OptionPtr& option, const bool persistent,
-               const std::string& option_space) {
-    add(OptionDescriptor(option, persistent), option_space);
+               const std::string& option_space,
+               const uint64_t id) {
+    OptionDescriptor desc(option, persistent);
+    if (id > 0) {
+        desc.setId(id);
+    }
+    add(desc, option_space);
 }
 
 void
@@ -66,6 +92,32 @@ CfgOption::add(const OptionDescriptor& desc, const std::string& option_space) {
     }
 }
 
+void
+CfgOption::replace(const OptionDescriptor& desc, const std::string& option_space) {
+    if (!desc.option_) {
+        isc_throw(isc::BadValue, "option being replaced must not be NULL");
+    } 
+
+    // Check for presence of options.
+    OptionContainerPtr options = getAll(option_space);
+    if (!options) {
+        isc_throw(isc::BadValue, "option space " << option_space
+                  << " does not exist");
+    }
+
+    // Find the option we want to replace.
+    OptionContainerTypeIndex& idx = options->get<1>();
+    OptionContainerTypeIndex::const_iterator od_itr = idx.find(desc.option_->getType());
+    if (od_itr == idx.end()) {
+        isc_throw(isc::BadValue, "cannot replace option: " 
+                  << option_space << ":" << desc.option_->getType()
+                  << ", it does not exist");
+    } 
+
+    idx.replace(od_itr, desc);
+}
+
+
 std::list<std::string>
 CfgOption::getVendorIdsSpaceNames() const {
     std::list<uint32_t> ids = getVendorIds();
@@ -79,6 +131,101 @@ CfgOption::getVendorIdsSpaceNames() const {
         names.push_back(s.str());
     }
     return (names);
+}
+
+void
+CfgOption::merge(CfgOptionDefPtr cfg_def,  CfgOption& other) {
+    // First we merge our options into other.
+    // This adds my options that are not
+    // in other, to other (i.e we skip over
+    // duplicates).
+    mergeTo(other);
+
+    // Create option instances based on the given definitions.
+    other.createOptions(cfg_def);
+
+    // Next we copy "other" on top of ourself.
+    other.copyTo(*this);
+}
+
+void
+CfgOption::createOptions(CfgOptionDefPtr cfg_def) {
+    // Iterate over all the option descriptors in
+    // all the spaces and instantiate the options
+    // based on the given definitions.
+    for (auto space : getOptionSpaceNames()) {
+        for (auto opt_desc : *(getAll(space))) {
+            if (createDescriptorOption(cfg_def, space, opt_desc)) {
+                // Option was recreated, let's replace the descriptor. 
+                replace(opt_desc,space);
+            }
+        }
+    }
+}
+
+bool
+CfgOption::createDescriptorOption(CfgOptionDefPtr cfg_def, const std::string& space,
+                                  OptionDescriptor& opt_desc) {
+    if (!opt_desc.option_) {
+        isc_throw(BadValue,
+                  "validateCreateOption: descriptor has no option instance");
+    }
+
+    Option::Universe universe = opt_desc.option_->getUniverse();
+    uint16_t code = opt_desc.option_->getType();
+
+    // Find the option's defintion, if it has one.
+    // First, check for a standard definition.
+    OptionDefinitionPtr def = LibDHCP::getOptionDef(space, code);
+
+    // If there is no standard definition but the option is vendor specific,
+    // we should search the definition within the vendor option space.
+    if (!def && (space != DHCP4_OPTION_SPACE) && (space != DHCP6_OPTION_SPACE)) {
+        uint32_t vendor_id = LibDHCP::optionSpaceToVendorId(space);
+        if (vendor_id > 0) {
+            def = LibDHCP::getVendorOptionDef(universe, vendor_id, code);
+        }
+    }
+
+    // Still haven't found the definition, so look for custom
+    // definition in the given set of configured definitions
+    if (!def) {
+        def = cfg_def->get(space, code);
+    }
+
+    std::string& formatted_value = opt_desc.formatted_value_;
+    if (!def) {
+        if (!formatted_value.empty()) {
+            isc_throw(InvalidOperation, "option: " << space << "." << code
+                      << " has a formatted value: '" << formatted_value
+                      << "' but no option definition");
+        }
+
+        // If there's no definition and no formatted string, we'll
+        // settle for the generic option already in the descriptor.
+        // Indicate no-change by returning false.
+        return (false);
+    }
+
+    try {
+        // Definition found. Let's replace the generic option in
+        // the descriptor with one created based on definition's factory.
+        if (formatted_value.empty()) {
+            // No formatted value, use data stored in the generic option.
+            opt_desc.option_ = def->optionFactory(universe, code, opt_desc.option_->getData());
+        } else {
+            // Spit the value specified in comma separated values format.
+            std::vector<std::string> split_vec;
+            boost::split(split_vec, formatted_value, boost::is_any_of(","));
+            opt_desc.option_ = def->optionFactory(universe, code, split_vec);
+        }
+    } catch (const std::exception& ex) {
+            isc_throw(InvalidOperation, "could not create option: " << space << "." << code
+                      << " from data specified, reason: " << ex.what());
+    }
+
+    // Indicate we replaced the definition.
+    return(true);
 }
 
 void
@@ -189,8 +336,99 @@ CfgOption::getAll(const uint32_t vendor_id) const {
     return (vendor_options_.getItems(vendor_id));
 }
 
+size_t
+CfgOption::del(const std::string& option_space, const uint16_t option_code) {
+    // Check for presence of options.
+    OptionContainerPtr options = getAll(option_space);
+    if (!options || options->empty()) {
+        // There are no options, so there is nothing to do.
+        return (0);
+    }
+
+    // If this is not top level option we may also need to delete the
+    // option instance from options encapsulating the particular option
+    // space.
+    if ((option_space != DHCP4_OPTION_SPACE) &&
+        (option_space != DHCP6_OPTION_SPACE)) {
+        // For each option space name iterate over the existing options.
+        auto option_space_names = getOptionSpaceNames();
+        for (auto option_space_from_list : option_space_names) {
+            // Get all options within the particular option space.
+            auto options_in_space = getAll(option_space_from_list);
+            for (auto option_it = options_in_space->begin();
+                 option_it != options_in_space->end();
+                 ++option_it) {
+
+                // Check if the option encapsulates our option space and
+                // it does, try to delete our option.
+                if (option_it->option_ &&
+                    (option_it->option_->getEncapsulatedSpace() == option_space)) {
+                    option_it->option_->delOption(option_code);
+                }
+            }
+        }
+    }
+
+    auto& idx = options->get<1>();
+    return (idx.erase(option_code));
+}
+
+size_t
+CfgOption::del(const uint32_t vendor_id, const uint16_t option_code) {
+    // Check for presence of options.
+    OptionContainerPtr vendor_options = getAll(vendor_id);
+    if (!vendor_options || vendor_options->empty()) {
+        // There are no options, so there is nothing to do.
+        return (0);
+    }
+
+    auto& idx = vendor_options->get<1>();
+    return (idx.erase(option_code));
+}
+
+size_t
+CfgOption::del(const uint64_t id) {
+    // Hierarchical nature of the options configuration requires that
+    // we go over all options and decapsulate them before removing
+    // any of them. Let's walk over the existing option spaces.
+    for (auto space_name : getOptionSpaceNames()) {
+        // Get all options for the option space.
+        auto options = getAll(space_name);
+        for (auto option_it = options->begin(); option_it != options->end();
+             ++option_it) {
+            if (!option_it->option_) {
+                continue;
+            }
+
+            // For each option within the option space we need to dereference
+            // any existing sub options.
+            auto sub_options = option_it->option_->getOptions();
+            for (auto sub = sub_options.begin(); sub != sub_options.end();
+                 ++sub) {
+                // Dereference sub option.
+                option_it->option_->delOption(sub->second->getType());
+            }
+        }
+    }
+
+    // Now that we got rid of dependencies between the instances of the options
+    // we can delete all options having a specified id.
+    size_t num_deleted = options_.deleteItems(id) + vendor_options_.deleteItems(id);
+
+    // Let's encapsulate those options that remain in the configuration.
+    encapsulate();
+
+    // Return the number of deleted options.
+    return (num_deleted);
+}
+
 ElementPtr
 CfgOption::toElement() const {
+    return (toElementWithMetadata(false));
+}
+
+ElementPtr
+CfgOption::toElementWithMetadata(const bool include_metadata) const {
     // option-data value is a list of maps
     ElementPtr result = Element::createList();
     // Iterate first on options using space names
@@ -232,6 +470,12 @@ CfgOption::toElement() const {
             }
             // Set the persistency flag
             map->set("always-send", Element::create(opt->persistent_));
+
+            // Include metadata if requested.
+            if (include_metadata) {
+                map->set("metadata", opt->getMetadata());
+            }
+
             // Push on the list
             result->add(map);
         }
@@ -283,6 +527,7 @@ CfgOption::toElement() const {
     }
     return (result);
 }
+
 
 }  // namespace dhcp
 }  // namespace isc

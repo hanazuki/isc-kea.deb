@@ -1,4 +1,4 @@
-// Copyright (C) 2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,8 +10,10 @@
 #include <stats/observation.h>
 #include <stats/context.h>
 #include <boost/noncopyable.hpp>
+#include <boost/scoped_ptr.hpp>
 
 #include <map>
+#include <mutex>
 #include <string>
 #include <vector>
 #include <sstream>
@@ -59,7 +61,7 @@ namespace stats {
 /// for adding logging have been marked in @ref addValueInternal and
 /// @ref setValueInternal.
 class StatsMgr : public boost::noncopyable {
- public:
+public:
 
     /// @brief Statistics Manager accessor method.
     static StatsMgr& instance();
@@ -133,27 +135,40 @@ class StatsMgr : public boost::noncopyable {
     /// Samples older than duration will be discarded. This is time-constrained
     /// approach. For sample count constrained approach, see @ref
     /// setMaxSampleCount() below.
-    ///
-    /// @todo: Not implemented.
-    ///
-    /// Example: to set a statistic to keep observations for the last 5 minutes,
-    /// call setMaxSampleAge("incoming-packets", time_duration(0,5,0,0));
+    /// Example:
+    /// To set a statistic to keep observations for the last 5 minutes, call:
+    /// setMaxSampleAge("incoming-packets", time_duration(0, 5, 0, 0));
     /// to revert statistic to a single value, call:
-    /// setMaxSampleAge("incoming-packets" time_duration(0,0,0,0))
-    void setMaxSampleAge(const std::string& name, const StatsDuration& duration);
+    /// setMaxSampleAge("incoming-packets", time_duration(0, 0, 0, 0));
+    ///
+    /// @param name name of the observation
+    /// @param duration determines maximum age of samples
+    /// @return true if successful, false if there's no such statistic
+    bool setMaxSampleAge(const std::string& name, const StatsDuration& duration);
 
     /// @brief Determines how many samples of a given statistic should be kept.
     ///
     /// Specifies that statistic name should be stored not as single value, but
     /// rather as a set of values. In this form, at most max_samples will be kept.
-    /// When adding max_samples+1 sample, the oldest sample will be discarded.
-    ///
-    /// @todo: Not implemented.
-    ///
+    /// When adding max_samples + 1 sample, the oldest sample will be discarded.
     /// Example:
     /// To set a statistic to keep the last 100 observations, call:
     /// setMaxSampleCount("incoming-packets", 100);
-    void setMaxSampleCount(const std::string& name, uint32_t max_samples);
+    ///
+    /// @param name name of the observation
+    /// @param max_samples how many samples of a given statistic should be kept
+    /// @return true if successful, false if there's no such statistic
+    bool setMaxSampleCount(const std::string& name, uint32_t max_samples);
+
+    /// @brief Set duration limit for all collected statistics.
+    ///
+    /// @param duration determines maximum age of samples
+    void setMaxSampleAgeAll(const StatsDuration& duration);
+
+    /// @brief Set count limit for all collected statistics.
+    ///
+    /// @param max_samples how many samples of a given statistic should be kept
+    void setMaxSampleCountAll(uint32_t max_samples);
 
     /// @}
 
@@ -167,6 +182,7 @@ class StatsMgr : public boost::noncopyable {
     ///
     /// This is a convenience function and is equivalent to setValue(name,
     /// neutral_value), where neutral_value is 0, 0.0 or "".
+    ///
     /// @param name name of the statistic to be reset.
     /// @return true if successful, false if there's no such statistic
     bool reset(const std::string& name);
@@ -182,6 +198,12 @@ class StatsMgr : public boost::noncopyable {
 
     /// @brief Removes all collected statistics.
     void removeAll();
+
+    /// @brief Returns size of specified statistic.
+    ///
+    /// @param name name of the statistic which size should be return.
+    /// @return size of specified statistic, 0 means lack of given statistic.
+    size_t getSize(const std::string& name) const;
 
     /// @brief Returns number of available statistics.
     ///
@@ -203,9 +225,20 @@ class StatsMgr : public boost::noncopyable {
     /// @brief Returns an observation.
     ///
     /// Used in testing only. Production code should use @ref get() method.
+    /// Calls @ref getObservationInternal() method in a thread safe context.
+    ///
     /// @param name name of the statistic
     /// @return Pointer to the Observation object
     ObservationPtr getObservation(const std::string& name) const;
+
+    /// @brief Returns an observation in a thread safe context.
+    ///
+    /// Used in testing only. Production code should use @ref get() method.
+    /// Should be called in a thread safe context.
+    ///
+    /// @param name name of the statistic
+    /// @return Pointer to the Observation object
+    ObservationPtr getObservationInternal(const std::string& name) const;
 
     /// @brief Generates statistic name in a given context
     ///
@@ -223,7 +256,7 @@ class StatsMgr : public boost::noncopyable {
     /// @return returns full statistic name in form context[index].stat_name
     template<typename Type>
     static std::string generateName(const std::string& context, Type index,
-                             const std::string& stat_name) {
+                                    const std::string& stat_name) {
         std::stringstream name;
         name << context << "[" << index << "]." << stat_name;
         return (name.str());
@@ -239,7 +272,7 @@ class StatsMgr : public boost::noncopyable {
     ///
     /// This method handles statistic-get command, which returns value
     /// of a given statistic). It expects one parameter stored in params map:
-    /// name: name-of-the-statistic
+    /// name: name of the statistic
     ///
     /// Example params structure:
     /// {
@@ -257,7 +290,7 @@ class StatsMgr : public boost::noncopyable {
     ///
     /// This method handles statistic-reset command, which resets value
     /// of a given statistic. It expects one parameter stored in params map:
-    /// name: name-of-the-statistic
+    /// name: name of the statistic
     ///
     /// Example params structure:
     /// {
@@ -275,7 +308,7 @@ class StatsMgr : public boost::noncopyable {
     ///
     /// This method handles statistic-reset command, which removes a given
     /// statistic completely. It expects one parameter stored in params map:
-    /// name: name-of-the-statistic
+    /// name: name of the statistic
     ///
     /// Example params structure:
     /// {
@@ -288,6 +321,50 @@ class StatsMgr : public boost::noncopyable {
     static isc::data::ConstElementPtr
     statisticRemoveHandler(const std::string& name,
                            const isc::data::ConstElementPtr& params);
+
+    /// @brief Handles statistic-sample-age-set command
+    ///
+    /// This method handles statistic-sample-age-set command,
+    /// which set max_sample_age_ limit of a given statistic
+    /// and leaves max_sample_count_ disabled.
+    /// It expects two parameters stored in params map:
+    /// name: name of the statistic
+    /// duration: time limit expressed as a number of seconds
+    ///
+    /// Example params structure:
+    /// {
+    ///     "name": "packets-received",
+    ///     "duration": 1245
+    /// }
+    ///
+    /// @param name name of the command (ignored, should be "statistic-sample-age-set")
+    /// @param params structure containing a map that contains "name" and "duration"
+    /// @return answer containing information about successfully setup limit of statistic
+    static isc::data::ConstElementPtr
+    statisticSetMaxSampleAgeHandler(const std::string& name,
+                                    const isc::data::ConstElementPtr& params);
+
+    /// @brief Handles statistic-sample-count-set command
+    ///
+    /// This method handles statistic-sample-count-set command,
+    /// which set max_sample_count_ limit of a given statistic
+    /// and leaves max_sample_age_ disabled.
+    /// It expects two parameters stored in params map:
+    /// name: name of the statistic
+    /// max-samples: count limit
+    ///
+    /// Example params structure:
+    /// {
+    ///     "name": "packets-received",
+    ///     "max-samples": 15
+    /// }
+    ///
+    /// @param name name of the command (ignored, should be "statistic-sample-count-set")
+    /// @param params structure containing a map that contains "name" and "max-samples"
+    /// @return answer containing information about successfully setup limit of statistic
+    static isc::data::ConstElementPtr
+    statisticSetMaxSampleCountHandler(const std::string& name,
+                                      const isc::data::ConstElementPtr& params);
 
     /// @brief Handles statistic-get-all command
     ///
@@ -325,16 +402,57 @@ class StatsMgr : public boost::noncopyable {
     statisticRemoveAllHandler(const std::string& name,
                               const isc::data::ConstElementPtr& params);
 
+    /// @brief Handles statistic-sample-age-set-all command
+    ///
+    /// This method handles statistic-sample-age-set-all command,
+    /// which set max_sample_age_ limit to all statistics.
+    /// It expects one parameter stored in params map:
+    /// duration: limit expressed as a number of seconds
+    ///
+    /// Example params structure:
+    /// {
+    ///     "duration": 1245
+    /// }
+    ///
+    /// @param name name of the command (ignored, should be "statistic-sample-age-set-all")
+    /// @param params structure containing a map that contains "duration"
+    /// @return answer confirming success of this operation
+    static isc::data::ConstElementPtr
+    statisticSetMaxSampleAgeAllHandler(const std::string& name,
+                                       const isc::data::ConstElementPtr& params);
+
+    /// @brief Handles statistic-sample-count-set-all command
+    ///
+    /// This method handles statistic-sample-count-set-all command,
+    /// which set max_sample_count_ limit of all statistics.
+    /// It expects one parameter stored in params map:
+    /// max-samples: count limit
+    ///
+    /// Example params structure:
+    /// {
+    ///     "max-samples": 15
+    /// }
+    ///
+    /// @param name name of the command (ignored, should be "statistic-sample-count-set-all")
+    /// @param params structure containing a map that contains "max-samples"
+    /// @return answer confirming success of this operation
+    static isc::data::ConstElementPtr
+    statisticSetMaxSampleCountAllHandler(const std::string& name,
+                                         const isc::data::ConstElementPtr& params);
+
     /// @}
 
 private:
 
+    /// @private
+
     /// @brief Private constructor.
+    ///
     /// StatsMgr is a singleton. It should be accessed using @ref instance
     /// method.
     StatsMgr();
 
-    /// @public
+    /// @private
 
     /// @brief Sets a given statistic to specified value (internal version).
     ///
@@ -348,18 +466,17 @@ private:
     /// @throw InvalidStatType is statistic exists and has a different type.
     template<typename DataType>
     void setValueInternal(const std::string& name, DataType value) {
-
         // If we want to log each observation, here would be the best place for it.
-        ObservationPtr stat = getObservation(name);
+        ObservationPtr stat = getObservationInternal(name);
         if (stat) {
             stat->setValue(value);
         } else {
             stat.reset(new Observation(name, value));
-            addObservation(stat);
+            addObservationInternal(stat);
         }
     }
 
-    /// @public
+    /// @private
 
     /// @brief Adds specified value to a given statistic (internal version).
     ///
@@ -373,14 +490,13 @@ private:
     /// @throw InvalidStatType is statistic exists and has a different type.
     template<typename DataType>
     void addValueInternal(const std::string& name, DataType value) {
-
         // If we want to log each observation, here would be the best place for it.
-        ObservationPtr existing = getObservation(name);
+        ObservationPtr existing = getObservationInternal(name);
         if (!existing) {
             // We tried to add to a non-existing statistic. We can recover from
             // that. Simply add the new incremental value as a new statistic and
             // we're done.
-            setValue(name, value);
+            setValueInternal(name, value);
             return;
         } else {
             // Let's hope it is of correct type. If not, the underlying
@@ -389,22 +505,160 @@ private:
         }
     }
 
-    /// @public
+    /// @private
 
     /// @brief Adds a new observation.
     ///
     /// That's an utility method used by public @ref setValue() and
     /// @ref addValue() methods.
+    /// Calls @ref addObservationInternal() method in a thread safe context.
+    ///
     /// @param stat observation
     void addObservation(const ObservationPtr& stat);
 
     /// @private
 
+    /// @brief Adds a new observation in a thread safe context.
+    ///
+    /// That's an utility method used by public @ref setValue() and
+    /// @ref addValue() methods.
+    /// Should be called in a thread safe context.
+    ///
+    /// @param stat observation
+    void addObservationInternal(const ObservationPtr& stat);
+
+    /// @private
+
     /// @brief Tries to delete an observation.
+    ///
+    /// Calls @ref deleteObservationInternal() method in a thread safe context.
     ///
     /// @param name of the statistic to be deleted
     /// @return true if deleted, false if not found
     bool deleteObservation(const std::string& name);
+
+    /// @private
+
+    /// @brief Tries to delete an observation in a thread safe context.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param name of the statistic to be deleted
+    /// @return true if deleted, false if not found
+    bool deleteObservationInternal(const std::string& name);
+
+    /// @private
+
+    /// @brief Determines maximum age of samples.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param name name of the observation
+    /// @param duration determines maximum age of samples
+    /// @return true if successful, false if there's no such statistic
+    bool setMaxSampleAgeInternal(const std::string& name, const StatsDuration& duration);
+
+    /// @private
+
+    /// @brief Determines how many samples of a given statistic should be kept.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param name name of the observation
+    /// @param max_samples how many samples of a given statistic should be kept
+    /// @return true if successful, false if there's no such statistic
+    bool setMaxSampleCountInternal(const std::string& name, uint32_t max_samples);
+
+    /// @private
+
+    /// @brief Set duration limit for all collected statistics.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param duration determines maximum age of samples
+    void setMaxSampleAgeAllInternal(const StatsDuration& duration);
+
+    /// @private
+
+    /// @brief Set count limit for all collected statistics.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param max_samples how many samples of a given statistic should be kept
+    void setMaxSampleCountAllInternal(uint32_t max_samples);
+
+    /// @private
+
+    /// @brief Resets specified statistic.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param name name of the statistic to be reset.
+    /// @return true if successful, false if there's no such statistic
+    bool resetInternal(const std::string& name);
+
+    /// @private
+
+    /// @brief Removes specified statistic.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param name name of the statistic to be removed.
+    /// @return true if successful, false if there's no such statistic
+    bool delInternal(const std::string& name);
+
+    /// @private
+
+    /// @brief Resets all collected statistics back to zero.
+    ///
+    /// Should be called in a thread safe context.
+    void resetAllInternal();
+
+    /// @private
+
+    /// @brief Removes all collected statistics.
+    ///
+    /// Should be called in a thread safe context.
+    void removeAllInternal();
+
+    /// @private
+
+    /// @brief Returns size of specified statistic.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param name name of the statistic which size should be return.
+    /// @return size of specified statistic, 0 means lack of given statistic.
+    size_t getSizeInternal(const std::string& name) const;
+
+    /// @private
+
+    /// @brief Returns number of available statistics.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return number of recorded statistics.
+    size_t countInternal() const;
+
+    /// @private
+
+    /// @brief Returns a single statistic as a JSON structure.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return JSON structures representing a single statistic
+    isc::data::ConstElementPtr getInternal(const std::string& name) const;
+
+    /// @private
+
+    /// @brief Returns all statistics as a JSON structure.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return JSON structures representing all statistics
+    isc::data::ConstElementPtr getAllInternal() const;
+
+    /// @private
 
     /// @brief Utility method that attempts to extract statistic name
     ///
@@ -422,11 +676,57 @@ private:
                             std::string& name,
                             std::string& reason);
 
-    // This is a global context. All statistics will initially be stored here.
+    /// @private
+
+    /// @brief Utility method that attempts to extract duration limit for
+    /// a given statistic
+    ///
+    /// This method attempts to extract duration limit for a given statistic
+    /// from the params structure.
+    /// It is expected to be a map that contains four 'duration' elements: 'hours',
+    /// 'minutes', 'seconds' and 'milliseconds'
+    /// all are of type int. If present as expected, statistic duration
+    /// limit is set and true is returned.
+    /// If any of these four parameters is missing or is of incorrect type,
+    /// the reason is specified in reason parameter and false is returned.
+    ///
+    /// @param params parameters structure received in command
+    /// @param duration [out] duration limit for the statistic (if no error detected)
+    /// @param reason [out] failure reason (if error is detected)
+    /// @return true (if everything is ok), false otherwise
+    static bool getStatDuration(const isc::data::ConstElementPtr& params,
+                                StatsDuration& duration,
+                                std::string& reason);
+
+    /// @private
+
+    /// @brief Utility method that attempts to extract count limit for
+    /// a given statistic
+    ///
+    /// This method attempts to extract count limit for a given statistic
+    /// from the params structure.
+    /// It is expected to be a map that contains 'max-samples' element,
+    /// that is of type int. If present as expected, statistic count
+    /// limit (max_samples) is set and true is returned.
+    /// If missing or is of incorrect type, the reason is specified in reason
+    /// parameter and false is returned.
+    ///
+    /// @param params parameters structure received in command
+    /// @param max_samples [out] count limit for the statistic (if no error detected)
+    /// @param reason [out] failure reason (if error is detected)
+    /// @return true (if everything is ok), false otherwise
+    static bool getStatMaxSamples(const isc::data::ConstElementPtr& params,
+                                  uint32_t& max_samples,
+                                  std::string& reason);
+
+    /// @brief This is a global context. All statistics will initially be stored here.
     StatContextPtr global_;
+
+    /// @brief The mutex used to protect internal state.
+    const boost::scoped_ptr<std::mutex> mutex_;
 };
 
-};
-};
+}  // namespace stats
+}  // namespace isc
 
 #endif // STATS_MGR

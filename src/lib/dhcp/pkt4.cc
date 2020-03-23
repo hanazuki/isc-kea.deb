@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -135,7 +135,9 @@ Pkt4::pack() {
         // write DHCP magic cookie
         buffer_out_.writeUint32(DHCP_OPTIONS_COOKIE);
 
-        LibDHCP::packOptions4(buffer_out_, options_);
+        // Call packOptions4() with parameter,"top", true. This invokes
+        // logic to emit the message type option first.
+        LibDHCP::packOptions4(buffer_out_, options_, true);
 
         // add END option that indicates end of options
         // (End option is very simple, just a 255 octet)
@@ -182,18 +184,18 @@ Pkt4::unpack() {
     if (buffer_in.getLength() == buffer_in.getPosition()) {
         // this is *NOT* DHCP packet. It does not have any DHCPv4 options. In
         // particular, it does not have magic cookie, a 4 byte sequence that
-        // differentiates between DHCP and BOOTP packets.
-        isc_throw(InvalidOperation, "Received BOOTP packet. BOOTP is not supported.");
+        // differentiates between DHCP and RFC 951 BOOTP packets.
+        isc_throw(InvalidOperation, "Received BOOTP packet without vendor information extensions.");
     }
 
     if (buffer_in.getLength() - buffer_in.getPosition() < 4) {
-      // there is not enough data to hold magic DHCP cookie
-      isc_throw(Unexpected, "Truncated or no DHCP packet.");
+        // there is not enough data to hold magic DHCP cookie
+        isc_throw(Unexpected, "Truncated or no DHCP packet.");
     }
 
     uint32_t magic = buffer_in.readUint32();
     if (magic != DHCP_OPTIONS_COOKIE) {
-      isc_throw(Unexpected, "Invalid or missing DHCP magic cookie");
+        isc_throw(Unexpected, "Invalid or missing DHCP magic cookie");
     }
 
     size_t opts_len = buffer_in.getLength() - buffer_in.getPosition();
@@ -203,7 +205,7 @@ Pkt4::unpack() {
     // a vector as an input.
     buffer_in.readVector(opts_buffer, opts_len);
 
-    size_t offset = LibDHCP::unpackOptions4(opts_buffer, DHCP4_OPTION_SPACE, options_, deferred_options_);
+    size_t offset = LibDHCP::unpackOptions4(opts_buffer, DHCP4_OPTION_SPACE, options_, deferred_options_, false);
 
     // If offset is not equal to the size and there is no DHO_END,
     // then something is wrong here. We either parsed past input

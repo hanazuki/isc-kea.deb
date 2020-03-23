@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -35,11 +35,18 @@ CSVLeaseFile6::append(const Lease6& lease) {
     // Bump the number of write attempts
     ++writes_;
 
+    if (((!(lease.duid_)) || (*(lease.duid_) == DUID::EMPTY())) &&
+        (lease.state_ != Lease::STATE_DECLINED)) {
+        ++write_errs_;
+        isc_throw(BadValue, "Lease6: " << lease.addr_.toText() << ", state: "
+                  << Lease::basicStatesToText(lease.state_) << ", has no DUID");
+    }
+
     CSVRow row(getColumnCount());
     row.writeAt(getColumnIndex("address"), lease.addr_.toText());
     row.writeAt(getColumnIndex("duid"), lease.duid_->toText());
     row.writeAt(getColumnIndex("valid_lifetime"), lease.valid_lft_);
-    row.writeAt(getColumnIndex("expire"), static_cast<uint64_t>(lease.cltt_ + lease.valid_lft_));
+    row.writeAt(getColumnIndex("expire"), static_cast<uint64_t>(lease.cltt_) + lease.valid_lft_);
     row.writeAt(getColumnIndex("subnet_id"), lease.subnet_id_);
     row.writeAt(getColumnIndex("pref_lifetime"), lease.preferred_lft_);
     row.writeAt(getColumnIndex("lease_type"), lease.type_);
@@ -91,7 +98,7 @@ CSVLeaseFile6::next(Lease6Ptr& lease) {
 
         lease.reset(new Lease6(readType(row), readAddress(row), readDUID(row),
                                readIAID(row), readPreferred(row),
-                               readValid(row), 0, 0, // t1, t2 = 0
+                               readValid(row),
                                readSubnetID(row),
                                readHWAddr(row),
                                readPrefixLen(row)));

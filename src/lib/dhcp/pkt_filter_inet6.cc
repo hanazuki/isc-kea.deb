@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -319,12 +319,12 @@ PktFilterInet6::send(const Iface&, uint16_t sockfd, const Pkt6Ptr& pkt) {
     pkt->updateTimestamp();
 
     int result = sendmsg(sockfd, &m, 0);
-    if  (result < 0) {
+    if (result < 0) {
         isc_throw(SocketWriteError, "pkt6 send failed: sendmsg() returned"
                   " with an error: " << strerror(errno));
     }
 
-    return (result);
+    return (0);
 }
 
 

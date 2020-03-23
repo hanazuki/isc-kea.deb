@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,9 +16,9 @@
 #include <dhcp/packet_queue_mgr6.h>
 #include <dhcp/pkt_filter.h>
 #include <dhcp/pkt_filter6.h>
-#include <util/optional_value.h>
+#include <util/optional.h>
 #include <util/watch_socket.h>
-#include <util/threads/watched_thread.h>
+#include <util/watched_thread.h>
 
 #include <boost/function.hpp>
 #include <boost/noncopyable.hpp>
@@ -118,7 +118,7 @@ public:
     static const unsigned int MAX_MAC_LEN = 20;
 
     /// @brief Address type.
-    typedef util::OptionalValue<asiolink::IOAddress> Address;
+    typedef util::Optional<asiolink::IOAddress> Address;
 
     /// Type that defines list of addresses
     typedef std::list<Address> AddressCollection;
@@ -227,7 +227,7 @@ public:
 
     /// @brief Returns all addresses available on an interface.
     ///
-    /// The returned addresses are encapsulated in the @c util::OptionalValue
+    /// The returned addresses are encapsulated in the @c util::Optional
     /// class to be able to selectively flag some of the addresses as active
     /// (when optional value is specified) or inactive (when optional value
     /// is specified). If the address is marked as active, the
@@ -478,7 +478,8 @@ boost::function<void(const std::string& errmsg)> IfaceMgrErrorMsgCallback;
 class IfaceMgr : public boost::noncopyable {
 public:
     /// Defines callback used when data is received over external sockets.
-    typedef boost::function<void ()> SocketCallback;
+    /// @param fd socket descriptor of the ready socket
+    typedef boost::function<void (int fd)> SocketCallback;
 
     /// Keeps callback information for external sockets.
     struct SocketCallbackInfo {
@@ -925,6 +926,17 @@ public:
 
     /// @brief Deletes external socket
     void deleteExternalSocket(int socketfd);
+
+    /// @brief Scans registered socket set and removes any that are invalid.
+    ///
+    /// Walks the list of registered external sockets and tests each for
+    /// validity.  If any are found to be invalid they are removed. This is
+    /// primarily a self-defense mechanism against hook libs or other users
+    /// of external sockets that may leave a closed socket registered by
+    /// mistake.
+    ///
+    /// @return A count of the sockets purged.
+    int purgeBadSockets();
 
     /// @brief Deletes all external sockets.
     void deleteAllExternalSockets();
@@ -1374,7 +1386,7 @@ private:
     PacketQueueMgr6Ptr packet_queue_mgr6_;
 
     /// DHCP packet receiver.
-    isc::util::thread::WatchedThreadPtr dhcp_receiver_;
+    isc::util::WatchedThreadPtr dhcp_receiver_;
 };
 
 }; // namespace isc::dhcp

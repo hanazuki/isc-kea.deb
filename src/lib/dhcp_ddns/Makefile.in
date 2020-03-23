@@ -94,6 +94,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -149,18 +150,15 @@ libkea_dhcp_ddns_la_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 	$(am__DEPENDENCIES_1)
 am_libkea_dhcp_ddns_la_OBJECTS = libkea_dhcp_ddns_la-dhcp_ddns_log.lo \
+	libkea_dhcp_ddns_la-dhcp_ddns_messages.lo \
 	libkea_dhcp_ddns_la-ncr_io.lo libkea_dhcp_ddns_la-ncr_msg.lo \
 	libkea_dhcp_ddns_la-ncr_udp.lo
-nodist_libkea_dhcp_ddns_la_OBJECTS =  \
-	libkea_dhcp_ddns_la-dhcp_ddns_messages.lo
-libkea_dhcp_ddns_la_OBJECTS = $(am_libkea_dhcp_ddns_la_OBJECTS) \
-	$(nodist_libkea_dhcp_ddns_la_OBJECTS)
+libkea_dhcp_ddns_la_OBJECTS = $(am_libkea_dhcp_ddns_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
@@ -221,8 +219,7 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(libkea_dhcp_ddns_la_SOURCES) \
-	$(nodist_libkea_dhcp_ddns_la_SOURCES)
+SOURCES = $(libkea_dhcp_ddns_la_SOURCES)
 DIST_SOURCES = $(libkea_dhcp_ddns_la_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
 	ctags-recursive dvi-recursive html-recursive info-recursive \
@@ -309,7 +306,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -330,7 +326,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -340,6 +335,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -349,7 +345,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -400,6 +395,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -417,17 +413,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -491,23 +487,17 @@ AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 	$(BOOST_INCLUDES)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
-# Tell automake that the message files are built as part of the build process
-# (so that they are built before the main library is built).
-BUILT_SOURCES = dhcp_ddns_messages.h dhcp_ddns_messages.cc
-
 # Ensure that the message file is included in the distribution
 EXTRA_DIST = dhcp_ddns_messages.mes libdhcp_ddns.dox
-
-# Get rid of generated message files on a clean
-CLEANFILES = *.gcno *.gcda dhcp_ddns_messages.h dhcp_ddns_messages.cc s-messages
+CLEANFILES = *.gcno *.gcda
 lib_LTLIBRARIES = libkea-dhcp_ddns.la
 libkea_dhcp_ddns_la_SOURCES = dhcp_ddns_log.cc dhcp_ddns_log.h \
-	ncr_io.cc ncr_io.h ncr_msg.cc ncr_msg.h ncr_udp.cc ncr_udp.h
-nodist_libkea_dhcp_ddns_la_SOURCES = dhcp_ddns_messages.cc dhcp_ddns_messages.h
+	dhcp_ddns_messages.cc dhcp_ddns_messages.h ncr_io.cc ncr_io.h \
+	ncr_msg.cc ncr_msg.h ncr_udp.cc ncr_udp.h
 libkea_dhcp_ddns_la_CXXFLAGS = $(AM_CXXFLAGS)
 libkea_dhcp_ddns_la_CPPFLAGS = $(AM_CPPFLAGS)
 libkea_dhcp_ddns_la_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) \
-	-no-undefined -version-info 1:3:0
+	-no-undefined -version-info 2:0:0
 libkea_dhcp_ddns_la_LIBADD =  \
 	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
 	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
@@ -517,7 +507,6 @@ libkea_dhcp_ddns_la_LIBADD =  \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
@@ -526,12 +515,12 @@ libkea_dhcp_ddns_la_LIBADD =  \
 libkea_dhcp_ddns_includedir = $(pkgincludedir)/dhcp_ddns
 libkea_dhcp_ddns_include_HEADERS = \
 	dhcp_ddns_log.h \
+	dhcp_ddns_messages.h \
 	ncr_io.h \
 	ncr_msg.h \
 	ncr_udp.h
 
-all: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+all: all-recursive
 
 .SUFFIXES:
 .SUFFIXES: .cc .lo .o .obj
@@ -643,6 +632,13 @@ libkea_dhcp_ddns_la-dhcp_ddns_log.lo: dhcp_ddns_log.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcp_ddns_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcp_ddns_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_dhcp_ddns_la-dhcp_ddns_log.lo `test -f 'dhcp_ddns_log.cc' || echo '$(srcdir)/'`dhcp_ddns_log.cc
 
+libkea_dhcp_ddns_la-dhcp_ddns_messages.lo: dhcp_ddns_messages.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcp_ddns_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcp_ddns_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_dhcp_ddns_la-dhcp_ddns_messages.lo -MD -MP -MF $(DEPDIR)/libkea_dhcp_ddns_la-dhcp_ddns_messages.Tpo -c -o libkea_dhcp_ddns_la-dhcp_ddns_messages.lo `test -f 'dhcp_ddns_messages.cc' || echo '$(srcdir)/'`dhcp_ddns_messages.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libkea_dhcp_ddns_la-dhcp_ddns_messages.Tpo $(DEPDIR)/libkea_dhcp_ddns_la-dhcp_ddns_messages.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp_ddns_messages.cc' object='libkea_dhcp_ddns_la-dhcp_ddns_messages.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcp_ddns_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcp_ddns_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_dhcp_ddns_la-dhcp_ddns_messages.lo `test -f 'dhcp_ddns_messages.cc' || echo '$(srcdir)/'`dhcp_ddns_messages.cc
+
 libkea_dhcp_ddns_la-ncr_io.lo: ncr_io.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcp_ddns_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcp_ddns_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_dhcp_ddns_la-ncr_io.lo -MD -MP -MF $(DEPDIR)/libkea_dhcp_ddns_la-ncr_io.Tpo -c -o libkea_dhcp_ddns_la-ncr_io.lo `test -f 'ncr_io.cc' || echo '$(srcdir)/'`ncr_io.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libkea_dhcp_ddns_la-ncr_io.Tpo $(DEPDIR)/libkea_dhcp_ddns_la-ncr_io.Plo
@@ -663,13 +659,6 @@ libkea_dhcp_ddns_la-ncr_udp.lo: ncr_udp.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='ncr_udp.cc' object='libkea_dhcp_ddns_la-ncr_udp.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcp_ddns_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcp_ddns_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_dhcp_ddns_la-ncr_udp.lo `test -f 'ncr_udp.cc' || echo '$(srcdir)/'`ncr_udp.cc
-
-libkea_dhcp_ddns_la-dhcp_ddns_messages.lo: dhcp_ddns_messages.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcp_ddns_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcp_ddns_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_dhcp_ddns_la-dhcp_ddns_messages.lo -MD -MP -MF $(DEPDIR)/libkea_dhcp_ddns_la-dhcp_ddns_messages.Tpo -c -o libkea_dhcp_ddns_la-dhcp_ddns_messages.lo `test -f 'dhcp_ddns_messages.cc' || echo '$(srcdir)/'`dhcp_ddns_messages.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libkea_dhcp_ddns_la-dhcp_ddns_messages.Tpo $(DEPDIR)/libkea_dhcp_ddns_la-dhcp_ddns_messages.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp_ddns_messages.cc' object='libkea_dhcp_ddns_la-dhcp_ddns_messages.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcp_ddns_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcp_ddns_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_dhcp_ddns_la-dhcp_ddns_messages.lo `test -f 'dhcp_ddns_messages.cc' || echo '$(srcdir)/'`dhcp_ddns_messages.cc
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -853,16 +842,14 @@ distdir: $(DISTFILES)
 	  fi; \
 	done
 check-am: all-am
-check: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) check-recursive
+check: check-recursive
 all-am: Makefile $(LTLIBRARIES) $(HEADERS)
 installdirs: installdirs-recursive
 installdirs-am:
 	for dir in "$(DESTDIR)$(libdir)" "$(DESTDIR)$(libkea_dhcp_ddns_includedir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
-install: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) install-recursive
+install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
 uninstall: uninstall-recursive
@@ -893,7 +880,6 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 clean: clean-recursive
 
 clean-am: clean-generic clean-libLTLIBRARIES clean-libtool \
@@ -948,7 +934,8 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
-maintainer-clean-am: distclean-am maintainer-clean-generic
+maintainer-clean-am: distclean-am maintainer-clean-generic \
+	maintainer-clean-local
 
 mostlyclean: mostlyclean-recursive
 
@@ -966,8 +953,7 @@ ps-am:
 uninstall-am: uninstall-libLTLIBRARIES \
 	uninstall-libkea_dhcp_ddns_includeHEADERS
 
-.MAKE: $(am__recursive_targets) all check install install-am \
-	install-strip
+.MAKE: $(am__recursive_targets) install-am install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am check \
 	check-am clean clean-generic clean-libLTLIBRARIES \
@@ -981,20 +967,41 @@ uninstall-am: uninstall-libLTLIBRARIES \
 	install-man install-pdf install-pdf-am install-ps \
 	install-ps-am install-strip installcheck installcheck-am \
 	installdirs installdirs-am maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-compile \
-	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	tags tags-am uninstall uninstall-am uninstall-libLTLIBRARIES \
+	maintainer-clean-generic maintainer-clean-local mostlyclean \
+	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
+	pdf pdf-am ps ps-am tags tags-am uninstall uninstall-am \
+	uninstall-libLTLIBRARIES \
 	uninstall-libkea_dhcp_ddns_includeHEADERS
 
 .PRECIOUS: Makefile
 
 
-# Define rule to build logging source files from message file
-dhcp_ddns_messages.h dhcp_ddns_messages.cc: s-messages
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f dhcp_ddns_messages.h dhcp_ddns_messages.cc
 
-s-messages: dhcp_ddns_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/lib/dhcp_ddns/dhcp_ddns_messages.mes
-	touch $@
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
+# Define rule to build logging source files from message file
+@GENERATE_MESSAGES_TRUE@messages: dhcp_ddns_messages.h dhcp_ddns_messages.cc
+@GENERATE_MESSAGES_TRUE@	@echo Message files regenerated
+
+@GENERATE_MESSAGES_TRUE@dhcp_ddns_messages.h dhcp_ddns_messages.cc: dhcp_ddns_messages.mes
+@GENERATE_MESSAGES_TRUE@	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/lib/dhcp_ddns/dhcp_ddns_messages.mes
+
+@GENERATE_MESSAGES_FALSE@messages dhcp_ddns_messages.h dhcp_ddns_messages.cc:
+@GENERATE_MESSAGES_FALSE@	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

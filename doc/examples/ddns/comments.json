@@ -8,9 +8,16 @@
 
     // Global scope
     "comment": "A DHCP-DDNS server",
-    "ip-address": "172.16.1.10",
+    "ip-address": "127.0.0.1",
     "port": 53001,
     "dns-server-timeout" : 1000,
+
+    "control-socket":
+    {
+        "comment": "Control channel",
+        "socket-type": "unix",
+        "socket-name": "/tmp/kea-ddns-ctrl-socket"
+    },
 
     "forward-ddns":
     {
@@ -42,15 +49,14 @@
             "algorithm": "HMAC-MD5",
             "secret": "LSWXnfkKZjdPJI5QxlpnfQ=="
         }
-    ]
-},
+    ],
 
-"Logging": {
     // In loggers
     "loggers": [
         {
             "comment": "A logger",
-            "name": "kea-dhcp-ddns"
+            "name": "kea-dhcp-ddns",
+            "severity": "info"
         }
     ]
 }

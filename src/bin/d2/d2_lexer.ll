@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -269,6 +269,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     case isc::d2::D2ParserContext::DNS_SERVERS:
     case isc::d2::D2ParserContext::TSIG_KEY:
     case isc::d2::D2ParserContext::TSIG_KEYS:
+    case isc::d2::D2ParserContext::CONTROL_SOCKET:
     case isc::d2::D2ParserContext::LOGGERS:
         return isc::d2::D2Parser::make_USER_CONTEXT(driver.loc_);
     default:
@@ -285,6 +286,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     case isc::d2::D2ParserContext::DNS_SERVERS:
     case isc::d2::D2ParserContext::TSIG_KEY:
     case isc::d2::D2ParserContext::TSIG_KEYS:
+    case isc::d2::D2ParserContext::CONTROL_SOCKET:
     case isc::d2::D2ParserContext::LOGGERS:
         return isc::d2::D2Parser::make_COMMENT(driver.loc_);
     default:
@@ -390,6 +392,33 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
+\"control-socket\" {
+    switch(driver.ctx_) {
+    case isc::d2::D2ParserContext::DHCPDDNS:
+        return isc::d2::D2Parser::make_CONTROL_SOCKET(driver.loc_);
+    default:
+        return isc::d2::D2Parser::make_STRING("control-socket", driver.loc_);
+    }
+}
+
+\"socket-type\" {
+    switch(driver.ctx_) {
+    case isc::d2::D2ParserContext::CONTROL_SOCKET:
+        return isc::d2::D2Parser::make_SOCKET_TYPE(driver.loc_);
+    default:
+        return isc::d2::D2Parser::make_STRING("socket-type", driver.loc_);
+    }
+}
+
+\"socket-name\" {
+    switch(driver.ctx_) {
+    case isc::d2::D2ParserContext::CONTROL_SOCKET:
+        return isc::d2::D2Parser::make_SOCKET_NAME(driver.loc_);
+    default:
+        return isc::d2::D2Parser::make_STRING("socket-name", driver.loc_);
+    }
+}
+
 
 \"Logging\" {
     switch(driver.ctx_) {
@@ -402,6 +431,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
 
 \"loggers\" {
     switch(driver.ctx_) {
+    case isc::d2::D2ParserContext::DHCPDDNS:
     case isc::d2::D2ParserContext::LOGGING:
         return isc::d2::D2Parser::make_LOGGERS(driver.loc_);
     default:
@@ -451,6 +481,15 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
         return isc::d2::D2Parser::make_MAXVER(driver.loc_);
     default:
         return isc::d2::D2Parser::make_STRING("maxver", driver.loc_);
+    }
+}
+
+\"pattern\" {
+    switch(driver.ctx_) {
+    case isc::d2::D2ParserContext::OUTPUT_OPTIONS:
+        return isc::d2::D2Parser::make_PATTERN(driver.loc_);
+    default:
+        return isc::d2::D2Parser::make_STRING("pattern", driver.loc_);
     }
 }
 

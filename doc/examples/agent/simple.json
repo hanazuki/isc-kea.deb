@@ -32,23 +32,21 @@
             {
                 "comment": "socket to DHCP4 server",
                 "socket-type": "unix",
-                "socket-name": "/path/to/the/unix/socket-v4"
+                "socket-name": "/tmp/kea4-ctrl-socket"
             },
 
             // Location of the DHCPv6 command channel socket.
             "dhcp6":
             {
                 "socket-type": "unix",
-                "socket-name": "/path/to/the/unix/socket-v6"
+                "socket-name": "/tmp/kea6-ctrl-socket"
             },
 
-            // Currently DHCP-DDNS (nicknamed D2) does not support
-            // command channel yet, but we hope this will change in the
-            // future.
+            // Location of the D2 command channel socket.
             "d2":
             {
                 "socket-type": "unix",
-                "socket-name": "/path/to/the/unix/socket-d2",
+                "socket-name": "/tmp/kea-ddns-ctrl-socket",
                 "user-context": { "in-use": false }
             }
         },
@@ -68,13 +66,9 @@
                     "param1": "foo"
                 }
             }
-        ]
+        ],
 
-    },
-
-    // Similar to other Kea components, CA also uses logging.
-    "Logging":
-    {
+        // Similar to other Kea components, CA also uses logging.
         "loggers": [
             {
                 "name": "kea-ctrl-agent",
@@ -89,7 +83,9 @@
                         // kept.
                         "flush": true,
                         "maxsize": 204800,
-                        "maxver": 4
+                        "maxver": 4,
+                        // We use pattern to specify custom log message layout
+                        "pattern": "%d{%y.%m.%d %H:%M:%S.%q} %-5p [%c/%i] %m\n"
                     }
                 ],
                 "severity": "INFO",

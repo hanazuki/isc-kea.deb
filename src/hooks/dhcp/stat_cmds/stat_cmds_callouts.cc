@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the End User License
 // Agreement. See COPYING file in the premium/ directory.
@@ -59,6 +59,13 @@ int load(LibraryHandle& handle) {
 int unload() {
     LOG_INFO(stat_cmds_logger, STAT_CMDS_DEINIT_OK);
     return (0);
+}
+
+/// @brief This function is called to retrieve the multi-threading compatibility.
+///
+/// @return 1 which means compatible with multi-threading.
+int multi_threading_compatible() {
+    return (1);
 }
 
 } // end extern "C"

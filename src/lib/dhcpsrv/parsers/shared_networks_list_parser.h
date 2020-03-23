@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -29,14 +29,23 @@ template<typename SharedNetworkParserType>
 class SharedNetworksListParser : public data::SimpleParser {
 public:
 
+    /// @brief Constructor.
+    ///
+    /// @param check_iface Check if the specified interface exists in
+    /// the system.
+    SharedNetworksListParser(bool check_iface = true)
+        : check_iface_(check_iface) {
+    }
+
     /// @brief Parses a list of shared networks.
     ///
+    /// @tparam CfgSharedNetworksTypePtr Type of the configuration structure
+    /// into which the result will be stored, i.e. @ref CfgSharedNetworks4
+    /// or @ref CfgSharedNetworks6.
     /// @param [out] cfg Shared networks configuration structure into which
     /// the data should be parsed.
     /// @param shared_networks_list_data List element holding a list of
     /// shared networks.
-    /// @tparam Type of the configuration structure into which the result
-    /// will be stored, i.e. @ref CfgSharedNetworks4 or @ref CfgSharedNetworks6.
     ///
     /// @throw DhcpConfigError when error has occurred, e.g. when networks
     /// with duplicated names have been specified.
@@ -50,7 +59,7 @@ public:
             // Iterate over all networks and do the parsing.
             for (auto network_element = networks_list.cbegin();
                  network_element != networks_list.cend(); ++network_element) {
-                SharedNetworkParserType parser;
+                SharedNetworkParserType parser(check_iface_);
                 auto network = parser.parse(*network_element);
                 cfg->add(network);
             }
@@ -67,6 +76,10 @@ public:
                       << shared_networks_list_data->getPosition() << ")");
         }
     }
+
+protected:
+    /// Check if the specified interface exists in the system.
+    bool check_iface_;
 };
 
 /// @brief Type of the shared networks list parser for IPv4.

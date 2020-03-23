@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -77,6 +77,7 @@ using namespace std;
   FLUSH "flush"
   MAXSIZE "maxsize"
   MAXVER "maxver"
+  PATTERN "pattern"
 
   DHCP4 "Dhcp4"
   DHCP6 "Dhcp6"
@@ -113,7 +114,7 @@ using namespace std;
 // is parsed.
 start: START_JSON      { ctx.ctx_ = ctx.NO_KEYWORDS; } json
      | START_AGENT     { ctx.ctx_ = ctx.CONFIG; } agent_syntax_map
-     | START_SUB_AGENT { ctx.ctx_ = ctx.AGENT; } sub_agent 
+     | START_SUB_AGENT { ctx.ctx_ = ctx.AGENT; } sub_agent
      ;
 
 // This rule defines a "shortcut". Instead of specifying the whole structure
@@ -273,6 +274,7 @@ global_param: http_host
             | http_port
             | control_sockets
             | hooks_libraries
+            | loggers
             | user_context
             | comment
             | unknown_map_entry
@@ -629,6 +631,7 @@ output_params: output
              | flush
              | maxsize
              | maxver
+             | pattern
              ;
 
 output: OUTPUT {
@@ -653,6 +656,14 @@ maxver: MAXVER COLON INTEGER {
     ElementPtr maxver(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxver", maxver);
 }
+
+pattern: PATTERN {
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("pattern", sev);
+    ctx.leave();
+};
 
 %%
 

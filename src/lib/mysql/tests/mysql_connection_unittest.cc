@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -99,6 +99,12 @@ public:
     /// The new table contains 6 columns of various data types. All of
     /// the columns accept null values.
     void createTestTable() {
+        /// @todo TIMESTAMP value lacks sub second precision because
+        /// it is supported since MySQL 5.6.4, which is still not a
+        /// default version on some OSes. When the subsecond precision
+        /// is available on all OSes that Kea supports, the timestamp
+        /// column should be turned to TIMESTAMP(6). Until then, it
+        /// must remain TIMESTAMP.
         runQuery("CREATE TABLE IF NOT EXISTS mysql_connection_test ("
                  "tinyint_value TINYINT NULL,"
                  "int_value INT NULL,"
@@ -236,7 +242,9 @@ TEST_F(MySqlConnectionTest, select) {
         MySqlBinding::createInteger<int64_t>(-4096),
         MySqlBinding::createString("shellfish"),
         MySqlBinding::createBlob(blob.begin(), blob.end()),
-        MySqlBinding::createTimestamp(boost::posix_time::microsec_clock::universal_time())
+        /// @todo Change it to microsec_clock once we transition to subsecond
+        /// precision.
+        MySqlBinding::createTimestamp(boost::posix_time::second_clock::local_time())
     };
 
     testInsertSelect(in_bindings);
@@ -252,7 +260,9 @@ TEST_F(MySqlConnectionTest, selectNullInteger) {
         MySqlBinding::createInteger<int64_t>(-4096),
         MySqlBinding::createString("shellfish"),
         MySqlBinding::createBlob(blob.begin(), blob.end()),
-        MySqlBinding::createTimestamp(boost::posix_time::microsec_clock::universal_time())
+        /// @todo Change it to microsec_clock once we transition to subsecond
+        /// precision.
+        MySqlBinding::createTimestamp(boost::posix_time::second_clock::local_time())
     };
 
     testInsertSelect(in_bindings);
@@ -269,7 +279,9 @@ TEST_F(MySqlConnectionTest, selectNullString) {
         MySqlBinding::createInteger<int64_t>(-4096),
         MySqlBinding::createNull(),
         MySqlBinding::createBlob(blob.begin(), blob.end()),
-        MySqlBinding::createTimestamp(boost::posix_time::microsec_clock::universal_time())
+        /// @todo Change it to microsec_clock once we transition to subsecond
+        /// precision.
+        MySqlBinding::createTimestamp(boost::posix_time::second_clock::local_time())
     };
 
     testInsertSelect(in_bindings);
@@ -284,7 +296,9 @@ TEST_F(MySqlConnectionTest, selectNullBlob) {
         MySqlBinding::createInteger<int64_t>(-4096),
         MySqlBinding::createString("shellfish"),
         MySqlBinding::createNull(),
-        MySqlBinding::createTimestamp(boost::posix_time::microsec_clock::universal_time())
+        /// @todo Change it to microsec_clock once we transition to subsecond
+        /// precision.
+        MySqlBinding::createTimestamp(boost::posix_time::second_clock::local_time())
     };
 
     testInsertSelect(in_bindings);
@@ -315,7 +329,9 @@ TEST_F(MySqlConnectionTest, selectEmptyStringBlob) {
         MySqlBinding::createInteger<int64_t>(-4096),
         MySqlBinding::createString(""),
         MySqlBinding::createBlob(blob.begin(), blob.end()),
-        MySqlBinding::createTimestamp(boost::posix_time::microsec_clock::universal_time())
+        /// @todo Change it to microsec_clock once we transition to subsecond
+        /// precision.
+        MySqlBinding::createTimestamp(boost::posix_time::second_clock::local_time())
     };
 
     testInsertSelect(in_bindings);
@@ -365,13 +381,38 @@ TEST_F(MySqlConnectionTest, deleteByValue) {
 
     ASSERT_NO_THROW(conn_.selectQuery(MySqlConnectionTest::GET_BY_INT_VALUE,
                                       in_bindings, out_bindings,
-                                      [&deleted](MySqlBindingCollection& out_bindings) {
+                                      [&deleted](MySqlBindingCollection&) {
         // This will be executed if the row is returned as a result of
         // select query. We expect that this is not executed.
         deleted = false;
     }));
     // Make sure that select query returned nothing.
     EXPECT_TRUE(deleted);
+}
+
+/// @brief Test fixture class for @c MySqlConnection class methods.
+class MySqlSchemaTest : public ::testing::Test {
+public:
+    /// @brief Constructor.
+    MySqlSchemaTest() {
+        // Ensure we have the proper schema.
+        createMySQLSchema();
+    }
+
+    /// @brief Destructor.
+    virtual ~MySqlSchemaTest() {
+        destroyMySQLSchema();
+    }
+};
+
+/// @brief Check that getVersion() returns the expected version.
+TEST_F(MySqlSchemaTest, checkVersion) {
+    // Check version
+    auto parameters = DatabaseConnection::parse(validMySQLConnectionString());
+    std::pair<uint32_t, uint32_t> version;
+    ASSERT_NO_THROW(version = MySqlConnection::getVersion(parameters));
+    EXPECT_EQ(MYSQL_SCHEMA_VERSION_MAJOR, version.first);
+    EXPECT_EQ(MYSQL_SCHEMA_VERSION_MINOR, version.second);
 }
 
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -28,6 +28,9 @@
 #include <hooks/hooks_config.h>
 #include <cc/data.h>
 #include <cc/user_context.h>
+#include <cc/simple_parser.h>
+#include <util/strutil.h>
+
 #include <boost/shared_ptr.hpp>
 #include <vector>
 #include <stdint.h>
@@ -37,6 +40,98 @@ namespace dhcp {
 
 class CfgMgr;
 
+/// @brief Convenience container for conveying DDNS behaviorial parameters
+/// It is intended to be created per Packet exchange using the selected
+/// subnet passed into functions that require them
+class DdnsParams {
+public:
+    /// @brief Default constructor
+    DdnsParams() : subnet_(), d2_client_enabled_(false) {};
+
+    /// @brief Constructor for DHPCv4 subnets
+    ///
+    /// @param subnet Pointer to Subnet4 instance to use for fetching
+    /// parameter values (typically this is the selected subnet).
+    /// @param d2_client_enabled flag which indicates whether or not
+    /// D2Client is enabled (typically the value should come from
+    /// global D2Client configuration).
+    DdnsParams(const Subnet4Ptr& subnet, bool d2_client_enabled)
+        : subnet_(boost::dynamic_pointer_cast<Subnet>(subnet)),
+          d2_client_enabled_(d2_client_enabled) {}
+
+    /// @brief Constructor for DHPCv6 subnets
+    ///
+    /// @param subnet Pointer to Subnet6 instance to use for fetching
+    /// parameter values (typically this is the selected subnet).
+    /// @param d2_client_enabled flag which indicates whether or not
+    /// D2Client is enabled (typically the value should come from
+    /// global D2Client configuration).
+    DdnsParams(const Subnet6Ptr& subnet, bool d2_client_enabled)
+        : subnet_(boost::dynamic_pointer_cast<Subnet>(subnet)),
+          d2_client_enabled_(d2_client_enabled) {}
+
+    /// @brief Returns whether or not DHCP DDNS updating is enabled.
+    /// The value is the logical AND of d2_client_enabled_ and
+    /// the value returned by subnet_'s getDdnsSendUpdates().  It
+    /// @return True if updates are enabled, false otherwise or if
+    /// subnet_ is empty.
+    bool getEnableUpdates() const;
+
+    /// @brief Returns whether or not Kea should perform updates, even if
+    /// client requested no updates.
+    /// @return The value from the subnet_ or false if subnet_ is empty.
+    bool getOverrideNoUpdate() const;
+
+    /// @brief Returns whether or not Kea should perform updates, even if
+    /// client requested delegation.
+    /// @return The value from the subnet_ or false if subnet_ is empty.
+    bool getOverrideClientUpdate() const;
+
+    /// @brief Returns how Kea should handle the domain-name supplied by
+    /// the client.
+    /// @return The value from the subnet_ or RCM_NEVER if subnet_ is empty.
+    D2ClientConfig::ReplaceClientNameMode getReplaceClientNameMode() const;
+
+    /// @brief Returns the Prefix Kea should use when generating domain-names.
+    /// @return The value from the subnet_ or an empty string if subnet_ is empty.
+    std::string getGeneratedPrefix() const;
+
+    /// @brief Returns the suffix Kea should use when to qualify partial
+    /// domain-names.
+    /// @return The value from the subnet_ or an empty string if subnet_ is empty.
+    std::string getQualifyingSuffix() const;
+
+    /// @brief Returns the regular expression describing invalid characters
+    /// for client hostnames.  If empty, host name scrubbing should not be done.
+    /// @return The value from the subnet_ or an empty string if subnet_ is empty.
+    std::string getHostnameCharSet() const;
+
+    /// @brief Returns the string to replace invalid characters when scrubbing
+    /// hostnames. Meaningful only if hostname_char_set_ is not empty.
+    /// @return The value from the subnet_ or an empty string if subnet_ is empty.
+    std::string getHostnameCharReplacement() const;
+
+    /// @brief Returns a regular expression string sanitizer
+    ///
+    /// If the value returned by getHostnameCharSet() is not empty, then it is
+    /// used in conjunction the value returned by getHostnameCharReplacment()
+    /// (which may be empty) to create and return a StringSanitizer instance.
+    /// Otherwise it will return an empty pointer.
+    ///
+    /// @return pointer to the StringSanitizer instance or an empty pointer
+    /// @throw BadValue if the compilation fails.
+    isc::util::str::StringSanitizerPtr getHostnameSanitizer() const;
+
+private:
+    /// @brief Subnet from which values should be fetched.
+    SubnetPtr subnet_;
+
+    /// @brief Flag indicating whether or not the D2Client is enabled.
+    bool d2_client_enabled_;
+};
+
+/// @brief Defines a pointer for DdnsParams instances.
+typedef boost::shared_ptr<DdnsParams> DdnsParamsPtr;
 
 /// @brief Specifies current DHCP configuration
 ///
@@ -404,6 +499,28 @@ public:
         return (hooks_config_);
     }
 
+    /// @brief Fetches the DDNS parameters for a given DHCPv4 subnet.
+    ///
+    /// Creates a DdnsParams structure which retain and thereafter
+    /// use the given subnet to fetch DDNS behaviorial parameters.
+    /// The values are fetched with the inheritance scope mode
+    /// of Network::ALL.
+    ///
+    /// @param subnet DHCPv4 Subnet for which DDNS parameters are desired.
+    /// @return pointer to DddnParams instance
+    DdnsParamsPtr getDdnsParams(const Subnet4Ptr& subnet) const;
+
+    /// @brief Fetches the DDNS parameters for a given DHCPv6 subnet.
+    ///
+    /// Creates a DdnsParams structure which retain and thereafter
+    /// use the given subnet to fetch DDNS behaviorial parameters.
+    /// The values are fetched with the inheritance scope mode
+    /// of Network::ALL.
+    ///
+    /// @param subnet DHCPv6 Subnet for which DDNS parameters are desired.
+    /// @return pointer to DddnParams instance
+    DdnsParamsPtr getDdnsParams(const Subnet6Ptr& subnet) const;
+
     /// @brief Copies the current configuration to a new configuration.
     ///
     /// This method copies the parameters stored in the configuration to
@@ -460,7 +577,7 @@ public:
         return (equals(other));
     }
 
-    /// @param other An object to be compared with this object.
+    /// @brief other An object to be compared with this object.
     ///
     /// It ignores the configuration sequence number when checking for
     /// inequality of objects.
@@ -473,6 +590,54 @@ public:
     }
 
     //@}
+
+    /// @brief Merges the configuration specified as a parameter into
+    /// this configuration.
+    ///
+    /// This method is used when two or more configurations held in the
+    /// @c SrvConfig objects need to be combined into a single configuration.
+    /// Specifically, when the configuration backend is used, then part of
+    /// the server configuration comes from the configuration file and
+    /// stored in the staging configuration. The other part of the
+    /// configuration comes from the database. The configuration fetched
+    /// from the database is stored in a separate @c SrvConfig instance
+    /// and then merged into the staging configuration prior to commiting
+    /// it.
+    ///
+    /// The merging strategy depends on the underlying data being merged.
+    /// For example: subnets are merged using the algorithm implemented
+    /// in the @c CfgSubnets4. Other data structures are merged using the
+    /// algorithms implemented in their respective configuration
+    /// containers.
+    ///
+    /// The general rule is that the configuration data from the @c other
+    /// object replaces configuration data held in this object instance.
+    /// The data that do not overlap between the two objects is simply
+    /// inserted into this configuration.
+    ///
+    /// @warning The call to @c merge may modify the data in the @c other
+    /// object. Therefore, the caller must not rely on the data held
+    /// in the @c other object after the call to @c merge. Also, the
+    /// data held in @c other must not be modified after the call to
+    /// @c merge because it may affect the merged configuration.
+    ///
+    /// The @c other parameter must be a @c SrvConfig or its derivation.
+    ///
+    /// This method calls either @c merge4 or @c merge6 based on
+    ///
+    /// Currently, the following parts of the configuration are merged:
+    /// - globals
+    /// - option definitions
+    /// - options
+    /// - via @c merge4 or @c merge6 depending on @c CfgMgr::family_:
+    ///     - shared networks
+    ///     - subnets
+    ///
+    /// @todo Add support for merging other configuration elements.
+    ///
+    /// @param other An object holding the configuration to be merged
+    /// into this configuration.
+    virtual void merge(ConfigBase& other);
 
     /// @brief Updates statistics.
     ///
@@ -536,8 +701,36 @@ public:
     ///
     /// See @ref setDhcp4o6Port for brief discussion.
     /// @return value of DHCP4o6 IPC port
-    uint16_t getDhcp4o6Port() {
+    uint16_t getDhcp4o6Port() const {
         return (dhcp4o6_port_);
+    }
+
+    /// @brief Sets the server thread count.
+    ///
+    /// @param threads value of the server thread count
+    void setServerThreadCount(uint32_t threads) {
+        server_threads_ = threads;
+    }
+
+    /// @brief Retrieves the server thread count.
+    ///
+    /// @return value of the server thread count
+    uint32_t getServerThreadCount() const {
+        return (server_threads_);
+    }
+
+    /// @brief Sets the server max thread queue size.
+    ///
+    /// @param size max thread queue size
+    void setServerMaxThreadQueueSize(uint32_t size) {
+        server_max_thread_queue_size_ = size;
+    }
+
+    /// @brief Retrieves the server max thread queue size.
+    ///
+    /// @return value of the max thread queue size
+    uint32_t getServerMaxThreadQueueSize() const {
+        return (server_max_thread_queue_size_);
     }
 
     /// @brief Returns pointer to the D2 client configuration
@@ -561,6 +754,23 @@ public:
         return (isc::data::ConstElementPtr(configured_globals_));
     }
 
+    /// @brief Returns pointer to a given configured global parameter
+    /// @param name name of the parameter to fetch
+    /// @return Pointer to the parameter if it exists, otherwise an
+    /// empty pointer.
+    isc::data::ConstElementPtr getConfiguredGlobal(std::string name) const;
+
+    /// @brief Removes all configured global parameters.
+    /// @note This removes the default values too so either
+    /// @c applyDefaultsConfiguredGlobals and @c mergeGlobals,
+    /// or @c isc::data::SimpleParser::setDefaults and
+    /// @c extractConfiguredGlobals should be called after.
+    void clearConfiguredGlobals();
+
+    /// @brief Applies defaults to global parameters.
+    /// @param defaults vector of (name, type, value) defaults to apply.
+    void applyDefaultsConfiguredGlobals(const isc::data::SimpleDefaults& defaults);
+
     /// @brief Saves scalar elements from the global scope of a configuration
     void extractConfiguredGlobals(isc::data::ConstElementPtr config);
 
@@ -571,20 +781,30 @@ public:
         configured_globals_->set(name, value);
     }
 
-    /// @brief Sets the server's logical name
+    /// @brief Moves deprecated parameters from dhcp-ddns element to global element
     ///
-    /// @param server_tag a unique string name which identifies this server
-    /// from any other configured servers
-    void setServerTag(const std::string& server_tag) {
-        server_tag_ = server_tag;
-    }
-
-    /// @brief Returns the server's logical name
+    /// Given a server configuration element map, the following parameters are moved
+    /// from dhcp-ddns to top-level (i.e. global) element if they do not already
+    /// exist there:
     ///
-    /// @return string containing the server's tag
-    std::string getServerTag() const {
-        return (server_tag_);
-    }
+    /// @code
+    /// From dhcp-ddns:            To (global):
+    /// ------------------------------------------------------
+    /// override-no-update         ddns-override-no-update
+    /// override-client-update     ddns-override-client-update
+    /// replace-client-name        ddns-replace-client-name
+    /// generated-prefix           ddns-generated-prefix
+    /// qualifying-suffix          ddns-qualifying-suffix
+    /// hostname-char-set          hostname-char-set
+    /// hostname-char-replacement  hostname-char-replacement
+    /// @endcode
+    ///
+    /// Note that the whether or not the deprecated parameters are added
+    /// to the global element, they are always removed from the dhcp-ddns
+    /// element.
+    ///
+    /// @param srv_elem server top level map to alter
+    static void moveDdnsParams(isc::data::ElementPtr srv_elem);
 
     /// @brief Unparse a configuration object
     ///
@@ -592,6 +812,50 @@ public:
     virtual isc::data::ElementPtr toElement() const;
 
 private:
+
+    /// @brief Merges the DHCPv4 configuration specified as a parameter into
+    /// this configuration.
+    ///
+    /// This is called by @c merge() to handle v4 specifics, such as
+    /// networks and subnets.
+    ///
+    /// @param other An object holding the configuration to be merged
+    /// into this configuration.
+    void merge4(SrvConfig& other);
+
+    /// @brief Merges the DHCPv6 configuration specified as a parameter into
+    /// this configuration.
+    ///
+    /// This is called by @c merge() to handle v4 specifics, such as
+    /// networks and subnets.
+    ///
+    /// @param other An object holding the configuration to be merged
+    /// into this configuration.
+    void merge6(SrvConfig& other);
+
+    /// @brief Merges the globals specified in the given configuration
+    /// into this configuration.
+    ///
+    /// Configurable global values may be specified either via JSON
+    /// configuration (e.g. "echo-client-id":true) or as global parameters
+    /// within a configuration back end.  Regardless of the source, these
+    /// values once provided, are stored in @c SrvConfig::configured_globals_.
+    /// Any such value that does not have an explicit specification should be
+    /// considered "unspecified" at the global scope.
+    ///
+    /// This function adds the configured globals from the "other" config
+    /// into this config's configured globals.  If a value already exists
+    /// in this config, it will be overwritten with the value from the
+    /// "other" config.
+    ///
+    /// It then iterates over this merged list of globals, setting
+    /// any of the corresponding SrvConfig members that map to a
+    /// a configurable parameter (e.g. c@ SrvConfig::echo_client_id_,
+    /// @c SrvConfig::server_tag_).
+    ///
+    /// @param other An object holding the configuration to be merged
+    /// into this configuration.
+    void mergeGlobals(SrvConfig& other);
 
     /// @brief Sequence number identifying the configuration.
     uint32_t sequence_;
@@ -687,6 +951,12 @@ private:
     /// this socket is bound and connected to this port and port + 1
     uint16_t dhcp4o6_port_;
 
+    /// @brief The server thread count.
+    uint32_t server_threads_;
+
+    /// @brief The server max thread queue size.
+    uint32_t server_max_thread_queue_size_;
+
     /// @brief Stores D2 client configuration
     D2ClientConfigPtr d2_client_config_;
 
@@ -695,9 +965,6 @@ private:
 
     /// @brief Pointer to the configuration consistency settings
     CfgConsistencyPtr cfg_consist_;
-
-    /// @brief Logical name of the server
-    std::string server_tag_;
 };
 
 /// @name Pointers to the @c SrvConfig object.
@@ -710,7 +977,7 @@ typedef boost::shared_ptr<SrvConfig> SrvConfigPtr;
 typedef boost::shared_ptr<const SrvConfig> ConstSrvConfigPtr;
 //@}
 
-} // namespace isc::dhcp
-} // namespace isc
+}  // namespace dhcp
+}  // namespace isc
 
 #endif // DHCPSRV_CONFIG_H

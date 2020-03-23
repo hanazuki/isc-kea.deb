@@ -1,17 +1,17 @@
-# Copyright (C) 2014-2017 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 # Path to the temporary configuration file.
-CFG_FILE=/home/wlodek/dev/kea/src/bin/dhcp6/tests/test_config.json
+CFG_FILE=/home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/bin/dhcp6/tests/test_config.json
 # Path to the Kea log file.
-LOG_FILE=/home/wlodek/dev/kea/src/bin/dhcp6/tests/test.log
+LOG_FILE=/home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/bin/dhcp6/tests/test.log
 # Path to the Kea lease file.
-LEASE_FILE=/home/wlodek/dev/kea/src/bin/dhcp6/tests/test_leases.csv
+LEASE_FILE=/home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/bin/dhcp6/tests/test_leases.csv
 # Expected version
-EXPECTED_VERSION="1.5.0"
+EXPECTED_VERSION="1.7.5"
 # Kea configuration to be stored in the configuration file.
 CONFIG="{
     \"Dhcp6\":
@@ -175,10 +175,10 @@ CONFIG_BAD_VALUES="{
 
 # Set the location of the executable.
 bin="kea-dhcp6"
-bin_path=/home/wlodek/dev/kea/src/bin/dhcp6
+bin_path=/home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/bin/dhcp6
 
 # Import common test library.
-. /home/wlodek/dev/kea/src/lib/testutils/dhcp_test_lib.sh
+. /home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/lib/testutils/dhcp_test_lib.sh
 
 # This test verifies that syntax checking works properly. This function
 # requires 3 parameters:

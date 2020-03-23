@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -169,8 +169,7 @@ Dhcp6Client::applyRcvdConfiguration(const Pkt6Ptr& reply, uint32_t state) {
                                        iaaddr->getAddress(),
                                        duid_, ia->getIAID(),
                                        iaaddr->getPreferred(),
-                                       iaaddr->getValid(),
-                                       ia->getT1(), ia->getT2(), 0,
+                                       iaaddr->getValid(), 0,
                                        hwaddr);
                         lease.cltt_ = time(NULL);
                         lease.state_ = state;
@@ -189,8 +188,7 @@ Dhcp6Client::applyRcvdConfiguration(const Pkt6Ptr& reply, uint32_t state) {
                                        iaprefix->getAddress(), duid_,
                                        ia->getIAID(),
                                        iaprefix->getPreferred(),
-                                       iaprefix->getValid(),
-                                       ia->getT1(), ia->getT2(), 0,
+                                       iaprefix->getValid(), 0,
                                        hwaddr,
                                        iaprefix->getLength());
                         lease.cltt_ = time(NULL);
@@ -361,8 +359,6 @@ Dhcp6Client::copyIAsFromLeases(const Pkt6Ptr& dest) const {
         }
         Option6IAPtr opt(new Option6IA(leases[0].type_ == Lease::TYPE_NA ?
                                        D6O_IA_NA : D6O_IA_PD, *iaid));
-        opt->setT1(leases[0].t1_);
-        opt->setT2(leases[0].t2_);
         for (std::vector<Lease6>::const_iterator lease = leases.begin();
              lease != leases.end(); ++lease) {
             if ((lease->preferred_lft_ != 0) && (lease->valid_lft_ != 0)) {
@@ -870,6 +866,35 @@ Dhcp6Client::getStatusCode(const uint32_t iaid) const {
     return (0xFFFF);
 }
 
+bool
+Dhcp6Client::getTeeTimes(const uint32_t iaid, uint32_t& t1, uint32_t& t2) const {
+    // Sanity check.
+    if (!context_.response_) {
+        return (false);
+    }
+
+    // Get all options in the response message and pick IA_NA, IA_PD.
+    OptionCollection opts = context_.response_->options_;
+
+    for (auto opt = opts.begin(); opt != opts.end(); ++opt) {
+        Option6IAPtr ia = boost::dynamic_pointer_cast<Option6IA>(opt->second);
+        if (!ia) {
+            // This is not IA, so let's just skip it.
+            continue;
+        }
+        if (ia->getIAID() != iaid) {
+            // This is not the right IA, so let's just skip it.
+            continue;
+        }
+        // Found the IA.
+        t1 = ia->getT1();
+        t2 = ia->getT2();
+        return (true);
+    }
+
+    // Not found the IA.
+    return (false);
+}
 
 void
 Dhcp6Client::setDUID(const std::string& str) {

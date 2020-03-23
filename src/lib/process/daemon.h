@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,6 +12,7 @@
 #include <util/pid_file.h>
 #include <util/signal_set.h>
 #include <boost/noncopyable.hpp>
+#include <boost/date_time/posix_time/posix_time.hpp>
 #include <string>
 
 namespace isc {
@@ -85,9 +86,21 @@ public:
     /// @param verbose verbose mode (true usually enables DEBUG messages)
     static void loggerInit(const char* log_name, bool verbose);
 
+    /// @brief Relocate Logging configuration
+    ///
+    /// Moves the loggers entry from Logging to the server top element.
+    /// This method assumes the configuration is sane, e.g. the server
+    /// top element exists and is a map.
+    /// Top elements other than the server one are removed.
+    ///
+    /// @param config JSON top level configuration
+    /// @param server_name name of the server top element
+    static void relocateLogging(isc::data::ConstElementPtr config,
+                                const std::string server_name);
+
     /// @brief Configures logger
     ///
-    /// Applies configuration stored in "Logging" structure in the
+    /// Applies configuration stored in a top-level structure in the
     /// configuration file. This structure has a "loggers" array that
     /// contains 0 or more entries, each configuring one logging source
     /// (name, severity, debuglevel), each with zero or more outputs (file,
@@ -162,11 +175,11 @@ public:
     /// @brief returns the process name
     /// This value is used as when forming the default PID file name
     /// @return text string
-    std::string getProcName() const;
+    static std::string getProcName();
 
     /// @brief Sets the process name
     /// @param proc_name name the process by which the process is recognized
-    void setProcName(const std::string& proc_name);
+    static void setProcName(const std::string& proc_name);
 
     /// @brief Returns the directory used when forming default PID file name
     /// @return text string
@@ -248,15 +261,18 @@ protected:
     /// @brief Manufacture the pid file name
     std::string makePIDFileName() const;
 
+    /// @brief Timestamp of the start of the daemon.
+    boost::posix_time::ptime start_;
+
 private:
     /// @brief Config file name or empty if config file not used.
     std::string config_file_;
 
     /// @brief Name of this process, used when creating its pid file
-    std::string proc_name_;
+    static std::string proc_name_;
 
     /// @brief Pointer to the directory where PID file(s) are written
-    /// It defaults to --localstatedir
+    /// It defaults to --localstatedir / run
     std::string pid_file_dir_;
 
     /// @brief Pointer to the PID file for this process

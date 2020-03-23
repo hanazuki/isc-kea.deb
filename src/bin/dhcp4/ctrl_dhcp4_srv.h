@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,11 +27,13 @@ public:
 
     /// @brief Constructor
     ///
-    /// @param port UDP port to be opened for DHCP traffic
-    ControlledDhcpv4Srv(uint16_t port = DHCP4_SERVER_PORT);
+    /// @param server_port UDP port to be opened for DHCP traffic
+    /// @param client_port UDP port where all responses are sent to.
+    ControlledDhcpv4Srv(uint16_t server_port = DHCP4_SERVER_PORT,
+                        uint16_t client_port = 0);
 
     /// @brief Destructor.
-    ~ControlledDhcpv4Srv();
+    virtual ~ControlledDhcpv4Srv();
 
     /// @brief Initializes the server.
     ///
@@ -119,12 +121,12 @@ public:
         return (server_);
     }
 
-
 private:
+
     /// @brief Callback that will be called from iface_mgr when data
     /// is received over control socket.
     ///
-    /// This static callback method is called from IfaceMgr::receive6() method,
+    /// This static callback method is called from IfaceMgr::receive4() method,
     /// when there is a new command or configuration sent over control socket
     /// (that was sent from some yet unspecified sender).
     static void sessionReader(void);
@@ -203,7 +205,8 @@ private:
     /// @param command (parameter ignored)
     /// @param args configuration to be processed. Expected format:
     /// map containing Dhcp4 map that contains DHCPv4 server configuration.
-    /// May also contain Logging map that specifies logging configuration.
+    /// May also contain Logging map that specifies logging configuration
+    /// for backward compatibility.
     ///
     /// @return status of the command
     isc::data::ConstElementPtr
@@ -217,7 +220,8 @@ private:
     /// @param command (parameter ignored)
     /// @param args configuration to be checked. Expected format:
     /// map containing Dhcp4 map that contains DHCPv4 server configuration.
-    /// May also contain Logging map that specifies logging configuration.
+    /// May also contain Logging map that specifies logging configuration
+    /// for backward compatibility.
     ///
     /// @return status of the command
     isc::data::ConstElementPtr
@@ -244,7 +248,6 @@ private:
     isc::data::ConstElementPtr
     commandDhcpEnableHandler(const std::string& command,
                              isc::data::ConstElementPtr args);
-
 
     /// @Brief handler for processing 'version-get' command
     ///
@@ -287,6 +290,43 @@ private:
     isc::data::ConstElementPtr
     commandLeasesReclaimHandler(const std::string& command,
                                 isc::data::ConstElementPtr args);
+
+    /// @brief handler for server-tag-get command
+    ///
+    /// This method handles the server-tag-get command, which retrieves
+    /// the current server tag and returns it in response.
+    ///
+    /// @param command (ignored)
+    /// @param args (ignored)
+    /// @return current configuration wrapped in a response
+    isc::data::ConstElementPtr
+    commandServerTagGetHandler(const std::string& command,
+                               isc::data::ConstElementPtr args);
+
+    /// @brief handler for config-backend-pull command
+    ///
+    /// This method handles the config-backend-pull command, which updates
+    /// the server configuration from the Config Backends immediately.
+    ///
+    /// @param command (parameter ignored)
+    /// @param args (ignored)
+    ///
+    /// @return status of the command/
+    isc::data::ConstElementPtr
+    commandConfigBackendPullHandler(const std::string& command,
+                                    isc::data::ConstElementPtr args);
+
+    /// @brief handler for processing 'status-get' command
+    ///
+    /// This handler processes status-get command, which retrieves
+    /// the server process information i.e. the pid and returns it in response.
+    ///
+    /// @param command (ignored)
+    /// @param args (ignored)
+    /// @return process information wrapped in a response
+    isc::data::ConstElementPtr
+    commandStatusGetHandler(const std::string& command,
+                            isc::data::ConstElementPtr args);
 
     /// @brief Reclaims expired IPv4 leases and reschedules timer.
     ///
@@ -346,8 +386,8 @@ private:
     /// between retry attempts.
     ///
     /// If either value is zero, reconnect is presumed to be disabled and
-    /// the function will returns false.  This instructs the DB backend
-    /// layer (the caller) to treat the connectivity loss as fatal.
+    /// the function will schedule a shutdown and return false.  This instructs
+    /// the DB backend layer (the caller) to treat the connectivity loss as fatal.
     ///
     /// Otherwise, the function saves db_reconnect_ctl and invokes
     /// dbReconnect to initiate the reconnect process.
@@ -358,10 +398,24 @@ private:
     /// @return false if reconnect is not configured, true otherwise
     bool dbLostCallback(db::ReconnectCtlPtr db_reconnect_ctl);
 
+    /// @brief Callback invoked periodically to fetch configuration updates
+    /// from the Config Backends.
+    ///
+    /// This method calls @c CBControlDHCPv4::databaseConfigFetch and then
+    /// reschedules the timer.
+    ///
+    /// @param srv_cfg Server configuration holding the database credentials
+    /// and server tag.
+    /// @param failure_count pointer to failure counter which causes this
+    /// callback to stop scheduling the timer after 10 consecutive failures
+    /// to fetch the updates.
+    void cbFetchUpdates(const SrvConfigPtr& srv_cfg,
+                        boost::shared_ptr<unsigned> failure_count);
+
     /// @brief Static pointer to the sole instance of the DHCP server.
     ///
     /// This is required for config and command handlers to gain access to
-    /// the server
+    /// the server. Some of them need to be static methods.
     static ControlledDhcpv4Srv* server_;
 
     /// @brief IOService object, used for all ASIO operations.
@@ -374,7 +428,7 @@ private:
     TimerMgrPtr timer_mgr_;
 };
 
-}; // namespace isc::dhcp
-}; // namespace isc
+}  // namespace dhcp
+}  // namespace isc
 
 #endif

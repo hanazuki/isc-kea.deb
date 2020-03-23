@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -47,7 +47,7 @@ public:
     ///
     /// The handler processes the DHCPv4-query DHCPv6 packet and
     /// sends the DHCPv4-response DHCPv6 packet back to the DHCPv6 server
-    static void handler();
+    static void handler(int /* fd */);
 };
 
 } // namespace isc

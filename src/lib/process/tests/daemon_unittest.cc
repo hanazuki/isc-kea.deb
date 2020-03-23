@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -86,12 +86,9 @@ TEST_F(DaemonTest, constructor) {
 
     EXPECT_NO_THROW(Daemon instance1);
 
-    // Check that the verbose mode is not set by default.
+    // Check only instance values.
     Daemon instance2;
-    EXPECT_FALSE(instance2.getVerbose());
-
     EXPECT_TRUE(instance2.getConfigFile().empty());
-    EXPECT_TRUE(instance2.getProcName().empty());
     EXPECT_EQ(std::string(DATA_DIR), instance2.getPIDFileDir());
     EXPECT_TRUE(instance2.getPIDFileName().empty());
 }
@@ -271,6 +268,58 @@ TEST_F(DaemonTest, PIDFileCleanup) {
     struct stat stat_buf;
     ASSERT_EQ(-1, stat(pid_file_name.c_str(), &stat_buf));
     EXPECT_EQ(errno, ENOENT);
+}
+
+// Check that relocateLogging method is behaving properly with no Logging.
+TEST_F(DaemonTest, relocateLoggingNoLogging) {
+    std::string config_txt = "{ \"myServer\": { } }";
+    ConstElementPtr config = Element::fromJSON(config_txt);
+    ConstElementPtr expected = Element::fromJSON(config_txt);
+    Daemon x;
+    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
+    EXPECT_TRUE(expected->equals(*config));
+}
+
+// Check that relocateLogging method is behaving properly with empty Logging.
+TEST_F(DaemonTest, relocateLoggingEmptyLogging) {
+    std::string config_txt =
+        "{ \"myServer\": { },\n"
+        "  \"Logging\": { } }";
+    ConstElementPtr config = Element::fromJSON(config_txt);
+    std::string expected_txt = "{ \"myServer\": { } }";
+    ConstElementPtr expected = Element::fromJSON(expected_txt);
+    Daemon x;
+    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
+    EXPECT_TRUE(expected->equals(*config));
+}
+
+// Check that relocateLogging method is behaving properly.
+TEST_F(DaemonTest, relocateLogging) {
+    std::string config_txt =
+        "{ \"myServer\": { },\n"
+        "  \"Logging\": {\n"
+        "    \"loggers\": [ ] } }";
+    ConstElementPtr config = Element::fromJSON(config_txt);
+    std::string expected_txt =
+        "{ \"myServer\": {\n"
+        "  \"loggers\": [ ] } }";
+    ConstElementPtr expected = Element::fromJSON(expected_txt);
+    Daemon x;
+    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
+    EXPECT_TRUE(expected->equals(*config));
+}
+
+// Check that relocateLogging method is behaving properly with extra objects.
+TEST_F(DaemonTest, relocateLoggingExtraObjects) {
+    std::string config_txt =
+        "{ \"myServer\": { },\n"
+        "  \"Foobar\": { } }";
+    ConstElementPtr config = Element::fromJSON(config_txt);
+    std::string expected_txt = "{ \"myServer\": { } }";
+    ConstElementPtr expected = Element::fromJSON(expected_txt);
+    Daemon x;
+    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
+    EXPECT_TRUE(expected->equals(*config));
 }
 
 // Checks that configureLogger method is behaving properly.

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,6 +14,7 @@
 
 using namespace isc::asiolink;
 using namespace isc::data;
+using namespace isc::util;
 
 namespace isc {
 namespace dhcp {
@@ -98,6 +99,42 @@ Network::getRequiredClasses() const {
     return (required_classes_);
 }
 
+Network::HRMode
+Network::hrModeFromString(const std::string& hr_mode_name) {
+    if ( (hr_mode_name.compare("disabled") == 0) ||
+         (hr_mode_name.compare("off") == 0) )  {
+        return (Network::HR_DISABLED);
+    } else if (hr_mode_name.compare("out-of-pool") == 0) {
+        return (Network::HR_OUT_OF_POOL);
+    } else if (hr_mode_name.compare("global") == 0) {
+        return (Network::HR_GLOBAL);
+    } else if (hr_mode_name.compare("all") == 0) {
+        return (Network::HR_ALL);
+    } else {
+        // Should never happen...
+        isc_throw(BadValue, "Can't convert '" << hr_mode_name
+                  << "' into any valid reservation-mode values");
+    }
+}
+
+Optional<IOAddress>
+Network::getGlobalProperty(Optional<IOAddress> property,
+                           const std::string& global_name) const {
+    if (!global_name.empty() && fetch_globals_fn_) {
+        ConstElementPtr globals = fetch_globals_fn_();
+        if (globals && (globals->getType() == Element::map)) {
+            ConstElementPtr global_param = globals->get(global_name);
+            if (global_param) {
+                std::string global_str = global_param->stringValue();
+                if (!global_str.empty()) {
+                    return (IOAddress(global_str));
+                }
+            }
+        }
+    }
+    return (property);
+}
+
 ElementPtr
 Network::toElement() const {
     ElementPtr map = Element::createMap();
@@ -106,9 +143,8 @@ Network::toElement() const {
     contextToElement(map);
 
     // Set interface
-    const std::string& iface = getIface();
-    if (!iface.empty()) {
-        map->set("interface", Element::create(iface));
+    if (!iface_name_.unspecified()) {
+        map->set("interface", Element::create(iface_name_.get()));
     }
 
     ElementPtr relay_map = Element::createMap();
@@ -122,9 +158,8 @@ Network::toElement() const {
     map->set("relay", relay_map);
 
     // Set client-class
-    const ClientClass& cclass = getClientClass();
-    if (!cclass.empty()) {
-        map->set("client-class", Element::create(cclass));
+    if (!client_class_.unspecified()) {
+        map->set("client-class", Element::create(client_class_.get()));
     }
 
     // Set require-client-classes
@@ -141,51 +176,126 @@ Network::toElement() const {
     // T1, T2, and Valid are optional for SharedNetworks, and
     // T1 and T2 are optional for Subnet4 thus we will only
     // output them if they are marked as specified.
-    if (!getT1().unspecified()) {
+    if (!t1_.unspecified()) {
         map->set("renew-timer",
-                 Element::create(static_cast<long long>(getT1().get())));
+                 Element::create(static_cast<long long>(t1_.get())));
     }
 
     // Set rebind-timer
-    if (!getT2().unspecified()) {
+    if (!t2_.unspecified()) {
         map->set("rebind-timer",
-                 Element::create(static_cast<long long>(getT2().get())));
+                 Element::create(static_cast<long long>(t2_.get())));
     }
 
     // Set valid-lifetime
-    if (!getValid().unspecified()) {
+    if (!valid_.unspecified()) {
         map->set("valid-lifetime",
-                 Element::create(static_cast<long long>
-                                 (getValid().get())));
+                 Element::create(static_cast<long long>(valid_.get())));
+        if (valid_.getMin() < valid_.get()) {
+            map->set("min-valid-lifetime",
+                     Element::create(static_cast<long long>(valid_.getMin())));
+        }
+        if (valid_.getMax() > valid_.get()) {
+            map->set("max-valid-lifetime",
+                     Element::create(static_cast<long long>(valid_.getMax())));
+        }
     }
 
     // Set reservation mode
-    Network::HRMode hrmode = getHostReservationMode();
-    std::string mode;
-    switch (hrmode) {
-    case HR_DISABLED:
-        mode = "disabled";
-        break;
-    case HR_OUT_OF_POOL:
-        mode = "out-of-pool";
-        break;
-    case HR_GLOBAL:
-        mode = "global";
-        break;
-    case HR_ALL:
-        mode = "all";
-        break;
-    default:
-        isc_throw(ToElementError,
-                  "invalid host reservation mode: " << hrmode);
+    Optional<Network::HRMode> hrmode = host_reservation_mode_;
+    if (!hrmode.unspecified()) {
+        std::string mode;
+        switch (hrmode.get()) {
+        case HR_DISABLED:
+            mode = "disabled";
+            break;
+        case HR_OUT_OF_POOL:
+            mode = "out-of-pool";
+            break;
+        case HR_GLOBAL:
+            mode = "global";
+            break;
+        case HR_ALL:
+            mode = "all";
+            break;
+        default:
+            isc_throw(ToElementError,
+                      "invalid host reservation mode: " << hrmode.get());
+        }
+        map->set("reservation-mode", Element::create(mode));
     }
-    map->set("reservation-mode", Element::create(mode));
 
     // Set options
     ConstCfgOptionPtr opts = getCfgOption();
     map->set("option-data", opts->toElement());
 
+    // Output calculate-tee-times and percentages if calculation is enabled.
+    if (!calculate_tee_times_.unspecified()) {
+        map->set("calculate-tee-times", Element::create(calculate_tee_times_));
+    }
+
+    if (!t1_percent_.unspecified()) {
+        map->set("t1-percent", Element::create(t1_percent_));
+    }
+
+    if (!t2_percent_.unspecified()) {
+        map->set("t2-percent", Element::create(t2_percent_));
+    }
+
+    if (!ddns_send_updates_.unspecified()) {
+        map->set("ddns-send-updates", Element::create(ddns_send_updates_));
+    }
+
+    if (!ddns_override_no_update_.unspecified()) {
+        map->set("ddns-override-no-update", Element::create(ddns_override_no_update_));
+    }
+
+    if (!ddns_override_client_update_.unspecified()) {
+        map->set("ddns-override-client-update", Element::create(ddns_override_client_update_));
+    }
+
+    if (!ddns_replace_client_name_mode_.unspecified()) {
+        map->set("ddns-replace-client-name",
+                  Element::create(D2ClientConfig::
+                                  replaceClientNameModeToString(ddns_replace_client_name_mode_)));
+    }
+
+    if (!ddns_generated_prefix_.unspecified()) {
+        map->set("ddns-generated-prefix", Element::create(ddns_generated_prefix_));
+    }
+
+    if (!ddns_qualifying_suffix_.unspecified()) {
+        map->set("ddns-qualifying-suffix", Element::create(ddns_qualifying_suffix_));
+    }
+
+    if (!hostname_char_set_.unspecified()) {
+        map->set("hostname-char-set", Element::create(hostname_char_set_));
+    }
+
+    if (!hostname_char_replacement_.unspecified()) {
+        map->set("hostname-char-replacement", Element::create(hostname_char_replacement_));
+    }
+
     return (map);
+}
+
+void
+Network4::setSiaddr(const Optional<IOAddress>& siaddr) {
+    if (!siaddr.get().isV4()) {
+        isc_throw(BadValue, "Can't set siaddr to non-IPv4 address "
+                  << siaddr);
+    }
+    siaddr_ = siaddr;
+}
+
+void
+Network4::setSname(const Optional<std::string>& sname) {
+    sname_ = sname;
+}
+
+void
+Network4::setFilename(const Optional<std::string>& filename) {
+    filename_ = filename;
 }
 
 ElementPtr
@@ -193,10 +303,29 @@ Network4::toElement() const {
     ElementPtr map = Network::toElement();
 
     // Set match-client-id
-    map->set("match-client-id", Element::create(getMatchClientId()));
+    if (!match_client_id_.unspecified()) {
+        map->set("match-client-id", Element::create(match_client_id_.get()));
+    }
 
     // Set authoritative
-    map->set("authoritative", Element::create(getAuthoritative()));
+    if (!authoritative_.unspecified()) {
+        map->set("authoritative", Element::create(authoritative_.get()));
+    }
+
+    // Set next-server
+    if (!siaddr_.unspecified()) {
+        map->set("next-server", Element::create(siaddr_.get().toText()));
+    }
+
+    // Set server-hostname
+    if (!sname_.unspecified()) {
+        map->set("server-hostname", Element::create(sname_.get()));
+    }
+
+    // Set boot-file-name
+    if (!filename_.unspecified()) {
+        map->set("boot-file-name",Element::create(filename_.get()));
+    }
 
     return (map);
 }
@@ -221,9 +350,18 @@ Network6::toElement() const {
     ElementPtr map = Network::toElement();
 
     // Set preferred-lifetime
-    map->set("preferred-lifetime",
-             Element::create(static_cast<long long>
-                             (getPreferred().get())));
+    if (!preferred_.unspecified()) {
+        map->set("preferred-lifetime",
+                 Element::create(static_cast<long long>(preferred_.get())));
+        if (preferred_.getMin() < preferred_.get()) {
+            map->set("min-preferred-lifetime",
+                     Element::create(static_cast<long long>(preferred_.getMin())));
+        }
+        if (preferred_.getMax() > preferred_.get()) {
+            map->set("max-preferred-lifetime",
+                     Element::create(static_cast<long long>(preferred_.getMax())));
+        }
+    }
 
     // Set interface-id
     const OptionPtr& ifaceid = getInterfaceId();
@@ -238,8 +376,9 @@ Network6::toElement() const {
     }
 
     // Set rapid-commit
-    bool rapid_commit = getRapidCommit();
-    map->set("rapid-commit", Element::create(rapid_commit));
+    if (!rapid_commit_.unspecified()) {
+        map->set("rapid-commit", Element::create(rapid_commit_.get()));
+    }
 
     return (map);
 }

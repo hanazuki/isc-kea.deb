@@ -1,5 +1,5 @@
 SUBDIRS = .
-dhcp_data_dir = @localstatedir@/@PACKAGE@
+dhcp_data_dir = @runstatedir@/@PACKAGE@
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
 AM_CPPFLAGS += $(BOOST_INCLUDES)
 AM_CPPFLAGS += -DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/lib/process/tests\"
@@ -22,6 +22,7 @@ if HAVE_GTEST
 TESTS += libprocess_unittests
 
 libprocess_unittests_SOURCES  = d_cfg_mgr_unittests.cc
+libprocess_unittests_SOURCES += cb_ctl_base_unittests.cc
 libprocess_unittests_SOURCES += config_base_unittests.cc
 libprocess_unittests_SOURCES += config_ctl_info_unittests.cc
 libprocess_unittests_SOURCES += config_ctl_parser_unittests.cc

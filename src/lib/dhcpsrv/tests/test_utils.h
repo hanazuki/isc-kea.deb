@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -39,7 +39,7 @@ detailCompareLease(const Lease4Ptr& first, const Lease4Ptr& second);
 /// This function is used to attempt lost connectivity
 /// with backends, notably MySQL and Postgresql.
 ///
-/// The theory being, that in a confined test environment the last 
+/// The theory being, that in a confined test environment the last
 /// such descriptor is the SQL client socket descriptor.  This allows
 /// us to the close that descriptor and simulate a loss of server
 /// connectivity.

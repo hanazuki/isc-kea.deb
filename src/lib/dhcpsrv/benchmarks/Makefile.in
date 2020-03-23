@@ -101,12 +101,19 @@ host_triplet = @host@
 @HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__append_8 = $(MYSQL_LIBS)
 @HAVE_BENCHMARK_TRUE@@HAVE_PGSQL_TRUE@am__append_9 = $(PGSQL_LIBS)
 @HAVE_BENCHMARK_TRUE@@HAVE_CQL_TRUE@am__append_10 = $(CQL_LIBS)
+@HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__append_11 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la
+@HAVE_BENCHMARK_TRUE@@HAVE_PGSQL_TRUE@am__append_12 = $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la
+@HAVE_BENCHMARK_TRUE@@HAVE_CQL_TRUE@am__append_13 = $(top_builddir)/src/lib/cql/testutils/libcqltest.la
+@HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__append_14 = $(MYSQL_LIBS)
+@HAVE_BENCHMARK_TRUE@@HAVE_PGSQL_TRUE@am__append_15 = $(PGSQL_LIBS)
+@HAVE_BENCHMARK_TRUE@@HAVE_CQL_TRUE@am__append_16 = $(CQL_LIBS)
 noinst_PROGRAMS = $(am__EXEEXT_2)
 subdir = src/lib/dhcpsrv/benchmarks
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -149,10 +156,33 @@ am__run_benchmarks_SOURCES_DIST = run_benchmarks.cc \
 @HAVE_BENCHMARK_TRUE@	$(am__objects_3)
 run_benchmarks_OBJECTS = $(am_run_benchmarks_OBJECTS)
 am__DEPENDENCIES_1 =
+@HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__DEPENDENCIES_2 =  \
+@HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@	$(am__DEPENDENCIES_1)
+@HAVE_BENCHMARK_TRUE@@HAVE_PGSQL_TRUE@am__DEPENDENCIES_3 =  \
+@HAVE_BENCHMARK_TRUE@@HAVE_PGSQL_TRUE@	$(am__DEPENDENCIES_1)
+@HAVE_BENCHMARK_TRUE@@HAVE_CQL_TRUE@am__DEPENDENCIES_4 =  \
+@HAVE_BENCHMARK_TRUE@@HAVE_CQL_TRUE@	$(am__DEPENDENCIES_1)
 @HAVE_BENCHMARK_TRUE@run_benchmarks_DEPENDENCIES = $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
-@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
-@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
+@HAVE_BENCHMARK_TRUE@	$(am__append_11) $(am__append_12) \
+@HAVE_BENCHMARK_TRUE@	$(am__append_13) \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
+@HAVE_BENCHMARK_TRUE@	$(am__DEPENDENCIES_2) \
+@HAVE_BENCHMARK_TRUE@	$(am__DEPENDENCIES_3) \
+@HAVE_BENCHMARK_TRUE@	$(am__DEPENDENCIES_4) \
 @HAVE_BENCHMARK_TRUE@	$(am__DEPENDENCIES_1) \
 @HAVE_BENCHMARK_TRUE@	$(am__DEPENDENCIES_1) \
 @HAVE_BENCHMARK_TRUE@	$(am__DEPENDENCIES_1) \
@@ -304,7 +334,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -325,7 +354,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -335,6 +363,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -344,7 +373,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -395,6 +423,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -412,17 +441,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -510,12 +539,27 @@ BENCHMARKS = $(am__append_1)
 @HAVE_BENCHMARK_TRUE@	$(am__append_8) $(am__append_9) \
 @HAVE_BENCHMARK_TRUE@	$(am__append_10)
 @HAVE_BENCHMARK_TRUE@run_benchmarks_LDADD = $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
-@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
-@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
-@HAVE_BENCHMARK_TRUE@	$(BENCHMARK_LDADD) $(LOG4CPLUS_LIBS) \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
+@HAVE_BENCHMARK_TRUE@	$(am__append_11) $(am__append_12) \
+@HAVE_BENCHMARK_TRUE@	$(am__append_13) \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
+@HAVE_BENCHMARK_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
+@HAVE_BENCHMARK_TRUE@	$(am__append_14) $(am__append_15) \
+@HAVE_BENCHMARK_TRUE@	$(am__append_16) $(LOG4CPLUS_LIBS) \
 @HAVE_BENCHMARK_TRUE@	$(CRYPTO_LIBS) $(BOOST_LIBS) \
-@HAVE_BENCHMARK_TRUE@	$(GTEST_LDADD)
+@HAVE_BENCHMARK_TRUE@	$(GTEST_LDADD) $(BENCHMARK_LDADD)
 all: all-recursive
 
 .SUFFIXES:

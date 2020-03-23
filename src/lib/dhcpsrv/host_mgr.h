@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -124,6 +124,137 @@ public:
            const uint8_t* identifier_begin,
            const size_t identifier_len) const;
 
+    /// @brief Return all hosts in a DHCPv4 subnet.
+    ///
+    /// This method returns all @c Host objects representing reservations
+    /// in a specified subnet as documented in the
+    /// @c BaseHostDataSource::getAll4
+    ///
+    /// It retrieves reservations from both primary and alternate host data
+    /// source as a single collection of @c Host objects, i.e. if matching
+    /// reservations are in both sources, all of them are returned. The
+    /// reservations from the primary data source are placed before the
+    /// reservations from the alternate source.
+    ///
+    /// @param subnet_id Subnet identifier.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll4(const SubnetID& subnet_id) const;
+
+    /// @brief Return all hosts in a DHCPv6 subnet.
+    ///
+    /// This method returns all @c Host objects representing reservations
+    /// in a specified subnet as documented in the
+    /// @c BaseHostDataSource::getAll6
+    ///
+    /// It retrieves reservations from both primary and alternate host data
+    /// source as a single collection of @c Host objects, i.e. if matching
+    /// reservations are in both sources, all of them are returned. The
+    /// reservations from the primary data source are placed before the
+    /// reservations from the alternate source.
+    ///
+    /// @param subnet_id Subnet identifier.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll6(const SubnetID& subnet_id) const;
+
+    /// @brief Return all hosts with a hostname.
+    ///
+    /// This method returns all @c Host objects which represent reservations
+    /// using a specified hostname.
+    ///
+    /// @param hostname The lower case hostname.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAllbyHostname(const std::string& hostname) const;
+
+    /// @brief Return all hosts with a hostname in a DHCPv4 subnet.
+    ///
+    /// This method returns all @c Host objects which represent reservations
+    /// using a specified hostname in a specified subnet.
+    ///
+    /// @param hostname The lower case hostname.
+    /// @param subnet_id Subnet identifier.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAllbyHostname4(const std::string& hostname, const SubnetID& subnet_id) const;
+
+    /// @brief Return all hosts with a hostname in a DHCPv6 subnet.
+    ///
+    /// This method returns all @c Host objects which represent reservations
+    /// using a specified hostname in a specified subnet.
+    ///
+    /// @param hostname The lower case hostname.
+    /// @param subnet_id Subnet identifier.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAllbyHostname6(const std::string& hostname, const SubnetID& subnet_id) const;
+
+    /// @brief Returns range of hosts in a DHCPv4 subnet.
+    ///
+    /// This method returns a page of @c Host objects representing
+    /// reservations in a specified subnet as documented in the
+    /// @c BaseHostDataSource::getPage4
+    ///
+    /// The typical usage of this method is as follows:
+    /// - Get the first page of hosts by specifying zero index and id
+    ///   as the beginning of the range.
+    /// - Index and last id of the returned range should be used as
+    ///   starting index and id for the next page in the subsequent call.
+    /// - All returned hosts are from the same source so if the number of
+    ///   hosts returned is lower than the page size, it does not indicate
+    ///   that the last page has been retrieved.
+    /// - If there are no hosts returned it indicates that the previous page
+    ///   was the last page.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param source_index Index of the source.
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Host collection (may be empty).
+    virtual ConstHostCollection
+    getPage4(const SubnetID& subnet_id,
+             size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
+    /// @brief Returns range of hosts in a DHCPv6 subnet.
+    ///
+    /// This method returns a page of @c Host objects representing
+    /// reservations in a specified subnet as documented in the
+    /// @c BaseHostDataSource::getPage6
+    ///
+    /// The typical usage of this method is as follows:
+    /// - Get the first page of hosts by specifying zero index and id
+    ///   as the beginning of the range.
+    /// - Index and last id of the returned range should be used as
+    ///   starting index and id for the next page in the subsequent call.
+    /// - All returned hosts are from the same source so if the number of
+    ///   hosts returned is lower than the page size, it does not indicate
+    ///   that the last page has been retrieved.
+    /// - If there are no hosts returned it indicates that the previous page
+    ///   was the last page.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param source_index Index of the source.
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Host collection (may be empty).
+    virtual ConstHostCollection
+    getPage6(const SubnetID& subnet_id,
+             size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
     /// @brief Returns a collection of hosts using the specified IPv4 address.
     ///
     /// This method may return multiple @c Host objects if they are connected to
@@ -195,7 +326,7 @@ public:
     /// @brief Returns any host connected to the IPv6 subnet.
     ///
     /// This method returns a host connected to the IPv6 subnet as described
-    /// in the @c BaseHostDataSource::get6 even when the             
+    /// in the @c BaseHostDataSource::get6 even when the
     /// reservation is marked as from negative caching. This allows to
     /// monitor negative caching.
     ///
@@ -331,6 +462,19 @@ public:
         negative_caching_ = negative_caching;
     }
 
+    /// @brief Returns the disable single query flag.
+    ///
+    /// @return the disable single query flag.
+    bool getDisableSingleQuery() const {
+        return (disable_single_query_);
+    }
+
+    /// @brief Sets the disable single query flag.
+    ///
+    void setDisableSingleQuery(bool disable_single_query) {
+        disable_single_query_ = disable_single_query;
+    }
+
 protected:
     /// @brief The negative caching flag.
     ///
@@ -338,6 +482,13 @@ protected:
     /// negative answers are inserted in the cache.
     /// This works for get[46] for a subnet and an identifier.
     bool negative_caching_;
+
+    /// @brief The disable single query flag.
+    ///
+    /// When true prevent the use of lookup methods returning a collection
+    /// aka single queries when methods returning a host object are usable
+    /// instead.
+    bool disable_single_query_;
 
     /// @brief Cache an answer.
     ///
@@ -360,7 +511,7 @@ protected:
 private:
 
     /// @brief Private default constructor.
-    HostMgr() : negative_caching_(false) { }
+    HostMgr() : negative_caching_(false), disable_single_query_(false) { }
 
     /// @brief List of alternate host data sources.
     HostDataSourceList alternate_sources_;
