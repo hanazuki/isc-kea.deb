@@ -3,10 +3,12 @@ Date: Tue, 19 Feb 2019 12:55:42 +0000
 Subject: Use runstatedir for pid file location
 
 ---
- src/lib/process/Makefile.am | 3 +--
+ src/lib/process/Makefile.am | 4 +---
  src/lib/process/daemon.cc   | 2 +-
- 2 files changed, 2 insertions(+), 3 deletions(-)
+ 2 files changed, 2 insertions(+), 4 deletions(-)
 
+diff --git a/src/lib/process/Makefile.am b/src/lib/process/Makefile.am
+index 07f33de..3dd9298 100644
 --- a/src/lib/process/Makefile.am
 +++ b/src/lib/process/Makefile.am
 @@ -1,8 +1,6 @@
@@ -19,9 +21,11 @@ Subject: Use runstatedir for pid file location
  
  AM_CPPFLAGS += $(BOOST_INCLUDES)
  AM_CXXFLAGS  = $(KEA_CXXFLAGS)
+diff --git a/src/lib/process/daemon.cc b/src/lib/process/daemon.cc
+index 4ca5d0d..f465d1c 100644
 --- a/src/lib/process/daemon.cc
 +++ b/src/lib/process/daemon.cc
-@@ -37,7 +37,7 @@
+@@ -37,7 +37,7 @@ std::string Daemon::default_logger_name_("kea");
  
  Daemon::Daemon()
      : signal_set_(), signal_handler_(), config_file_(""),

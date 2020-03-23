@@ -7,6 +7,8 @@ Subject: Put KEA_LOCKFILE_DIR to runstatedir
  src/lib/log/interprocess/interprocess_sync_file.cc | 2 +-
  2 files changed, 2 insertions(+), 2 deletions(-)
 
+diff --git a/src/lib/log/interprocess/Makefile.am b/src/lib/log/interprocess/Makefile.am
+index 676af42..e62624b 100644
 --- a/src/lib/log/interprocess/Makefile.am
 +++ b/src/lib/log/interprocess/Makefile.am
 @@ -1,7 +1,7 @@
@@ -18,9 +20,11 @@ Subject: Put KEA_LOCKFILE_DIR to runstatedir
  AM_CPPFLAGS += $(BOOST_INCLUDES)
  
  AM_CXXFLAGS = $(KEA_CXXFLAGS)
+diff --git a/src/lib/log/interprocess/interprocess_sync_file.cc b/src/lib/log/interprocess/interprocess_sync_file.cc
+index ed6a5b7..0d8efa7 100644
 --- a/src/lib/log/interprocess/interprocess_sync_file.cc
 +++ b/src/lib/log/interprocess/interprocess_sync_file.cc
-@@ -43,7 +43,7 @@
+@@ -43,7 +43,7 @@ InterprocessSyncFile::do_lock(int cmd, short l_type) {
      // if a default InterprocessSync object is replaced with another
      // implementation, it doesn't attempt any opens.
      if (fd_ == -1) {
