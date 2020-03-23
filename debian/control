@@ -20,6 +20,7 @@ Build-Depends: bison,
                libssl-dev,
                postgresql-server-dev-all,
                python3-dev,
+               python3-sphinx,
                xsltproc
 Standards-Version: 4.5.0
 Homepage: http://kea.isc.org/
