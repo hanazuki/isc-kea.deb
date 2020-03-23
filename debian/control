@@ -6,7 +6,7 @@ Uploaders: Adam Majer <adamm@zombino.com>,
            Ondřej Surý <ondrej@debian.org>,
            Jason Guy <jason.e.guy@gmail.com>
 Build-Depends: bison,
-               debhelper-compat (= 11),
+               debhelper-compat (= 12),
                default-libmysqlclient-dev | libmysqlclient-dev,
                dh-python,
                docbook,
@@ -21,7 +21,7 @@ Build-Depends: bison,
                postgresql-server-dev-all,
                python3-dev,
                xsltproc
-Standards-Version: 3.9.7
+Standards-Version: 4.5.0
 Homepage: http://kea.isc.org/
 Vcs-Git: https://salsa.debian.org/debian/isc-kea.git
 Vcs-Browser: https://salsa.debian.org/debian/isc-kea
