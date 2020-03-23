@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,16 +8,19 @@
 #define DHCPV6_SRV_H
 
 #include <asiolink/io_service.h>
-#include <dhcp_ddns/ncr_msg.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/duid.h>
 #include <dhcp/option.h>
+#include <dhcp/option_string.h>
 #include <dhcp/option6_client_fqdn.h>
 #include <dhcp/option6_ia.h>
+#include <dhcp/option_custom.h>
 #include <dhcp/option_definition.h>
+#include <dhcp_ddns/ncr_msg.h>
 #include <dhcp/pkt6.h>
 #include <dhcpsrv/alloc_engine.h>
 #include <dhcpsrv/callout_handle_store.h>
+#include <dhcpsrv/cb_ctl_dhcp6.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/d2_client_mgr.h>
 #include <dhcpsrv/network_state.h>
@@ -50,12 +53,16 @@ public:
 
 /// @brief DHCPv6 server service.
 ///
-/// This class represents DHCPv6 server. It contains all
+/// This singleton class represents DHCPv6 server. It contains all
 /// top-level methods and routines necessary for server operation.
 /// In particular, it instantiates IfaceMgr, loads or generates DUID
 /// that is going to be used as server-identifier, receives incoming
 /// packets, processes them, manages leases assignment and generates
 /// appropriate responses.
+///
+/// This class does not support any controlling mechanisms directly.
+/// See the derived \ref ControlledDhcpv6Srv class for support for
+/// command and configuration updates over msgq.
 class Dhcpv6Srv : public process::Daemon {
 private:
 
@@ -78,13 +85,26 @@ public:
     /// Instantiates necessary services, required to run DHCPv6 server.
     /// In particular, creates IfaceMgr that will be responsible for
     /// network interaction. Will instantiate lease manager, and load
-    /// old or create new DUID.
+    /// old or create new DUID. It is possible to specify alternate
+    /// port on which DHCPv6 server will listen on and alternate port
+    /// where DHCPv6 server sends all responses to. Those are mostly useful
+    /// for testing purposes.
     ///
-    /// @param port port on will all sockets will listen
-    Dhcpv6Srv(uint16_t port = DHCP6_SERVER_PORT);
+    /// @param server_port specifies port number to listen on
+    /// @param client_port specifies port number to send to
+    Dhcpv6Srv(uint16_t server_port = DHCP6_SERVER_PORT,
+              uint16_t client_port = 0);
 
     /// @brief Destructor. Used during DHCPv6 service shutdown.
     virtual ~Dhcpv6Srv();
+
+    /// @brief Checks if the server is running in unit test mode.
+    ///
+    /// @return true if the server is running in unit test mode,
+    /// false otherwise.
+    bool inTestMode() const {
+        return (server_port_ == 0);
+    }
 
     /// @brief Returns pointer to the IO service used by the server.
     asiolink::IOServicePtr& getIOService() {
@@ -94,6 +114,15 @@ public:
     /// @brief Returns pointer to the network state used by the server.
     NetworkStatePtr& getNetworkState() {
         return (network_state_);
+    }
+
+    /// @brief Returns an object which controls access to the configuration
+    /// backends.
+    ///
+    /// @return Pointer to the instance of the object which controls
+    /// access to the configuration backends.
+    CBControlDHCPv6Ptr getCBControl() const {
+        return (cb_control_);
     }
 
     /// @brief returns Kea version on stdout and exit.
@@ -120,6 +149,32 @@ public:
     /// a response.
     void run_one();
 
+    /// @brief Process a single incoming DHCPv6 packet and sends the response.
+    ///
+    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// methods, generates appropriate answer, sends the answer to the client.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response
+    void processPacketAndSendResponse(Pkt6Ptr& query, Pkt6Ptr& rsp);
+
+    /// @brief Process a single incoming DHCPv6 packet and sends the response.
+    ///
+    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// methods, generates appropriate answer, sends the answer to the client.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response
+    void processPacketAndSendResponseNoThrow(Pkt6Ptr& query, Pkt6Ptr& rsp);
+
+    /// @brief Process an unparked DHCPv6 packet and sends the response.
+    ///
+    /// @param callout_handle pointer to the callout handle.
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response
+    void sendResponseNoThrow(hooks::CalloutHandlePtr& callout_handle,
+                             Pkt6Ptr& query, Pkt6Ptr& rsp);
+
     /// @brief Process a single incoming DHCPv6 packet.
     ///
     /// It verifies correctness of the passed packet, call per-type processXXX
@@ -132,15 +187,21 @@ public:
     /// @brief Instructs the server to shut down.
     void shutdown();
 
+    ///
+    /// @name Public accessors returning values required to (re)open sockets.
+    ///
+    //@{
+    ///
     /// @brief Get UDP port on which server should listen.
     ///
-    /// Typically, server listens on UDP port 547. Other ports are only
-    /// used for testing purposes.
+    /// Typically, server listens on UDP port number 547. Other ports are used
+    /// for testing purposes only.
     ///
     /// @return UDP port on which server should listen.
-    uint16_t getPort() const {
-        return (port_);
+    uint16_t getServerPort() const {
+        return (server_port_);
     }
+    //@}
 
     /// @brief Starts DHCP_DDNS client IO if DDNS updates are enabled.
     ///
@@ -180,6 +241,14 @@ public:
     void discardPackets();
 
 protected:
+
+    /// @brief This function sets statistics related to DHCPv6 packets processing
+    /// to their initial values.
+    ///
+    /// All of the statistics observed by the DHCPv6 server and with the names
+    /// like "pkt6-" are reset to 0. This function must be invoked in the class
+    /// constructor.
+    void setPacketStatisticsDefaults();
 
     /// @brief Compare received server id with our server id
     ///
@@ -633,9 +702,11 @@ protected:
     /// The FQDN option carries response to the client about DNS updates that
     /// server intends to perform for the DNS client. Based on this, the
     /// function will create zero or more @c isc::dhcp_ddns::NameChangeRequest
-    /// objects and store them in the internal queue. Requests created by this
-    /// function are only for adding or updating DNS records. If DNS updates are
-    /// disabled, this method returns immediately.
+    /// objects and store them in the internal queue.  To catch lease renewals
+    /// that alter the FQDN, the function first looks at the context's changed
+    /// list of leases (if any) to determine if DNS entries need to be removed.
+    /// It then looks at the valid leases to determine if any DNS entries need
+    /// to be added. If DNS updates are disabled, this method returns immediately.
     ///
     /// @todo Add support for multiple IAADDR options in the IA_NA.
     ///
@@ -658,6 +729,33 @@ protected:
     /// @param ctx client context (contains subnet, duid and other parameters)
     void extendLeases(const Pkt6Ptr& query, Pkt6Ptr& reply,
                       AllocEngine::ClientContext6& ctx);
+
+    /// @brief Sets the T1 and T2 timers in the outbound IA
+    ///
+    /// This method determines the values for both the T1 and T2
+    /// timers for the given IA. It is influenced by the
+    /// lease's subnet's values for renew-timer, rebind-timer,
+    /// calculate-tee-times, t1-percent, and t2-percent as follows:
+    ///
+    /// T2:
+    ///
+    /// The value for T2 defaults to zero. If the rebind-timer value is
+    /// specified then use it.  If not and calculate-tee-times is true, then
+    /// use the value given by: preferred lease time * t2-percent.
+    ///
+    /// T1:
+    ///
+    /// The candidate value for T1 defaults to zero. If the renew-timer value
+    /// is specified then use it. If not and calculate-tee-times is true, then
+    /// use the value given by: preferred lease time * t1-percent.
+    ///
+    /// The T1 candidate will be used provided it less than to T2,
+    /// otherwise it will be set T1 to zero.
+    ///
+    /// @param preferred_lft preferred lease time of the lease being assigned to the client
+    /// @param subnet the subnet to which the lease belongs
+    /// @param resp outbound IA option in which the timers are set.
+    void setTeeTimes(uint32_t preferred_lft, const Subnet6Ptr& subnet, Option6IAPtr& resp);
 
     /// @brief Attempts to release received addresses
     ///
@@ -881,7 +979,7 @@ private:
     ///
     /// @throw isc::Unexpected if specified message is NULL. This is treated
     /// as a programmatic error.
-    void updateReservedFqdn(const AllocEngine::ClientContext6& ctx,
+    void updateReservedFqdn(AllocEngine::ClientContext6& ctx,
                             const Pkt6Ptr& answer);
 
     /// @private
@@ -922,10 +1020,12 @@ private:
     ///
     /// @param answer Message being sent to a client, which may hold IA_NA
     /// and Client FQDN options to be used to generate name for a client.
+    /// @param ctx Client context.
     ///
     /// @throw isc::Unexpected if specified message is NULL. This is treated
     /// as a programmatic error.
-    void generateFqdn(const Pkt6Ptr& answer);
+    void generateFqdn(const Pkt6Ptr& answer,
+                      AllocEngine::ClientContext6& ctx);
 
     /// @brief Updates statistics for received packets
     /// @param query packet received
@@ -940,8 +1040,12 @@ private:
     /// @return true if option has been requested in the ORO.
     bool requestedInORO(const Pkt6Ptr& query, const uint16_t code) const;
 
+protected:
     /// UDP port number on which server listens.
-    uint16_t port_;
+    uint16_t server_port_;
+
+    /// UDP port number to which server sends all responses.
+    uint16_t client_port_;
 
 public:
     /// @note used by DHCPv4-over-DHCPv6 so must be public and static
@@ -992,9 +1096,11 @@ protected:
     /// disabled subnet/network scopes.
     NetworkStatePtr network_state_;
 
+    /// @brief Controls access to the configuration backends.
+    CBControlDHCPv6Ptr cb_control_;
 };
 
-}; // namespace isc::dhcp
-}; // namespace isc
+}  // namespace dhcp
+}  // namespace isc
 
 #endif // DHCP6_SRV_H

@@ -21,7 +21,7 @@
     // API between the HA peers.
     "control-socket": {
         "socket-type": "unix",
-        "socket-name": "/tmp/kea-dhcp6-ctrl.sock"
+        "socket-name": "/tmp/kea6-ctrl-socket"
     },
 
     // Use Memfile lease database backend to store leases in a CSV file.
@@ -40,12 +40,12 @@
     // The latter implements high availability feature for Kea.
     "hooks-libraries": [
         {
-            "library": "/opt/lib/hooks/libdhcp_lease_cmds.so",
+            "library": "/opt/lib/kea/hooks/libdhcp_lease_cmds.so",
             "parameters": { }
         },
         {
             // The HA hooks library should be loaded.
-            "library": "/opt/lib/hooks/libdhcp_ha.so",
+            "library": "/opt/lib/kea/hooks/libdhcp_ha.so",
             "parameters": {
                 // High Availability configuration is specified for the HA hook library.
                 // Each server should have the same HA configuration, except for the
@@ -80,7 +80,7 @@
                              // channel can be reached. The Control Agent is required
                              // to run on the partner's machine with "http-host" and
                              // "http-port" values set to the corresponding values.
-                             "url": "http://192.168.56.33:8080/",
+                             "url": "http://192.168.56.33:8000/",
                              // Th partner is primary. Our is standby.
                              "role": "primary"
                          },
@@ -91,7 +91,7 @@
                              // Control Agent must run along with our DHCPv6 server
                              // instance and the "http-host" and "http-port" must be
                              // set to the corresponding values.
-                             "url": "http://192.168.56.66:8080/",
+                             "url": "http://192.168.56.66:8000/",
                              // Out server is standby. The partner is primary.
                              "role": "standby"
                          }
@@ -115,14 +115,12 @@
 
              "interface": "ethX"
     }
-  ]
-},
+  ],
 
 // The following configures logging. It assumes that messages with at
 // least informational level (info, warn, error and fatal) should be
 // logged to stdout. Alternatively, you can specify stderr here, a filename
 // or 'syslog', which will store output messages via syslog.
-"Logging": {
     "loggers": [
         {
             "name": "kea-dhcp6",
@@ -150,4 +148,3 @@
 }
 
 }
-

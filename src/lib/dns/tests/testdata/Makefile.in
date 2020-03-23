@@ -92,6 +92,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -144,7 +145,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -165,7 +165,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -175,6 +174,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -184,7 +184,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -235,6 +234,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -252,17 +252,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -365,37 +365,38 @@ EXTRA_DIST = edns_toWire1.spec edns_toWire2.spec edns_toWire3.spec \
 	rdata_nsec3param_fromWire1 rdata_nsec3param_fromWire2.spec \
 	rdata_nsec3param_fromWire11.spec \
 	rdata_nsec3param_fromWire13.spec rdata_nsec3_fromWire1 \
-	rdata_nsec3_fromWire2.spec rdata_nsec3_fromWire3 \
-	rdata_nsec3_fromWire4.spec rdata_nsec3_fromWire5.spec \
-	rdata_nsec3_fromWire6.spec rdata_nsec3_fromWire7.spec \
-	rdata_nsec3_fromWire8.spec rdata_nsec3_fromWire9.spec \
-	rdata_nsec3_fromWire10.spec rdata_nsec3_fromWire11.spec \
-	rdata_nsec3_fromWire12.spec rdata_nsec3_fromWire13.spec \
-	rdata_nsec3_fromWire14.spec rdata_nsec3_fromWire15.spec \
-	rdata_nsec3_fromWire16.spec rdata_nsec3_fromWire17.spec \
-	rdata_opt_fromWire1 rdata_opt_fromWire2 rdata_opt_fromWire3 \
-	rdata_opt_fromWire4 rdata_rrsig_fromWire1 \
-	rdata_rrsig_fromWire2.spec rdata_rp_fromWire1.spec \
-	rdata_rp_fromWire2.spec rdata_rp_fromWire3.spec \
-	rdata_rp_fromWire4.spec rdata_rp_fromWire5.spec \
-	rdata_rp_fromWire6.spec rdata_rp_toWire1.spec \
-	rdata_rp_toWire2.spec rdata_sshfp_fromWire \
-	rdata_sshfp_fromWire2 rdata_sshfp_fromWire1.spec \
-	rdata_sshfp_fromWire2.spec rdata_sshfp_fromWire3.spec \
-	rdata_sshfp_fromWire4.spec rdata_sshfp_fromWire5.spec \
-	rdata_sshfp_fromWire6.spec rdata_sshfp_fromWire7.spec \
-	rdata_sshfp_fromWire8.spec rdata_sshfp_fromWire9 \
-	rdata_sshfp_fromWire10 rdata_sshfp_fromWire11 \
-	rdata_sshfp_fromWire12 rdata_afsdb_fromWire1.spec \
-	rdata_afsdb_fromWire2.spec rdata_afsdb_fromWire3.spec \
-	rdata_afsdb_fromWire4.spec rdata_afsdb_fromWire5.spec \
-	rdata_afsdb_toWire1.spec rdata_afsdb_toWire2.spec \
-	rdata_soa_fromWire rdata_soa_toWireUncompressed.spec \
-	rdata_srv_fromWire rdata_minfo_fromWire1.spec \
-	rdata_minfo_fromWire2.spec rdata_minfo_fromWire3.spec \
-	rdata_minfo_fromWire4.spec rdata_minfo_fromWire5.spec \
-	rdata_minfo_fromWire6.spec rdata_minfo_toWire1.spec \
-	rdata_minfo_toWire2.spec rdata_minfo_toWireUncompressed1.spec \
+	rdata_nsec3_fromWire1.spec rdata_nsec3_fromWire2.spec \
+	rdata_nsec3_fromWire3 rdata_nsec3_fromWire4.spec \
+	rdata_nsec3_fromWire5.spec rdata_nsec3_fromWire6.spec \
+	rdata_nsec3_fromWire7.spec rdata_nsec3_fromWire8.spec \
+	rdata_nsec3_fromWire9.spec rdata_nsec3_fromWire10.spec \
+	rdata_nsec3_fromWire11.spec rdata_nsec3_fromWire12.spec \
+	rdata_nsec3_fromWire13.spec rdata_nsec3_fromWire14.spec \
+	rdata_nsec3_fromWire15.spec rdata_nsec3_fromWire16.spec \
+	rdata_nsec3_fromWire17.spec rdata_opt_fromWire1 \
+	rdata_opt_fromWire2 rdata_opt_fromWire3 rdata_opt_fromWire4 \
+	rdata_rrsig_fromWire1 rdata_rrsig_fromWire2.spec \
+	rdata_rp_fromWire1.spec rdata_rp_fromWire2.spec \
+	rdata_rp_fromWire3.spec rdata_rp_fromWire4.spec \
+	rdata_rp_fromWire5.spec rdata_rp_fromWire6.spec \
+	rdata_rp_toWire1.spec rdata_rp_toWire2.spec \
+	rdata_sshfp_fromWire rdata_sshfp_fromWire2 \
+	rdata_sshfp_fromWire1.spec rdata_sshfp_fromWire2.spec \
+	rdata_sshfp_fromWire3.spec rdata_sshfp_fromWire4.spec \
+	rdata_sshfp_fromWire5.spec rdata_sshfp_fromWire6.spec \
+	rdata_sshfp_fromWire7.spec rdata_sshfp_fromWire8.spec \
+	rdata_sshfp_fromWire9 rdata_sshfp_fromWire10 \
+	rdata_sshfp_fromWire11 rdata_sshfp_fromWire12 \
+	rdata_afsdb_fromWire1.spec rdata_afsdb_fromWire2.spec \
+	rdata_afsdb_fromWire3.spec rdata_afsdb_fromWire4.spec \
+	rdata_afsdb_fromWire5.spec rdata_afsdb_toWire1.spec \
+	rdata_afsdb_toWire2.spec rdata_soa_fromWire \
+	rdata_soa_toWireUncompressed.spec rdata_srv_fromWire \
+	rdata_minfo_fromWire1.spec rdata_minfo_fromWire2.spec \
+	rdata_minfo_fromWire3.spec rdata_minfo_fromWire4.spec \
+	rdata_minfo_fromWire5.spec rdata_minfo_fromWire6.spec \
+	rdata_minfo_toWire1.spec rdata_minfo_toWire2.spec \
+	rdata_minfo_toWireUncompressed1.spec \
 	rdata_minfo_toWireUncompressed2.spec rdata_txt_fromWire1 \
 	rdata_txt_fromWire2.spec rdata_txt_fromWire3.spec \
 	rdata_txt_fromWire4.spec rdata_txt_fromWire5.spec \

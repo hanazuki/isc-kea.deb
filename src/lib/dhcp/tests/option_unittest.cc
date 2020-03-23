@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -70,13 +70,11 @@ TEST_F(OptionTest, v4_basic) {
     EXPECT_NO_THROW(opt.reset());
 
     // V4 options have type 0...255
-    EXPECT_THROW(opt.reset(new Option(Option::V4, 256)), BadValue);
+    EXPECT_THROW(opt.reset(new Option(Option::V4, 256)), OutOfRange);
 
-    // 0 is a special PAD option
-    EXPECT_THROW(opt.reset(new Option(Option::V4, 0)), BadValue);
-
-    // 255 is a special END option
-    EXPECT_THROW(opt.reset(new Option(Option::V4, 255)), BadValue);
+    // 0 / PAD and 255 / END are no longer forbidden
+    EXPECT_NO_THROW(opt.reset(new Option(Option::V4, 0)));
+    EXPECT_NO_THROW(opt.reset(new Option(Option::V4, 255)));
 }
 
 const uint8_t dummyPayload[] =
@@ -616,6 +614,25 @@ TEST_F(OptionTest, cloneInternal) {
     // This shouldn't throw nor cause segmentation fault.
     ASSERT_NO_THROW(clone = option.cloneInternal<OptionUint8>());
     EXPECT_FALSE(clone);
+}
+
+// This test verifies that empty option factory function creates
+// a valid option instance.
+TEST_F(OptionTest, create) {
+    auto option = Option::create(Option::V4, 123);
+    ASSERT_TRUE(option);
+    EXPECT_EQ(Option::V4, option->getUniverse());
+    EXPECT_EQ(123, option->getType());
+}
+
+// This test verifies that option factory function creates a
+// valid option instance.
+TEST_F(OptionTest, createPayload) {
+    auto option = Option::create(Option::V4, 123, buf_);
+    ASSERT_TRUE(option);
+    EXPECT_EQ(Option::V4, option->getUniverse());
+    EXPECT_EQ(123, option->getType());
+    EXPECT_EQ(buf_, option->getData());
 }
 
 }

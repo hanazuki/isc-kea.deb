@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,7 +18,7 @@ namespace isc {
 namespace db {
 
 /// @brief Database logging levels.
-extern const int DB_DBG_TRACE_DETAIL = isc::log::DBGLVL_TRACE_DETAIL;
+const int DB_DBG_TRACE_DETAIL = isc::log::DBGLVL_TRACE_DETAIL;
 
 /// @brief Map of translated messages.
 const DbLogger::MessageMap db_message_map = {

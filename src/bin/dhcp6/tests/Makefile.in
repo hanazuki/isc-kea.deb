@@ -107,6 +107,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -160,45 +161,48 @@ libco3_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 @HAVE_GTEST_TRUE@am__EXEEXT_1 = dhcp6_unittests$(EXEEXT)
 am__EXEEXT_2 = $(am__EXEEXT_1)
 PROGRAMS = $(noinst_PROGRAMS)
-am__dhcp6_unittests_SOURCES_DIST = dhcp6_unittests.cc \
-	dhcp6_srv_unittest.cc fqdn_unittest.cc hooks_unittest.cc \
-	host_unittest.cc dhcp6_test_utils.cc dhcp6_test_utils.h \
-	d2_unittest.cc d2_unittest.h marker_file.cc \
-	ctrl_dhcp6_srv_unittest.cc dhcp6_client.cc dhcp6_client.h \
+am__dhcp6_unittests_SOURCES_DIST = classify_unittests.cc \
+	config_parser_unittest.cc config_backend_unittest.cc \
+	confirm_unittest.cc ctrl_dhcp6_srv_unittest.cc d2_unittest.cc \
+	d2_unittest.h decline_unittest.cc dhcp6_client.cc \
+	dhcp6_client.h dhcp6_message_test.cc dhcp6_message_test.h \
+	dhcp6_srv_unittest.cc dhcp6_test_utils.cc dhcp6_test_utils.h \
+	dhcp6_unittests.cc dhcp6to4_ipc_unittest.cc fqdn_unittest.cc \
+	get_config_unittest.cc get_config_unittest.h hooks_unittest.cc \
+	host_unittest.cc infrequest_unittest.cc \
+	kea_controller_unittest.cc marker_file.cc parser_unittest.cc \
 	rebind_unittest.cc renew_unittest.cc sarr_unittest.cc \
-	config_parser_unittest.cc confirm_unittest.cc \
-	infrequest_unittest.cc decline_unittest.cc \
-	dhcp6_message_test.cc dhcp6_message_test.h \
-	kea_controller_unittest.cc dhcp6to4_ipc_unittest.cc \
-	classify_unittests.cc parser_unittest.cc \
-	simple_parser6_unittest.cc get_config_unittest.cc \
-	get_config_unittest.h shared_network_unittest.cc
+	simple_parser6_unittest.cc shared_network_unittest.cc \
+	tee_times_unittest.cc vendor_opts_unittest.cc
 @HAVE_GTEST_TRUE@am_dhcp6_unittests_OBJECTS =  \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-classify_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-config_parser_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-config_backend_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-confirm_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-ctrl_dhcp6_srv_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-d2_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-decline_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_client.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_message_test.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_srv_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_test_utils.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6to4_ipc_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-fqdn_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-get_config_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-hooks_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-host_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_test_utils.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-d2_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-infrequest_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-kea_controller_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-marker_file.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-ctrl_dhcp6_srv_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_client.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-parser_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-rebind_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-renew_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-sarr_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-config_parser_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-confirm_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-infrequest_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-decline_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6_message_test.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-kea_controller_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-dhcp6to4_ipc_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-classify_unittests.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-parser_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	dhcp6_unittests-simple_parser6_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-get_config_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	dhcp6_unittests-shared_network_unittest.$(OBJEXT)
+@HAVE_GTEST_TRUE@	dhcp6_unittests-shared_network_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-tee_times_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	dhcp6_unittests-vendor_opts_unittest.$(OBJEXT)
 nodist_dhcp6_unittests_OBJECTS =
 dhcp6_unittests_OBJECTS = $(am_dhcp6_unittests_OBJECTS) \
 	$(nodist_dhcp6_unittests_OBJECTS)
@@ -226,7 +230,6 @@ am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -361,7 +364,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -382,7 +384,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -392,6 +393,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -401,7 +403,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -452,6 +453,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -469,17 +471,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -542,7 +544,7 @@ top_srcdir = @top_srcdir@
 # if we are using file based configuration approach.
 SHTESTS = dhcp6_process_tests.sh
 noinst_SCRIPTS = dhcp6_process_tests.sh
-EXTRA_DIST = $(SHTESTS) dhcp6_process_tests.sh.in
+EXTRA_DIST = $(SHTESTS) dhcp6_process_tests.sh.in get_config_unittest.cc.skel
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
 	-I$(top_srcdir)/src/bin -I$(top_builddir)/src/bin \
 	-I$(top_srcdir)/src -I$(top_builddir)/src \
@@ -588,23 +590,29 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@libco3_la_CXXFLAGS = $(AM_CXXFLAGS)
 @HAVE_GTEST_TRUE@libco3_la_CPPFLAGS = $(AM_CPPFLAGS)
 @HAVE_GTEST_TRUE@libco3_la_LDFLAGS = -avoid-version -export-dynamic -module -rpath /nowhere
-@HAVE_GTEST_TRUE@dhcp6_unittests_SOURCES = dhcp6_unittests.cc \
-@HAVE_GTEST_TRUE@	dhcp6_srv_unittest.cc fqdn_unittest.cc \
-@HAVE_GTEST_TRUE@	hooks_unittest.cc host_unittest.cc \
-@HAVE_GTEST_TRUE@	dhcp6_test_utils.cc dhcp6_test_utils.h \
-@HAVE_GTEST_TRUE@	d2_unittest.cc d2_unittest.h marker_file.cc \
-@HAVE_GTEST_TRUE@	ctrl_dhcp6_srv_unittest.cc dhcp6_client.cc \
-@HAVE_GTEST_TRUE@	dhcp6_client.h rebind_unittest.cc \
-@HAVE_GTEST_TRUE@	renew_unittest.cc sarr_unittest.cc \
-@HAVE_GTEST_TRUE@	config_parser_unittest.cc confirm_unittest.cc \
-@HAVE_GTEST_TRUE@	infrequest_unittest.cc decline_unittest.cc \
+
+# This list is ordered alphabetically. When adding new files, please maintain
+# this order.
+@HAVE_GTEST_TRUE@dhcp6_unittests_SOURCES = classify_unittests.cc \
+@HAVE_GTEST_TRUE@	config_parser_unittest.cc \
+@HAVE_GTEST_TRUE@	config_backend_unittest.cc \
+@HAVE_GTEST_TRUE@	confirm_unittest.cc \
+@HAVE_GTEST_TRUE@	ctrl_dhcp6_srv_unittest.cc d2_unittest.cc \
+@HAVE_GTEST_TRUE@	d2_unittest.h decline_unittest.cc \
+@HAVE_GTEST_TRUE@	dhcp6_client.cc dhcp6_client.h \
 @HAVE_GTEST_TRUE@	dhcp6_message_test.cc dhcp6_message_test.h \
-@HAVE_GTEST_TRUE@	kea_controller_unittest.cc \
-@HAVE_GTEST_TRUE@	dhcp6to4_ipc_unittest.cc \
-@HAVE_GTEST_TRUE@	classify_unittests.cc parser_unittest.cc \
-@HAVE_GTEST_TRUE@	simple_parser6_unittest.cc \
+@HAVE_GTEST_TRUE@	dhcp6_srv_unittest.cc dhcp6_test_utils.cc \
+@HAVE_GTEST_TRUE@	dhcp6_test_utils.h dhcp6_unittests.cc \
+@HAVE_GTEST_TRUE@	dhcp6to4_ipc_unittest.cc fqdn_unittest.cc \
 @HAVE_GTEST_TRUE@	get_config_unittest.cc get_config_unittest.h \
-@HAVE_GTEST_TRUE@	shared_network_unittest.cc
+@HAVE_GTEST_TRUE@	hooks_unittest.cc host_unittest.cc \
+@HAVE_GTEST_TRUE@	infrequest_unittest.cc \
+@HAVE_GTEST_TRUE@	kea_controller_unittest.cc marker_file.cc \
+@HAVE_GTEST_TRUE@	parser_unittest.cc rebind_unittest.cc \
+@HAVE_GTEST_TRUE@	renew_unittest.cc sarr_unittest.cc \
+@HAVE_GTEST_TRUE@	simple_parser6_unittest.cc \
+@HAVE_GTEST_TRUE@	shared_network_unittest.cc \
+@HAVE_GTEST_TRUE@	tee_times_unittest.cc vendor_opts_unittest.cc
 @HAVE_GTEST_TRUE@nodist_dhcp6_unittests_SOURCES = marker_file.h test_libraries.h
 @HAVE_GTEST_TRUE@dhcp6_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@dhcp6_unittests_LDFLAGS = $(AM_LDFLAGS) \
@@ -634,7 +642,6 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) \
@@ -721,6 +728,7 @@ distclean-compile:
 	-rm -f *.tab.c
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-classify_unittests.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-config_backend_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-config_parser_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-confirm_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Po@am__quote@
@@ -745,6 +753,8 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-sarr_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-shared_network_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-simple_parser6_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-tee_times_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp6_unittests-vendor_opts_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libco1_la-callout_library_1.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libco2_la-callout_library_2.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libco3_la-callout_library_3.Plo@am__quote@
@@ -791,19 +801,131 @@ libco3_la-callout_library_3.lo: callout_library_3.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libco3_la_CPPFLAGS) $(CPPFLAGS) $(libco3_la_CXXFLAGS) $(CXXFLAGS) -c -o libco3_la-callout_library_3.lo `test -f 'callout_library_3.cc' || echo '$(srcdir)/'`callout_library_3.cc
 
-dhcp6_unittests-dhcp6_unittests.o: dhcp6_unittests.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_unittests.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo -c -o dhcp6_unittests-dhcp6_unittests.o `test -f 'dhcp6_unittests.cc' || echo '$(srcdir)/'`dhcp6_unittests.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_unittests.cc' object='dhcp6_unittests-dhcp6_unittests.o' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-classify_unittests.o: classify_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-classify_unittests.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo -c -o dhcp6_unittests-classify_unittests.o `test -f 'classify_unittests.cc' || echo '$(srcdir)/'`classify_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo $(DEPDIR)/dhcp6_unittests-classify_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='classify_unittests.cc' object='dhcp6_unittests-classify_unittests.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_unittests.o `test -f 'dhcp6_unittests.cc' || echo '$(srcdir)/'`dhcp6_unittests.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-classify_unittests.o `test -f 'classify_unittests.cc' || echo '$(srcdir)/'`classify_unittests.cc
 
-dhcp6_unittests-dhcp6_unittests.obj: dhcp6_unittests.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_unittests.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo -c -o dhcp6_unittests-dhcp6_unittests.obj `if test -f 'dhcp6_unittests.cc'; then $(CYGPATH_W) 'dhcp6_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_unittests.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_unittests.cc' object='dhcp6_unittests-dhcp6_unittests.obj' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-classify_unittests.obj: classify_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-classify_unittests.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo -c -o dhcp6_unittests-classify_unittests.obj `if test -f 'classify_unittests.cc'; then $(CYGPATH_W) 'classify_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/classify_unittests.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo $(DEPDIR)/dhcp6_unittests-classify_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='classify_unittests.cc' object='dhcp6_unittests-classify_unittests.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_unittests.obj `if test -f 'dhcp6_unittests.cc'; then $(CYGPATH_W) 'dhcp6_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_unittests.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-classify_unittests.obj `if test -f 'classify_unittests.cc'; then $(CYGPATH_W) 'classify_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/classify_unittests.cc'; fi`
+
+dhcp6_unittests-config_parser_unittest.o: config_parser_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-config_parser_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo -c -o dhcp6_unittests-config_parser_unittest.o `test -f 'config_parser_unittest.cc' || echo '$(srcdir)/'`config_parser_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_parser_unittest.cc' object='dhcp6_unittests-config_parser_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-config_parser_unittest.o `test -f 'config_parser_unittest.cc' || echo '$(srcdir)/'`config_parser_unittest.cc
+
+dhcp6_unittests-config_parser_unittest.obj: config_parser_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-config_parser_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo -c -o dhcp6_unittests-config_parser_unittest.obj `if test -f 'config_parser_unittest.cc'; then $(CYGPATH_W) 'config_parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_parser_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_parser_unittest.cc' object='dhcp6_unittests-config_parser_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-config_parser_unittest.obj `if test -f 'config_parser_unittest.cc'; then $(CYGPATH_W) 'config_parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_parser_unittest.cc'; fi`
+
+dhcp6_unittests-config_backend_unittest.o: config_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-config_backend_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-config_backend_unittest.Tpo -c -o dhcp6_unittests-config_backend_unittest.o `test -f 'config_backend_unittest.cc' || echo '$(srcdir)/'`config_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-config_backend_unittest.Tpo $(DEPDIR)/dhcp6_unittests-config_backend_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_backend_unittest.cc' object='dhcp6_unittests-config_backend_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-config_backend_unittest.o `test -f 'config_backend_unittest.cc' || echo '$(srcdir)/'`config_backend_unittest.cc
+
+dhcp6_unittests-config_backend_unittest.obj: config_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-config_backend_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-config_backend_unittest.Tpo -c -o dhcp6_unittests-config_backend_unittest.obj `if test -f 'config_backend_unittest.cc'; then $(CYGPATH_W) 'config_backend_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_backend_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-config_backend_unittest.Tpo $(DEPDIR)/dhcp6_unittests-config_backend_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_backend_unittest.cc' object='dhcp6_unittests-config_backend_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-config_backend_unittest.obj `if test -f 'config_backend_unittest.cc'; then $(CYGPATH_W) 'config_backend_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_backend_unittest.cc'; fi`
+
+dhcp6_unittests-confirm_unittest.o: confirm_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-confirm_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo -c -o dhcp6_unittests-confirm_unittest.o `test -f 'confirm_unittest.cc' || echo '$(srcdir)/'`confirm_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo $(DEPDIR)/dhcp6_unittests-confirm_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='confirm_unittest.cc' object='dhcp6_unittests-confirm_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-confirm_unittest.o `test -f 'confirm_unittest.cc' || echo '$(srcdir)/'`confirm_unittest.cc
+
+dhcp6_unittests-confirm_unittest.obj: confirm_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-confirm_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo -c -o dhcp6_unittests-confirm_unittest.obj `if test -f 'confirm_unittest.cc'; then $(CYGPATH_W) 'confirm_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/confirm_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo $(DEPDIR)/dhcp6_unittests-confirm_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='confirm_unittest.cc' object='dhcp6_unittests-confirm_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-confirm_unittest.obj `if test -f 'confirm_unittest.cc'; then $(CYGPATH_W) 'confirm_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/confirm_unittest.cc'; fi`
+
+dhcp6_unittests-ctrl_dhcp6_srv_unittest.o: ctrl_dhcp6_srv_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-ctrl_dhcp6_srv_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.o `test -f 'ctrl_dhcp6_srv_unittest.cc' || echo '$(srcdir)/'`ctrl_dhcp6_srv_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='ctrl_dhcp6_srv_unittest.cc' object='dhcp6_unittests-ctrl_dhcp6_srv_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.o `test -f 'ctrl_dhcp6_srv_unittest.cc' || echo '$(srcdir)/'`ctrl_dhcp6_srv_unittest.cc
+
+dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj: ctrl_dhcp6_srv_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj `if test -f 'ctrl_dhcp6_srv_unittest.cc'; then $(CYGPATH_W) 'ctrl_dhcp6_srv_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/ctrl_dhcp6_srv_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='ctrl_dhcp6_srv_unittest.cc' object='dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj `if test -f 'ctrl_dhcp6_srv_unittest.cc'; then $(CYGPATH_W) 'ctrl_dhcp6_srv_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/ctrl_dhcp6_srv_unittest.cc'; fi`
+
+dhcp6_unittests-d2_unittest.o: d2_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-d2_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo -c -o dhcp6_unittests-d2_unittest.o `test -f 'd2_unittest.cc' || echo '$(srcdir)/'`d2_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo $(DEPDIR)/dhcp6_unittests-d2_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='d2_unittest.cc' object='dhcp6_unittests-d2_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-d2_unittest.o `test -f 'd2_unittest.cc' || echo '$(srcdir)/'`d2_unittest.cc
+
+dhcp6_unittests-d2_unittest.obj: d2_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-d2_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo -c -o dhcp6_unittests-d2_unittest.obj `if test -f 'd2_unittest.cc'; then $(CYGPATH_W) 'd2_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/d2_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo $(DEPDIR)/dhcp6_unittests-d2_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='d2_unittest.cc' object='dhcp6_unittests-d2_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-d2_unittest.obj `if test -f 'd2_unittest.cc'; then $(CYGPATH_W) 'd2_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/d2_unittest.cc'; fi`
+
+dhcp6_unittests-decline_unittest.o: decline_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-decline_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo -c -o dhcp6_unittests-decline_unittest.o `test -f 'decline_unittest.cc' || echo '$(srcdir)/'`decline_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo $(DEPDIR)/dhcp6_unittests-decline_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='decline_unittest.cc' object='dhcp6_unittests-decline_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-decline_unittest.o `test -f 'decline_unittest.cc' || echo '$(srcdir)/'`decline_unittest.cc
+
+dhcp6_unittests-decline_unittest.obj: decline_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-decline_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo -c -o dhcp6_unittests-decline_unittest.obj `if test -f 'decline_unittest.cc'; then $(CYGPATH_W) 'decline_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/decline_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo $(DEPDIR)/dhcp6_unittests-decline_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='decline_unittest.cc' object='dhcp6_unittests-decline_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-decline_unittest.obj `if test -f 'decline_unittest.cc'; then $(CYGPATH_W) 'decline_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/decline_unittest.cc'; fi`
+
+dhcp6_unittests-dhcp6_client.o: dhcp6_client.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_client.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo -c -o dhcp6_unittests-dhcp6_client.o `test -f 'dhcp6_client.cc' || echo '$(srcdir)/'`dhcp6_client.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_client.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_client.cc' object='dhcp6_unittests-dhcp6_client.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_client.o `test -f 'dhcp6_client.cc' || echo '$(srcdir)/'`dhcp6_client.cc
+
+dhcp6_unittests-dhcp6_client.obj: dhcp6_client.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_client.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo -c -o dhcp6_unittests-dhcp6_client.obj `if test -f 'dhcp6_client.cc'; then $(CYGPATH_W) 'dhcp6_client.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_client.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_client.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_client.cc' object='dhcp6_unittests-dhcp6_client.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_client.obj `if test -f 'dhcp6_client.cc'; then $(CYGPATH_W) 'dhcp6_client.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_client.cc'; fi`
+
+dhcp6_unittests-dhcp6_message_test.o: dhcp6_message_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_message_test.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo -c -o dhcp6_unittests-dhcp6_message_test.o `test -f 'dhcp6_message_test.cc' || echo '$(srcdir)/'`dhcp6_message_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_message_test.cc' object='dhcp6_unittests-dhcp6_message_test.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_message_test.o `test -f 'dhcp6_message_test.cc' || echo '$(srcdir)/'`dhcp6_message_test.cc
+
+dhcp6_unittests-dhcp6_message_test.obj: dhcp6_message_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_message_test.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo -c -o dhcp6_unittests-dhcp6_message_test.obj `if test -f 'dhcp6_message_test.cc'; then $(CYGPATH_W) 'dhcp6_message_test.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_message_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_message_test.cc' object='dhcp6_unittests-dhcp6_message_test.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_message_test.obj `if test -f 'dhcp6_message_test.cc'; then $(CYGPATH_W) 'dhcp6_message_test.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_message_test.cc'; fi`
 
 dhcp6_unittests-dhcp6_srv_unittest.o: dhcp6_srv_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_srv_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_srv_unittest.Tpo -c -o dhcp6_unittests-dhcp6_srv_unittest.o `test -f 'dhcp6_srv_unittest.cc' || echo '$(srcdir)/'`dhcp6_srv_unittest.cc
@@ -819,6 +941,48 @@ dhcp6_unittests-dhcp6_srv_unittest.obj: dhcp6_srv_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_srv_unittest.obj `if test -f 'dhcp6_srv_unittest.cc'; then $(CYGPATH_W) 'dhcp6_srv_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_srv_unittest.cc'; fi`
 
+dhcp6_unittests-dhcp6_test_utils.o: dhcp6_test_utils.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_test_utils.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo -c -o dhcp6_unittests-dhcp6_test_utils.o `test -f 'dhcp6_test_utils.cc' || echo '$(srcdir)/'`dhcp6_test_utils.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_test_utils.cc' object='dhcp6_unittests-dhcp6_test_utils.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_test_utils.o `test -f 'dhcp6_test_utils.cc' || echo '$(srcdir)/'`dhcp6_test_utils.cc
+
+dhcp6_unittests-dhcp6_test_utils.obj: dhcp6_test_utils.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_test_utils.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo -c -o dhcp6_unittests-dhcp6_test_utils.obj `if test -f 'dhcp6_test_utils.cc'; then $(CYGPATH_W) 'dhcp6_test_utils.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_test_utils.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_test_utils.cc' object='dhcp6_unittests-dhcp6_test_utils.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_test_utils.obj `if test -f 'dhcp6_test_utils.cc'; then $(CYGPATH_W) 'dhcp6_test_utils.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_test_utils.cc'; fi`
+
+dhcp6_unittests-dhcp6_unittests.o: dhcp6_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_unittests.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo -c -o dhcp6_unittests-dhcp6_unittests.o `test -f 'dhcp6_unittests.cc' || echo '$(srcdir)/'`dhcp6_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_unittests.cc' object='dhcp6_unittests-dhcp6_unittests.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_unittests.o `test -f 'dhcp6_unittests.cc' || echo '$(srcdir)/'`dhcp6_unittests.cc
+
+dhcp6_unittests-dhcp6_unittests.obj: dhcp6_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_unittests.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo -c -o dhcp6_unittests-dhcp6_unittests.obj `if test -f 'dhcp6_unittests.cc'; then $(CYGPATH_W) 'dhcp6_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_unittests.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_unittests.cc' object='dhcp6_unittests-dhcp6_unittests.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_unittests.obj `if test -f 'dhcp6_unittests.cc'; then $(CYGPATH_W) 'dhcp6_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_unittests.cc'; fi`
+
+dhcp6_unittests-dhcp6to4_ipc_unittest.o: dhcp6to4_ipc_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6to4_ipc_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.o `test -f 'dhcp6to4_ipc_unittest.cc' || echo '$(srcdir)/'`dhcp6to4_ipc_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6to4_ipc_unittest.cc' object='dhcp6_unittests-dhcp6to4_ipc_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.o `test -f 'dhcp6to4_ipc_unittest.cc' || echo '$(srcdir)/'`dhcp6to4_ipc_unittest.cc
+
+dhcp6_unittests-dhcp6to4_ipc_unittest.obj: dhcp6to4_ipc_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6to4_ipc_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.obj `if test -f 'dhcp6to4_ipc_unittest.cc'; then $(CYGPATH_W) 'dhcp6to4_ipc_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6to4_ipc_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6to4_ipc_unittest.cc' object='dhcp6_unittests-dhcp6to4_ipc_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.obj `if test -f 'dhcp6to4_ipc_unittest.cc'; then $(CYGPATH_W) 'dhcp6to4_ipc_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6to4_ipc_unittest.cc'; fi`
+
 dhcp6_unittests-fqdn_unittest.o: fqdn_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-fqdn_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-fqdn_unittest.Tpo -c -o dhcp6_unittests-fqdn_unittest.o `test -f 'fqdn_unittest.cc' || echo '$(srcdir)/'`fqdn_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-fqdn_unittest.Tpo $(DEPDIR)/dhcp6_unittests-fqdn_unittest.Po
@@ -832,6 +996,20 @@ dhcp6_unittests-fqdn_unittest.obj: fqdn_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='fqdn_unittest.cc' object='dhcp6_unittests-fqdn_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-fqdn_unittest.obj `if test -f 'fqdn_unittest.cc'; then $(CYGPATH_W) 'fqdn_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/fqdn_unittest.cc'; fi`
+
+dhcp6_unittests-get_config_unittest.o: get_config_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-get_config_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo -c -o dhcp6_unittests-get_config_unittest.o `test -f 'get_config_unittest.cc' || echo '$(srcdir)/'`get_config_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo $(DEPDIR)/dhcp6_unittests-get_config_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='get_config_unittest.cc' object='dhcp6_unittests-get_config_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-get_config_unittest.o `test -f 'get_config_unittest.cc' || echo '$(srcdir)/'`get_config_unittest.cc
+
+dhcp6_unittests-get_config_unittest.obj: get_config_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-get_config_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo -c -o dhcp6_unittests-get_config_unittest.obj `if test -f 'get_config_unittest.cc'; then $(CYGPATH_W) 'get_config_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/get_config_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo $(DEPDIR)/dhcp6_unittests-get_config_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='get_config_unittest.cc' object='dhcp6_unittests-get_config_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-get_config_unittest.obj `if test -f 'get_config_unittest.cc'; then $(CYGPATH_W) 'get_config_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/get_config_unittest.cc'; fi`
 
 dhcp6_unittests-hooks_unittest.o: hooks_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-hooks_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-hooks_unittest.Tpo -c -o dhcp6_unittests-hooks_unittest.o `test -f 'hooks_unittest.cc' || echo '$(srcdir)/'`hooks_unittest.cc
@@ -861,33 +1039,33 @@ dhcp6_unittests-host_unittest.obj: host_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-host_unittest.obj `if test -f 'host_unittest.cc'; then $(CYGPATH_W) 'host_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/host_unittest.cc'; fi`
 
-dhcp6_unittests-dhcp6_test_utils.o: dhcp6_test_utils.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_test_utils.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo -c -o dhcp6_unittests-dhcp6_test_utils.o `test -f 'dhcp6_test_utils.cc' || echo '$(srcdir)/'`dhcp6_test_utils.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_test_utils.cc' object='dhcp6_unittests-dhcp6_test_utils.o' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-infrequest_unittest.o: infrequest_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-infrequest_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo -c -o dhcp6_unittests-infrequest_unittest.o `test -f 'infrequest_unittest.cc' || echo '$(srcdir)/'`infrequest_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='infrequest_unittest.cc' object='dhcp6_unittests-infrequest_unittest.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_test_utils.o `test -f 'dhcp6_test_utils.cc' || echo '$(srcdir)/'`dhcp6_test_utils.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-infrequest_unittest.o `test -f 'infrequest_unittest.cc' || echo '$(srcdir)/'`infrequest_unittest.cc
 
-dhcp6_unittests-dhcp6_test_utils.obj: dhcp6_test_utils.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_test_utils.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo -c -o dhcp6_unittests-dhcp6_test_utils.obj `if test -f 'dhcp6_test_utils.cc'; then $(CYGPATH_W) 'dhcp6_test_utils.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_test_utils.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_test_utils.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_test_utils.cc' object='dhcp6_unittests-dhcp6_test_utils.obj' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-infrequest_unittest.obj: infrequest_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-infrequest_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo -c -o dhcp6_unittests-infrequest_unittest.obj `if test -f 'infrequest_unittest.cc'; then $(CYGPATH_W) 'infrequest_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/infrequest_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='infrequest_unittest.cc' object='dhcp6_unittests-infrequest_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_test_utils.obj `if test -f 'dhcp6_test_utils.cc'; then $(CYGPATH_W) 'dhcp6_test_utils.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_test_utils.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-infrequest_unittest.obj `if test -f 'infrequest_unittest.cc'; then $(CYGPATH_W) 'infrequest_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/infrequest_unittest.cc'; fi`
 
-dhcp6_unittests-d2_unittest.o: d2_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-d2_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo -c -o dhcp6_unittests-d2_unittest.o `test -f 'd2_unittest.cc' || echo '$(srcdir)/'`d2_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo $(DEPDIR)/dhcp6_unittests-d2_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='d2_unittest.cc' object='dhcp6_unittests-d2_unittest.o' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-kea_controller_unittest.o: kea_controller_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-kea_controller_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo -c -o dhcp6_unittests-kea_controller_unittest.o `test -f 'kea_controller_unittest.cc' || echo '$(srcdir)/'`kea_controller_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='kea_controller_unittest.cc' object='dhcp6_unittests-kea_controller_unittest.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-d2_unittest.o `test -f 'd2_unittest.cc' || echo '$(srcdir)/'`d2_unittest.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-kea_controller_unittest.o `test -f 'kea_controller_unittest.cc' || echo '$(srcdir)/'`kea_controller_unittest.cc
 
-dhcp6_unittests-d2_unittest.obj: d2_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-d2_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo -c -o dhcp6_unittests-d2_unittest.obj `if test -f 'd2_unittest.cc'; then $(CYGPATH_W) 'd2_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/d2_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-d2_unittest.Tpo $(DEPDIR)/dhcp6_unittests-d2_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='d2_unittest.cc' object='dhcp6_unittests-d2_unittest.obj' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-kea_controller_unittest.obj: kea_controller_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-kea_controller_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo -c -o dhcp6_unittests-kea_controller_unittest.obj `if test -f 'kea_controller_unittest.cc'; then $(CYGPATH_W) 'kea_controller_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/kea_controller_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='kea_controller_unittest.cc' object='dhcp6_unittests-kea_controller_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-d2_unittest.obj `if test -f 'd2_unittest.cc'; then $(CYGPATH_W) 'd2_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/d2_unittest.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-kea_controller_unittest.obj `if test -f 'kea_controller_unittest.cc'; then $(CYGPATH_W) 'kea_controller_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/kea_controller_unittest.cc'; fi`
 
 dhcp6_unittests-marker_file.o: marker_file.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-marker_file.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-marker_file.Tpo -c -o dhcp6_unittests-marker_file.o `test -f 'marker_file.cc' || echo '$(srcdir)/'`marker_file.cc
@@ -903,33 +1081,19 @@ dhcp6_unittests-marker_file.obj: marker_file.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-marker_file.obj `if test -f 'marker_file.cc'; then $(CYGPATH_W) 'marker_file.cc'; else $(CYGPATH_W) '$(srcdir)/marker_file.cc'; fi`
 
-dhcp6_unittests-ctrl_dhcp6_srv_unittest.o: ctrl_dhcp6_srv_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-ctrl_dhcp6_srv_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.o `test -f 'ctrl_dhcp6_srv_unittest.cc' || echo '$(srcdir)/'`ctrl_dhcp6_srv_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='ctrl_dhcp6_srv_unittest.cc' object='dhcp6_unittests-ctrl_dhcp6_srv_unittest.o' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-parser_unittest.o: parser_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-parser_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo -c -o dhcp6_unittests-parser_unittest.o `test -f 'parser_unittest.cc' || echo '$(srcdir)/'`parser_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-parser_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='parser_unittest.cc' object='dhcp6_unittests-parser_unittest.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.o `test -f 'ctrl_dhcp6_srv_unittest.cc' || echo '$(srcdir)/'`ctrl_dhcp6_srv_unittest.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-parser_unittest.o `test -f 'parser_unittest.cc' || echo '$(srcdir)/'`parser_unittest.cc
 
-dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj: ctrl_dhcp6_srv_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj `if test -f 'ctrl_dhcp6_srv_unittest.cc'; then $(CYGPATH_W) 'ctrl_dhcp6_srv_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/ctrl_dhcp6_srv_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Tpo $(DEPDIR)/dhcp6_unittests-ctrl_dhcp6_srv_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='ctrl_dhcp6_srv_unittest.cc' object='dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj' libtool=no @AMDEPBACKSLASH@
+dhcp6_unittests-parser_unittest.obj: parser_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-parser_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo -c -o dhcp6_unittests-parser_unittest.obj `if test -f 'parser_unittest.cc'; then $(CYGPATH_W) 'parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/parser_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-parser_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='parser_unittest.cc' object='dhcp6_unittests-parser_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-ctrl_dhcp6_srv_unittest.obj `if test -f 'ctrl_dhcp6_srv_unittest.cc'; then $(CYGPATH_W) 'ctrl_dhcp6_srv_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/ctrl_dhcp6_srv_unittest.cc'; fi`
-
-dhcp6_unittests-dhcp6_client.o: dhcp6_client.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_client.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo -c -o dhcp6_unittests-dhcp6_client.o `test -f 'dhcp6_client.cc' || echo '$(srcdir)/'`dhcp6_client.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_client.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_client.cc' object='dhcp6_unittests-dhcp6_client.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_client.o `test -f 'dhcp6_client.cc' || echo '$(srcdir)/'`dhcp6_client.cc
-
-dhcp6_unittests-dhcp6_client.obj: dhcp6_client.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_client.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo -c -o dhcp6_unittests-dhcp6_client.obj `if test -f 'dhcp6_client.cc'; then $(CYGPATH_W) 'dhcp6_client.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_client.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_client.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_client.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_client.cc' object='dhcp6_unittests-dhcp6_client.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_client.obj `if test -f 'dhcp6_client.cc'; then $(CYGPATH_W) 'dhcp6_client.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_client.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-parser_unittest.obj `if test -f 'parser_unittest.cc'; then $(CYGPATH_W) 'parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/parser_unittest.cc'; fi`
 
 dhcp6_unittests-rebind_unittest.o: rebind_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-rebind_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-rebind_unittest.Tpo -c -o dhcp6_unittests-rebind_unittest.o `test -f 'rebind_unittest.cc' || echo '$(srcdir)/'`rebind_unittest.cc
@@ -973,132 +1137,6 @@ dhcp6_unittests-sarr_unittest.obj: sarr_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-sarr_unittest.obj `if test -f 'sarr_unittest.cc'; then $(CYGPATH_W) 'sarr_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/sarr_unittest.cc'; fi`
 
-dhcp6_unittests-config_parser_unittest.o: config_parser_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-config_parser_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo -c -o dhcp6_unittests-config_parser_unittest.o `test -f 'config_parser_unittest.cc' || echo '$(srcdir)/'`config_parser_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_parser_unittest.cc' object='dhcp6_unittests-config_parser_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-config_parser_unittest.o `test -f 'config_parser_unittest.cc' || echo '$(srcdir)/'`config_parser_unittest.cc
-
-dhcp6_unittests-config_parser_unittest.obj: config_parser_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-config_parser_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo -c -o dhcp6_unittests-config_parser_unittest.obj `if test -f 'config_parser_unittest.cc'; then $(CYGPATH_W) 'config_parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_parser_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-config_parser_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='config_parser_unittest.cc' object='dhcp6_unittests-config_parser_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-config_parser_unittest.obj `if test -f 'config_parser_unittest.cc'; then $(CYGPATH_W) 'config_parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/config_parser_unittest.cc'; fi`
-
-dhcp6_unittests-confirm_unittest.o: confirm_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-confirm_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo -c -o dhcp6_unittests-confirm_unittest.o `test -f 'confirm_unittest.cc' || echo '$(srcdir)/'`confirm_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo $(DEPDIR)/dhcp6_unittests-confirm_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='confirm_unittest.cc' object='dhcp6_unittests-confirm_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-confirm_unittest.o `test -f 'confirm_unittest.cc' || echo '$(srcdir)/'`confirm_unittest.cc
-
-dhcp6_unittests-confirm_unittest.obj: confirm_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-confirm_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo -c -o dhcp6_unittests-confirm_unittest.obj `if test -f 'confirm_unittest.cc'; then $(CYGPATH_W) 'confirm_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/confirm_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-confirm_unittest.Tpo $(DEPDIR)/dhcp6_unittests-confirm_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='confirm_unittest.cc' object='dhcp6_unittests-confirm_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-confirm_unittest.obj `if test -f 'confirm_unittest.cc'; then $(CYGPATH_W) 'confirm_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/confirm_unittest.cc'; fi`
-
-dhcp6_unittests-infrequest_unittest.o: infrequest_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-infrequest_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo -c -o dhcp6_unittests-infrequest_unittest.o `test -f 'infrequest_unittest.cc' || echo '$(srcdir)/'`infrequest_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='infrequest_unittest.cc' object='dhcp6_unittests-infrequest_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-infrequest_unittest.o `test -f 'infrequest_unittest.cc' || echo '$(srcdir)/'`infrequest_unittest.cc
-
-dhcp6_unittests-infrequest_unittest.obj: infrequest_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-infrequest_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo -c -o dhcp6_unittests-infrequest_unittest.obj `if test -f 'infrequest_unittest.cc'; then $(CYGPATH_W) 'infrequest_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/infrequest_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Tpo $(DEPDIR)/dhcp6_unittests-infrequest_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='infrequest_unittest.cc' object='dhcp6_unittests-infrequest_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-infrequest_unittest.obj `if test -f 'infrequest_unittest.cc'; then $(CYGPATH_W) 'infrequest_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/infrequest_unittest.cc'; fi`
-
-dhcp6_unittests-decline_unittest.o: decline_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-decline_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo -c -o dhcp6_unittests-decline_unittest.o `test -f 'decline_unittest.cc' || echo '$(srcdir)/'`decline_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo $(DEPDIR)/dhcp6_unittests-decline_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='decline_unittest.cc' object='dhcp6_unittests-decline_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-decline_unittest.o `test -f 'decline_unittest.cc' || echo '$(srcdir)/'`decline_unittest.cc
-
-dhcp6_unittests-decline_unittest.obj: decline_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-decline_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo -c -o dhcp6_unittests-decline_unittest.obj `if test -f 'decline_unittest.cc'; then $(CYGPATH_W) 'decline_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/decline_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-decline_unittest.Tpo $(DEPDIR)/dhcp6_unittests-decline_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='decline_unittest.cc' object='dhcp6_unittests-decline_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-decline_unittest.obj `if test -f 'decline_unittest.cc'; then $(CYGPATH_W) 'decline_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/decline_unittest.cc'; fi`
-
-dhcp6_unittests-dhcp6_message_test.o: dhcp6_message_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_message_test.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo -c -o dhcp6_unittests-dhcp6_message_test.o `test -f 'dhcp6_message_test.cc' || echo '$(srcdir)/'`dhcp6_message_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_message_test.cc' object='dhcp6_unittests-dhcp6_message_test.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_message_test.o `test -f 'dhcp6_message_test.cc' || echo '$(srcdir)/'`dhcp6_message_test.cc
-
-dhcp6_unittests-dhcp6_message_test.obj: dhcp6_message_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6_message_test.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo -c -o dhcp6_unittests-dhcp6_message_test.obj `if test -f 'dhcp6_message_test.cc'; then $(CYGPATH_W) 'dhcp6_message_test.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_message_test.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6_message_test.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6_message_test.cc' object='dhcp6_unittests-dhcp6_message_test.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6_message_test.obj `if test -f 'dhcp6_message_test.cc'; then $(CYGPATH_W) 'dhcp6_message_test.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6_message_test.cc'; fi`
-
-dhcp6_unittests-kea_controller_unittest.o: kea_controller_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-kea_controller_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo -c -o dhcp6_unittests-kea_controller_unittest.o `test -f 'kea_controller_unittest.cc' || echo '$(srcdir)/'`kea_controller_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='kea_controller_unittest.cc' object='dhcp6_unittests-kea_controller_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-kea_controller_unittest.o `test -f 'kea_controller_unittest.cc' || echo '$(srcdir)/'`kea_controller_unittest.cc
-
-dhcp6_unittests-kea_controller_unittest.obj: kea_controller_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-kea_controller_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo -c -o dhcp6_unittests-kea_controller_unittest.obj `if test -f 'kea_controller_unittest.cc'; then $(CYGPATH_W) 'kea_controller_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/kea_controller_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Tpo $(DEPDIR)/dhcp6_unittests-kea_controller_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='kea_controller_unittest.cc' object='dhcp6_unittests-kea_controller_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-kea_controller_unittest.obj `if test -f 'kea_controller_unittest.cc'; then $(CYGPATH_W) 'kea_controller_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/kea_controller_unittest.cc'; fi`
-
-dhcp6_unittests-dhcp6to4_ipc_unittest.o: dhcp6to4_ipc_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6to4_ipc_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.o `test -f 'dhcp6to4_ipc_unittest.cc' || echo '$(srcdir)/'`dhcp6to4_ipc_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6to4_ipc_unittest.cc' object='dhcp6_unittests-dhcp6to4_ipc_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.o `test -f 'dhcp6to4_ipc_unittest.cc' || echo '$(srcdir)/'`dhcp6to4_ipc_unittest.cc
-
-dhcp6_unittests-dhcp6to4_ipc_unittest.obj: dhcp6to4_ipc_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-dhcp6to4_ipc_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.obj `if test -f 'dhcp6to4_ipc_unittest.cc'; then $(CYGPATH_W) 'dhcp6to4_ipc_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6to4_ipc_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Tpo $(DEPDIR)/dhcp6_unittests-dhcp6to4_ipc_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp6to4_ipc_unittest.cc' object='dhcp6_unittests-dhcp6to4_ipc_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-dhcp6to4_ipc_unittest.obj `if test -f 'dhcp6to4_ipc_unittest.cc'; then $(CYGPATH_W) 'dhcp6to4_ipc_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp6to4_ipc_unittest.cc'; fi`
-
-dhcp6_unittests-classify_unittests.o: classify_unittests.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-classify_unittests.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo -c -o dhcp6_unittests-classify_unittests.o `test -f 'classify_unittests.cc' || echo '$(srcdir)/'`classify_unittests.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo $(DEPDIR)/dhcp6_unittests-classify_unittests.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='classify_unittests.cc' object='dhcp6_unittests-classify_unittests.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-classify_unittests.o `test -f 'classify_unittests.cc' || echo '$(srcdir)/'`classify_unittests.cc
-
-dhcp6_unittests-classify_unittests.obj: classify_unittests.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-classify_unittests.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo -c -o dhcp6_unittests-classify_unittests.obj `if test -f 'classify_unittests.cc'; then $(CYGPATH_W) 'classify_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/classify_unittests.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-classify_unittests.Tpo $(DEPDIR)/dhcp6_unittests-classify_unittests.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='classify_unittests.cc' object='dhcp6_unittests-classify_unittests.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-classify_unittests.obj `if test -f 'classify_unittests.cc'; then $(CYGPATH_W) 'classify_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/classify_unittests.cc'; fi`
-
-dhcp6_unittests-parser_unittest.o: parser_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-parser_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo -c -o dhcp6_unittests-parser_unittest.o `test -f 'parser_unittest.cc' || echo '$(srcdir)/'`parser_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-parser_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='parser_unittest.cc' object='dhcp6_unittests-parser_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-parser_unittest.o `test -f 'parser_unittest.cc' || echo '$(srcdir)/'`parser_unittest.cc
-
-dhcp6_unittests-parser_unittest.obj: parser_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-parser_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo -c -o dhcp6_unittests-parser_unittest.obj `if test -f 'parser_unittest.cc'; then $(CYGPATH_W) 'parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/parser_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-parser_unittest.Tpo $(DEPDIR)/dhcp6_unittests-parser_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='parser_unittest.cc' object='dhcp6_unittests-parser_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-parser_unittest.obj `if test -f 'parser_unittest.cc'; then $(CYGPATH_W) 'parser_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/parser_unittest.cc'; fi`
-
 dhcp6_unittests-simple_parser6_unittest.o: simple_parser6_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-simple_parser6_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-simple_parser6_unittest.Tpo -c -o dhcp6_unittests-simple_parser6_unittest.o `test -f 'simple_parser6_unittest.cc' || echo '$(srcdir)/'`simple_parser6_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-simple_parser6_unittest.Tpo $(DEPDIR)/dhcp6_unittests-simple_parser6_unittest.Po
@@ -1113,20 +1151,6 @@ dhcp6_unittests-simple_parser6_unittest.obj: simple_parser6_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-simple_parser6_unittest.obj `if test -f 'simple_parser6_unittest.cc'; then $(CYGPATH_W) 'simple_parser6_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/simple_parser6_unittest.cc'; fi`
 
-dhcp6_unittests-get_config_unittest.o: get_config_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-get_config_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo -c -o dhcp6_unittests-get_config_unittest.o `test -f 'get_config_unittest.cc' || echo '$(srcdir)/'`get_config_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo $(DEPDIR)/dhcp6_unittests-get_config_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='get_config_unittest.cc' object='dhcp6_unittests-get_config_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-get_config_unittest.o `test -f 'get_config_unittest.cc' || echo '$(srcdir)/'`get_config_unittest.cc
-
-dhcp6_unittests-get_config_unittest.obj: get_config_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-get_config_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo -c -o dhcp6_unittests-get_config_unittest.obj `if test -f 'get_config_unittest.cc'; then $(CYGPATH_W) 'get_config_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/get_config_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-get_config_unittest.Tpo $(DEPDIR)/dhcp6_unittests-get_config_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='get_config_unittest.cc' object='dhcp6_unittests-get_config_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-get_config_unittest.obj `if test -f 'get_config_unittest.cc'; then $(CYGPATH_W) 'get_config_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/get_config_unittest.cc'; fi`
-
 dhcp6_unittests-shared_network_unittest.o: shared_network_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-shared_network_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-shared_network_unittest.Tpo -c -o dhcp6_unittests-shared_network_unittest.o `test -f 'shared_network_unittest.cc' || echo '$(srcdir)/'`shared_network_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-shared_network_unittest.Tpo $(DEPDIR)/dhcp6_unittests-shared_network_unittest.Po
@@ -1140,6 +1164,34 @@ dhcp6_unittests-shared_network_unittest.obj: shared_network_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='shared_network_unittest.cc' object='dhcp6_unittests-shared_network_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-shared_network_unittest.obj `if test -f 'shared_network_unittest.cc'; then $(CYGPATH_W) 'shared_network_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/shared_network_unittest.cc'; fi`
+
+dhcp6_unittests-tee_times_unittest.o: tee_times_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-tee_times_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-tee_times_unittest.Tpo -c -o dhcp6_unittests-tee_times_unittest.o `test -f 'tee_times_unittest.cc' || echo '$(srcdir)/'`tee_times_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-tee_times_unittest.Tpo $(DEPDIR)/dhcp6_unittests-tee_times_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='tee_times_unittest.cc' object='dhcp6_unittests-tee_times_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-tee_times_unittest.o `test -f 'tee_times_unittest.cc' || echo '$(srcdir)/'`tee_times_unittest.cc
+
+dhcp6_unittests-tee_times_unittest.obj: tee_times_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-tee_times_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-tee_times_unittest.Tpo -c -o dhcp6_unittests-tee_times_unittest.obj `if test -f 'tee_times_unittest.cc'; then $(CYGPATH_W) 'tee_times_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/tee_times_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-tee_times_unittest.Tpo $(DEPDIR)/dhcp6_unittests-tee_times_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='tee_times_unittest.cc' object='dhcp6_unittests-tee_times_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-tee_times_unittest.obj `if test -f 'tee_times_unittest.cc'; then $(CYGPATH_W) 'tee_times_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/tee_times_unittest.cc'; fi`
+
+dhcp6_unittests-vendor_opts_unittest.o: vendor_opts_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-vendor_opts_unittest.o -MD -MP -MF $(DEPDIR)/dhcp6_unittests-vendor_opts_unittest.Tpo -c -o dhcp6_unittests-vendor_opts_unittest.o `test -f 'vendor_opts_unittest.cc' || echo '$(srcdir)/'`vendor_opts_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-vendor_opts_unittest.Tpo $(DEPDIR)/dhcp6_unittests-vendor_opts_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='vendor_opts_unittest.cc' object='dhcp6_unittests-vendor_opts_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-vendor_opts_unittest.o `test -f 'vendor_opts_unittest.cc' || echo '$(srcdir)/'`vendor_opts_unittest.cc
+
+dhcp6_unittests-vendor_opts_unittest.obj: vendor_opts_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT dhcp6_unittests-vendor_opts_unittest.obj -MD -MP -MF $(DEPDIR)/dhcp6_unittests-vendor_opts_unittest.Tpo -c -o dhcp6_unittests-vendor_opts_unittest.obj `if test -f 'vendor_opts_unittest.cc'; then $(CYGPATH_W) 'vendor_opts_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/vendor_opts_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/dhcp6_unittests-vendor_opts_unittest.Tpo $(DEPDIR)/dhcp6_unittests-vendor_opts_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='vendor_opts_unittest.cc' object='dhcp6_unittests-vendor_opts_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(dhcp6_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o dhcp6_unittests-vendor_opts_unittest.obj `if test -f 'vendor_opts_unittest.cc'; then $(CYGPATH_W) 'vendor_opts_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/vendor_opts_unittest.cc'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo

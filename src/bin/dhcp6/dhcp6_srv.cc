@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,6 +13,7 @@
 #include <dhcp/docsis3_option_defs.h>
 #include <dhcp/duid.h>
 #include <dhcp/duid_factory.h>
+#include <dhcpsrv/fuzz.h>
 #include <dhcp/iface_mgr.h>
 #include <dhcp/libdhcp++.h>
 #include <dhcp/option6_addrlst.h>
@@ -34,6 +35,7 @@
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease_mgr.h>
 #include <dhcpsrv/lease_mgr_factory.h>
+#include <dhcpsrv/multi_threading_utils.h>
 #include <dhcpsrv/ncr_generator.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/subnet_selector.h>
@@ -45,7 +47,6 @@
 #include <hooks/hooks_log.h>
 #include <hooks/hooks_manager.h>
 #include <stats/stats_mgr.h>
-
 #include <util/encode/hex.h>
 #include <util/io_utilities.h>
 #include <util/pointer_util.h>
@@ -78,6 +79,7 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <set>
 
 using namespace isc;
 using namespace isc::asiolink;
@@ -172,27 +174,54 @@ createStatusCode(const Pkt6& pkt, const Option6IA& ia, const uint16_t status_cod
     return (option_status);
 }
 
-}; // anonymous namespace
+/// List of statistics which is initialized to 0 during the DHCPv6
+/// server startup.
+std::set<std::string> dhcp6_statistics = {
+    "pkt6-received",
+    "pkt6-solicit-received",
+    "pkt6-advertise-received",
+    "pkt6-request-received",
+    "pkt6-reply-received",
+    "pkt6-renew-received",
+    "pkt6-rebind-received",
+    "pkt6-decline-received",
+    "pkt6-release-received",
+    "pkt6-infrequest-received",
+    "pkt6-dhcpv4-query-received",
+    "pkt6-dhcpv4-response-received",
+    "pkt6-unknown-received",
+    "pkt6-sent",
+    "pkt6-advertise-sent",
+    "pkt6-reply-sent",
+    "pkt6-dhcpv4-response-sent",
+    "pkt6-parse-failed",
+    "pkt6-receive-drop"
+};
+
+}  // namespace
 
 namespace isc {
 namespace dhcp {
 
 const std::string Dhcpv6Srv::VENDOR_CLASS_PREFIX("VENDOR_CLASS_");
 
-Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
-    : io_service_(new IOService()), port_(port), serverid_(), shutdown_(true),
+Dhcpv6Srv::Dhcpv6Srv(uint16_t server_port, uint16_t client_port)
+    : io_service_(new IOService()), server_port_(server_port),
+      client_port_(client_port), serverid_(), shutdown_(true),
       alloc_engine_(), name_change_reqs_(),
-      network_state_(new NetworkState(NetworkState::DHCPv6))
-{
+      network_state_(new NetworkState(NetworkState::DHCPv6)),
+      cb_control_(new CBControlDHCPv6()) {
+    LOG_DEBUG(dhcp6_logger, DBG_DHCP6_START, DHCP6_OPEN_SOCKET)
+        .arg(server_port);
 
-    LOG_DEBUG(dhcp6_logger, DBG_DHCP6_START, DHCP6_OPEN_SOCKET).arg(port);
+    Dhcp6to4Ipc::instance().client_port = client_port;
 
     // Initialize objects required for DHCP server operation.
     try {
         // Port 0 is used for testing purposes where in most cases we don't
         // rely on the physical interfaces. Therefore, it should be possible
         // to create an object even when there are no usable interfaces.
-        if ((port > 0) && (IfaceMgr::instance().countIfaces() == 0)) {
+        if ((server_port > 0) && (IfaceMgr::instance().countIfaces() == 0)) {
             LOG_ERROR(dhcp6_logger, DHCP6_NO_INTERFACES);
             return;
         }
@@ -213,9 +242,21 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t port)
         LOG_ERROR(dhcp6_logger, DHCP6_SRV_CONSTRUCT_ERROR).arg(e.what());
         return;
     }
+    // Initializing all observations with default value
+    setPacketStatisticsDefaults();
 
     // All done, so can proceed
     shutdown_ = false;
+}
+
+void Dhcpv6Srv::setPacketStatisticsDefaults() {
+    isc::stats::StatsMgr& stats_mgr = isc::stats::StatsMgr::instance();
+
+    // Iterate over set of observed statistics
+    for (auto it = dhcp6_statistics.begin(); it != dhcp6_statistics.end(); ++it) {
+        // Initialize them with default value 0
+        stats_mgr.setValue((*it), static_cast<int64_t>(0));
+    }
 }
 
 Dhcpv6Srv::~Dhcpv6Srv() {
@@ -402,7 +443,19 @@ Dhcpv6Srv::initContext(const Pkt6Ptr& pkt,
 }
 
 bool Dhcpv6Srv::run() {
+#ifdef ENABLE_AFL
+    // Set up structures needed for fuzzing.
+    Fuzz fuzzer(6, server_port_);
+    //
+    // The next line is needed as a signature for AFL to recognise that we are
+    // running persistent fuzzing.  This has to be in the main image file.
+    while (__AFL_LOOP(fuzzer.maxLoopCount())) {
+        // Read from stdin and put the data read into an address/port on which
+        // Kea is listening, read for Kea to read it via asynchronous I/O.
+        fuzzer.transfer();
+#else
     while (!shutdown_) {
+#endif // ENABLE_AFL
         try {
             run_one();
             getIOService()->poll();
@@ -411,12 +464,16 @@ bool Dhcpv6Srv::run() {
             // specific catches.
             LOG_ERROR(packet6_logger, DHCP6_PACKET_PROCESS_STD_EXCEPTION)
                 .arg(e.what());
+
         } catch (...) {
             // General catch-all non-standard exception that are not caught
             // by more specific catches.
             LOG_ERROR(packet6_logger, DHCP6_PACKET_PROCESS_EXCEPTION);
         }
     }
+
+    // destroying the thread pool
+    MultiThreadingMgr::instance().apply(false, 0);
 
     return (true);
 }
@@ -427,11 +484,24 @@ void Dhcpv6Srv::run_one() {
     Pkt6Ptr rsp;
 
     try {
-        // Set select() timeout to 1s. This value should not be modified
-        // because it is important that the select() returns control
-        // frequently so as the IOService can be polled for ready handlers.
-        uint32_t timeout = 1;
-        query = receivePacket(timeout);
+        bool read_pkt = true;
+
+        // Do not read more packets from socket if there are enough
+        // packets to be processed in the packet thread pool queue
+        const int max_queue_size = CfgMgr::instance().getCurrentCfg()->getServerMaxThreadQueueSize();
+        const int thread_count = MultiThreadingMgr::instance().getPktThreadPoolSize();
+        size_t pkt_queue_size = MultiThreadingMgr::instance().getPktThreadPool().count();
+        if (thread_count && (pkt_queue_size >= thread_count * max_queue_size)) {
+            read_pkt = false;
+        }
+
+        if (read_pkt) {
+            // Set select() timeout to 1s. This value should not be modified
+            // because it is important that the select() returns control
+            // frequently so as the IOService can be polled for ready handlers.
+            uint32_t timeout = 1;
+            query = receivePacket(timeout);
+        }
 
         // Log if packet has arrived. We can't log the detailed information
         // about the DHCP message because it hasn't been unpacked/parsed
@@ -504,9 +574,33 @@ void Dhcpv6Srv::run_one() {
             .arg(query->getLabel());
         return;
     } else {
-        processPacket(query, rsp);
+        if (MultiThreadingMgr::instance().getMode()) {
+            typedef function<void()> CallBack;
+            boost::shared_ptr<CallBack> call_back =
+                boost::make_shared<CallBack>(std::bind(&Dhcpv6Srv::processPacketAndSendResponseNoThrow,
+                                                       this, query, rsp));
+            MultiThreadingMgr::instance().getPktThreadPool().add(call_back);
+        } else {
+            processPacketAndSendResponse(query, rsp);
+        }
     }
+}
 
+void
+Dhcpv6Srv::processPacketAndSendResponseNoThrow(Pkt6Ptr& query, Pkt6Ptr& rsp) {
+    try {
+        processPacketAndSendResponse(query, rsp);
+    } catch (const std::exception& e) {
+        LOG_ERROR(packet6_logger, DHCP6_PACKET_PROCESS_STD_EXCEPTION)
+            .arg(e.what());
+    } catch (...) {
+        LOG_ERROR(packet6_logger, DHCP6_PACKET_PROCESS_EXCEPTION);
+    }
+}
+
+void
+Dhcpv6Srv::processPacketAndSendResponse(Pkt6Ptr& query, Pkt6Ptr& rsp) {
+    processPacket(query, rsp);
     if (!rsp) {
         return;
     }
@@ -680,6 +774,15 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
         return;
     }
 
+    // Check the DROP special class.
+    if (query->inClass("DROP")) {
+        LOG_DEBUG(packet6_logger, DBG_DHCP6_BASIC, DHCP6_PACKET_DROP_DROP_CLASS)
+            .arg(query->toText());
+        StatsMgr::instance().addValue("pkt6-receive-drop",
+                                      static_cast<int64_t>(1));
+        return;
+    }
+
     if (query->getType() == DHCPV6_DHCPV4_QUERY) {
         // This call never throws. Should this change, this section must be
         // enclosed in try-catch.
@@ -774,7 +877,10 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
     rsp->setRemoteAddr(query->getRemoteAddr());
     rsp->setLocalAddr(query->getLocalAddr());
 
-    if (rsp->relay_info_.empty()) {
+    if (client_port_) {
+        // A command line option enforces a specific client port
+        rsp->setRemotePort(client_port_);
+    } else if (rsp->relay_info_.empty()) {
         // Direct traffic, send back to the client directly
         rsp->setRemotePort(DHCP6_CLIENT_PORT);
     } else {
@@ -783,7 +889,11 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
         rsp->setRemotePort(relay_port ? relay_port : DHCP6_SERVER_PORT);
     }
 
-    rsp->setLocalPort(DHCP6_SERVER_PORT);
+    if (server_port_) {
+        rsp->setLocalPort(server_port_);
+    } else {
+        rsp->setLocalPort(DHCP6_SERVER_PORT);
+    }
     rsp->setIndex(query->getIndex());
     rsp->setIface(query->getIface());
 
@@ -868,8 +978,16 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
         // library unparks the packet.
         HooksManager::park("leases6_committed", query,
         [this, callout_handle, query, rsp]() mutable {
-            processPacketPktSend(callout_handle, query, rsp);
-            processPacketBufferSend(callout_handle, rsp);
+            if (MultiThreadingMgr::instance().getMode()) {
+                typedef function<void()> CallBack;
+                boost::shared_ptr<CallBack> call_back =
+                    boost::make_shared<CallBack>(std::bind(&Dhcpv6Srv::sendResponseNoThrow,
+                                                           this, callout_handle, query, rsp));
+                MultiThreadingMgr::instance().getPktThreadPool().add(call_back);
+            } else {
+                processPacketPktSend(callout_handle, query, rsp);
+                processPacketBufferSend(callout_handle, rsp);
+            }
         });
 
         // If we have parked the packet, let's reset the pointer to the
@@ -879,6 +997,20 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
 
     } else {
         processPacketPktSend(callout_handle, query, rsp);
+    }
+}
+
+void
+Dhcpv6Srv::sendResponseNoThrow(hooks::CalloutHandlePtr& callout_handle,
+                               Pkt6Ptr& query, Pkt6Ptr& rsp) {
+    try {
+            processPacketPktSend(callout_handle, query, rsp);
+            processPacketBufferSend(callout_handle, rsp);
+        } catch (const std::exception& e) {
+            LOG_ERROR(packet6_logger, DHCP6_PACKET_PROCESS_STD_EXCEPTION)
+                .arg(e.what());
+    } catch (...) {
+        LOG_ERROR(packet6_logger, DHCP6_PACKET_PROCESS_EXCEPTION);
     }
 }
 
@@ -991,6 +1123,16 @@ Dhcpv6Srv::processPacketBufferSend(CalloutHandlePtr& callout_handle,
             callout_handle->getArgument("response6", rsp);
         }
 
+        LOG_DEBUG(packet6_logger, DBG_DHCP6_BASIC, DHCP6_PACKET_SEND)
+            .arg(rsp->getLabel())
+            .arg(rsp->getName())
+            .arg(static_cast<int>(rsp->getType()))
+            .arg(rsp->getLocalAddr().isV6Zero() ? "*" : rsp->getLocalAddr().toText())
+            .arg(rsp->getLocalPort())
+            .arg(rsp->getRemoteAddr())
+            .arg(rsp->getRemotePort())
+            .arg(rsp->getIface());
+
         LOG_DEBUG(packet6_logger, DBG_DHCP6_DETAIL_DATA, DHCP6_RESPONSE_DATA)
             .arg(static_cast<int>(rsp->getType())).arg(rsp->toText());
 
@@ -1059,11 +1201,12 @@ Dhcpv6Srv::buildCfgOptionList(const Pkt6Ptr& question,
     // Secondly, pool specific options. Pools are defined within a subnet, so
     // if there is no subnet, there is nothing to do.
     if (ctx.subnet_) {
-        BOOST_FOREACH(const AllocEngine::ResourceType& resource,
-                      ctx.allocated_resources_) {
-            PoolPtr pool = ctx.subnet_->getPool(resource.second == 128 ?
-                                                Lease::TYPE_NA : Lease::TYPE_PD,
-                                                resource.first, false);
+        for (auto resource : ctx.allocated_resources_) {
+            PoolPtr pool =
+                ctx.subnet_->getPool(resource.getPrefixLength() == 128 ?
+                                     Lease::TYPE_NA : Lease::TYPE_PD,
+                                     resource.getAddress(),
+                                     false);
             if (pool && !pool->getCfgOption()->empty()) {
                 co_list.push_back(pool->getCfgOption());
             }
@@ -1179,28 +1322,54 @@ Dhcpv6Srv::appendRequestedVendorOptions(const Pkt6Ptr& question,
     // it will be logged in the assignLease() when it fails to
     // pick the suitable subnet. We don't want to duplicate
     // error messages in such case.
-    if (!ctx.subnet_) {
+    //
+    // Also, if there's no options to possibly assign, give up.
+    if (!ctx.subnet_ || co_list.empty()) {
         return;
     }
 
-    // Try to get the vendor option
+    uint32_t vendor_id = 0;
+
+    // Try to get the vendor option from a client. This is the usual way.
     boost::shared_ptr<OptionVendor> vendor_req =
         boost::dynamic_pointer_cast<OptionVendor>(question->getOption(D6O_VENDOR_OPTS));
-    if (!vendor_req || co_list.empty()) {
+    if (vendor_req) {
+        vendor_id = vendor_req->getVendorId();
+    }
+
+    /// @todo: We could get the vendor-id from vendor-class option (16).
+
+    // The alternative is that the server could have provided the option in some
+    // other way, either using client classification or hooks. If there's a
+    // vendor info option in the response already, use that.
+    boost::shared_ptr<OptionVendor> vendor_rsp =
+        boost::dynamic_pointer_cast<OptionVendor>(answer->getOption(D6O_VENDOR_OPTS));
+    if (vendor_rsp) {
+        vendor_id = vendor_rsp->getVendorId();
+    }
+
+    // If there's no vendor option in either request or response, then there's no way
+    // to figure out what the vendor-id value is and we give up.
+    if (!vendor_req && !vendor_rsp) {
         return;
     }
 
-    uint32_t vendor_id = vendor_req->getVendorId();
     std::vector<uint16_t> requested_opts;
 
     // Let's try to get ORO within that vendor-option
     /// @todo This is very specific to vendor-id=4491 (Cable Labs). Other vendors
     /// may have different policies.
-    boost::shared_ptr<OptionUint16Array> oro =
-        boost::dynamic_pointer_cast<OptionUint16Array>(vendor_req->getOption(DOCSIS3_V6_ORO));
-    if (oro) {
-        requested_opts = oro->getValues();
+    boost::shared_ptr<OptionUint16Array> oro;
+    if (vendor_req) {
+        OptionPtr oro_generic = vendor_req->getOption(DOCSIS3_V6_ORO);
+        if (oro_generic) {
+            oro = boost::dynamic_pointer_cast<OptionUint16Array>(oro_generic);
+            if (oro) {
+                requested_opts = oro->getValues();
+            }
+        }
     }
+
     // Iterate on the configured option list to add persistent options
     for (CfgOptionList::const_iterator copts = co_list.begin();
          copts != co_list.end(); ++copts) {
@@ -1223,7 +1392,11 @@ Dhcpv6Srv::appendRequestedVendorOptions(const Pkt6Ptr& question,
         return;
     }
 
-    boost::shared_ptr<OptionVendor> vendor_rsp(new OptionVendor(Option::V6, vendor_id));
+    if (!vendor_rsp) {
+        // It's possible that the vendor opts option was inserted already
+        // by client class or a hook. If that is so, let's use it.
+        vendor_rsp.reset(new OptionVendor(Option::V6, vendor_id));
+    }
 
     // Get the list of options that client requested.
     bool added = false;
@@ -1240,7 +1413,9 @@ Dhcpv6Srv::appendRequestedVendorOptions(const Pkt6Ptr& question,
         }
     }
 
-    if (added) {
+    // If we added some sub-options and the vendor opts option is not in
+    // the response already, then add it.
+    if (added && !answer->getOption(D6O_VENDOR_OPTS)) {
         answer->addOption(vendor_rsp);
     }
 }
@@ -1251,7 +1426,7 @@ Dhcpv6Srv::sanityCheck(const Pkt6Ptr& pkt) {
         switch (pkt->getType()) {
         case DHCPV6_SOLICIT:
         case DHCPV6_REBIND:
-    case DHCPV6_CONFIRM:
+        case DHCPV6_CONFIRM:
             sanityCheck(pkt, MANDATORY, FORBIDDEN);
             return (true);
 
@@ -1353,9 +1528,10 @@ void Dhcpv6Srv::sanityCheckDUID(const OptionPtr& opt, const std::string& opt_nam
     // The client-id or server-id has to have at least 3 bytes of useful data:
     // two for duid type and one more for actual duid value.
     uint16_t len = opt->len() - opt->getHeaderLen();
-    if (len < 3) {
-        isc_throw(RFCViolation, "Received empty or truncated " << opt_name << " option: "
-                  << len << " byte(s) only");
+    if (len < 3 || len > DUID::MAX_DUID_LEN || opt->getData().empty()) {
+        isc_throw(RFCViolation, "Received invalid DUID for " << opt_name << ", received "
+                  << len << " byte(s). It must be at least 3 and no more than "
+                  << DUID::MAX_DUID_LEN);
     }
 }
 
@@ -1473,6 +1649,7 @@ Dhcpv6Srv::assignLeases(const Pkt6Ptr& question, Pkt6Ptr& answer,
             if (answer_opt) {
                 answer->addOption(answer_opt);
             }
+            break;
         }
         default:
             break;
@@ -1499,17 +1676,16 @@ void
 Dhcpv6Srv::processClientFqdn(const Pkt6Ptr& question, const Pkt6Ptr& answer,
                              AllocEngine::ClientContext6& ctx) {
     D2ClientMgr& d2_mgr = CfgMgr::instance().getD2ClientMgr();
+    DdnsParamsPtr ddns_params = ctx.getDdnsParams();
 
     // Get Client FQDN Option from the client's message. If this option hasn't
     // been included, do nothing.
     Option6ClientFqdnPtr fqdn = boost::dynamic_pointer_cast<
         Option6ClientFqdn>(question->getOption(D6O_CLIENT_FQDN));
     if (!fqdn) {
-        D2ClientConfig::ReplaceClientNameMode replace_name_mode =
-            d2_mgr.getD2ClientConfig()->getReplaceClientNameMode();
-        if (d2_mgr.ddnsEnabled() &&
-            (replace_name_mode == D2ClientConfig::RCM_ALWAYS ||
-             replace_name_mode == D2ClientConfig::RCM_WHEN_NOT_PRESENT)) {
+        if (ddns_params->getEnableUpdates() &&
+            (ddns_params->getReplaceClientNameMode() == D2ClientConfig::RCM_ALWAYS ||
+             ddns_params->getReplaceClientNameMode() == D2ClientConfig::RCM_WHEN_NOT_PRESENT)) {
             // Fabricate an empty "client" FQDN with flags requesting
             // the server do all the updates.  The flags will get modified
             // below according the configuration options, the name will
@@ -1539,19 +1715,19 @@ Dhcpv6Srv::processClientFqdn(const Pkt6Ptr& question, const Pkt6Ptr& answer,
 
     // Set the server S, N, and O flags based on client's flags and
     // current configuration.
-    d2_mgr.adjustFqdnFlags<Option6ClientFqdn>(*fqdn, *fqdn_resp);
+    d2_mgr.adjustFqdnFlags<Option6ClientFqdn>(*fqdn, *fqdn_resp, *ddns_params);
 
     // If there's a reservation and it has a hostname specified, use it!
     if (ctx.currentHost() && !ctx.currentHost()->getHostname().empty()) {
         // Add the qualifying suffix.
         // After #3765, this will only occur if the suffix is not empty.
         fqdn_resp->setDomainName(d2_mgr.qualifyName(ctx.currentHost()->getHostname(),
-                                                    true),
+                                                    *ddns_params, true),
                                                     Option6ClientFqdn::FULL);
     } else {
         // Adjust the domain name based on domain name value and type sent by
         // the client and current configuration.
-        d2_mgr.adjustDomainName<Option6ClientFqdn>(*fqdn, *fqdn_resp);
+        d2_mgr.adjustDomainName<Option6ClientFqdn>(*fqdn, *fqdn_resp, *ddns_params);
     }
 
     // Once we have the FQDN setup to use it for the lease hostname.  This
@@ -1572,7 +1748,7 @@ void
 Dhcpv6Srv::createNameChangeRequests(const Pkt6Ptr& answer,
                                     AllocEngine::ClientContext6& ctx) {
     // Don't create NameChangeRequests if DNS updates are disabled.
-    if (!CfgMgr::instance().ddnsEnabled()) {
+    if (!(ctx.getDdnsParams()->getEnableUpdates())) {
         return;
     }
 
@@ -1599,12 +1775,6 @@ Dhcpv6Srv::createNameChangeRequests(const Pkt6Ptr& answer,
     bool do_rev = false;
     CfgMgr::instance().getD2ClientMgr().getUpdateDirections(*opt_fqdn,
                                                              do_fwd, do_rev);
-    if (!do_fwd && !do_rev) {
-        // Flags indicate there is Nothing to do, get out now.
-        // The Most likely scenario is that we are honoring the client's
-        // request that no updates be done.
-        return;
-    }
 
     // Get the Client Id. It is mandatory and a function creating a response
     // would have thrown an exception if it was missing. Thus throwing
@@ -1630,13 +1800,12 @@ Dhcpv6Srv::createNameChangeRequests(const Pkt6Ptr& answer,
 
     // Get all IAs from the answer. For each IA, holding an address we will
     // create a corresponding NameChangeRequest.
-    OptionCollection answer_ias = answer->getOptions(D6O_IA_NA);
-    for (OptionCollection::const_iterator answer_ia =
-             answer_ias.begin(); answer_ia != answer_ias.end(); ++answer_ia) {
+    for (auto answer_ia : answer->getOptions(D6O_IA_NA)) {
         /// @todo IA_NA may contain multiple addresses. We should process
         /// each address individually. Currently we get only one.
         Option6IAAddrPtr iaaddr = boost::static_pointer_cast<
-            Option6IAAddr>(answer_ia->second->getOption(D6O_IAADDR));
+            Option6IAAddr>(answer_ia.second->getOption(D6O_IAADDR));
+
         // We need an address to create a name-to-address mapping.
         // If address is missing for any reason, go to the next IA.
         if (!iaaddr) {
@@ -1644,22 +1813,36 @@ Dhcpv6Srv::createNameChangeRequests(const Pkt6Ptr& answer,
         }
 
         // If the lease for iaaddr is in the list of changed leases, we need
-        // to determine if the changes included changes to the FQDN. If there
-        // were  changes to the FQDN then we need to update DNS, otherwise
-        // we do not.
+        // to determine if the changes included changes to the FQDN. If so
+        // then we may need to do a CHG_REMOVE.
         bool extended_only = false;
         for (Lease6Collection::const_iterator l = ctx.currentIA().changed_leases_.begin();
              l != ctx.currentIA().changed_leases_.end(); ++l) {
+
             if ((*l)->addr_ == iaaddr->getAddress()) {
+                // The address is the same so this must be renewal?
                 if ((*l)->hostname_ == opt_fqdn->getDomainName() &&
                     (*l)->fqdn_fwd_ == do_fwd && (*l)->fqdn_rev_ == do_rev) {
+                    // The FQDN is the same, it must be an extension only.
+                    // @todo - If we decide to allow updates on renews, we
+                    // will need to bypass this.
                     extended_only = true;
-                    break;
+                } else {
+                    // The FQDN has changed, queue a CHG_REMOVE of the old data.
+                    // NCR will only be created if the lease hostname is not
+                    // empty and at least one of the direction flags is true
+                    queueNCR(CHG_REMOVE, *l);
                 }
+
+                break;
             }
         }
 
-        if (extended_only) {
+        if (!(do_fwd || do_rev) || (extended_only)) {
+            // Flags indicate no updates needed  or it was an extension of
+            // an existing lease with no FQDN changes.  In the case of the
+            // former, the most likely scenario is that we are honoring the
+            // client's request that no updates be done.
             continue;
         }
 
@@ -1762,7 +1945,11 @@ Dhcpv6Srv::assignIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
     // Set per-IA context values.
     ctx.createIAContext();
     ctx.currentIA().iaid_ = ia->getIAID();
-    ctx.currentIA().addHint(hint);
+    if (hint_opt) {
+        ctx.currentIA().addHint(hint_opt);
+    } else {
+        ctx.currentIA().addHint(hint);
+    }
     ctx.currentIA().type_ = Lease::TYPE_NA;
 
     // Use allocation engine to pick a lease for this client. Allocation engine
@@ -1785,17 +1972,25 @@ Dhcpv6Srv::assignIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
     if (lease) {
         // We have a lease! Let's wrap its content into IA_NA option
         // with IAADDR suboption.
-        LOG_INFO(lease6_logger, ctx.fake_allocation_ ? DHCP6_LEASE_ADVERT : DHCP6_LEASE_ALLOC)
-            .arg(query->getLabel())
-            .arg(lease->addr_.toText())
-            .arg(ia->getIAID());
+        if (ctx.fake_allocation_) {
+            LOG_INFO(lease6_logger, DHCP6_LEASE_ADVERT)
+                .arg(query->getLabel())
+                .arg(lease->addr_.toText())
+                .arg(ia->getIAID());
+        } else {
+            LOG_INFO(lease6_logger, DHCP6_LEASE_ALLOC)
+                .arg(query->getLabel())
+                .arg(lease->addr_.toText())
+                .arg(ia->getIAID())
+                .arg(Lease::lifetimeToText(lease->valid_lft_));
+        }
         LOG_DEBUG(lease6_logger, DBG_DHCP6_DETAIL_DATA, DHCP6_LEASE_DATA)
             .arg(query->getLabel())
             .arg(ia->getIAID())
             .arg(lease->toText());
 
-        ia_rsp->setT1(subnet->getT1());
-        ia_rsp->setT2(subnet->getT2());
+        // Set the values for T1 and T2.
+        setTeeTimes(lease->preferred_lft_, subnet, ia_rsp);
 
         Option6IAAddrPtr addr(new Option6IAAddr(D6O_IAADDR, lease->addr_,
                                                 lease->preferred_lft_,
@@ -1868,7 +2063,11 @@ Dhcpv6Srv::assignIA_PD(const Pkt6Ptr& query, const Pkt6Ptr& /*answer*/,
     // Set per-IA context values.
     ctx.createIAContext();
     ctx.currentIA().iaid_ = ia->getIAID();
-    ctx.currentIA().addHint(hint);
+    if (hint_opt) {
+        ctx.currentIA().addHint(hint_opt);
+    } else {
+        ctx.currentIA().addHint(hint);
+    }
     ctx.currentIA().type_ = Lease::TYPE_PD;
 
     // Use allocation engine to pick a lease for this client. Allocation engine
@@ -1879,22 +2078,35 @@ Dhcpv6Srv::assignIA_PD(const Pkt6Ptr& query, const Pkt6Ptr& /*answer*/,
 
     if (!leases.empty()) {
 
-        ia_rsp->setT1(subnet->getT1());
-        ia_rsp->setT2(subnet->getT2());
+        // Need to retain the shortest preferred lease time to use
+        // for calculating T1 and T2.
+        uint32_t min_preferred_lft = (*leases.begin())->preferred_lft_;
 
         const bool pd_exclude_requested = requestedInORO(query, D6O_PD_EXCLUDE);
-
         for (Lease6Collection::iterator l = leases.begin();
              l != leases.end(); ++l) {
 
+            // Check for new minimum lease time
+            if (((*l)->preferred_lft_ > 0) && (min_preferred_lft > (*l)->preferred_lft_)) {
+                min_preferred_lft = (*l)->preferred_lft_;
+            }
+
             // We have a lease! Let's wrap its content into IA_PD option
             // with IAADDR suboption.
-            LOG_INFO(lease6_logger, ctx.fake_allocation_ ?
-                      DHCP6_PD_LEASE_ADVERT : DHCP6_PD_LEASE_ALLOC)
-                .arg(query->getLabel())
-                .arg((*l)->addr_.toText())
-                .arg(static_cast<int>((*l)->prefixlen_))
-                .arg(ia->getIAID());
+            if (ctx.fake_allocation_) {
+                LOG_INFO(lease6_logger, DHCP6_PD_LEASE_ADVERT)
+                    .arg(query->getLabel())
+                    .arg((*l)->addr_.toText())
+                    .arg(static_cast<int>((*l)->prefixlen_))
+                    .arg(ia->getIAID());
+            } else {
+                LOG_INFO(lease6_logger, DHCP6_PD_LEASE_ALLOC)
+                    .arg(query->getLabel())
+                    .arg((*l)->addr_.toText())
+                    .arg(static_cast<int>((*l)->prefixlen_))
+                    .arg(ia->getIAID())
+                    .arg(Lease::lifetimeToText((*l)->valid_lft_));
+            }
 
             boost::shared_ptr<Option6IAPrefix>
                 addr(new Option6IAPrefix(D6O_IAPREFIX, (*l)->addr_,
@@ -1915,6 +2127,9 @@ Dhcpv6Srv::assignIA_PD(const Pkt6Ptr& query, const Pkt6Ptr& /*answer*/,
                 }
             }
         }
+
+        // Set T1 and T2, using the shortest preferred lifetime among the leases.
+        setTeeTimes(min_preferred_lft, subnet, ia_rsp);
 
         // It would be possible to insert status code=0(success) as well,
         // but this is considered waste of bandwidth as absence of status
@@ -1968,10 +2183,6 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
         return (ia_rsp);
     }
 
-    // Set up T1, T2 timers
-    ia_rsp->setT1(subnet->getT1());
-    ia_rsp->setT2(subnet->getT2());
-
     // Get DDNS update directions
     bool do_fwd = false;
     bool do_rev = false;
@@ -2007,7 +2218,7 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
             // There's no way to protect against this.
             continue;
         }
-        ctx.currentIA().addHint(iaaddr->getAddress());
+        ctx.currentIA().addHint(iaaddr);
     }
 
     Lease6Collection leases = alloc_engine_->renewLeases6(ctx);
@@ -2024,18 +2235,29 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
     // into temporary container.
     AllocEngine::HintContainer hints = ctx.currentIA().hints_;
 
+    // Retains the shortest valid lease time to use
+    // for calculating T1 and T2.
+    uint32_t min_preferred_lft = std::numeric_limits<uint32_t>::max();
+
     // For all leases we have now, add the IAADDR with non-zero lifetimes.
     for (Lease6Collection::const_iterator l = leases.begin(); l != leases.end(); ++l) {
         Option6IAAddrPtr iaaddr(new Option6IAAddr(D6O_IAADDR,
                                 (*l)->addr_, (*l)->preferred_lft_, (*l)->valid_lft_));
         ia_rsp->addOption(iaaddr);
-        LOG_INFO(lease6_logger, DHCP6_LEASE_RENEW)
+
+        // Check for new minimum lease time
+        if (((*l)->preferred_lft_ > 0) && (min_preferred_lft > (*l)->preferred_lft_)) {
+            min_preferred_lft = (*l)->preferred_lft_;
+        }
+
+        LOG_INFO(lease6_logger, DHCP6_PD_LEASE_RENEW)
             .arg(query->getLabel())
             .arg((*l)->addr_.toText())
-            .arg(ia_rsp->getIAID());
+            .arg(static_cast<int>((*l)->prefixlen_))
+            .arg(ia->getIAID());
 
-        // Now remove this address from the hints list.
-        AllocEngine::ResourceType hint_type((*l)->addr_, 128);
+        // Now remove this prefix from the hints list.
+        AllocEngine::Resource hint_type((*l)->addr_, (*l)->prefixlen_);
         hints.erase(std::remove(hints.begin(), hints.end(), hint_type),
                     hints.end());
     }
@@ -2054,7 +2276,7 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
         }
 
         // Now remove this address from the hints list.
-        AllocEngine::ResourceType hint_type((*l)->addr_, 128);
+        AllocEngine::Resource hint_type((*l)->addr_, 128);
         hints.erase(std::remove(hints.begin(), hints.end(), hint_type), hints.end());
 
         // If the new FQDN settings have changed for the lease, we need to
@@ -2062,7 +2284,7 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
         if (((*l)->hostname_ != ctx.hostname_) || ((*l)->fqdn_fwd_ != do_fwd) ||
             ((*l)->fqdn_rev_ != do_rev)) {
             LOG_DEBUG(ddns6_logger, DBG_DHCP6_DETAIL,
-                      DHCP6_DDNS_LEASE_RENEW_FQDN_CHANGE)
+                      DHCP6_DDNS_REMOVE_OLD_LEASE_FQDN)
                 .arg(query->getLabel())
                 .arg((*l)->toText())
                 .arg(ctx.hostname_)
@@ -2078,13 +2300,14 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
     for (AllocEngine::HintContainer::const_iterator hint = hints.begin();
          hint != hints.end(); ++hint) {
         Option6IAAddrPtr iaaddr(new Option6IAAddr(D6O_IAADDR,
-                                                  hint->first, 0, 0));
+                                                  hint->getAddress(), 0, 0));
         ia_rsp->addOption(iaaddr);
     }
 
-    // All is left is to insert the status code.
-    if (leases.empty()) {
-
+    if (!leases.empty()) {
+        // We allocated leases so we need to update T1 and T2.
+        setTeeTimes(min_preferred_lft, subnet, ia_rsp);
+    } else {
         // The server wasn't able allocate new lease and renew an existing
         // lease. In that case, the server sends NoAddrsAvail per RFC 8415.
         ia_rsp->addOption(createStatusCode(*query, *ia_rsp,
@@ -2147,10 +2370,6 @@ Dhcpv6Srv::extendIA_PD(const Pkt6Ptr& query,
         }
     }
 
-    // Set up T1, T2 timers
-    ia_rsp->setT1(subnet->getT1());
-    ia_rsp->setT2(subnet->getT2());
-
     // Set per-IA context values.
     ctx.createIAContext();
     ctx.currentIA().iaid_ = ia->getIAID();
@@ -2174,7 +2393,7 @@ Dhcpv6Srv::extendIA_PD(const Pkt6Ptr& query,
         }
 
         // Put the client's prefix into the hints list.
-        ctx.currentIA().addHint(prf->getAddress(), prf->getLength());
+        ctx.currentIA().addHint(prf);
     }
 
     // Call Allocation Engine and attempt to renew leases. Number of things
@@ -2196,7 +2415,10 @@ Dhcpv6Srv::extendIA_PD(const Pkt6Ptr& query,
 
     const bool pd_exclude_requested = requestedInORO(query, D6O_PD_EXCLUDE);
 
-    // For all the leases we have now, add the IAPREFIX with non-zero lifetimes
+    // Retains the shortest valid lease time to use
+    // for calculating T1 and T2.
+    uint32_t min_preferred_lft = std::numeric_limits<uint32_t>::max();
+
     for (Lease6Collection::const_iterator l = leases.begin(); l != leases.end(); ++l) {
 
         Option6IAPrefixPtr prf(new Option6IAPrefix(D6O_IAPREFIX,
@@ -2219,6 +2441,10 @@ Dhcpv6Srv::extendIA_PD(const Pkt6Ptr& query,
             }
         }
 
+        // Check for new minimum lease time
+        if (((*l)->preferred_lft_ > 0) && ((*l)->preferred_lft_ < min_preferred_lft)) {
+            min_preferred_lft = (*l)->preferred_lft_;
+        }
 
         LOG_INFO(lease6_logger, DHCP6_PD_LEASE_RENEW)
             .arg(query->getLabel())
@@ -2227,7 +2453,7 @@ Dhcpv6Srv::extendIA_PD(const Pkt6Ptr& query,
             .arg(ia->getIAID());
 
         // Now remove this prefix from the hints list.
-        AllocEngine::ResourceType hint_type((*l)->addr_, (*l)->prefixlen_);
+        AllocEngine::Resource hint_type((*l)->addr_, (*l)->prefixlen_);
         hints.erase(std::remove(hints.begin(), hints.end(), hint_type),
                     hints.end());
     }
@@ -2246,7 +2472,7 @@ Dhcpv6Srv::extendIA_PD(const Pkt6Ptr& query,
         }
 
         // Now remove this prefix from the hints list.
-        AllocEngine::ResourceType hint_type((*l)->addr_, (*l)->prefixlen_);
+        AllocEngine::Resource hint_type((*l)->addr_, (*l)->prefixlen_);
         hints.erase(std::remove(hints.begin(), hints.end(), hint_type), hints.end());
     }
 
@@ -2258,16 +2484,20 @@ Dhcpv6Srv::extendIA_PD(const Pkt6Ptr& query,
         // Send the prefix with the zero lifetimes only if the prefix
         // contains non-zero value. A zero value indicates that the hint was
         // for the prefix length.
-        if (!prefix->first.isV6Zero()) {
-            OptionPtr prefix_opt(new Option6IAPrefix(D6O_IAPREFIX, prefix->first,
-                                                     prefix->second, 0, 0));
+        if (!prefix->getAddress().isV6Zero()) {
+            OptionPtr prefix_opt(new Option6IAPrefix(D6O_IAPREFIX,
+                                                     prefix->getAddress(),
+                                                     prefix->getPrefixLength(),
+                                                     0, 0));
             ia_rsp->addOption(prefix_opt);
         }
     }
 
-    // All is left is to insert the status code.
-    if (leases.empty()) {
-
+    if (!leases.empty()) {
+        // We allocated leases so we need to update T1 and T2.
+        setTeeTimes(min_preferred_lft, subnet, ia_rsp);
+    } else {
+        // All is left is to insert the status code.
         // The server wasn't able allocate new lease and renew an existing
         // lease. In that case, the server sends NoPrefixAvail per RFC 8415.
         ia_rsp->addOption(createStatusCode(*query, *ia_rsp,
@@ -2510,7 +2740,7 @@ Dhcpv6Srv::releaseIA_NA(const DuidPtr& duid, const Pkt6Ptr& query,
     bool success = false; // was the removal operation successful?
 
     if (!skip) {
-        success = LeaseMgrFactory::instance().deleteLease(lease->addr_);
+        success = LeaseMgrFactory::instance().deleteLease(lease);
     }
 
     // Here the success should be true if we removed lease successfully
@@ -2668,7 +2898,7 @@ Dhcpv6Srv::releaseIA_PD(const DuidPtr& duid, const Pkt6Ptr& query,
     bool success = false; // was the removal operation successful?
 
     if (!skip) {
-        success = LeaseMgrFactory::instance().deleteLease(lease->addr_);
+        success = LeaseMgrFactory::instance().deleteLease(lease);
     } else {
         // Callouts decided to skip the next processing step. The next
         // processing step would to send the packet, so skip at this
@@ -2791,7 +3021,7 @@ Dhcpv6Srv::processRequest(AllocEngine::ClientContext6& ctx) {
     appendRequestedVendorOptions(request, reply, ctx, co_list);
 
     updateReservedFqdn(ctx, reply);
-    generateFqdn(reply);
+    generateFqdn(reply, ctx);
     createNameChangeRequests(reply, ctx);
 
     return (reply);
@@ -2817,7 +3047,7 @@ Dhcpv6Srv::processRenew(AllocEngine::ClientContext6& ctx) {
     appendRequestedVendorOptions(renew, reply, ctx, co_list);
 
     updateReservedFqdn(ctx, reply);
-    generateFqdn(reply);
+    generateFqdn(reply, ctx);
     createNameChangeRequests(reply, ctx);
 
     return (reply);
@@ -2843,7 +3073,7 @@ Dhcpv6Srv::processRebind(AllocEngine::ClientContext6& ctx) {
     appendRequestedVendorOptions(rebind, reply, ctx, co_list);
 
     updateReservedFqdn(ctx, reply);
-    generateFqdn(reply);
+    generateFqdn(reply, ctx);
     createNameChangeRequests(reply, ctx);
 
     return (reply);
@@ -3227,10 +3457,21 @@ Dhcpv6Srv::declineLease(const Pkt6Ptr& decline, const Lease6Ptr lease,
         }
     }
 
+    Lease6Ptr old_values = boost::make_shared<Lease6>(*lease);
+
+    // @todo: Call hooks.
+
+    // We need to disassociate the lease from the client. Once we move a lease
+    // to declined state, it is no longer associated with the client in any
+    // way.
+    lease->decline(CfgMgr::instance().getCurrentCfg()->getDeclinePeriod());
+
+    LeaseMgrFactory::instance().updateLease6(lease);
+
     // Check if a lease has flags indicating that the FQDN update has
     // been performed. If so, create NameChangeRequest which removes
     // the entries. This method does all necessary checks.
-    queueNCR(CHG_REMOVE, lease);
+    queueNCR(CHG_REMOVE, old_values);
 
     // Bump up the subnet-specific statistic.
     StatsMgr::instance().addValue(
@@ -3239,12 +3480,6 @@ Dhcpv6Srv::declineLease(const Pkt6Ptr& decline, const Lease6Ptr lease,
 
     // Global declined addresses counter.
     StatsMgr::instance().addValue("declined-addresses", static_cast<int64_t>(1));
-
-    // We need to disassociate the lease from the client. Once we move a lease
-    // to declined state, it is no longer associated with the client in any
-    // way.
-    lease->decline(CfgMgr::instance().getCurrentCfg()->getDeclinePeriod());
-    LeaseMgrFactory::instance().updateLease6(lease);
 
     LOG_INFO(lease6_logger, DHCP6_DECLINE_LEASE).arg(decline->getLabel())
         .arg(lease->addr_.toText()).arg(lease->valid_lft_);
@@ -3436,13 +3671,12 @@ Dhcpv6Srv::requiredClassify(const Pkt6Ptr& pkt, AllocEngine::ClientContext6& ctx
         }
 
         // And finish by pools
-        BOOST_FOREACH(const AllocEngine::ResourceType& resource,
-                      ctx.allocated_resources_) {
-            PoolPtr pool = ctx.subnet_->getPool(resource.second == 128 ?
-                                                    Lease::TYPE_NA :
-                                                    Lease::TYPE_PD,
-                                                resource.first,
-                                                false);
+        for (auto resource : ctx.allocated_resources_) {
+            PoolPtr pool =
+                ctx.subnet_->getPool(resource.getPrefixLength() == 128 ?
+                                     Lease::TYPE_NA : Lease::TYPE_PD,
+                                     resource.getAddress(),
+                                     false);
             if (pool) {
                 const ClientClasses& to_add = pool->getRequiredClasses();
                 for (ClientClasses::const_iterator cclass = to_add.cbegin();
@@ -3502,7 +3736,7 @@ Dhcpv6Srv::requiredClassify(const Pkt6Ptr& pkt, AllocEngine::ClientContext6& ctx
 }
 
 void
-Dhcpv6Srv::updateReservedFqdn(const AllocEngine::ClientContext6& ctx,
+Dhcpv6Srv::updateReservedFqdn(AllocEngine::ClientContext6& ctx,
                               const Pkt6Ptr& answer) {
     if (!answer) {
         isc_throw(isc::Unexpected, "an instance of the object encapsulating"
@@ -3527,7 +3761,7 @@ Dhcpv6Srv::updateReservedFqdn(const AllocEngine::ClientContext6& ctx,
    if (ctx.currentHost() &&
        !ctx.currentHost()->getHostname().empty()) {
        std::string new_name = CfgMgr::instance().getD2ClientMgr().
-           qualifyName(ctx.currentHost()->getHostname(), true);
+           qualifyName(ctx.currentHost()->getHostname(), *ctx.getDdnsParams(), true);
 
        if (new_name != name) {
            fqdn->setDomainName(new_name, Option6ClientFqdn::FULL);
@@ -3540,7 +3774,8 @@ Dhcpv6Srv::updateReservedFqdn(const AllocEngine::ClientContext6& ctx,
 }
 
 void
-Dhcpv6Srv::generateFqdn(const Pkt6Ptr& answer) {
+Dhcpv6Srv::generateFqdn(const Pkt6Ptr& answer,
+                        AllocEngine::ClientContext6& ctx) {
     if (!answer) {
         isc_throw(isc::Unexpected, "an instance of the object encapsulating"
                   " a message must not be NULL when generating FQDN");
@@ -3573,7 +3808,7 @@ Dhcpv6Srv::generateFqdn(const Pkt6Ptr& answer) {
     // Get the IPv6 address acquired by the client.
     IOAddress addr = iaaddr->getAddress();
     std::string generated_name =
-        CfgMgr::instance().getD2ClientMgr().generateFqdn(addr);
+        CfgMgr::instance().getD2ClientMgr().generateFqdn(addr, *ctx.getDdnsParams());
 
     LOG_DEBUG(ddns6_logger, DBG_DHCP6_DETAIL_DATA, DHCP6_DDNS_FQDN_GENERATED)
         .arg(answer->getLabel())
@@ -3603,9 +3838,9 @@ Dhcpv6Srv::generateFqdn(const Pkt6Ptr& answer) {
         // Set the generated FQDN in the Client FQDN option.
         fqdn->setDomainName(generated_name, Option6ClientFqdn::FULL);
 
-       answer->delOption(D6O_CLIENT_FQDN);
-       answer->addOption(fqdn);
-
+        answer->delOption(D6O_CLIENT_FQDN);
+        answer->addOption(fqdn);
+        ctx.hostname_ = generated_name;
     } catch (const Exception& ex) {
         LOG_ERROR(ddns6_logger, DHCP6_DDNS_GENERATED_FQDN_UPDATE_FAIL)
             .arg(answer->getLabel())
@@ -3831,5 +4066,42 @@ void Dhcpv6Srv::discardPackets() {
     HooksManager::clearParkingLots();
 }
 
-};
-};
+/// @todo This logic to be modified if we decide to support infinite lease times.
+void
+Dhcpv6Srv::setTeeTimes(uint32_t preferred_lft, const Subnet6Ptr& subnet, Option6IAPtr& resp) {
+    // Default T2 time to zero.
+    uint32_t t2_time = 0;
+
+    // If T2 is explicitly configured we'll use that value.
+    if (!subnet->getT2().unspecified()) {
+        t2_time = subnet->getT2();
+    } else if (subnet->getCalculateTeeTimes()) {
+        // Calculating tee times is enabled, so calculate it.
+        t2_time = static_cast<uint32_t>(round(subnet->getT2Percent() * preferred_lft));
+    }
+
+    // We allow T2 to be any value.
+    resp->setT2(t2_time);
+
+    // Default T1 time to zero.
+    uint32_t t1_time = 0;
+
+    // If T1 is explicitly configured we'll use try value.
+    if (!subnet->getT1().unspecified()) {
+        t1_time = subnet->getT1();
+    } else if (subnet->getCalculateTeeTimes()) {
+        // Calculating tee times is enabled, so calculate it.
+        t1_time = static_cast<uint32_t>(round(subnet->getT1Percent() * preferred_lft));
+    }
+
+    // T1 is sane if it is less than or equal to T2.
+    if (t1_time < t2_time) {
+        resp->setT1(t1_time);
+    } else {
+        // It's either explicitly 0 or insane, leave it to the client
+        resp->setT1(0);
+    }
+}
+
+}  // namespace dhcp
+}  // namespace isc

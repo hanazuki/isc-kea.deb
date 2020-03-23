@@ -64,7 +64,7 @@
                 "comment": "Kea DHCP4 server serving network on floor 13"
             }
 
-        }
+        },
 
         // Netconf is able to load hook libraries that augment its operation.
         // The primary functionality is the ability to add new commands.
@@ -86,11 +86,7 @@
         //    }
         //]
 
-    },
-
-    // Similar to other Kea components, Netconf also uses logging.
-    "Logging":
-    {
+        // Similar to other Kea components, Netconf also uses logging.
         "loggers": [
             {
                 "name": "kea-netconf",
@@ -106,7 +102,9 @@
                         // kept.
                         "flush": true,
                         "maxsize": 204800,
-                        "maxver": 4
+                        "maxver": 4,
+                         // We use pattern to specify custom log message layout
+                        "pattern": "%d{%y.%m.%d %H:%M:%S.%q} %-5p [%c/%i] %m\n"
                     }
                 ],
                 // You can change the severity to DEBUG, INFO, WARN, ERROR or

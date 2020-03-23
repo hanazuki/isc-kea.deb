@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,7 +18,6 @@ CfgSharedNetworks4::hasNetworkWithServerId(const IOAddress& server_id) const {
     auto network_it = index.find(server_id);
     return (network_it != index.cend());
 }
-
 
 } // end of namespace isc::dhcp
 } // end of namespace isc

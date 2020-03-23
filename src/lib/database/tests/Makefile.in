@@ -96,6 +96,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -113,21 +114,24 @@ CONFIG_CLEAN_VPATH_FILES =
 @HAVE_GTEST_TRUE@am__EXEEXT_1 = libdatabase_unittests$(EXEEXT)
 am__EXEEXT_2 = $(am__EXEEXT_1)
 PROGRAMS = $(noinst_PROGRAMS)
-am__libdatabase_unittests_SOURCES_DIST = backend_selector_unittest.cc \
-	database_connection_unittest.cc dbaccess_parser_unittest.cc \
-	run_unittests.cc server_selector_unittest.cc
-@HAVE_GTEST_TRUE@am_libdatabase_unittests_OBJECTS = libdatabase_unittests-backend_selector_unittest.$(OBJEXT) \
+am__libdatabase_unittests_SOURCES_DIST = audit_entry_unittest.cc \
+	backend_selector_unittest.cc database_connection_unittest.cc \
+	dbaccess_parser_unittest.cc run_unittests.cc \
+	server_unittest.cc server_selector_unittest.cc
+@HAVE_GTEST_TRUE@am_libdatabase_unittests_OBJECTS = libdatabase_unittests-audit_entry_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	libdatabase_unittests-backend_selector_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdatabase_unittests-database_connection_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdatabase_unittests-dbaccess_parser_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdatabase_unittests-run_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	libdatabase_unittests-server_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdatabase_unittests-server_selector_unittest.$(OBJEXT)
 libdatabase_unittests_OBJECTS = $(am_libdatabase_unittests_OBJECTS)
 am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@libdatabase_unittests_DEPENDENCIES = $(top_builddir)/src/lib/database/libkea-database.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -282,7 +286,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -303,7 +306,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -313,6 +315,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -322,7 +325,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -373,6 +375,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -390,17 +393,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -470,17 +473,19 @@ TESTS_ENVIRONMENT = \
 	$(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 
 @HAVE_GTEST_TRUE@libdatabase_unittests_SOURCES =  \
+@HAVE_GTEST_TRUE@	audit_entry_unittest.cc \
 @HAVE_GTEST_TRUE@	backend_selector_unittest.cc \
 @HAVE_GTEST_TRUE@	database_connection_unittest.cc \
 @HAVE_GTEST_TRUE@	dbaccess_parser_unittest.cc run_unittests.cc \
+@HAVE_GTEST_TRUE@	server_unittest.cc \
 @HAVE_GTEST_TRUE@	server_selector_unittest.cc
 @HAVE_GTEST_TRUE@libdatabase_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@libdatabase_unittests_LDFLAGS = $(AM_LDFLAGS) $(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@libdatabase_unittests_LDADD = $(top_builddir)/src/lib/database/libkea-database.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(BOOST_LIBS) \
@@ -538,11 +543,13 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdatabase_unittests-audit_entry_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdatabase_unittests-backend_selector_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdatabase_unittests-database_connection_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdatabase_unittests-dbaccess_parser_unittest.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdatabase_unittests-run_unittests.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdatabase_unittests-server_selector_unittest.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdatabase_unittests-server_unittest.Po@am__quote@
 
 .cc.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -564,6 +571,20 @@ distclean-compile:
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
+
+libdatabase_unittests-audit_entry_unittest.o: audit_entry_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libdatabase_unittests-audit_entry_unittest.o -MD -MP -MF $(DEPDIR)/libdatabase_unittests-audit_entry_unittest.Tpo -c -o libdatabase_unittests-audit_entry_unittest.o `test -f 'audit_entry_unittest.cc' || echo '$(srcdir)/'`audit_entry_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdatabase_unittests-audit_entry_unittest.Tpo $(DEPDIR)/libdatabase_unittests-audit_entry_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='audit_entry_unittest.cc' object='libdatabase_unittests-audit_entry_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libdatabase_unittests-audit_entry_unittest.o `test -f 'audit_entry_unittest.cc' || echo '$(srcdir)/'`audit_entry_unittest.cc
+
+libdatabase_unittests-audit_entry_unittest.obj: audit_entry_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libdatabase_unittests-audit_entry_unittest.obj -MD -MP -MF $(DEPDIR)/libdatabase_unittests-audit_entry_unittest.Tpo -c -o libdatabase_unittests-audit_entry_unittest.obj `if test -f 'audit_entry_unittest.cc'; then $(CYGPATH_W) 'audit_entry_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/audit_entry_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdatabase_unittests-audit_entry_unittest.Tpo $(DEPDIR)/libdatabase_unittests-audit_entry_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='audit_entry_unittest.cc' object='libdatabase_unittests-audit_entry_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libdatabase_unittests-audit_entry_unittest.obj `if test -f 'audit_entry_unittest.cc'; then $(CYGPATH_W) 'audit_entry_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/audit_entry_unittest.cc'; fi`
 
 libdatabase_unittests-backend_selector_unittest.o: backend_selector_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libdatabase_unittests-backend_selector_unittest.o -MD -MP -MF $(DEPDIR)/libdatabase_unittests-backend_selector_unittest.Tpo -c -o libdatabase_unittests-backend_selector_unittest.o `test -f 'backend_selector_unittest.cc' || echo '$(srcdir)/'`backend_selector_unittest.cc
@@ -620,6 +641,20 @@ libdatabase_unittests-run_unittests.obj: run_unittests.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='run_unittests.cc' object='libdatabase_unittests-run_unittests.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libdatabase_unittests-run_unittests.obj `if test -f 'run_unittests.cc'; then $(CYGPATH_W) 'run_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/run_unittests.cc'; fi`
+
+libdatabase_unittests-server_unittest.o: server_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libdatabase_unittests-server_unittest.o -MD -MP -MF $(DEPDIR)/libdatabase_unittests-server_unittest.Tpo -c -o libdatabase_unittests-server_unittest.o `test -f 'server_unittest.cc' || echo '$(srcdir)/'`server_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdatabase_unittests-server_unittest.Tpo $(DEPDIR)/libdatabase_unittests-server_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='server_unittest.cc' object='libdatabase_unittests-server_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libdatabase_unittests-server_unittest.o `test -f 'server_unittest.cc' || echo '$(srcdir)/'`server_unittest.cc
+
+libdatabase_unittests-server_unittest.obj: server_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libdatabase_unittests-server_unittest.obj -MD -MP -MF $(DEPDIR)/libdatabase_unittests-server_unittest.Tpo -c -o libdatabase_unittests-server_unittest.obj `if test -f 'server_unittest.cc'; then $(CYGPATH_W) 'server_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/server_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdatabase_unittests-server_unittest.Tpo $(DEPDIR)/libdatabase_unittests-server_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='server_unittest.cc' object='libdatabase_unittests-server_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libdatabase_unittests-server_unittest.obj `if test -f 'server_unittest.cc'; then $(CYGPATH_W) 'server_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/server_unittest.cc'; fi`
 
 libdatabase_unittests-server_selector_unittest.o: server_selector_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdatabase_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libdatabase_unittests-server_selector_unittest.o -MD -MP -MF $(DEPDIR)/libdatabase_unittests-server_selector_unittest.Tpo -c -o libdatabase_unittests-server_selector_unittest.o `test -f 'server_selector_unittest.cc' || echo '$(srcdir)/'`server_selector_unittest.cc

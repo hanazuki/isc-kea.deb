@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -86,16 +86,14 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
     // Set the address of the lease
     lease->addr_ = IOAddress(address);
 
-    // Initialize unused fields.
-    lease->t1_ = 0;                             // Not saved
-    lease->t2_ = 0;                             // Not saved
-
     // Set other parameters.  For historical reasons, address 0 is not used.
     if (address == straddress4_[0]) {
         lease->hwaddr_.reset(new HWAddr(vector<uint8_t>(6, 0x08), HTYPE_ETHER));
         lease->client_id_ = ClientIdPtr(new ClientId(vector<uint8_t>(8, 0x42)));
         lease->valid_lft_ = 8677;
+        lease->old_valid_lft_ = 8677;
         lease->cltt_ = 168256;
+        lease->old_cltt_ = 168256;
         lease->subnet_id_ = 23;
         lease->fqdn_rev_ = true;
         lease->fqdn_fwd_ = false;
@@ -106,7 +104,9 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
         lease->client_id_ = ClientIdPtr(
             new ClientId(vector<uint8_t>(8, 0x53)));
         lease->valid_lft_ = 3677;
+        lease->old_valid_lft_ = 3677;
         lease->cltt_ = 123456;
+        lease->old_cltt_ = 123456;
         lease->subnet_id_ = 73;
         lease->fqdn_rev_ = true;
         lease->fqdn_fwd_ = true;
@@ -116,7 +116,9 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
         lease->hwaddr_.reset(new HWAddr(vector<uint8_t>(6, 0x2a), HTYPE_ETHER));
         lease->client_id_ = ClientIdPtr(new ClientId(vector<uint8_t>(8, 0x64)));
         lease->valid_lft_ = 5412;
+        lease->old_valid_lft_ = 5412;
         lease->cltt_ = 234567;
+        lease->old_cltt_ = 234567;
         lease->subnet_id_ = 73;                         // Same as lease 1
         lease->fqdn_rev_ = false;
         lease->fqdn_fwd_ = false;
@@ -131,9 +133,11 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
         // The times used in the next tests are deliberately restricted - we
         // should be able to cope with valid lifetimes up to 0xffffffff.
         //  However, this will lead to overflows.
-        // @TODO: test overflow conditions when code has been fixed
+        // @TODO: test overflow conditions when code has been fixed.
         lease->valid_lft_ = 7000;
+        lease->old_valid_lft_ = 7000;
         lease->cltt_ = 234567;
+        lease->old_cltt_ = 234567;
         lease->subnet_id_ = 37;
         lease->fqdn_rev_ = true;
         lease->fqdn_fwd_ = true;
@@ -145,7 +149,9 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
         lease->client_id_ = ClientIdPtr(
             new ClientId(vector<uint8_t>(8, 0x53)));    // Same as lease 1
         lease->valid_lft_ = 7736;
+        lease->old_valid_lft_ = 7736;
         lease->cltt_ = 222456;
+        lease->old_cltt_ = 222456;
         lease->subnet_id_ = 85;
         lease->fqdn_rev_ = true;
         lease->fqdn_fwd_ = true;
@@ -158,7 +164,9 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
         lease->client_id_ = ClientIdPtr(
             new ClientId(vector<uint8_t>(8, 0x53)));    // Same as lease 1
         lease->valid_lft_ = 7832;
+        lease->old_valid_lft_ = 7832;
         lease->cltt_ = 227476;
+        lease->old_cltt_ = 227476;
         lease->subnet_id_ = 175;
         lease->fqdn_rev_ = false;
         lease->fqdn_fwd_ = false;
@@ -171,7 +179,9 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
         lease->client_id_ = ClientIdPtr(
             new ClientId(vector<uint8_t>(8, 0x53)));    // Same as lease 1
         lease->valid_lft_ = 1832;
+        lease->old_valid_lft_ = 1832;
         lease->cltt_ = 627476;
+        lease->old_cltt_ = 627476;
         lease->subnet_id_ = 112;
         lease->fqdn_rev_ = false;
         lease->fqdn_fwd_ = true;
@@ -179,9 +189,12 @@ GenericLeaseMgrTest::initializeLease4(std::string address) {
 
     } else if (address == straddress4_[7]) {
         lease->hwaddr_.reset(new HWAddr(vector<uint8_t>(), HTYPE_ETHER)); // Empty
-        lease->client_id_ = ClientIdPtr();              // Empty
+        lease->client_id_ = ClientIdPtr(
+            new ClientId(vector<uint8_t>(8, 0x77)));
         lease->valid_lft_ = 7975;
+        lease->old_valid_lft_ = 7975;
         lease->cltt_ = 213876;
+        lease->old_cltt_ = 213876;
         lease->subnet_id_ = 19;
         lease->fqdn_rev_ = true;
         lease->fqdn_fwd_ = true;
@@ -204,10 +217,6 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
     // Set the address of the lease
     lease->addr_ = IOAddress(address);
 
-    // Initialize unused fields.
-    lease->t1_ = 0;                             // Not saved
-    lease->t2_ = 0;                             // Not saved
-
     // Set other parameters.  For historical reasons, address 0 is not used.
     if (address == straddress6_[0]) {
         lease->type_ = leasetype6_[0];
@@ -216,7 +225,9 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         lease->duid_ = DuidPtr(new DUID(vector<uint8_t>(8, 0x77)));
         lease->preferred_lft_ = 900;
         lease->valid_lft_ = 8677;
+        lease->old_valid_lft_ = 8677;
         lease->cltt_ = 168256;
+        lease->old_cltt_ = 168256;
         lease->subnet_id_ = 23;
         lease->fqdn_fwd_ = true;
         lease->fqdn_rev_ = true;
@@ -229,7 +240,9 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         lease->duid_ = DuidPtr(new DUID(vector<uint8_t>(8, 0x42)));
         lease->preferred_lft_ = 3600;
         lease->valid_lft_ = 3677;
+        lease->old_valid_lft_ = 3677;
         lease->cltt_ = 123456;
+        lease->old_cltt_ = 123456;
         lease->subnet_id_ = 73;
         lease->fqdn_fwd_ = false;
         lease->fqdn_rev_ = true;
@@ -242,7 +255,9 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         lease->duid_ = DuidPtr(new DUID(vector<uint8_t>(8, 0x3a)));
         lease->preferred_lft_ = 1800;
         lease->valid_lft_ = 5412;
+        lease->old_valid_lft_ = 5412;
         lease->cltt_ = 234567;
+        lease->old_cltt_ = 234567;
         lease->subnet_id_ = 73;                     // Same as lease 1
         lease->fqdn_fwd_ = false;
         lease->fqdn_rev_ = false;
@@ -261,10 +276,12 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         // The times used in the next tests are deliberately restricted - we
         // should be able to cope with valid lifetimes up to 0xffffffff.
         //  However, this will lead to overflows.
-        // @TODO: test overflow conditions when code has been fixed
+        // @TODO: test overflow conditions when code has been fixed.
         lease->preferred_lft_ = 7200;
         lease->valid_lft_ = 7000;
+        lease->old_valid_lft_ = 7000;
         lease->cltt_ = 234567;
+        lease->old_cltt_ = 234567;
         lease->subnet_id_ = 37;
         lease->fqdn_fwd_ = true;
         lease->fqdn_rev_ = false;
@@ -278,7 +295,9 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         lease->duid_ = DuidPtr(new DUID(vector<uint8_t>(8, 0x42)));
         lease->preferred_lft_ = 4800;
         lease->valid_lft_ = 7736;
+        lease->old_valid_lft_ = 7736;
         lease->cltt_ = 222456;
+        lease->old_cltt_ = 222456;
         lease->subnet_id_ = 671;
         lease->fqdn_fwd_ = true;
         lease->fqdn_rev_ = true;
@@ -293,7 +312,9 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         // Same as lease 4
         lease->preferred_lft_ = 5400;
         lease->valid_lft_ = 7832;
+        lease->old_valid_lft_ = 7832;
         lease->cltt_ = 227476;
+        lease->old_cltt_ = 227476;
         lease->subnet_id_ = 175;
         lease->fqdn_fwd_ = false;
         lease->fqdn_rev_ = true;
@@ -309,7 +330,9 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         // Same as lease 4
         lease->preferred_lft_ = 5400;
         lease->valid_lft_ = 1832;
+        lease->old_valid_lft_ = 1832;
         lease->cltt_ = 627476;
+        lease->old_cltt_ = 627476;
         lease->subnet_id_ = 112;
         lease->fqdn_fwd_ = false;
         lease->fqdn_rev_ = true;
@@ -323,7 +346,9 @@ GenericLeaseMgrTest::initializeLease6(std::string address) {
         lease->duid_ = DuidPtr(new DUID(vector<uint8_t>(8, 0xe5)));
         lease->preferred_lft_ = 5600;
         lease->valid_lft_ = 7975;
+        lease->old_valid_lft_ = 7975;
         lease->cltt_ = 213876;
+        lease->old_cltt_ = 213876;
         lease->subnet_id_ = 19;
         lease->fqdn_fwd_ = false;
         lease->fqdn_rev_ = true;
@@ -500,10 +525,10 @@ GenericLeaseMgrTest::testLease4NullClientId() {
 
     // Delete a lease, check that it's gone, and that we can't delete it
     // a second time.
-    EXPECT_TRUE(lmptr_->deleteLease(ioaddress4_[1]));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[1]));
     l_returned = lmptr_->getLease4(ioaddress4_[1]);
     EXPECT_FALSE(l_returned);
-    EXPECT_FALSE(lmptr_->deleteLease(ioaddress4_[1]));
+    EXPECT_FALSE(lmptr_->deleteLease(leases[1]));
 
     // Check that the second address is still there.
     l_returned = lmptr_->getLease4(ioaddress4_[2]);
@@ -574,6 +599,7 @@ GenericLeaseMgrTest::testGetLease4HWAddr2() {
 
     // Check that an empty vector is valid
     EXPECT_TRUE(leases[7]->hwaddr_->hwaddr_.empty());
+    EXPECT_FALSE(leases[7]->client_id_->getClientId().empty());
     returned = lmptr_->getLease4(*leases[7]->hwaddr_);
     ASSERT_EQ(1, returned.size());
     detailCompareLease(leases[7], *returned.begin());
@@ -619,7 +645,7 @@ GenericLeaseMgrTest::testGetLease4ClientIdHWAddrSubnetId() {
 }
 
 void
-GenericLeaseMgrTest::testAddGetDelete6(bool check_t1_t2) {
+GenericLeaseMgrTest::testAddGetDelete6() {
     const std::string addr234("2001:db8:1::234");
     const std::string addr456("2001:db8:1::456");
     const std::string addr789("2001:db8:1::789");
@@ -632,8 +658,8 @@ GenericLeaseMgrTest::testAddGetDelete6(bool check_t1_t2) {
 
     SubnetID subnet_id = 8; // just another number
 
-    Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid, iaid, 100, 200, 50,
-                               80, subnet_id));
+    Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid, iaid, 100, 200,
+                               subnet_id));
 
     EXPECT_TRUE(lmptr_->addLease(lease));
 
@@ -656,15 +682,6 @@ GenericLeaseMgrTest::testAddGetDelete6(bool check_t1_t2) {
     EXPECT_EQ(Lease::TYPE_NA, x->type_);
     EXPECT_EQ(100, x->preferred_lft_);
     EXPECT_EQ(200, x->valid_lft_);
-    if (check_t1_t2) {
-        // Backend supports T1,T2 storage: check the values
-        EXPECT_EQ(50, x->t1_);
-        EXPECT_EQ(80, x->t2_);
-    } else {
-        // Backend does not support storing, check that it returns 0s.
-        EXPECT_EQ(0, x->t1_);
-        EXPECT_EQ(0, x->t2_);
-    }
 
     // Test getLease6(duid, iaid, subnet_id) - positive case
     Lease6Ptr y = lmptr_->getLease6(Lease::TYPE_NA, *duid, iaid, subnet_id);
@@ -688,10 +705,13 @@ GenericLeaseMgrTest::testAddGetDelete6(bool check_t1_t2) {
     EXPECT_FALSE(y);
 
     // should return false - there's no such address
-    EXPECT_FALSE(lmptr_->deleteLease(IOAddress(addr789)));
+    Lease6Ptr non_existing_lease(new Lease6(Lease::TYPE_NA, IOAddress(addr789),
+                                            duid, iaid, 100, 200,
+                                            subnet_id));
+    EXPECT_FALSE(lmptr_->deleteLease(non_existing_lease));
 
     // this one should succeed
-    EXPECT_TRUE(lmptr_->deleteLease(IOAddress(addr456)));
+    EXPECT_TRUE(lmptr_->deleteLease(x));
 
     // after the lease is deleted, it should really be gone
     x = lmptr_->getLease6(Lease::TYPE_NA, IOAddress(addr456));
@@ -721,6 +741,23 @@ GenericLeaseMgrTest::testMaxDate4() {
     // Set valid_lft_ to 0, which should make expire time small enough to
     // store and try again.
     lease->valid_lft_ = 0;
+    EXPECT_TRUE(lmptr_->addLease(leases[1]));
+    Lease4Ptr l_returned = lmptr_->getLease4(ioaddress4_[1]);
+    ASSERT_TRUE(l_returned);
+    detailCompareLease(leases[1], l_returned);
+}
+
+void
+GenericLeaseMgrTest::testInfiniteLifeTime4() {
+    // Get the leases to be used for the test.
+    vector<Lease4Ptr> leases = createLeases4();
+    Lease4Ptr lease = leases[1];
+
+    // Set valid_lft_ to infinite, cllt_ to now.
+    lease->valid_lft_ = Lease::INFINITY_LFT;
+    lease->cltt_ = time(NULL);
+
+    // Insert should not throw.
     EXPECT_TRUE(lmptr_->addLease(leases[1]));
     Lease4Ptr l_returned = lmptr_->getLease4(ioaddress4_[1]);
     ASSERT_TRUE(l_returned);
@@ -760,10 +797,10 @@ GenericLeaseMgrTest::testBasicLease4() {
 
     // Delete a lease, check that it's gone, and that we can't delete it
     // a second time.
-    EXPECT_TRUE(lmptr_->deleteLease(ioaddress4_[1]));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[1]));
     l_returned = lmptr_->getLease4(ioaddress4_[1]);
     EXPECT_FALSE(l_returned);
-    EXPECT_FALSE(lmptr_->deleteLease(ioaddress4_[1]));
+    EXPECT_FALSE(lmptr_->deleteLease(leases[1]));
 
     // Check that the second address is still there.
     l_returned = lmptr_->getLease4(ioaddress4_[2]);
@@ -838,10 +875,10 @@ GenericLeaseMgrTest::testBasicLease6() {
 
     // Delete a lease, check that it's gone, and that we can't delete it
     // a second time.
-    EXPECT_TRUE(lmptr_->deleteLease(ioaddress6_[1]));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[1]));
     l_returned = lmptr_->getLease6(leasetype6_[1], ioaddress6_[1]);
     EXPECT_FALSE(l_returned);
-    EXPECT_FALSE(lmptr_->deleteLease(ioaddress6_[1]));
+    EXPECT_FALSE(lmptr_->deleteLease(leases[1]));
 
     // Check that the second address is still there.
     l_returned = lmptr_->getLease6(leasetype6_[2], ioaddress6_[2]);
@@ -892,6 +929,23 @@ GenericLeaseMgrTest::testMaxDate6() {
     // Set valid_lft_ to 0, which should make expire time small enough to
     // store and try again.
     lease->valid_lft_ = 0;
+    EXPECT_TRUE(lmptr_->addLease(leases[1]));
+    Lease6Ptr l_returned = lmptr_->getLease6(leasetype6_[1], ioaddress6_[1]);
+    ASSERT_TRUE(l_returned);
+    detailCompareLease(leases[1], l_returned);
+}
+
+void
+GenericLeaseMgrTest::testInfiniteLifeTime6() {
+    // Get the leases to be used for the test.
+    vector<Lease6Ptr> leases = createLeases6();
+    Lease6Ptr lease = leases[1];
+
+    // Set valid_lft_ to infinite, cllt_ to now.
+    lease->valid_lft_ = Lease::INFINITY_LFT;
+    lease->cltt_ = time(NULL);
+
+    // Insert should not throw.
     EXPECT_TRUE(lmptr_->addLease(leases[1]));
     Lease6Ptr l_returned = lmptr_->getLease6(leasetype6_[1], ioaddress6_[1]);
     ASSERT_TRUE(l_returned);
@@ -1003,7 +1057,7 @@ GenericLeaseMgrTest::testLease4InvalidHostname() {
 
     // Let's delete the lease, so as we can try to add it again with
     // invalid hostname.
-    EXPECT_TRUE(lmptr_->deleteLease(ioaddress4_[1]));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[1]));
 
     // Create a hostname with 256 characters. It should not be accepted.
     leases[1]->hostname_.assign(256, 'a');
@@ -1026,7 +1080,7 @@ GenericLeaseMgrTest::testLease6InvalidHostname() {
 
     // Let's delete the lease, so as we can try to add it again with
     // invalid hostname.
-    EXPECT_TRUE(lmptr_->deleteLease(ioaddress6_[1]));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[1]));
 
     // Create a hostname with 256 characters. It should not be accepted.
     leases[1]->hostname_.assign(256, 'a');
@@ -1048,7 +1102,7 @@ GenericLeaseMgrTest::testGetLease4HWAddrSize() {
 
         ASSERT_EQ(1, returned.size());
         detailCompareLease(leases[1], *returned.begin());
-        (void) lmptr_->deleteLease(leases[1]->addr_);
+        (void) lmptr_->deleteLease(leases[1]);
     }
 
     // Database should not let us add one that is too big
@@ -1100,7 +1154,7 @@ GenericLeaseMgrTest::testGetLease4HWAddrSubnetId() {
     // "multiple records" exception. (We expect there to be only one record
     // with that combination, so getting them via getLeaseX() (as opposed
     // to getLeaseXCollection() should throw an exception.)
-    EXPECT_TRUE(lmptr_->deleteLease(leases[2]->addr_));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[2]));
     leases[1]->addr_ = leases[2]->addr_;
     EXPECT_TRUE(lmptr_->addLease(leases[1]));
     /// @todo: Simply use HWAddr directly once 2589 is implemented
@@ -1125,7 +1179,7 @@ GenericLeaseMgrTest::testGetLease4HWAddrSubnetIdSize() {
                                                leases[1]->subnet_id_);
         ASSERT_TRUE(returned);
         detailCompareLease(leases[1], returned);
-        (void) lmptr_->deleteLease(leases[1]->addr_);
+        (void) lmptr_->deleteLease(leases[1]);
     }
 
     // Database should not let us add one that is too big
@@ -1176,13 +1230,6 @@ GenericLeaseMgrTest::testGetLease4ClientId2() {
     ASSERT_EQ(1, returned.size());
     detailCompareLease(leases[3], *returned.begin());
 
-    // Check that client-id is NULL
-    EXPECT_FALSE(leases[7]->client_id_);
-    HWAddr tmp(*leases[7]->hwaddr_);
-    returned = lmptr_->getLease4(tmp);
-    ASSERT_EQ(1, returned.size());
-    detailCompareLease(leases[7], *returned.begin());
-
     // Try to get something with invalid client ID
     const uint8_t invalid_data[] = {0, 0, 0};
     ClientId invalid(invalid_data, sizeof(invalid_data));
@@ -1212,7 +1259,7 @@ GenericLeaseMgrTest::testGetLease4ClientIdSize() {
         Lease4Collection returned = lmptr_->getLease4(*leases[1]->client_id_);
         ASSERT_EQ(returned.size(), 1u);
         detailCompareLease(leases[1], *returned.begin());
-        (void) lmptr_->deleteLease(leases[1]->addr_);
+        (void) lmptr_->deleteLease(leases[1]);
     }
 
     // Don't bother to check client IDs longer than the maximum -
@@ -1266,6 +1313,29 @@ GenericLeaseMgrTest::testGetLeases4SubnetId() {
     // lease belongs to.
     Lease4Collection returned = lmptr_->getLeases4(leases[1]->subnet_id_);
     ASSERT_EQ(2, returned.size());
+}
+
+void
+GenericLeaseMgrTest::testGetLeases4Hostname() {
+    // Get the leases to be used for the test and add to the database.
+    vector<Lease4Ptr> leases = createLeases4();
+    for (size_t i = 0; i < leases.size(); ++i) {
+        EXPECT_TRUE(lmptr_->addLease(leases[i]));
+    }
+
+    // There should be no lease for hostname foobar.
+    Lease4Collection returned = lmptr_->getLeases4(string("foobar"));
+    EXPECT_TRUE(returned.empty());
+
+    // There should be exactly 4 leases for the hostname of the second lease.
+    ASSERT_FALSE(leases[1]->hostname_.empty());
+    returned = lmptr_->getLeases4(leases[1]->hostname_);
+    EXPECT_EQ(4, returned.size());
+
+    // And 3 for the forth lease.
+    ASSERT_FALSE(leases[3]->hostname_.empty());
+    returned = lmptr_->getLeases4(leases[3]->hostname_);
+    EXPECT_EQ(3, returned.size());
 }
 
 void
@@ -1358,6 +1428,34 @@ GenericLeaseMgrTest::testGetLeases6SubnetId() {
 }
 
 void
+GenericLeaseMgrTest::testGetLeases6Hostname() {
+    // Get the leases to be used for the test and add to the database.
+    vector<Lease6Ptr> leases = createLeases6();
+    for (size_t i = 0; i < leases.size(); ++i) {
+        EXPECT_TRUE(lmptr_->addLease(leases[i]));
+    }
+
+    // There should be no lease for hostname foobar.
+    Lease6Collection returned = lmptr_->getLeases6(string("foobar"));
+    EXPECT_TRUE(returned.empty());
+
+    // There should be exactly 4 leases for the hostname of the second lease.
+    ASSERT_FALSE(leases[1]->hostname_.empty());
+    returned = lmptr_->getLeases6(leases[1]->hostname_);
+    EXPECT_EQ(4, returned.size());
+
+    // One for the fifth lease.
+    ASSERT_FALSE(leases[4]->hostname_.empty());
+    returned = lmptr_->getLeases6(leases[4]->hostname_);
+    EXPECT_EQ(1, returned.size());
+
+    // And 3 for the sixth lease.
+    ASSERT_FALSE(leases[5]->hostname_.empty());
+    returned = lmptr_->getLeases6(leases[5]->hostname_);
+    EXPECT_EQ(3, returned.size());
+}
+
+void
 GenericLeaseMgrTest::testGetLeases6() {
     // Get the leases to be used for the test and add to the database
     vector<Lease6Ptr> leases = createLeases6();
@@ -1421,7 +1519,6 @@ GenericLeaseMgrTest::testGetLeases6Paged() {
     // Only IPv6 address can be used.
     EXPECT_THROW(lmptr_->getLeases6(IOAddress("192.0.2.0"), LeasePageSize(3)),
                  InvalidAddressFamily);
-                 
 }
 
 void
@@ -1489,7 +1586,7 @@ GenericLeaseMgrTest::testGetLeases6DuidSize() {
                                                        leases[1]->iaid_);
         ASSERT_EQ(1, returned.size());
         detailCompareLease(leases[1], *returned.begin());
-        (void) lmptr_->deleteLease(leases[1]->addr_);
+        (void) lmptr_->deleteLease(leases[1]);
     }
 
     // Don't bother to check DUIDs longer than the maximum - these cannot be
@@ -1504,9 +1601,6 @@ GenericLeaseMgrTest::testLease6LeaseTypeCheck() {
 
     DuidPtr duid(new DUID(vector<uint8_t>(8, 0x77)));
 
-    // Initialize unused fields.
-    empty_lease->t1_ = 0;                             // Not saved
-    empty_lease->t2_ = 0;                             // Not saved
     empty_lease->iaid_ = 142;
     empty_lease->duid_ = DuidPtr(new DUID(*duid));
     empty_lease->subnet_id_ = 23;
@@ -1589,6 +1683,39 @@ GenericLeaseMgrTest::testLease6LeaseTypeCheck() {
 }
 
 void
+GenericLeaseMgrTest::testLease6LargeIaidCheck() {
+
+    DuidPtr duid(new DUID(vector<uint8_t>(8, 0x77)));
+    IOAddress addr(std::string("2001:db8:1::111"));
+    SubnetID subnet_id = 8; // random number
+
+    // Use a value we know is larger than 32-bit signed max.
+    uint32_t large_iaid = 0xFFFFFFFE;
+
+    // We should be able to add with no problems.
+    Lease6Ptr lease(new Lease6(Lease::TYPE_NA, addr, duid, large_iaid,
+                               100, 200, subnet_id));
+    ASSERT_TRUE(lmptr_->addLease(lease));
+
+    // Sanity check that we added it.
+    Lease6Ptr found_lease = lmptr_->getLease6(Lease::TYPE_NA, addr);
+    ASSERT_TRUE(found_lease);
+    EXPECT_TRUE(*found_lease == *lease);
+
+    // Verify getLease6() duid/iaid finds it.
+    found_lease = lmptr_->getLease6(Lease::TYPE_NA, *duid, large_iaid, subnet_id);
+    ASSERT_TRUE(found_lease);
+    EXPECT_TRUE(*found_lease == *lease);
+
+    // Verify getLeases6() duid/iaid finds it.
+    Lease6Collection found_leases = lmptr_->getLeases6(Lease::TYPE_NA,
+                                                       *duid, large_iaid);
+    // We should match the lease.
+    ASSERT_EQ(1, found_leases.size());
+    EXPECT_TRUE(*(found_leases[0]) == *lease);
+}
+
+void
 GenericLeaseMgrTest::testGetLease6DuidIaidSubnetId() {
     // Get the leases to be used for the test and add them to the database.
     vector<Lease6Ptr> leases = createLeases6();
@@ -1639,40 +1766,40 @@ GenericLeaseMgrTest::testGetLeases6Duid() {
 
     SubnetID subnet_id = 8; // radom number
 
-    Lease6Ptr lease1(new Lease6(Lease::TYPE_NA, addr1, duid1, iaid, 100, 200, 50,
-                               80, subnet_id));
-    Lease6Ptr lease2(new Lease6(Lease::TYPE_NA, addr2, duid2, iaid, 100, 200, 50,
-                               80, subnet_id));
-    Lease6Ptr lease3(new Lease6(Lease::TYPE_PD, addr3, duid3, iaid, 100, 200, 50,
-                               80, subnet_id, HWAddrPtr(), 64));
+    Lease6Ptr lease1(new Lease6(Lease::TYPE_NA, addr1, duid1, iaid, 100, 200,
+                                subnet_id));
+    Lease6Ptr lease2(new Lease6(Lease::TYPE_NA, addr2, duid2, iaid, 100, 200,
+                                subnet_id));
+    Lease6Ptr lease3(new Lease6(Lease::TYPE_PD, addr3, duid3, iaid, 100, 200,
+                                subnet_id, HWAddrPtr(), 64));
 
     EXPECT_TRUE(lmptr_->addLease(lease1));
     EXPECT_TRUE(lmptr_->addLease(lease2));
     EXPECT_TRUE(lmptr_->addLease(lease3));
-    
+
     Lease6Collection returned1 = lmptr_->getLeases6(*(lease1->duid_));
     Lease6Collection returned2 = lmptr_->getLeases6(*(lease2->duid_));
     Lease6Collection returned3 = lmptr_->getLeases6(*(lease3->duid_));
-  
-    //verify if the returned lease mathces 
+
+    //verify if the returned lease mathces
     EXPECT_EQ(returned1.size(), 1);
     EXPECT_EQ(returned2.size(), 1);
     EXPECT_EQ(returned3.size(), 1);
 
     //verify that the returned lease are same
-    EXPECT_TRUE(returned1[0]->addr_ == lease1->addr_); 
+    EXPECT_TRUE(returned1[0]->addr_ == lease1->addr_);
     EXPECT_TRUE(returned2[0]->addr_ == lease2->addr_);
     EXPECT_TRUE(returned3[0]->addr_ == lease3->addr_);
-    
+
     //now verify we return empty for a lease that has not been stored
     returned3 = lmptr_->getLeases6(*duid4);
     EXPECT_TRUE(returned3.empty());
-   
+
     //clean up
-    (void) lmptr_->deleteLease(addr1);
-    (void) lmptr_->deleteLease(addr2);
-    (void) lmptr_->deleteLease(addr3);
-   
+    (void) lmptr_->deleteLease(lease1);
+    (void) lmptr_->deleteLease(lease2);
+    (void) lmptr_->deleteLease(lease3);
+
     //now verify we return empty for a lease that has not been stored
     returned3 = lmptr_->getLeases6(*duid4);
     EXPECT_TRUE(returned3.empty());
@@ -1702,7 +1829,7 @@ GenericLeaseMgrTest::testGetLease6DuidIaidSubnetIdSize() {
                                                leases[1]->subnet_id_);
         ASSERT_TRUE(returned);
         detailCompareLease(leases[1], returned);
-        (void) lmptr_->deleteLease(leases[1]->addr_);
+        (void) lmptr_->deleteLease(leases[1]);
     }
 
     // Don't bother to check DUIDs longer than the maximum - these cannot be
@@ -1717,6 +1844,11 @@ GenericLeaseMgrTest::testUpdateLease4() {
     for (size_t i = 0; i < leases.size(); ++i) {
         EXPECT_TRUE(lmptr_->addLease(leases[i]));
     }
+    lmptr_->commit();
+
+    Lease4Ptr l_returned = lmptr_->getLease4(ioaddress4_[1]);
+    ASSERT_TRUE(l_returned);
+    detailCompareLease(leases[1], l_returned);
 
     // Modify some fields in lease 1 (not the address) and update it.
     ++leases[1]->subnet_id_;
@@ -1728,7 +1860,7 @@ GenericLeaseMgrTest::testUpdateLease4() {
     lmptr_->updateLease4(leases[1]);
 
     // ... and check what is returned is what is expected.
-    Lease4Ptr l_returned = lmptr_->getLease4(ioaddress4_[1]);
+    l_returned = lmptr_->getLease4(ioaddress4_[1]);
     ASSERT_TRUE(l_returned);
     detailCompareLease(leases[1], l_returned);
 
@@ -1757,8 +1889,43 @@ GenericLeaseMgrTest::testUpdateLease4() {
     EXPECT_THROW(lmptr_->updateLease4(leases[1]), isc::db::DbOperationError);
 
     // Try updating a lease not in the database.
-    lmptr_->deleteLease(ioaddress4_[2]);
+    lmptr_->deleteLease(leases[2]);
     EXPECT_THROW(lmptr_->updateLease4(leases[2]), isc::dhcp::NoSuchLease);
+}
+
+void
+GenericLeaseMgrTest::testConcurrentUpdateLease4() {
+    // Get the leases to be used for the test and add them to the database.
+    vector<Lease4Ptr> leases = createLeases4();
+    for (size_t i = 0; i < leases.size(); ++i) {
+        EXPECT_TRUE(lmptr_->addLease(leases[i]));
+    }
+    lmptr_->commit();
+
+    Lease4Ptr l_returned = lmptr_->getLease4(ioaddress4_[1]);
+    ASSERT_TRUE(l_returned);
+    detailCompareLease(leases[1], l_returned);
+
+    // Save initial lease to be used for concurrent update
+    Lease4Ptr initialLease = boost::make_shared<Lease4>(*leases[1]);
+    detailCompareLease(leases[1], initialLease);
+
+    // Modify some fields in lease 1 (not the address) and update it.
+    ++leases[1]->subnet_id_;
+    leases[1]->valid_lft_ *= 2;
+    leases[1]->hostname_ = "modified.hostname.";
+    leases[1]->fqdn_fwd_ = !leases[1]->fqdn_fwd_;
+    leases[1]->fqdn_rev_ = !leases[1]->fqdn_rev_;;
+    leases[1]->setContext(Element::fromJSON("{ \"foobar\": 1234 }"));
+    lmptr_->updateLease4(leases[1]);
+
+    // ... and check what is returned is what is expected.
+    l_returned = lmptr_->getLease4(ioaddress4_[1]);
+    ASSERT_TRUE(l_returned);
+    detailCompareLease(leases[1], l_returned);
+
+    // Concurrently updating lease should fail
+    EXPECT_THROW(lmptr_->updateLease4(initialLease), isc::dhcp::NoSuchLease);
 }
 
 void
@@ -1784,7 +1951,6 @@ GenericLeaseMgrTest::testUpdateLease6() {
     leases[1]->fqdn_rev_ = !leases[1]->fqdn_rev_;;
     leases[1]->setContext(Element::fromJSON("{ \"foobar\": 1234 }"));
     lmptr_->updateLease6(leases[1]);
-    lmptr_->commit();
 
     // ... and check what is returned is what is expected.
     l_returned.reset();
@@ -1821,6 +1987,44 @@ GenericLeaseMgrTest::testUpdateLease6() {
 }
 
 void
+GenericLeaseMgrTest::testConcurrentUpdateLease6() {
+    // Get the leases to be used for the test.
+    vector<Lease6Ptr> leases = createLeases6();
+    ASSERT_LE(3, leases.size());    // Expect to access leases 0 through 2
+
+    // Add a lease to the database and check that the lease is there.
+    EXPECT_TRUE(lmptr_->addLease(leases[1]));
+    lmptr_->commit();
+
+    Lease6Ptr l_returned = lmptr_->getLease6(leasetype6_[1], ioaddress6_[1]);
+    ASSERT_TRUE(l_returned);
+    detailCompareLease(leases[1], l_returned);
+
+    // Save initial lease to be used for concurrent update
+    Lease6Ptr initialLease = boost::make_shared<Lease6>(*leases[1]);
+    detailCompareLease(leases[1], initialLease);
+
+    // Modify some fields in lease 1 (not the address) and update it.
+    ++leases[1]->iaid_;
+    leases[1]->type_ = Lease::TYPE_PD;
+    leases[1]->valid_lft_ *= 2;
+    leases[1]->hostname_ = "modified.hostname.v6.";
+    leases[1]->fqdn_fwd_ = !leases[1]->fqdn_fwd_;
+    leases[1]->fqdn_rev_ = !leases[1]->fqdn_rev_;;
+    leases[1]->setContext(Element::fromJSON("{ \"foobar\": 1234 }"));
+    lmptr_->updateLease6(leases[1]);
+
+    // ... and check what is returned is what is expected.
+    l_returned.reset();
+    l_returned = lmptr_->getLease6(Lease::TYPE_PD, ioaddress6_[1]);
+    ASSERT_TRUE(l_returned);
+    detailCompareLease(leases[1], l_returned);
+
+    // Concurrently updating lease should fail
+    EXPECT_THROW(lmptr_->updateLease6(initialLease), isc::dhcp::NoSuchLease);
+}
+
+void
 GenericLeaseMgrTest::testRecreateLease4() {
     // Create a lease.
     std::vector<Lease4Ptr> leases = createLeases4();
@@ -1837,7 +2041,7 @@ GenericLeaseMgrTest::testRecreateLease4() {
     detailCompareLease(lease, l_returned);
 
     // Delete a lease, check that it's gone.
-    EXPECT_TRUE(lmptr_->deleteLease(ioaddress4_[0]));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[0]));
     EXPECT_FALSE(lmptr_->getLease4(ioaddress4_[0]));
 
     // Modify the copy of the lease. Increasing values or negating them ensures
@@ -1877,7 +2081,7 @@ GenericLeaseMgrTest::testRecreateLease6() {
     detailCompareLease(lease, l_returned);
 
     // Delete a lease, check that it's gone.
-    EXPECT_TRUE(lmptr_->deleteLease(ioaddress6_[0]));
+    EXPECT_TRUE(lmptr_->deleteLease(leases[0]));
     EXPECT_FALSE(lmptr_->getLease6(Lease::TYPE_NA, ioaddress6_[0]));
 
     // Modify the copy of the lease. Increasing values or negating them ensures
@@ -2158,6 +2362,48 @@ GenericLeaseMgrTest::testGetExpiredLeases6() {
         int index = static_cast<int>(std::distance(expired_leases.begin(), lease));
         EXPECT_EQ(saved_expired_leases[2 * index]->addr_, (*lease)->addr_);
     }
+}
+
+void
+GenericLeaseMgrTest::testInfiniteAreNotExpired4() {
+    // Get the leases to be used for the test.
+    vector<Lease4Ptr> leases = createLeases4();
+    Lease4Ptr lease = leases[1];
+
+    // Set valid_lft_ to infinite. Leave the small cltt even it won't happen
+    // in the real world to catch more possible issues.
+    lease->valid_lft_ = Lease::INFINITY_LFT;
+
+    // Add it to the database.
+    ASSERT_TRUE(lmptr_->addLease(leases[1]));
+
+    // Retrieve at most 10 expired leases.
+    Lease4Collection expired_leases;
+    ASSERT_NO_THROW(lmptr_->getExpiredLeases4(expired_leases, 10));
+
+    // No lease should be returned.
+    EXPECT_EQ(0, expired_leases.size());
+}
+
+void
+GenericLeaseMgrTest::testInfiniteAreNotExpired6() {
+    // Get the leases to be used for the test.
+    vector<Lease6Ptr> leases = createLeases6();
+    Lease6Ptr lease = leases[1];
+
+    // Set valid_lft_ to infinite. Leave the small cltt even it won't happen
+    // in the real world to catch more possible issues.
+    lease->valid_lft_ = Lease::INFINITY_LFT;
+
+    // Add it to the database.
+    ASSERT_TRUE(lmptr_->addLease(leases[1]));
+
+    // Retrieve at most 10 expired leases.
+    Lease6Collection expired_leases;
+    ASSERT_NO_THROW(lmptr_->getExpiredLeases6(expired_leases, 10));
+
+    // No lease should be returned.
+    EXPECT_EQ(0, expired_leases.size());
 }
 
 void
@@ -2693,7 +2939,7 @@ GenericLeaseMgrTest::checkLeaseStats(const StatValMapList& expectedStats) {
     checkStat("reclaimed-declined-addresses", reclaimed_declined_addresses);
 }
 
-void
+Lease4Ptr
 GenericLeaseMgrTest::makeLease4(const std::string& address,
                                 const SubnetID& subnet_id,
                                 const uint32_t state) {
@@ -2712,10 +2958,11 @@ GenericLeaseMgrTest::makeLease4(const std::string& address,
     lease->cltt_ = 168256;
     lease->subnet_id_ = subnet_id;
     lease->state_ = state;
-    ASSERT_TRUE(lmptr_->addLease(lease));
+    EXPECT_TRUE(lmptr_->addLease(lease));
+    return lease;
 }
 
-void
+Lease6Ptr
 GenericLeaseMgrTest::makeLease6(const Lease::Type& type,
                                 const std::string& address,
                                 uint8_t prefix_len,
@@ -2728,10 +2975,11 @@ GenericLeaseMgrTest::makeLease6(const Lease::Type& type,
     bytes.push_back(prefix_len);
 
     Lease6Ptr lease(new Lease6(type, addr, DuidPtr(new DUID(bytes)), 77,
-                               16000, 24000, 0, 0, subnet_id, HWAddrPtr(),
+                               16000, 24000, subnet_id, HWAddrPtr(),
                                prefix_len));
     lease->state_ = state;
-    ASSERT_TRUE(lmptr_->addLease(lease));
+    EXPECT_TRUE(lmptr_->addLease(lease));
+    return lease;
 }
 
 void
@@ -2783,10 +3031,10 @@ GenericLeaseMgrTest::testRecountLeaseStats4() {
     int subnet_id = 1;
 
     // Insert one lease in default state, i.e. assigned.
-    makeLease4("192.0.1.1", subnet_id);
+    Lease4Ptr lease1 = makeLease4("192.0.1.1", subnet_id);
 
     // Insert one lease in declined state.
-    makeLease4("192.0.1.2", subnet_id, Lease::STATE_DECLINED);
+    Lease4Ptr lease2 = makeLease4("192.0.1.2", subnet_id, Lease::STATE_DECLINED);
 
     // Insert one lease in the expired state.
     makeLease4("192.0.1.3", subnet_id, Lease::STATE_EXPIRED_RECLAIMED);
@@ -2814,10 +3062,10 @@ GenericLeaseMgrTest::testRecountLeaseStats4() {
     ASSERT_NO_FATAL_FAILURE(checkLeaseStats(expectedStats));
 
     // Delete some leases from subnet, and update the expected stats.
-    EXPECT_TRUE(lmptr_->deleteLease(IOAddress("192.0.1.1")));
+    EXPECT_TRUE(lmptr_->deleteLease(lease1));
     expectedStats[0]["assigned-addresses"] = 1;
 
-    EXPECT_TRUE(lmptr_->deleteLease(IOAddress("192.0.1.2")));
+    EXPECT_TRUE(lmptr_->deleteLease(lease2));
     expectedStats[0]["declined-addresses"] = 0;
 
     // Recount the stats.
@@ -2890,7 +3138,7 @@ GenericLeaseMgrTest::testRecountLeaseStats6() {
 
     // Insert three assigned NAs.
     makeLease6(Lease::TYPE_NA, "3001:1::1", 0, subnet_id);
-    makeLease6(Lease::TYPE_NA, "3001:1::2", 0, subnet_id);
+    Lease6Ptr lease2 = makeLease6(Lease::TYPE_NA, "3001:1::2", 0, subnet_id);
     makeLease6(Lease::TYPE_NA, "3001:1::3", 0, subnet_id);
     expectedStats[subnet_id - 1]["assigned-nas"] = 3;
 
@@ -2925,7 +3173,7 @@ GenericLeaseMgrTest::testRecountLeaseStats6() {
     expectedStats[subnet_id - 1]["assigned-nas"] = 2;
 
     // Insert one declined NA.
-    makeLease6(Lease::TYPE_NA, "2001:db81::3", 0, subnet_id,
+    Lease6Ptr lease3 = makeLease6(Lease::TYPE_NA, "2001:db81::3", 0, subnet_id,
                Lease::STATE_DECLINED);
     expectedStats[subnet_id - 1]["declined-addresses"] = 1;
 
@@ -2936,10 +3184,10 @@ GenericLeaseMgrTest::testRecountLeaseStats6() {
     ASSERT_NO_FATAL_FAILURE(checkLeaseStats(expectedStats));
 
     // Delete some leases and update the expected stats.
-    EXPECT_TRUE(lmptr_->deleteLease(IOAddress("3001:1::2")));
+    EXPECT_TRUE(lmptr_->deleteLease(lease2));
     expectedStats[0]["assigned-nas"] = 2;
 
-    EXPECT_TRUE(lmptr_->deleteLease(IOAddress("2001:db81::3")));
+    EXPECT_TRUE(lmptr_->deleteLease(lease3));
     expectedStats[1]["declined-addresses"] = 0;
 
     // Recount the stats.
@@ -3374,6 +3622,6 @@ GenericLeaseMgrTest::testLeaseStatsQuery6() {
     }
 }
 
-}; // namespace test
-}; // namespace dhcp
-}; // namespace isc
+}  // namespace test
+}  // namespace dhcp
+}  // namespace isc

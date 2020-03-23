@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,6 +16,7 @@
 #include <dhcp6/dhcp6_log.h>
 #include <dhcp6/dhcp6_srv.h>
 #include <dhcp/iface_mgr.h>
+#include <dhcpsrv/cb_ctl_dhcp4.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/db_type.h>
@@ -64,6 +65,21 @@ using namespace isc::asiolink;
 using namespace isc::hooks;
 
 namespace {
+
+/// @brief Checks if specified directory exists.
+///
+/// @param dir_path Path to a directory.
+/// @throw BadValue If the directory does not exist or is not a directory.
+void dirExists(const string& dir_path) {
+    struct stat statbuf;
+    if (stat(dir_path.c_str(), &statbuf) < 0) {
+        isc_throw(BadValue, "Bad directory '" << dir_path
+                  << "': " << strerror(errno));
+    }
+    if ((statbuf.st_mode & S_IFMT) != S_IFDIR) {
+        isc_throw(BadValue, "'" << dir_path << "' is not a directory");
+    }
+}
 
 /// @brief Parser for list of RSOO options
 ///
@@ -148,6 +164,7 @@ public:
     ///
     /// Currently this method sets the following global parameters:
     ///
+    /// - data-directory
     /// - decline-probation-period
     /// - dhcp4o6-port
     /// - user-context
@@ -155,6 +172,12 @@ public:
     /// @throw DhcpConfigError if parameters are missing or
     /// or having incorrect values.
     void parse(const SrvConfigPtr& srv_config, const ConstElementPtr& global) {
+
+        // Set the data directory for server id file.
+        if (global->contains("data-directory")) {
+          CfgMgr::instance().setDataDir(getString(global, "data-directory"),
+                                        false);
+        }
 
         // Set the probation period for decline handling.
         uint32_t probation_period =
@@ -298,7 +321,7 @@ public:
                         continue;
                     }
 
-                    if (iface != (*subnet)->getIface()) {
+                    if ((*subnet)->getIface() != iface) {
                         isc_throw(DhcpConfigError, "Subnet " << (*subnet)->toText()
                                   << " has specified interface " << (*subnet)->getIface()
                                   << ", but earlier subnet in the same shared-network"
@@ -397,6 +420,7 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
     if (!check_only) {
         TimerMgr::instance()->unregisterTimers();
         server.discardPackets();
+        server.getCBControl()->reset();
     }
 
     // Revert any runtime option definitions configured so far and not committed.
@@ -422,12 +446,16 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
     // the parsers.  It is declared outside the loop so in case of error, the
     // name of the failing parser can be retrieved within the "catch" clause.
     ConfigPair config_pair;
+    SrvConfigPtr srv_config;
     try {
+        // Get the staging configuration.
+        srv_config = CfgMgr::instance().getStagingCfg();
 
-        SrvConfigPtr srv_config = CfgMgr::instance().getStagingCfg();
-
-        // Preserve all scalar global parameters
-        srv_config->extractConfiguredGlobals(config_set);
+        // Relocate dhcp-ddns parameters that have moved to global scope.
+        // Rule is that a global value overrides the dhcp-ddns value, so
+        // we need to do this before we apply global defaults.
+        // Note this is done for backward compatibilty.
+        srv_config->moveDdnsParams(mutable_cfg);
 
         // Set all default values if not specified by the user.
         SimpleParser6::setAllDefaults(mutable_cfg);
@@ -442,7 +470,7 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
         // We need definitions first
         ConstElementPtr option_defs = mutable_cfg->get("option-def");
         if (option_defs) {
-            OptionDefListParser parser;
+            OptionDefListParser parser(AF_INET6);
             CfgOptionDefPtr cfg_option_def = srv_config->getCfgOptionDef();
             parser.parse(cfg_option_def, option_defs);
         }
@@ -451,12 +479,21 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
         // early.
         Dhcp6ConfigParser global_parser;
 
+        // D2 client configuration.
+        D2ClientConfigPtr d2_client_cfg;
+
         BOOST_FOREACH(config_pair, values_map) {
             // In principle we could have the following code structured as a series
             // of long if else if clauses. That would give a marginal performance
             // boost, but would make the code less readable. We had serious issues
             // with the parser code debugability, so I decided to keep it as a
             // series of independent ifs.
+
+            if (config_pair.first == "data-directory") {
+                // Specific check for this global parameter.
+                dirExists(config_pair.second->stringValue());
+                continue;
+            }
 
             if (config_pair.first == "option-def") {
                 // This is converted to SimpleParser and is handled already above.
@@ -539,8 +576,7 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
                 // Apply defaults
                 D2ClientConfigParser::setAllDefaults(config_pair.second);
                 D2ClientConfigParser parser;
-                D2ClientConfigPtr cfg = parser.parse(config_pair.second);
-                srv_config->setD2ClientConfig(cfg);
+                d2_client_cfg = parser.parse(config_pair.second);
                 continue;
             }
 
@@ -625,20 +661,47 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
                 continue;
             }
 
-            // Timers are not used in the global scope. Their values are derived
-            // to specific subnets (see SimpleParser6::deriveParameters).
-            // decline-probation-period, dhcp4o6-port and user-context
-            // are handled in the global_parser.parse() which sets
-            // global parameters.
+            // As of Kea 1.6.0 we have two ways of inheriting the global parameters.
+            // The old method is used in JSON configuration parsers when the global
+            // parameters are derived into the subnets and shared networks and are
+            // being treated as explicitly specified. The new way used by the config
+            // backend is the dynamic inheritance whereby each subnet and shared
+            // network uses a callback function to return global parameter if it
+            // is not specified at lower level. This callback uses configured globals.
+            // We deliberately include both default and explicitly specified globals
+            // so as the callback can access the appropriate global values regardless
+            // whether they are set to a default or other value.
             if ( (config_pair.first == "renew-timer") ||
                  (config_pair.first == "rebind-timer") ||
                  (config_pair.first == "preferred-lifetime") ||
+                 (config_pair.first == "min-preferred-lifetime") ||
+                 (config_pair.first == "max-preferred-lifetime") ||
                  (config_pair.first == "valid-lifetime") ||
+                 (config_pair.first == "min-valid-lifetime") ||
+                 (config_pair.first == "max-valid-lifetime") ||
                  (config_pair.first == "decline-probation-period") ||
                  (config_pair.first == "dhcp4o6-port") ||
-                 (config_pair.first == "user-context") ||
                  (config_pair.first == "server-tag") ||
-                 (config_pair.first == "reservation-mode")) {
+                 (config_pair.first == "reservation-mode") ||
+                 (config_pair.first == "calculate-tee-times") ||
+                 (config_pair.first == "t1-percent") ||
+                 (config_pair.first == "t2-percent") ||
+                 (config_pair.first == "loggers") ||
+                 (config_pair.first == "hostname-char-set") ||
+                 (config_pair.first == "hostname-char-replacement") ||
+                 (config_pair.first == "ddns-send-updates") ||
+                 (config_pair.first == "ddns-override-no-update") ||
+                 (config_pair.first == "ddns-override-client-update") ||
+                 (config_pair.first == "ddns-replace-client-name") ||
+                 (config_pair.first == "ddns-generated-prefix") ||
+                 (config_pair.first == "ddns-qualifying-suffix")) {
+                CfgMgr::instance().getStagingCfg()->addConfiguredGlobal(config_pair.first,
+                                                                        config_pair.second);
+                continue;
+            }
+
+            // Nothing to configure for the user-context.
+            if (config_pair.first == "user-context") {
                 continue;
             }
 
@@ -661,6 +724,13 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
         // it checks that there is no conflict between plain subnets and those
         // defined as part of shared networks.
         global_parser.sanityChecks(srv_config, mutable_cfg);
+
+        // Validate D2 client confuguration.
+        if (!d2_client_cfg) {
+            d2_client_cfg.reset(new D2ClientConfig());
+        }
+        d2_client_cfg->validateContents();
+        srv_config->setD2ClientConfig(d2_client_cfg);
 
     } catch (const isc::Exception& ex) {
         LOG_ERROR(dhcp6_logger, DHCP6_PARSER_FAIL)
@@ -722,6 +792,33 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
             LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_EXCEPTION);
             answer = isc::config::createAnswer(2, "undefined configuration"
                                                " parsing error");
+            // An error occurred, so make sure to restore the original data.
+            rollback = true;
+        }
+    }
+
+    // Moved from the commit block to add the config backend indication.
+    if (!rollback) {
+        try {
+
+            // If there are config backends, fetch and merge into staging config
+            server.getCBControl()->databaseConfigFetch(srv_config,
+                                                       CBControlDHCPv6::FetchMode::FETCH_ALL);
+        }
+        catch (const isc::Exception& ex) {
+            std::ostringstream err;
+            err << "during update from config backend database: " << ex.what();
+            LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_FAIL).arg(err.str());
+            answer = isc::config::createAnswer(2, err.str());
+            // An error occurred, so make sure to restore the original data.
+            rollback = true;
+        } catch (...) {
+            // for things like bad_cast in boost::lexical_cast
+            std::ostringstream err;
+            err << "during update from config backend database: "
+                << "undefined configuration parsing error";
+            LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_FAIL).arg(err.str());
+            answer = isc::config::createAnswer(2, err.str());
             // An error occurred, so make sure to restore the original data.
             rollback = true;
         }

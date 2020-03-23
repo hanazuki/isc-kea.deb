@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,15 +38,29 @@ public:
     static size_t deriveParameters(isc::data::ElementPtr global);
 
     // see simple_parser6.cc for comments for those parameters
-    static const isc::data::SimpleDefaults OPTION6_DEF_DEFAULTS;
-    static const isc::data::SimpleDefaults OPTION6_DEFAULTS;
+    static const isc::data::SimpleKeywords GLOBAL6_PARAMETERS;
     static const isc::data::SimpleDefaults GLOBAL6_DEFAULTS;
+
+    static const isc::data::SimpleKeywords OPTION6_DEF_PARAMETERS;
+    static const isc::data::SimpleDefaults OPTION6_DEF_DEFAULTS;
+
+    static const isc::data::SimpleKeywords OPTION6_PARAMETERS;
+    static const isc::data::SimpleDefaults OPTION6_DEFAULTS;
+
+    static const isc::data::SimpleKeywords SUBNET6_PARAMETERS;
     static const isc::data::SimpleDefaults SUBNET6_DEFAULTS;
     static const isc::data::SimpleDefaults SHARED_SUBNET6_DEFAULTS;
+    static const isc::data::ParamsList INHERIT_TO_SUBNET6;
+
+    static const isc::data::SimpleKeywords POOL6_PARAMETERS;
+    static const isc::data::SimpleKeywords PD_POOL6_PARAMETERS;
+
+    static const isc::data::SimpleKeywords SHARED_NETWORK6_PARAMETERS;
     static const isc::data::SimpleDefaults SHARED_NETWORK6_DEFAULTS;
+
     static const isc::data::SimpleDefaults IFACE6_DEFAULTS;
     static const isc::data::SimpleDefaults DHCP_QUEUE_CONTROL6_DEFAULTS;
-    static const isc::data::ParamsList INHERIT_TO_SUBNET6;
+    static const isc::data::SimpleDefaults SANITY_CHECKS6_DEFAULTS;
 };
 
 };

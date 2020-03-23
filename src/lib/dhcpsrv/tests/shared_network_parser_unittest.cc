@@ -1,24 +1,28 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+#include <asiolink/io_address.h>
 #include <cc/data.h>
 #include <dhcp/dhcp4.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/option.h>
 #include <dhcp/option4_addrlst.h>
 #include <dhcp/option6_addrlst.h>
+#include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/parsers/shared_network_parser.h>
 #include <gtest/gtest.h>
 #include <string>
 
 using namespace isc;
+using namespace isc::asiolink;
 using namespace isc::data;
 using namespace isc::dhcp;
+using namespace isc::dhcp::test;
 
 namespace {
 class SharedNetworkParserTest : public ::testing::Test {
@@ -113,9 +117,34 @@ public:
     /// @return Valid shared network configuration.
     virtual std::string getWorkingConfig() const {
             std::string config = "{"
-                "    \"user-context\": { \"comment\": \"example\" },"
-                "    \"name\": \"bird\","
+                "    \"authoritative\": true,"
+                "    \"boot-file-name\": \"/dev/null\","
+                "    \"client-class\": \"srv1\","
                 "    \"interface\": \"eth1\","
+                "    \"match-client-id\": true,"
+                "    \"name\": \"bird\","
+                "    \"next-server\": \"10.0.0.1\","
+                "    \"rebind-timer\": 199,"
+                "    \"relay\": { \"ip-addresses\": [ \"10.1.1.1\" ] },"
+                "    \"renew-timer\": 99,"
+                "    \"reservation-mode\": \"out-of-pool\","
+                "    \"server-hostname\": \"example.org\","
+                "    \"require-client-classes\": [ \"runner\" ],"
+                "    \"user-context\": { \"comment\": \"example\" },"
+                "    \"valid-lifetime\": 399,"
+                "    \"min-valid-lifetime\": 299,"
+                "    \"max-valid-lifetime\": 499,"
+                "    \"calculate-tee-times\": true,"
+                "    \"t1-percent\": 0.345,"
+                "    \"t2-percent\": 0.721,"
+                "    \"ddns-send-updates\": true,"
+                "    \"ddns-override-no-update\": true,"
+                "    \"ddns-override-client-update\": true,"
+                "    \"ddns-replace-client-name\": \"always\","
+                "    \"ddns-generated-prefix\": \"prefix\","
+                "    \"ddns-qualifying-suffix\": \"example.com.\","
+                "    \"hostname-char-set\": \"[^A-Z]\","
+                "    \"hostname-char-replacement\": \"x\","
                 "    \"option-data\": ["
                 "        {"
                 "            \"name\": \"domain-name-servers\","
@@ -130,6 +159,8 @@ public:
                 "            \"renew-timer\": 100,"
                 "            \"rebind-timer\": 200,"
                 "            \"valid-lifetime\": 300,"
+                "            \"min-valid-lifetime\": 200,"
+                "            \"max-valid-lifetime\": 400,"
                 "            \"match-client-id\": false,"
                 "            \"authoritative\": false,"
                 "            \"next-server\": \"\","
@@ -141,9 +172,11 @@ public:
                 "            \"4o6-interface\": \"\","
                 "            \"4o6-interface-id\": \"\","
                 "            \"4o6-subnet\": \"\","
-                "            \"dhcp4o6-port\": 0,"
-                "            \"decline-probation-period\": 86400,"
-                "            \"reservation-mode\": \"all\""
+                "            \"reservation-mode\": \"all\","
+                "            \"calculate-tee-times\": true,"
+                "            \"t1-percent\": .45,"
+                "            \"t2-percent\": .65,"
+                "            \"hostname-char-set\": \"\""
                 "        },"
                 "        {"
                 "            \"id\": 2,"
@@ -163,9 +196,10 @@ public:
                 "            \"4o6-interface\": \"\","
                 "            \"4o6-interface-id\": \"\","
                 "            \"4o6-subnet\": \"\","
-                "            \"dhcp4o6-port\": 0,"
-                "            \"decline-probation-period\": 86400,"
-                "            \"reservation-mode\": \"all\""
+                "            \"reservation-mode\": \"all\","
+                "            \"calculate-tee-times\": false,"
+                "            \"t1-percent\": .40,"
+                "            \"t2-percent\": .80"
                 "        }"
                 "    ]"
                 "}";
@@ -187,6 +221,8 @@ private:
 // This test verifies that shared network parser for IPv4 works properly
 // in a positive test scenario.
 TEST_F(SharedNetwork4ParserTest, parse) {
+    IfaceMgrTestConfig ifmgr(true);
+
     // Basic configuration for shared network. A bunch of parameters
     // have to be specified for subnets because subnet parsers expect
     // that default and global values are set.
@@ -196,12 +232,45 @@ TEST_F(SharedNetwork4ParserTest, parse) {
     // Parse configuration specified above.
     SharedNetwork4Parser parser;
     SharedNetwork4Ptr network;
+
     ASSERT_NO_THROW(network = parser.parse(config_element));
     ASSERT_TRUE(network);
 
     // Check basic parameters.
+    EXPECT_TRUE(network->getAuthoritative());
+    EXPECT_EQ("srv1", network->getClientClass().get());
     EXPECT_EQ("bird", network->getName());
-    EXPECT_EQ("eth1", network->getIface());
+    EXPECT_EQ("eth1", network->getIface().get());
+    EXPECT_EQ(99, network->getT1());
+    EXPECT_EQ(199, network->getT2());
+    EXPECT_EQ(399, network->getValid());
+    EXPECT_EQ(299, network->getValid().getMin());
+    EXPECT_EQ(499, network->getValid().getMax());
+    EXPECT_TRUE(network->getCalculateTeeTimes());
+    EXPECT_EQ(0.345, network->getT1Percent());
+    EXPECT_EQ(0.721, network->getT2Percent());
+    EXPECT_EQ("/dev/null", network->getFilename().get());
+    EXPECT_EQ("10.0.0.1", network->getSiaddr().get().toText());
+    EXPECT_EQ("example.org", network->getSname().get());
+    EXPECT_EQ(Network::HR_OUT_OF_POOL, network->getHostReservationMode());
+    EXPECT_TRUE(network->getDdnsSendUpdates().get());
+    EXPECT_TRUE(network->getDdnsOverrideNoUpdate().get());
+    EXPECT_TRUE(network->getDdnsOverrideClientUpdate().get());
+    EXPECT_EQ(D2ClientConfig::RCM_ALWAYS, network->getDdnsReplaceClientNameMode().get());
+    EXPECT_EQ("prefix", network->getDdnsGeneratedPrefix().get());
+    EXPECT_EQ("example.com.", network->getDdnsQualifyingSuffix().get());
+    EXPECT_EQ("[^A-Z]", network->getHostnameCharSet().get());
+    EXPECT_EQ("x", network->getHostnameCharReplacement().get());
+
+    // Relay information.
+    auto relay_info = network->getRelayInfo();
+    EXPECT_EQ(1, relay_info.getAddresses().size());
+    EXPECT_TRUE(relay_info.containsAddress(IOAddress("10.1.1.1")));
+
+    // Required client classes.
+    auto required = network->getRequiredClasses();
+    ASSERT_EQ(1, required.size());
+    EXPECT_EQ("runner", *required.cbegin());
 
     // Check user context.
     ConstElementPtr context = network->getContext();
@@ -209,14 +278,24 @@ TEST_F(SharedNetwork4ParserTest, parse) {
     EXPECT_TRUE(context->get("comment"));
 
     // Subnet with id 1
-    Subnet4Ptr subnet1 = network->getSubnet(SubnetID(1));
-    ASSERT_TRUE(subnet1);
-    EXPECT_EQ("10.1.2.0", subnet1->get().first.toText());
+    Subnet4Ptr subnet = network->getSubnet(SubnetID(1));
+    ASSERT_TRUE(subnet);
+    EXPECT_EQ("10.1.2.0", subnet->get().first.toText());
+    EXPECT_EQ(300, subnet->getValid());
+    EXPECT_EQ(200, subnet->getValid().getMin());
+    EXPECT_EQ(400, subnet->getValid().getMax());
+    EXPECT_FALSE(subnet->getHostnameCharSet().unspecified());
+    EXPECT_EQ("", subnet->getHostnameCharSet().get());
 
     // Subnet with id 2
-    Subnet4Ptr subnet2 = network->getSubnet(SubnetID(2));
-    ASSERT_TRUE(subnet2);
-    EXPECT_EQ("192.0.2.0", subnet2->get().first.toText());
+    subnet = network->getSubnet(SubnetID(2));
+    ASSERT_TRUE(subnet);
+    EXPECT_EQ("192.0.2.0", subnet->get().first.toText());
+    EXPECT_EQ(30, subnet->getValid());
+    EXPECT_EQ(30, subnet->getValid().getMin());
+    EXPECT_EQ(30, subnet->getValid().getMax());
+    EXPECT_EQ("[^A-Z]", subnet->getHostnameCharSet().get());
+    EXPECT_EQ("x", subnet->getHostnameCharReplacement().get());
 
     // DHCP options
     ConstCfgOptionPtr cfg_option = network->getCfgOption();
@@ -249,6 +328,8 @@ TEST_F(SharedNetwork4ParserTest, missingName) {
 // This test verifies that it's possible to specify client-class,
 // match-client-id, and authoritative on shared-network level.
 TEST_F(SharedNetwork4ParserTest, clientClassMatchClientIdAuthoritative) {
+    IfaceMgrTestConfig ifmgr(true);
+
     std::string config = getWorkingConfig();
     ElementPtr config_element = Element::fromJSON(config);
 
@@ -262,7 +343,7 @@ TEST_F(SharedNetwork4ParserTest, clientClassMatchClientIdAuthoritative) {
     network = parser.parse(config_element);
     ASSERT_TRUE(network);
 
-    EXPECT_EQ("alpha", network->getClientClass());
+    EXPECT_EQ("alpha", network->getClientClass().get());
 
     EXPECT_FALSE(network->getMatchClientId());
 
@@ -272,6 +353,7 @@ TEST_F(SharedNetwork4ParserTest, clientClassMatchClientIdAuthoritative) {
 // This test verifies that parsing of the "relay" element.
 // It checks both valid and invalid scenarios.
 TEST_F(SharedNetwork4ParserTest, relayInfoTests) {
+    IfaceMgrTestConfig ifmgr(true);
 
     // Create the vector of test scenarios.
     std::vector<RelayTest> tests = {
@@ -350,19 +432,83 @@ TEST_F(SharedNetwork4ParserTest, relayInfoTests) {
     }
 }
 
+// This test verifies that the optional interface check works as expected.
+TEST_F(SharedNetwork4ParserTest, iface) {
+    // Basic configuration for shared network.
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+
+    // Parse configuration specified above.
+
+    // The interface check can be disabled.
+    SharedNetwork4Parser parser_no_check(false);
+    SharedNetwork4Ptr network;
+    EXPECT_NO_THROW(network = parser_no_check.parse(config_element));
+    ASSERT_TRUE(network);
+    EXPECT_FALSE(network->getIface().unspecified());
+    EXPECT_EQ("eth1", network->getIface().get());
+
+    // Retry with the interface check enabled.
+    SharedNetwork4Parser parser;
+    EXPECT_THROW(parser.parse(config_element), DhcpConfigError);
+
+    // Configure default test interfaces.
+    IfaceMgrTestConfig ifmgr(true);
+
+    EXPECT_NO_THROW(network = parser_no_check.parse(config_element));
+    ASSERT_TRUE(network);
+    EXPECT_FALSE(network->getIface().unspecified());
+    EXPECT_EQ("eth1", network->getIface().get());
+
+    EXPECT_NO_THROW(network = parser.parse(config_element));
+    ASSERT_TRUE(network);
+    EXPECT_FALSE(network->getIface().unspecified());
+    EXPECT_EQ("eth1", network->getIface().get());
+}
+
 
 /// @brief Test fixture class for SharedNetwork6Parser class.
 class SharedNetwork6ParserTest : public SharedNetworkParserTest {
 public:
+
+    /// @brief Constructor.
+    SharedNetwork6ParserTest()
+        : SharedNetworkParserTest(), network_(), use_iface_id_(false) {
+    }
 
     /// @brief Creates valid shared network configuration.
     ///
     /// @return Valid shared network configuration.
     virtual std::string getWorkingConfig() const {
             std::string config = "{"
+                "    \"client-class\": \"srv1\","
+                + std::string(use_iface_id_ ? "\"interface-id\": " : "\"interface\": ") +
+                "\"eth1\","
                 "    \"name\": \"bird\","
-                "    \"interface\": \"eth1\","
+                "    \"preferred-lifetime\": 211,"
+                "    \"min-preferred-lifetime\": 111,"
+                "    \"max-preferred-lifetime\": 311,"
+                "    \"rapid-commit\": true,"
+                "    \"rebind-timer\": 199,"
+                "    \"relay\": { \"ip-addresses\": [ \"2001:db8:1::1\" ] },"
+                "    \"renew-timer\": 99,"
+                "    \"require-client-classes\": [ \"runner\" ],"
+                "    \"reservation-mode\": \"out-of-pool\","
                 "    \"user-context\": { },"
+                "    \"valid-lifetime\": 399,"
+                "    \"min-valid-lifetime\": 299,"
+                "    \"max-valid-lifetime\": 499,"
+                "    \"calculate-tee-times\": true,"
+                "    \"t1-percent\": 0.345,"
+                "    \"t2-percent\": 0.721,"
+                "    \"ddns-send-updates\": true,"
+                "    \"ddns-override-no-update\": true,"
+                "    \"ddns-override-client-update\": true,"
+                "    \"ddns-replace-client-name\": \"always\","
+                "    \"ddns-generated-prefix\": \"prefix\","
+                "    \"ddns-qualifying-suffix\": \"example.com.\","
+                "    \"hostname-char-set\": \"[^A-Z]\","
+                "    \"hostname-char-replacement\": \"x\","
                 "    \"option-data\": ["
                 "        {"
                 "            \"name\": \"dns-servers\","
@@ -378,13 +524,16 @@ public:
                 "            \"renew-timer\": 100,"
                 "            \"rebind-timer\": 200,"
                 "            \"preferred-lifetime\": 300,"
+                "            \"min-preferred-lifetime\": 200,"
+                "            \"max-preferred-lifetime\": 400,"
                 "            \"valid-lifetime\": 400,"
+                "            \"min-valid-lifetime\": 300,"
+                "            \"max-valid-lifetime\": 500,"
                 "            \"client-class\": \"\","
                 "            \"require-client-classes\": []\n,"
                 "            \"reservation-mode\": \"all\","
-                "            \"decline-probation-period\": 86400,"
-                "            \"dhcp4o6-port\": 0,"
-                "            \"rapid-commit\": false"
+                "            \"rapid-commit\": false,"
+                "            \"hostname-char-set\": \"\""
                 "        },"
                 "        {"
                 "            \"id\": 2,"
@@ -398,8 +547,6 @@ public:
                 "            \"client-class\": \"\","
                 "            \"require-client-classes\": []\n,"
                 "            \"reservation-mode\": \"all\","
-                "            \"decline-probation-period\": 86400,"
-                "            \"dhcp4o6-port\": 0,"
                 "            \"rapid-commit\": false"
                 "        }"
                 "    ]"
@@ -415,13 +562,20 @@ public:
         return (*network_);
     }
 
-private:
+public:
+
     SharedNetwork6Ptr network_;
+
+    /// Boolean flag indicating if the interface-id should be used instead
+    /// of interface.
+    bool use_iface_id_;
 };
 
 // This test verifies that shared network parser for IPv4 works properly
 // in a positive test scenario.
 TEST_F(SharedNetwork6ParserTest, parse) {
+    IfaceMgrTestConfig ifmgr(true);
+
     // Basic configuration for shared network. A bunch of parameters
     // have to be specified for subnets because subnet parsers expect
     // that default and global values are set.
@@ -435,8 +589,39 @@ TEST_F(SharedNetwork6ParserTest, parse) {
     ASSERT_TRUE(network);
 
     // Check basic parameters.
+    EXPECT_EQ("srv1", network->getClientClass().get());
     EXPECT_EQ("bird", network->getName());
-    EXPECT_EQ("eth1", network->getIface());
+    EXPECT_EQ("eth1", network->getIface().get());
+    EXPECT_EQ(211, network->getPreferred());
+    EXPECT_EQ(111, network->getPreferred().getMin());
+    EXPECT_EQ(311, network->getPreferred().getMax());
+    EXPECT_TRUE(network->getRapidCommit());
+    EXPECT_EQ(99, network->getT1());
+    EXPECT_EQ(199, network->getT2());
+    EXPECT_EQ(399, network->getValid());
+    EXPECT_EQ(299, network->getValid().getMin());
+    EXPECT_EQ(499, network->getValid().getMax());
+    EXPECT_TRUE(network->getCalculateTeeTimes());
+    EXPECT_EQ(0.345, network->getT1Percent());
+    EXPECT_EQ(0.721, network->getT2Percent());
+    EXPECT_TRUE(network->getDdnsSendUpdates().get());
+    EXPECT_TRUE(network->getDdnsOverrideNoUpdate().get());
+    EXPECT_TRUE(network->getDdnsOverrideClientUpdate().get());
+    EXPECT_EQ(D2ClientConfig::RCM_ALWAYS, network->getDdnsReplaceClientNameMode().get());
+    EXPECT_EQ("prefix", network->getDdnsGeneratedPrefix().get());
+    EXPECT_EQ("example.com.", network->getDdnsQualifyingSuffix().get());
+    EXPECT_EQ("[^A-Z]", network->getHostnameCharSet().get());
+    EXPECT_EQ("x", network->getHostnameCharReplacement().get());
+
+    // Relay information.
+    auto relay_info = network->getRelayInfo();
+    EXPECT_EQ(1, relay_info.getAddresses().size());
+    EXPECT_TRUE(relay_info.containsAddress(IOAddress("2001:db8:1::1")));
+
+    // Required client classes.
+    auto required = network->getRequiredClasses();
+    ASSERT_EQ(1, required.size());
+    EXPECT_EQ("runner", *required.cbegin());
 
     // Check user context.
     ConstElementPtr context = network->getContext();
@@ -444,14 +629,30 @@ TEST_F(SharedNetwork6ParserTest, parse) {
     EXPECT_EQ(0, context->size());
 
     // Subnet with id 1
-    Subnet6Ptr subnet1 = network->getSubnet(SubnetID(1));
-    ASSERT_TRUE(subnet1);
-    EXPECT_EQ("3000::", subnet1->get().first.toText());
+    Subnet6Ptr subnet = network->getSubnet(SubnetID(1));
+    ASSERT_TRUE(subnet);
+    EXPECT_EQ("3000::", subnet->get().first.toText());
+    EXPECT_EQ(300, subnet->getPreferred());
+    EXPECT_EQ(200, subnet->getPreferred().getMin());
+    EXPECT_EQ(400, subnet->getPreferred().getMax());
+    EXPECT_EQ(400, subnet->getValid());
+    EXPECT_EQ(300, subnet->getValid().getMin());
+    EXPECT_EQ(500, subnet->getValid().getMax());
+    EXPECT_FALSE(subnet->getHostnameCharSet().unspecified());
+    EXPECT_EQ("", subnet->getHostnameCharSet().get());
 
     // Subnet with id 2
-    Subnet6Ptr subnet2 = network->getSubnet(SubnetID(2));
-    ASSERT_TRUE(subnet2);
-    EXPECT_EQ("2001:db8:1::", subnet2->get().first.toText());
+    subnet = network->getSubnet(SubnetID(2));
+    ASSERT_TRUE(subnet);
+    EXPECT_EQ("2001:db8:1::", subnet->get().first.toText());
+    EXPECT_EQ(30, subnet->getPreferred());
+    EXPECT_EQ(30, subnet->getPreferred().getMin());
+    EXPECT_EQ(30, subnet->getPreferred().getMax());
+    EXPECT_EQ(40, subnet->getValid());
+    EXPECT_EQ(40, subnet->getValid().getMin());
+    EXPECT_EQ(40, subnet->getValid().getMax());
+    EXPECT_EQ("[^A-Z]", subnet->getHostnameCharSet().get());
+    EXPECT_EQ("x", subnet->getHostnameCharReplacement().get());
 
     // DHCP options
     ConstCfgOptionPtr cfg_option = network->getCfgOption();
@@ -467,9 +668,50 @@ TEST_F(SharedNetwork6ParserTest, parse) {
     EXPECT_EQ("2001:db8:1::cafe", addresses[0].toText());
 }
 
+// This test verifies that shared network parser for IPv4 works properly
+// in a positive test scenario.
+TEST_F(SharedNetwork6ParserTest, parseWithInterfaceId) {
+    IfaceMgrTestConfig ifmgr(true);
+
+    // Use the configuration with interface-id instead of interface parameter.
+    use_iface_id_ = true;
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+
+    // Parse configuration specified above.
+    SharedNetwork6Parser parser;
+    SharedNetwork6Ptr network;
+    ASSERT_NO_THROW(network = parser.parse(config_element));
+    ASSERT_TRUE(network);
+
+    // Check that interface-id has been parsed.
+    auto opt_iface_id = network->getInterfaceId();
+    ASSERT_TRUE(opt_iface_id);
+}
+
+// This test verifies that error is returned when trying to configure a
+// shared network with both interface and interface id.
+TEST_F(SharedNetwork6ParserTest, mutuallyExclusiveInterfaceId) {
+    IfaceMgrTestConfig ifmgr(true);
+
+    // Use the configuration with interface-id instead of interface parameter.
+    use_iface_id_ = true;
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+
+    // Add interface which is mutually exclusive with interface-id
+    config_element->set("interface", Element::create("eth1"));
+
+    // Parse configuration specified above.
+    SharedNetwork6Parser parser;
+    EXPECT_THROW(parser.parse(config_element), DhcpConfigError);
+}
+
 // This test verifies that it's possible to specify client-class
 // on shared-network level.
 TEST_F(SharedNetwork6ParserTest, clientClass) {
+    IfaceMgrTestConfig ifmgr(true);
+
     std::string config = getWorkingConfig();
     ElementPtr config_element = Element::fromJSON(config);
 
@@ -481,12 +723,14 @@ TEST_F(SharedNetwork6ParserTest, clientClass) {
     network = parser.parse(config_element);
     ASSERT_TRUE(network);
 
-    EXPECT_EQ("alpha", network->getClientClass());
+    EXPECT_EQ("alpha", network->getClientClass().get());
 }
 
 // This test verifies that it's possible to specify require-client-classes
 // on shared-network level.
 TEST_F(SharedNetwork6ParserTest, evalClientClasses) {
+    IfaceMgrTestConfig ifmgr(true);
+
     std::string config = getWorkingConfig();
     ElementPtr config_element = Element::fromJSON(config);
 
@@ -509,6 +753,8 @@ TEST_F(SharedNetwork6ParserTest, evalClientClasses) {
 // This test verifies that bad require-client-classes configs raise
 // expected errors.
 TEST_F(SharedNetwork6ParserTest, badEvalClientClasses) {
+    IfaceMgrTestConfig ifmgr(true);
+
     std::string config = getWorkingConfig();
     ElementPtr config_element = Element::fromJSON(config);
 
@@ -538,6 +784,8 @@ TEST_F(SharedNetwork6ParserTest, badEvalClientClasses) {
 // This test verifies that v6 parsing of the "relay" element.
 // It checks both valid and invalid scenarios.
 TEST_F(SharedNetwork6ParserTest, relayInfoTests) {
+    IfaceMgrTestConfig ifmgr(true);
+
 
     // Create the vector of test scenarios.
     std::vector<RelayTest> tests = {
@@ -614,6 +862,40 @@ TEST_F(SharedNetwork6ParserTest, relayInfoTests) {
             relayTest(*test);
         }
     }
+}
+
+// This test verifies that the optional interface check works as expected.
+TEST_F(SharedNetwork6ParserTest, iface) {
+    // Basic configuration for shared network.
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+
+    // Parse configuration specified above.
+
+    // The interface check can be disabled.
+    SharedNetwork6Parser parser_no_check(false);
+    SharedNetwork6Ptr network;
+    EXPECT_NO_THROW(network = parser_no_check.parse(config_element));
+    ASSERT_TRUE(network);
+    EXPECT_FALSE(network->getIface().unspecified());
+    EXPECT_EQ("eth1", network->getIface().get());
+
+    // Retry with the interface check enabled.
+    SharedNetwork6Parser parser;
+    EXPECT_THROW(parser.parse(config_element), DhcpConfigError);
+
+    // Configure default test interfaces.
+    IfaceMgrTestConfig ifmgr(true);
+
+    EXPECT_NO_THROW(network = parser_no_check.parse(config_element));
+    ASSERT_TRUE(network);
+    EXPECT_FALSE(network->getIface().unspecified());
+    EXPECT_EQ("eth1", network->getIface().get());
+
+    EXPECT_NO_THROW(network = parser.parse(config_element));
+    ASSERT_TRUE(network);
+    EXPECT_FALSE(network->getIface().unspecified());
+    EXPECT_EQ("eth1", network->getIface().get());
 }
 
 } // end of anonymous namespace

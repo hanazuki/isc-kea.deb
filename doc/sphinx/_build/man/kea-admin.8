@@ -1,0 +1,141 @@
+.\" Man page generated from reStructuredText.
+.
+.TH "KEA-ADMIN" "8" "26 Feb, 2020" "1.7.5" "Kea"
+.SH NAME
+kea-admin \- Shell script for managing Kea databases
+.
+.nr rst2man-indent-level 0
+.
+.de1 rstReportMargin
+\\$1 \\n[an-margin]
+level \\n[rst2man-indent-level]
+level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
+-
+\\n[rst2man-indent0]
+\\n[rst2man-indent1]
+\\n[rst2man-indent2]
+..
+.de1 INDENT
+.\" .rstReportMargin pre:
+. RS \\$1
+. nr rst2man-indent\\n[rst2man-indent-level] \\n[an-margin]
+. nr rst2man-indent-level +1
+.\" .rstReportMargin post:
+..
+.de UNINDENT
+. RE
+.\" indent \\n[an-margin]
+.\" old: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.nr rst2man-indent-level -1
+.\" new: \\n[rst2man-indent\\n[rst2man-indent-level]]
+.in \\n[rst2man-indent\\n[rst2man-indent-level]]u
+..
+.SH SYNOPSIS
+.sp
+\fBkea\-admin\fP [command] [backend] [\fB\-u\fP database username] [\fB\-p\fP database password] [\fB\-n\fP database name] [\fB\-d\fP scripts directory] [\fB\-4\fP | \fB\-6\fP] [\fB\-o\fP output file] [\fB\-v\fP]
+.SH DESCRIPTION
+.sp
+\fBkea\-admin\fP is a shell script which offers database maintenance. In
+particular, it features database initialization, database version
+checking, and database schema upgrade.
+.SH ARGUMENTS
+.INDENT 0.0
+.TP
+.B \fBcommand\fP
+Specifies the command to be issued to the servers. It can be one of the following:
+.INDENT 7.0
+.TP
+\fBdb\-init\fP
+Initializes a new database schema. This is useful during a new Kea
+installation. The database is initialized to the latest version
+supported by the version of the software being installed.
+.TP
+\fBdb\-version\fP
+Reports the database backend version number. This is not necessarily
+equal to the Kea version number as each backend has its own
+versioning scheme.
+.TP
+\fBdb\-upgrade\fP
+Conducts a database schema upgrade. This is useful when upgrading Kea.
+.TP
+\fBdb\-dump\fP
+Dumps the contents of the lease database (for MySQL, PostgreSQL,
+or CQL backends) to a CSV (comma\-separated values) text file.
+The first line of the file contains the column names. This is meant
+to be used as a diagnostic tool, so it provides a portable,
+human\-readable form of the lease data.
+.UNINDENT
+.TP
+.B \fBbackend\fP
+Specifies the backend type. Currently allowed backends are: memfile,
+mysql, and pgsql.
+.TP
+.B \fB\-u|\-\-user username\fP
+Specifies the username when connecting to a database. If not specified,
+the default value of \fBkeatest\fP is used.
+.TP
+.B \fB\-p|\-\-password password\fP
+Specifies the password when connecting to a database. If not
+specified, the default value of \fBkeatest\fP is used.
+.TP
+.B \fB\-n|\-\-name database\-name\fP
+Specifies the name of the database to connect to. If not specified, the
+default value of \fBkeatest\fP is used.
+.TP
+.B \fB\-d|\-\-directory script\-directory\fP
+Specifies the override scripts directory. That script is used during
+upgrades, database initialization, and possibly other operations. If
+not specified, the default value of \fB(prefix)/share/kea/scripts/\fP is
+used.
+.TP
+.B \fB\-o|\-\-output output_file\fP
+Specifies the file to which the lease data will be dumped. Required for lease\-dump.
+.TP
+.B \fB\-v|\-\-version\fP
+Prints the \fBkea\-admin\fP version and quits.
+.TP
+.B \fB\-4\fP
+Directs \fBkea\-admin\fP to lease\-dump the DHCPv4 leases. Incompatible with
+the \-6 option.
+.TP
+.B \fB\-6\fP
+Directs \fBkea\-admin\fP to lease\-dump the DHCPv6 leases. Incompatible with
+the \-4 option.
+.UNINDENT
+.SH DOCUMENTATION
+.sp
+Kea comes with an extensive Kea Administrator Reference Manual that covers
+all aspects of running the Kea software \- compilation, installation,
+configuration, configuration examples, and much more. Kea also features a
+Kea Messages Manual, which lists all possible messages Kea can print
+with a brief description for each of them. Both documents are
+available in various formats (.txt, .html, .pdf) with the Kea
+distribution. The Kea documentation is available at
+\fI\%https://kb.isc.org/docs/kea\-administrator\-reference\-manual\fP .
+.sp
+Kea source code is documented in the Kea Developer\(aqs Guide. Its online
+version is available at \fI\%https://jenkins.isc.org/job/Kea_doc/doxygen/\fP\&.
+.sp
+The Kea project website is available at \fI\%https://kea.isc.org\fP\&.
+.SH MAILING LISTS AND SUPPORT
+.sp
+There are two public mailing lists available for the Kea project. \fBkea\-users\fP
+(kea\-users at lists.isc.org) is intended for Kea users, while \fBkea\-dev\fP
+(kea\-dev at lists.isc.org) is intended for Kea developers, prospective
+contributors, and other advanced users. Both lists are available at
+\fI\%https://lists.isc.org\fP\&. The community provides best\-effort support
+on both of those lists.
+.sp
+ISC provides professional support for Kea services. See
+\fI\%https://www.isc.org/kea/\fP for details.
+.SH SEE ALSO
+.sp
+\fBkea\-dhcp4(8)\fP, \fBkea\-dhcp6(8)\fP,
+\fBkea\-dhcp\-ddns(8)\fP, \fBkea\-ctrl\-agent(8)\fP, \fBkeactrl(8)\fP,
+\fBperfdhcp(8)\fP, \fBkea\-netconf(8)\fP, Kea Administrator Reference Manual.
+.SH AUTHOR
+Internet Systems Consortium
+.SH COPYRIGHT
+2019, Internet Systems Consortium
+.\" Generated by docutils manpage writer.
+.

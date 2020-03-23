@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -63,6 +63,11 @@ This debug message is issued when the HTTP request timeout has occurred and
 the server is going to send a response with Http Request timeout status
 code.
 
+% HTTP_CONNECTION_CLOSE_CALLBACK_FAILED Connection close callback threw an exception
+This is an error message emitted when the close connection callback
+registered on the connection failed unexpectedly.  This is a programmatic
+error that should be submitted as a bug.
+
 % HTTP_CONNECTION_STOP stopping HTTP connection from %1
 This debug message is issued when one of the HTTP connections is stopped.
 The connection can be stopped as a result of an error or after the
@@ -82,6 +87,12 @@ produced the data.
 % HTTP_IDLE_CONNECTION_TIMEOUT_OCCURRED closing persistent connection with %1 as a result of a timeout
 This debug message is issued when the persistent HTTP connection is being
 closed as a result of being idle.
+
+% HTTP_PREMATURE_CONNECTION_TIMEOUT_OCCURRED premature connection timeout occurred, possibly caused by system clock change
+This warning message is issued when unexpected timeout occurred during the
+transaction. This is proven to occur when the system clock is moved manually
+or as a result of synchronization with a time server. Any ongoing transactions
+will be interrupted. New transactions should be conducted normally.
 
 % HTTP_REQUEST_RECEIVE_START start receiving request from %1 with timeout %2
 This debug message is issued when the server starts receiving new request

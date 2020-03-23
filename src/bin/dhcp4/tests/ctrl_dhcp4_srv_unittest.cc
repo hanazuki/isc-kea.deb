@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,16 +12,19 @@
 #include <config/command_mgr.h>
 #include <config/timeouts.h>
 #include <dhcp/dhcp4.h>
-#include <dhcp4/ctrl_dhcp4_srv.h>
-#include <dhcp4/tests/dhcp4_test_utils.h>
+#include <dhcp/libdhcp++.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/lease_mgr_factory.h>
+#include <dhcp4/ctrl_dhcp4_srv.h>
+#include <dhcp4/tests/dhcp4_test_utils.h>
 #include <hooks/hooks_manager.h>
 #include <log/logger_support.h>
 #include <stats/stats_mgr.h>
+#include <util/boost_time_utils.h>
 #include <testutils/io_utils.h>
 #include <testutils/unix_control_client.h>
+#include <testutils/sandbox.h>
 
 #include "marker_file.h"
 #include "test_libraries.h"
@@ -93,6 +96,7 @@ public:
 /// @brief Fixture class intended for testing control channel in the DHCPv4Srv
 class CtrlChannelDhcpv4SrvTest : public ::testing::Test {
 public:
+    isc::test::Sandbox sandbox;
 
     /// @brief Path to the UNIX socket being used to communicate with the server
     std::string socket_path_;
@@ -108,7 +112,7 @@ public:
         if (env) {
             socket_path_ = string(env) + "/kea4.sock";
         } else {
-            socket_path_ = string(TEST_DATA_BUILDDIR) + "/kea4.sock";
+            socket_path_ = sandbox.join("kea4.sock");
         }
         reset();
     }
@@ -134,7 +138,7 @@ public:
     }
 
     void createUnixChannelServer() {
-        ::remove(socket_path_.c_str());
+        static_cast<void>(::remove(socket_path_.c_str()));
 
         // Just a simple config. The important part here is the socket
         // location information.
@@ -177,7 +181,6 @@ public:
         // changed.
         CfgMgr::instance().commit();
 
-
         ASSERT_TRUE(answer);
 
         int status = 0;
@@ -206,7 +209,7 @@ public:
         CfgMgr::instance().clear();
 
         // Remove unix socket file
-        ::remove(socket_path_.c_str());
+        static_cast<void>(::remove(socket_path_.c_str()));
     }
 
     /// @brief Conducts a command/response exchange via UnixCommandSocket
@@ -410,7 +413,6 @@ TEST_F(CtrlChannelDhcpv4SrvTest, commands) {
 }
 
 // Check that the "libreload" command will reload libraries
-
 TEST_F(CtrlChannelDhcpv4SrvTest, libreload) {
     createUnixChannelServer();
 
@@ -425,9 +427,9 @@ TEST_F(CtrlChannelDhcpv4SrvTest, libreload) {
     HooksManager::loadLibraries(libraries);
 
     // Check they are loaded.
-    std::vector<std::string> loaded_libraries =
-        HooksManager::getLibraryNames();
-    ASSERT_TRUE(extractNames(libraries) == loaded_libraries);
+    HookLibsCollection loaded_libraries =
+        HooksManager::getLibraryInfo();
+    ASSERT_TRUE(libraries == loaded_libraries);
 
     // ... which also included checking that the marker file created by the
     // load functions exists and holds the correct value (of "12" - the
@@ -471,16 +473,19 @@ TEST_F(CtrlChannelDhcpv4SrvTest, commandsRegistration) {
 
     EXPECT_NO_THROW(answer = CommandMgr::instance().processCommand(list_cmds));
     ASSERT_TRUE(answer);
+
     ASSERT_TRUE(answer->get("arguments"));
     std::string command_list = answer->get("arguments")->str();
 
     EXPECT_TRUE(command_list.find("\"list-commands\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"build-report\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"config-backend-pull\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"config-get\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"config-set\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"config-write\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"leases-reclaim\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"libreload\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"server-tag-get\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"shutdown\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"statistic-get\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"statistic-get-all\"") != string::npos);
@@ -488,6 +493,11 @@ TEST_F(CtrlChannelDhcpv4SrvTest, commandsRegistration) {
     EXPECT_TRUE(command_list.find("\"statistic-remove-all\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"statistic-reset\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"statistic-reset-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-age-set\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-age-set-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-count-set\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-sample-count-set-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"status-get\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"version-get\"") != string::npos);
 
     // Ok, and now delete the server. It should deregister its commands.
@@ -526,122 +536,6 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelShutdown) {
     EXPECT_EQ("{ \"result\": 0, \"text\": \"Shutting down.\" }",response);
 }
 
-// This test verifies that the DHCP server immediately reclaims expired
-// leases on leases-reclaim command
-TEST_F(CtrlChannelDhcpv4SrvTest, controlLeasesReclaim) {
-    createUnixChannelServer();
-
-    // Create expired leases. Leases are expired by 40 seconds ago
-    // (valid lifetime = 60, cltt = now - 100).
-    HWAddrPtr hwaddr0(new HWAddr(HWAddr::fromText("00:01:02:03:04:05")));
-    Lease4Ptr lease0(new Lease4(IOAddress("10.0.0.1"), hwaddr0,
-                                ClientIdPtr(), 60, 10, 20,
-                                time(NULL) - 100, SubnetID(1)));
-    HWAddrPtr hwaddr1(new HWAddr(HWAddr::fromText("01:02:03:04:05:06")));
-    Lease4Ptr lease1(new Lease4(IOAddress("10.0.0.2"), hwaddr1,
-                                ClientIdPtr(), 60, 10, 20,
-                                time(NULL) - 100, SubnetID(1)));
-
-    // Add leases to the database.
-    LeaseMgr& lease_mgr = LeaseMgrFactory::instance();
-    ASSERT_NO_THROW(lease_mgr.addLease(lease0));
-    ASSERT_NO_THROW(lease_mgr.addLease(lease1));
-
-    // Make sure they have been added.
-    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.1")));
-    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.2")));
-
-    // No arguments
-    std::string response;
-    sendUnixCommand("{ \"command\": \"leases-reclaim\" }", response);
-    EXPECT_EQ("{ \"result\": 1, \"text\": "
-              "\"Missing mandatory 'remove' parameter.\" }", response);
-
-    // Bad argument name
-    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
-                    "\"arguments\": { \"reclaim\": true } }", response);
-    EXPECT_EQ("{ \"result\": 1, \"text\": "
-              "\"Missing mandatory 'remove' parameter.\" }", response);
-
-    // Bad remove argument type
-    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
-                    "\"arguments\": { \"remove\": \"bogus\" } }", response);
-    EXPECT_EQ("{ \"result\": 1, \"text\": "
-              "\"'remove' parameter expected to be a boolean.\" }", response);
-
-    // Send the command
-    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
-                    "\"arguments\": { \"remove\": false } }", response);
-    EXPECT_EQ("{ \"result\": 0, \"text\": "
-              "\"Reclamation of expired leases is complete.\" }", response);
-
-    // Leases should be reclaimed, but not removed
-    ASSERT_NO_THROW(lease0 = lease_mgr.getLease4(IOAddress("10.0.0.1")));
-    ASSERT_NO_THROW(lease1 = lease_mgr.getLease4(IOAddress("10.0.0.2")));
-    ASSERT_TRUE(lease0);
-    ASSERT_TRUE(lease1);
-    EXPECT_TRUE(lease0->stateExpiredReclaimed());
-    EXPECT_TRUE(lease1->stateExpiredReclaimed());
-}
-
-// This test verifies that the DHCP server handles version-get commands
-TEST_F(CtrlChannelDhcpv4SrvTest, getversion) {
-    createUnixChannelServer();
-
-    std::string response;
-
-    // Send the version-get command
-    sendUnixCommand("{ \"command\": \"version-get\" }", response);
-    EXPECT_TRUE(response.find("\"result\": 0") != string::npos);
-    EXPECT_TRUE(response.find("log4cplus") != string::npos);
-    EXPECT_FALSE(response.find("GTEST_VERSION") != string::npos);
-
-    // Send the build-report command
-    sendUnixCommand("{ \"command\": \"build-report\" }", response);
-    EXPECT_TRUE(response.find("\"result\": 0") != string::npos);
-    EXPECT_TRUE(response.find("GTEST_VERSION") != string::npos);
-}
-
-// This test verifies that the DHCP server immediately removed expired
-// This test verifies that the DHCP server immediately removed expired
-// leases on leases-reclaim command with remove = true
-TEST_F(CtrlChannelDhcpv4SrvTest, controlLeasesReclaimRemove) {
-    createUnixChannelServer();
-
-    // Create expired leases. Leases are expired by 40 seconds ago
-    // (valid lifetime = 60, cltt = now - 100).
-    HWAddrPtr hwaddr0(new HWAddr(HWAddr::fromText("00:01:02:03:04:05")));
-    Lease4Ptr lease0(new Lease4(IOAddress("10.0.0.1"), hwaddr0,
-                                ClientIdPtr(), 60, 10, 20,
-                                time(NULL) - 100, SubnetID(1)));
-    HWAddrPtr hwaddr1(new HWAddr(HWAddr::fromText("01:02:03:04:05:06")));
-    Lease4Ptr lease1(new Lease4(IOAddress("10.0.0.2"), hwaddr1,
-                                ClientIdPtr(), 60, 10, 20,
-                                time(NULL) - 100, SubnetID(1)));
-
-    // Add leases to the database.
-    LeaseMgr& lease_mgr = LeaseMgrFactory::instance();
-    ASSERT_NO_THROW(lease_mgr.addLease(lease0));
-    ASSERT_NO_THROW(lease_mgr.addLease(lease1));
-
-    // Make sure they have been added.
-    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.1")));
-    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.2")));
-
-    // Send the command
-    std::string response;
-    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
-                    "\"arguments\": { \"remove\": true } }", response);
-    EXPECT_EQ("{ \"result\": 0, \"text\": "
-              "\"Reclamation of expired leases is complete.\" }", response);
-
-    // Leases should have been removed.
-    ASSERT_NO_THROW(lease0 = lease_mgr.getLease4(IOAddress("10.0.0.1")));
-    ASSERT_NO_THROW(lease1 = lease_mgr.getLease4(IOAddress("10.0.0.2")));
-    EXPECT_FALSE(lease0);
-    EXPECT_FALSE(lease1);
-}
-
 // Tests that the server properly responds to statistics commands.  Note this
 // is really only intended to verify that the appropriate Statistics handler
 // is called based on the command.  It is not intended to be an exhaustive
@@ -659,7 +553,42 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelStats) {
     // Check statistic-get-all
     sendUnixCommand("{ \"command\" : \"statistic-get-all\", "
                     "  \"arguments\": {}}", response);
-    EXPECT_EQ("{ \"arguments\": {  }, \"result\": 0 }", response);
+
+    std::set<std::string> initial_stats = {
+        "pkt4-received",
+        "pkt4-discover-received",
+        "pkt4-offer-received",
+        "pkt4-request-received",
+        "pkt4-ack-received",
+        "pkt4-nak-received",
+        "pkt4-release-received",
+        "pkt4-decline-received",
+        "pkt4-inform-received",
+        "pkt4-unknown-received",
+        "pkt4-sent",
+        "pkt4-offer-sent",
+        "pkt4-ack-sent",
+        "pkt4-nak-sent",
+        "pkt4-parse-failed",
+        "pkt4-receive-drop"
+    };
+
+    // preparing the schema which check if all statistics are set to zero
+    std::ostringstream s;
+    s << "{ \"arguments\": { ";
+    for (auto st = initial_stats.begin(); st != initial_stats.end();) {
+        s << "\"" << *st << "\": [ [ 0, \"";
+        s << isc::util::ptimeToText(StatsMgr::instance().getObservation(*st)->getInteger().second);
+        s << "\" ] ]";
+        if (++st != initial_stats.end()) {
+            s << ", ";
+        }
+    }
+    s << " }, \"result\": 0 }";
+
+    auto stats_get_all = s.str();
+
+    EXPECT_EQ(stats_get_all, response);
 
     // Check statistic-reset
     sendUnixCommand("{ \"command\" : \"statistic-reset\", "
@@ -686,6 +615,34 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelStats) {
                     "  \"arguments\": {}}", response);
     EXPECT_EQ("{ \"result\": 0, \"text\": \"All statistics removed.\" }",
               response);
+
+    // Check statistic-sample-age-set
+    sendUnixCommand("{ \"command\" : \"statistic-sample-age-set\", "
+                    "  \"arguments\": {"
+                    "  \"name\":\"bogus\", \"duration\": 1245 }}", response);
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"No 'bogus' statistic found\" }",
+              response);
+
+    // Check statistic-sample-age-set-all
+    sendUnixCommand("{ \"command\" : \"statistic-sample-age-set-all\", "
+                    "  \"arguments\": {"
+                    "  \"duration\": 1245 }}", response);
+    EXPECT_EQ("{ \"result\": 0, \"text\": \"All statistics duration limit are set.\" }",
+              response);
+
+    // Check statistic-sample-count-set
+    sendUnixCommand("{ \"command\" : \"statistic-sample-count-set\", "
+                    "  \"arguments\": {"
+                    "  \"name\":\"bogus\", \"max-samples\": 100 }}", response);
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"No 'bogus' statistic found\" }",
+              response);
+
+    // Check statistic-sample-count-set-all
+    sendUnixCommand("{ \"command\" : \"statistic-sample-count-set-all\", "
+                    "  \"arguments\": {"
+                    "  \"max-samples\": 100 }}", response);
+    EXPECT_EQ("{ \"result\": 0, \"text\": \"All statistics count limit are set.\" }",
+              response);
 }
 
 // Check that the "config-set" command will replace current configuration
@@ -709,7 +666,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
         "           \"persist\":false, \n"
         "           \"lfc-interval\": 0  \n"
         "        }, \n"
-        "       \"expired-leases-processing\": { \n"
+        "        \"expired-leases-processing\": { \n"
         "            \"reclaim-timer-wait-time\": 0, \n"
         "            \"hold-reclaimed-time\": 0, \n"
         "            \"flush-reclaimed-timer-wait-time\": 0 \n"
@@ -722,10 +679,32 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
         "               {\"subnet\": \"192.2.1.0/24\", \n"
         "                \"pools\": [{ \"pool\": \"192.2.1.1-192.2.1.50\" }]}\n";
     string bad_subnet =
-        "               {\"BOGUS\": \"192.2.2.0/24\", \n"
+        "               {\"comment\": \"192.2.2.0/24\", \n"
         "                \"pools\": [{ \"pool\": \"192.2.2.1-192.2.2.50\" }]}\n";
     string subnet_footer =
         "          ] \n";
+    string option_def =
+        "    ,\"option-def\": [\n"
+        "    {\n"
+        "        \"name\": \"foo\",\n"
+        "        \"code\": 163,\n"
+        "        \"type\": \"uint32\",\n"
+        "        \"array\": false,\n"
+        "        \"record-types\": \"\",\n"
+        "        \"space\": \"dhcp4\",\n"
+        "        \"encapsulate\": \"\"\n"
+        "    }\n"
+        "]\n";
+    string option_data =
+        "    ,\"option-data\": [\n"
+        "    {\n"
+        "        \"name\": \"foo\",\n"
+        "        \"code\": 163,\n"
+        "        \"space\": \"dhcp4\",\n"
+        "        \"csv-format\": true,\n"
+        "        \"data\": \"12345\"\n"
+        "    }\n"
+        "]\n";
     string control_socket_header =
         "       ,\"control-socket\": { \n"
         "       \"socket-type\": \"unix\", \n"
@@ -751,6 +730,8 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
         << dhcp4_cfg_txt
         << subnet1
         << subnet_footer
+        << option_def
+        << option_data
         << control_socket_header
         << socket_path_
         << control_socket_footer
@@ -771,6 +752,9 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
     const Subnet4Collection* subnets =
         CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
     EXPECT_EQ(1, subnets->size());
+
+    OptionDefinitionPtr def = LibDHCP::getRuntimeOptionDef("dhcp4", 163);
+    ASSERT_TRUE(def);
 
     // Create a config with malformed subnet that should fail to parse.
     os.str("");
@@ -797,6 +781,9 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
     // Check that the config was not lost
     subnets = CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
     EXPECT_EQ(1, subnets->size());
+
+    def = LibDHCP::getRuntimeOptionDef("dhcp4", 163);
+    ASSERT_TRUE(def);
 
     // Create a valid config with two subnets and no command channel.
     // It should succeed, client should still receive the response
@@ -830,36 +817,6 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
 
     // Clean up after the test.
     CfgMgr::instance().clear();
-}
-
-// Tests that the server properly responds to shtudown command sent
-// via ControlChannel
-TEST_F(CtrlChannelDhcpv4SrvTest, listCommands) {
-    createUnixChannelServer();
-    std::string response;
-
-    sendUnixCommand("{ \"command\": \"list-commands\" }", response);
-
-    ConstElementPtr rsp;
-    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
-
-    // We expect the server to report at least the following commands:
-    checkListCommands(rsp, "build-report");
-    checkListCommands(rsp, "config-get");
-    checkListCommands(rsp, "config-reload");
-    checkListCommands(rsp, "config-set");
-    checkListCommands(rsp, "config-write");
-    checkListCommands(rsp, "list-commands");
-    checkListCommands(rsp, "leases-reclaim");
-    checkListCommands(rsp, "libreload");
-    checkListCommands(rsp, "shutdown");
-    checkListCommands(rsp, "statistic-get");
-    checkListCommands(rsp, "statistic-get-all");
-    checkListCommands(rsp, "statistic-remove");
-    checkListCommands(rsp, "statistic-remove-all");
-    checkListCommands(rsp, "statistic-reset");
-    checkListCommands(rsp, "statistic-reset-all");
-    checkListCommands(rsp, "version-get");
 }
 
 // Tests if the server returns its configuration using config-get.
@@ -908,7 +865,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
         "           \"persist\":false, \n"
         "           \"lfc-interval\": 0  \n"
         "        }, \n"
-        "       \"expired-leases-processing\": { \n"
+        "        \"expired-leases-processing\": { \n"
         "            \"reclaim-timer-wait-time\": 0, \n"
         "            \"hold-reclaimed-time\": 0, \n"
         "            \"flush-reclaimed-timer-wait-time\": 0 \n"
@@ -921,7 +878,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
         "               {\"subnet\": \"192.2.1.0/24\", \n"
         "                \"pools\": [{ \"pool\": \"192.2.1.1-192.2.1.50\" }]}\n";
     string bad_subnet =
-        "               {\"BOGUS\": \"192.2.2.0/24\", \n"
+        "               {\"comment\": \"192.2.2.0/24\", \n"
         "                \"pools\": [{ \"pool\": \"192.2.2.1-192.2.2.50\" }]}\n";
     string subnet_footer =
         "          ] \n";
@@ -989,8 +946,8 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
 
     // Should fail with a syntax error
     EXPECT_EQ("{ \"result\": 1, "
-              "\"text\": \"subnet configuration failed: mandatory 'subnet' "
-              "parameter is missing for a subnet being configured (<wire>:19:17)\" }",
+              "\"text\": \"subnet configuration failed: mandatory 'subnet' parameter "
+              "is missing for a subnet being configured (<wire>:19:17)\" }",
               response);
 
     // Check that the config was not lost
@@ -1012,7 +969,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
     // Verify the control channel socket exists.
     ASSERT_TRUE(fileExists(socket_path_));
 
-    // Send the config-test command
+    // Send the config-test command.
     sendUnixCommand(os.str(), response);
 
     // Verify the control channel socket still exists.
@@ -1024,7 +981,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
               "sanity checked, but not applied.\" }",
               response);
 
-    // Check that the config was not applied
+    // Check that the config was not applied.
     subnets = CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
     EXPECT_EQ(1, subnets->size());
 
@@ -1032,8 +989,235 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
     CfgMgr::instance().clear();
 }
 
+// This test verifies that the DHCP server handles version-get commands
+TEST_F(CtrlChannelDhcpv4SrvTest, getVersion) {
+    createUnixChannelServer();
+
+    std::string response;
+
+    // Send the version-get command
+    sendUnixCommand("{ \"command\": \"version-get\" }", response);
+    EXPECT_TRUE(response.find("\"result\": 0") != string::npos);
+    EXPECT_TRUE(response.find("log4cplus") != string::npos);
+    EXPECT_FALSE(response.find("GTEST_VERSION") != string::npos);
+
+    // Send the build-report command
+    sendUnixCommand("{ \"command\": \"build-report\" }", response);
+    EXPECT_TRUE(response.find("\"result\": 0") != string::npos);
+    EXPECT_TRUE(response.find("GTEST_VERSION") != string::npos);
+}
+
+// This test verifies that the DHCP server handles server-tag-get command
+TEST_F(CtrlChannelDhcpv4SrvTest, serverTagGet) {
+    createUnixChannelServer();
+
+    std::string response;
+    std::string expected;
+
+    // Send the server-tag-get command
+    sendUnixCommand("{ \"command\": \"server-tag-get\" }", response);
+    expected = "{ \"arguments\": { \"server-tag\": \"\" }, \"result\": 0 }";
+    EXPECT_EQ(expected, response);
+
+    // Set a value to the server tag
+    CfgMgr::instance().getCurrentCfg()->setServerTag("foobar");
+
+    // Retry...
+    sendUnixCommand("{ \"command\": \"server-tag-get\" }", response);
+    expected = "{ \"arguments\": { \"server-tag\": \"foobar\" }, \"result\": 0 }";
+}
+
+// This test verifies that the DHCP server handles status-get commands
+TEST_F(CtrlChannelDhcpv4SrvTest, statusGet) {
+    createUnixChannelServer();
+
+    // start_ is initialized by init.
+    ASSERT_THROW(server_->init("/no/such/file"), BadValue);
+
+    std::string response_txt;
+
+    // Send the version-get command
+    sendUnixCommand("{ \"command\": \"status-get\" }", response_txt);
+    ConstElementPtr response;
+    ASSERT_NO_THROW(response = Element::fromJSON(response_txt));
+    ASSERT_TRUE(response);
+    ASSERT_EQ(Element::map, response->getType());
+    EXPECT_EQ(2, response->size());
+    ConstElementPtr result = response->get("result");
+    ASSERT_TRUE(result);
+    ASSERT_EQ(Element::integer, result->getType());
+    EXPECT_EQ(0, result->intValue());
+    ConstElementPtr arguments = response->get("arguments");
+    ASSERT_EQ(Element::map, arguments->getType());
+
+    // The returned pid should be the pid of our process.
+    auto found_pid = arguments->get("pid");
+    ASSERT_TRUE(found_pid);
+    EXPECT_EQ(static_cast<int64_t>(getpid()), found_pid->intValue());
+
+    // It is hard to check the actual uptime (and reload) as it is based
+    // on current time. Let's just make sure it is within a reasonable
+    // range.
+    auto found_uptime = arguments->get("uptime");
+    ASSERT_TRUE(found_uptime);
+    EXPECT_LE(found_uptime->intValue(), 5);
+    EXPECT_GE(found_uptime->intValue(), 0);
+
+    auto found_reload = arguments->get("reload");
+    ASSERT_TRUE(found_reload);
+    EXPECT_LE(found_reload->intValue(), 5);
+    EXPECT_GE(found_reload->intValue(), 0);
+}
+
+// This test verifies that the DHCP server handles config-backend-pull command
+TEST_F(CtrlChannelDhcpv4SrvTest, configBackendPull) {
+    createUnixChannelServer();
+
+    std::string response;
+    std::string expected;
+
+    // Send the config-backend-pull command. Note there is no configured backed.
+    sendUnixCommand("{ \"command\": \"config-backend-pull\" }", response);
+    expected = "{ \"result\": 3, \"text\": \"No config backend.\" }";
+    EXPECT_EQ(expected, response);
+}
+
+// This test verifies that the DHCP server immediately reclaims expired
+// leases on leases-reclaim command
+TEST_F(CtrlChannelDhcpv4SrvTest, controlLeasesReclaim) {
+    createUnixChannelServer();
+
+    // Create expired leases. Leases are expired by 40 seconds ago
+    // (valid lifetime = 60, cltt = now - 100).
+    HWAddrPtr hwaddr0(new HWAddr(HWAddr::fromText("00:01:02:03:04:05")));
+    Lease4Ptr lease0(new Lease4(IOAddress("10.0.0.1"), hwaddr0,
+                                ClientIdPtr(), 60,
+                                time(NULL) - 100, SubnetID(1)));
+    HWAddrPtr hwaddr1(new HWAddr(HWAddr::fromText("01:02:03:04:05:06")));
+    Lease4Ptr lease1(new Lease4(IOAddress("10.0.0.2"), hwaddr1,
+                                ClientIdPtr(), 60,
+                                time(NULL) - 100, SubnetID(1)));
+
+    // Add leases to the database.
+    LeaseMgr& lease_mgr = LeaseMgrFactory::instance();
+    ASSERT_NO_THROW(lease_mgr.addLease(lease0));
+    ASSERT_NO_THROW(lease_mgr.addLease(lease1));
+
+    // Make sure they have been added.
+    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.1")));
+    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.2")));
+
+    // No arguments
+    std::string response;
+    sendUnixCommand("{ \"command\": \"leases-reclaim\" }", response);
+    EXPECT_EQ("{ \"result\": 1, \"text\": "
+              "\"Missing mandatory 'remove' parameter.\" }", response);
+
+    // Bad argument name
+    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
+                    "\"arguments\": { \"reclaim\": true } }", response);
+    EXPECT_EQ("{ \"result\": 1, \"text\": "
+              "\"Missing mandatory 'remove' parameter.\" }", response);
+
+    // Bad remove argument type
+    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
+                    "\"arguments\": { \"remove\": \"bogus\" } }", response);
+    EXPECT_EQ("{ \"result\": 1, \"text\": "
+              "\"'remove' parameter expected to be a boolean.\" }", response);
+
+    // Send the command
+    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
+                    "\"arguments\": { \"remove\": false } }", response);
+    EXPECT_EQ("{ \"result\": 0, \"text\": "
+              "\"Reclamation of expired leases is complete.\" }", response);
+
+    // Leases should be reclaimed, but not removed
+    ASSERT_NO_THROW(lease0 = lease_mgr.getLease4(IOAddress("10.0.0.1")));
+    ASSERT_NO_THROW(lease1 = lease_mgr.getLease4(IOAddress("10.0.0.2")));
+    ASSERT_TRUE(lease0);
+    ASSERT_TRUE(lease1);
+    EXPECT_TRUE(lease0->stateExpiredReclaimed());
+    EXPECT_TRUE(lease1->stateExpiredReclaimed());
+}
+
+// This test verifies that the DHCP server immediately reclaims expired
+// leases on leases-reclaim command with remove = true
+TEST_F(CtrlChannelDhcpv4SrvTest, controlLeasesReclaimRemove) {
+    createUnixChannelServer();
+
+    // Create expired leases. Leases are expired by 40 seconds ago
+    // (valid lifetime = 60, cltt = now - 100).
+    HWAddrPtr hwaddr0(new HWAddr(HWAddr::fromText("00:01:02:03:04:05")));
+    Lease4Ptr lease0(new Lease4(IOAddress("10.0.0.1"), hwaddr0,
+                                ClientIdPtr(), 60,
+                                time(NULL) - 100, SubnetID(1)));
+    HWAddrPtr hwaddr1(new HWAddr(HWAddr::fromText("01:02:03:04:05:06")));
+    Lease4Ptr lease1(new Lease4(IOAddress("10.0.0.2"), hwaddr1,
+                                ClientIdPtr(), 60,
+                                time(NULL) - 100, SubnetID(1)));
+
+    // Add leases to the database.
+    LeaseMgr& lease_mgr = LeaseMgrFactory::instance();
+    ASSERT_NO_THROW(lease_mgr.addLease(lease0));
+    ASSERT_NO_THROW(lease_mgr.addLease(lease1));
+
+    // Make sure they have been added.
+    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.1")));
+    ASSERT_TRUE(lease_mgr.getLease4(IOAddress("10.0.0.2")));
+
+    // Send the command
+    std::string response;
+    sendUnixCommand("{ \"command\": \"leases-reclaim\", "
+                    "\"arguments\": { \"remove\": true } }", response);
+    EXPECT_EQ("{ \"result\": 0, \"text\": "
+              "\"Reclamation of expired leases is complete.\" }", response);
+
+    // Leases should have been removed.
+    ASSERT_NO_THROW(lease0 = lease_mgr.getLease4(IOAddress("10.0.0.1")));
+    ASSERT_NO_THROW(lease1 = lease_mgr.getLease4(IOAddress("10.0.0.2")));
+    ASSERT_FALSE(lease0);
+    ASSERT_FALSE(lease1);
+}
+
+// Tests that the server properly responds to shtudown command sent
+// via ControlChannel
+TEST_F(CtrlChannelDhcpv4SrvTest, listCommands) {
+    createUnixChannelServer();
+    std::string response;
+
+    sendUnixCommand("{ \"command\": \"list-commands\" }", response);
+
+    ConstElementPtr rsp;
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+
+    // We expect the server to report at least the following commands:
+    checkListCommands(rsp, "build-report");
+    checkListCommands(rsp, "config-backend-pull");
+    checkListCommands(rsp, "config-get");
+    checkListCommands(rsp, "config-reload");
+    checkListCommands(rsp, "config-set");
+    checkListCommands(rsp, "config-test");
+    checkListCommands(rsp, "config-write");
+    checkListCommands(rsp, "list-commands");
+    checkListCommands(rsp, "leases-reclaim");
+    checkListCommands(rsp, "libreload");
+    checkListCommands(rsp, "version-get");
+    checkListCommands(rsp, "server-tag-get");
+    checkListCommands(rsp, "shutdown");
+    checkListCommands(rsp, "statistic-get");
+    checkListCommands(rsp, "statistic-get-all");
+    checkListCommands(rsp, "statistic-remove");
+    checkListCommands(rsp, "statistic-remove-all");
+    checkListCommands(rsp, "statistic-reset");
+    checkListCommands(rsp, "statistic-reset-all");
+    checkListCommands(rsp, "statistic-sample-age-set");
+    checkListCommands(rsp, "statistic-sample-age-set-all");
+    checkListCommands(rsp, "statistic-sample-count-set");
+    checkListCommands(rsp, "statistic-sample-count-set-all");
+}
+
 // Tests if config-write can be called without any parameters.
-TEST_F(CtrlChannelDhcpv4SrvTest, writeConfigNoFilename) {
+TEST_F(CtrlChannelDhcpv4SrvTest, configWriteNoFilename) {
     createUnixChannelServer();
     std::string response;
 
@@ -1049,7 +1233,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, writeConfigNoFilename) {
 }
 
 // Tests if config-write can be called with a valid filename as parameter.
-TEST_F(CtrlChannelDhcpv4SrvTest, writeConfigFilename) {
+TEST_F(CtrlChannelDhcpv4SrvTest, configWriteFilename) {
     createUnixChannelServer();
     std::string response;
 
@@ -1074,7 +1258,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configReloadMissingFile) {
     sendUnixCommand("{ \"command\": \"config-reload\" }", response);
 
     // Verify the reload was rejected.
-    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed:"
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed: "
               "configuration error using file 'test6.json': Unable to open file "
               "test6.json\" }",
               response);
@@ -1100,7 +1284,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configReloadBrokenFile) {
     sendUnixCommand("{ \"command\": \"config-reload\" }", response);
 
     // Verify the reload will fail.
-    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed:"
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"Config reload failed: "
               "configuration error using file 'test7.json': "
               "test7.json:1.1: Invalid character: g\" }",
               response);
@@ -1412,7 +1596,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, longResponse) {
 }
 
 // This test verifies that the server signals timeout if the transmission
-// takes too long, after receiving a partial command.
+// takes too long, having received a partial command.
 TEST_F(CtrlChannelDhcpv4SrvTest, connectionTimeoutPartialCommand) {
     createUnixChannelServer();
 
@@ -1462,7 +1646,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, connectionTimeoutPartialCommand) {
     // Check that the server has signalled a timeout.
     EXPECT_EQ("{ \"result\": 1, \"text\": "
               "\"Connection over control channel timed out, "
-              "discarded partial command of 19 bytes\" }" , response);
+              "discarded partial command of 19 bytes\" }", response);
 }
 
 // This test verifies that the server signals timeout if the transmission
@@ -1492,6 +1676,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, connectionTimeoutNoData) {
         ASSERT_TRUE(client);
         ASSERT_TRUE(client->connectToServer(socket_path_));
 
+        // Having sent nothing let's just wait and see if Server times us out.
         // Let's wait up to 15s for the server's response. The response
         // should arrive sooner assuming that the timeout mechanism for
         // the server is working properly.

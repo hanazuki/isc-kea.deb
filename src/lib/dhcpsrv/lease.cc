@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -25,13 +25,25 @@ const uint32_t Lease::STATE_DEFAULT = 0x0;
 const uint32_t Lease::STATE_DECLINED = 0x1;
 const uint32_t Lease::STATE_EXPIRED_RECLAIMED = 0x2;
 
-Lease::Lease(const isc::asiolink::IOAddress& addr, uint32_t t1, uint32_t t2,
+std::string
+Lease::lifetimeToText(uint32_t lifetime) {
+    ostringstream repr;
+    if (lifetime == INFINITY_LFT) {
+        repr << "infinity";
+    } else {
+        repr << lifetime;
+    }
+    return repr.str();
+}
+
+Lease::Lease(const isc::asiolink::IOAddress& addr,
              uint32_t valid_lft, SubnetID subnet_id, time_t cltt,
              const bool fqdn_fwd, const bool fqdn_rev,
              const std::string& hostname, const HWAddrPtr& hwaddr)
-    :addr_(addr), t1_(t1), t2_(t2), valid_lft_(valid_lft), cltt_(cltt),
-     subnet_id_(subnet_id), hostname_(hostname), fqdn_fwd_(fqdn_fwd),
-    fqdn_rev_(fqdn_rev), hwaddr_(hwaddr), state_(STATE_DEFAULT) {
+    : addr_(addr), valid_lft_(valid_lft), old_valid_lft_(valid_lft),
+      cltt_(cltt), old_cltt_(cltt), subnet_id_(subnet_id),
+      hostname_(boost::algorithm::to_lower_copy(hostname)), fqdn_fwd_(fqdn_fwd),
+      fqdn_rev_(fqdn_rev), hwaddr_(hwaddr), state_(STATE_DEFAULT) {
 }
 
 
@@ -93,7 +105,7 @@ Lease::basicStatesToText(const uint32_t state) {
 
 bool
 Lease::expired() const {
-    return (getExpirationTime() < time(NULL));
+    return ((valid_lft_ != INFINITY_LFT) && (getExpirationTime() < time(NULL)));
 }
 
 bool
@@ -237,6 +249,7 @@ Lease::fromElementCommon(const LeasePtr& lease, const data::ConstElementPtr& ele
     }
 
     lease->hostname_ = hostname->stringValue();
+    boost::algorithm::to_lower(lease->hostname_);
 
     // state
     ConstElementPtr state = element->get("state");
@@ -264,7 +277,7 @@ Lease::fromElementCommon(const LeasePtr& lease, const data::ConstElementPtr& ele
 }
 
 Lease4::Lease4(const Lease4& other)
-    : Lease(other.addr_, other.t1_, other.t2_, other.valid_lft_,
+    : Lease(other.addr_, other.valid_lft_,
             other.subnet_id_, other.cltt_, other.fqdn_fwd_,
             other.fqdn_rev_, other.hostname_, other.hwaddr_) {
 
@@ -295,15 +308,13 @@ Lease4::Lease4(const isc::asiolink::IOAddress& address,
                const HWAddrPtr& hw_address,
                const ClientIdPtr& client_id,
                const uint32_t valid_lifetime,
-               const uint32_t t1,
-               const uint32_t t2,
                const time_t cltt,
                const SubnetID subnet_id,
                const bool fqdn_fwd,
                const bool fqdn_rev,
                const std::string& hostname)
 
-    : Lease(address, t1, t2, valid_lifetime, subnet_id, cltt, fqdn_fwd,
+    : Lease(address, valid_lifetime, subnet_id, cltt, fqdn_fwd,
             fqdn_rev, hostname, hw_address),
       client_id_(client_id) {
 }
@@ -353,8 +364,6 @@ void
 Lease4::decline(uint32_t probation_period) {
     hwaddr_.reset(new HWAddr());
     client_id_.reset();
-    t1_ = 0;
-    t2_ = 0;
     cltt_ = time(NULL);
     hostname_ = string("");
     fqdn_fwd_ = false;
@@ -367,10 +376,10 @@ Lease4&
 Lease4::operator=(const Lease4& other) {
     if (this != &other) {
         addr_ = other.addr_;
-        t1_ = other.t1_;
-        t2_ = other.t2_;
         valid_lft_ = other.valid_lft_;
+        old_valid_lft_ = other.old_valid_lft_;
         cltt_ = other.cltt_;
+        old_cltt_ = other.old_cltt_;
         subnet_id_ = other.subnet_id_;
         hostname_ = other.hostname_;
         fqdn_fwd_ = other.fqdn_fwd_;
@@ -462,9 +471,8 @@ Lease4::fromElement(const ConstElementPtr& element) {
 
 Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
                DuidPtr duid, uint32_t iaid, uint32_t preferred, uint32_t valid,
-               uint32_t t1, uint32_t t2, SubnetID subnet_id,
-               const HWAddrPtr& hwaddr, uint8_t prefixlen)
-    : Lease(addr, t1, t2, valid, subnet_id, 0/*cltt*/, false, false, "", hwaddr),
+               SubnetID subnet_id, const HWAddrPtr& hwaddr, uint8_t prefixlen)
+    : Lease(addr, valid, subnet_id, 0/*cltt*/, false, false, "", hwaddr),
       type_(type), prefixlen_(prefixlen), iaid_(iaid), duid_(duid),
       preferred_lft_(preferred) {
     if (!duid) {
@@ -472,15 +480,15 @@ Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
     }
 
     cltt_ = time(NULL);
+    old_cltt_ = cltt_;
 }
 
 Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
                DuidPtr duid, uint32_t iaid, uint32_t preferred, uint32_t valid,
-               uint32_t t1, uint32_t t2, SubnetID subnet_id,
-               const bool fqdn_fwd, const bool fqdn_rev,
+               SubnetID subnet_id, const bool fqdn_fwd, const bool fqdn_rev,
                const std::string& hostname, const HWAddrPtr& hwaddr,
                uint8_t prefixlen)
-    : Lease(addr, t1, t2, valid, subnet_id, 0/*cltt*/,
+    : Lease(addr, valid, subnet_id, 0/*cltt*/,
             fqdn_fwd, fqdn_rev, hostname, hwaddr),
       type_(type), prefixlen_(prefixlen), iaid_(iaid), duid_(duid),
       preferred_lft_(preferred) {
@@ -489,10 +497,11 @@ Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
     }
 
     cltt_ = time(NULL);
+    old_cltt_ = cltt_;
 }
 
 Lease6::Lease6()
-    : Lease(isc::asiolink::IOAddress("::"), 0, 0, 0, 0, 0, false, false, "",
+    : Lease(isc::asiolink::IOAddress("::"), 0, 0, 0, false, false, "",
             HWAddrPtr()), type_(TYPE_NA), prefixlen_(0), iaid_(0),
             duid_(DuidPtr()), preferred_lft_(0) {
 }
@@ -516,8 +525,6 @@ void
 Lease6::decline(uint32_t probation_period) {
     hwaddr_.reset();
     duid_.reset(new DUID(DUID::EMPTY()));
-    t1_ = 0;
-    t2_ = 0;
     preferred_lft_ = 0;
     valid_lft_ = probation_period;
     cltt_ = time(NULL);
@@ -537,8 +544,8 @@ Lease6::toText() const {
            << "Address:       " << addr_ << "\n"
            << "Prefix length: " << static_cast<int>(prefixlen_) << "\n"
            << "IAID:          " << iaid_ << "\n"
-           << "Pref life:     " << preferred_lft_ << "\n"
-           << "Valid life:    " << valid_lft_ << "\n"
+           << "Pref life:     " << lifetimeToText(preferred_lft_) << "\n"
+           << "Valid life:    " << lifetimeToText(valid_lft_) << "\n"
            << "Cltt:          " << cltt_ << "\n"
            << "DUID:          " << (duid_?duid_->toText():"(none)") << "\n"
            << "Hardware addr: " << (hwaddr_?hwaddr_->toText(false):"(none)") << "\n"
@@ -557,9 +564,7 @@ Lease4::toText() const {
     ostringstream stream;
 
     stream << "Address:       " << addr_ << "\n"
-           << "Valid life:    " << valid_lft_ << "\n"
-           << "T1:            " << t1_ << "\n"
-           << "T2:            " << t2_ << "\n"
+           << "Valid life:    " << lifetimeToText(valid_lft_) << "\n"
            << "Cltt:          " << cltt_ << "\n"
            << "Hardware addr: " << (hwaddr_ ? hwaddr_->toText(false) : "(none)") << "\n"
            << "Client id:     " << (client_id_ ? client_id_->toText() : "(none)") << "\n"
@@ -580,10 +585,10 @@ Lease4::operator==(const Lease4& other) const {
             nullOrEqualValues(client_id_, other.client_id_) &&
             addr_ == other.addr_ &&
             subnet_id_ == other.subnet_id_ &&
-            t1_ == other.t1_ &&
-            t2_ == other.t2_ &&
             valid_lft_ == other.valid_lft_ &&
+            old_valid_lft_ == other.old_valid_lft_ &&
             cltt_ == other.cltt_ &&
+            old_cltt_ == other.old_cltt_ &&
             hostname_ == other.hostname_ &&
             fqdn_fwd_ == other.fqdn_fwd_ &&
             fqdn_rev_ == other.fqdn_rev_ &&
@@ -601,9 +606,9 @@ Lease6::operator==(const Lease6& other) const {
             iaid_ == other.iaid_ &&
             preferred_lft_ == other.preferred_lft_ &&
             valid_lft_ == other.valid_lft_ &&
-            t1_ == other.t1_ &&
-            t2_ == other.t2_ &&
+            old_valid_lft_ == other.old_valid_lft_ &&
             cltt_ == other.cltt_ &&
+            old_cltt_ == other.old_cltt_ &&
             subnet_id_ == other.subnet_id_ &&
             hostname_ == other.hostname_ &&
             fqdn_fwd_ == other.fqdn_fwd_ &&

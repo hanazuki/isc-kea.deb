@@ -89,20 +89,15 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@HAVE_BOTAN1_TRUE@am__append_1 = botan1_link.cc botan_common.h \
-@HAVE_BOTAN1_TRUE@	botan1_hash.cc botan1_hmac.cc
-@HAVE_BOTAN_TRUE@am__append_2 = botan_link.cc botan_common.h \
+@HAVE_BOTAN_TRUE@am__append_1 = botan_link.cc botan_common.h \
 @HAVE_BOTAN_TRUE@	botan_hash.cc botan_hmac.cc
-@HAVE_OPENSSL_TRUE@am__append_3 = openssl_link.cc openssl_common.h \
+@HAVE_OPENSSL_TRUE@am__append_2 = openssl_link.cc openssl_common.h \
 @HAVE_OPENSSL_TRUE@	openssl_hash.cc openssl_compat.h \
 @HAVE_OPENSSL_TRUE@	openssl_hmac.cc
-@HAVE_BOTAN1_TRUE@am__append_4 = \
-@HAVE_BOTAN1_TRUE@	botan_common.h
-
-@HAVE_BOTAN_TRUE@am__append_5 = \
+@HAVE_BOTAN_TRUE@am__append_3 = \
 @HAVE_BOTAN_TRUE@	botan_common.h
 
-@HAVE_OPENSSL_TRUE@am__append_6 = \
+@HAVE_OPENSSL_TRUE@am__append_4 = \
 @HAVE_OPENSSL_TRUE@	openssl_common.h \
 @HAVE_OPENSSL_TRUE@	openssl_compat.h
 
@@ -111,6 +106,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -163,19 +159,15 @@ libkea_cryptolink_la_DEPENDENCIES =  \
 	$(am__DEPENDENCIES_1)
 am__libkea_cryptolink_la_SOURCES_DIST = cryptolink.h cryptolink.cc \
 	crypto_hash.h crypto_hash.cc crypto_hmac.h crypto_hmac.cc \
-	crypto_rng.h crypto_rng.cc botan1_link.cc botan_common.h \
-	botan1_hash.cc botan1_hmac.cc botan_link.cc botan_hash.cc \
-	botan_hmac.cc openssl_link.cc openssl_common.h openssl_hash.cc \
-	openssl_compat.h openssl_hmac.cc
-@HAVE_BOTAN1_TRUE@am__objects_1 = botan1_link.lo botan1_hash.lo \
-@HAVE_BOTAN1_TRUE@	botan1_hmac.lo
-@HAVE_BOTAN_TRUE@am__objects_2 = botan_link.lo botan_hash.lo \
+	crypto_rng.h crypto_rng.cc botan_link.cc botan_common.h \
+	botan_hash.cc botan_hmac.cc openssl_link.cc openssl_common.h \
+	openssl_hash.cc openssl_compat.h openssl_hmac.cc
+@HAVE_BOTAN_TRUE@am__objects_1 = botan_link.lo botan_hash.lo \
 @HAVE_BOTAN_TRUE@	botan_hmac.lo
-@HAVE_OPENSSL_TRUE@am__objects_3 = openssl_link.lo openssl_hash.lo \
+@HAVE_OPENSSL_TRUE@am__objects_2 = openssl_link.lo openssl_hash.lo \
 @HAVE_OPENSSL_TRUE@	openssl_hmac.lo
 am_libkea_cryptolink_la_OBJECTS = cryptolink.lo crypto_hash.lo \
-	crypto_hmac.lo crypto_rng.lo $(am__objects_1) $(am__objects_2) \
-	$(am__objects_3)
+	crypto_hmac.lo crypto_rng.lo $(am__objects_1) $(am__objects_2)
 libkea_cryptolink_la_OBJECTS = $(am_libkea_cryptolink_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -327,7 +319,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -348,7 +339,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -358,6 +348,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -367,7 +358,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -418,6 +408,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -435,17 +426,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -512,10 +503,9 @@ CLEANFILES = *.gcno *.gcda
 lib_LTLIBRARIES = libkea-cryptolink.la
 libkea_cryptolink_la_SOURCES = cryptolink.h cryptolink.cc \
 	crypto_hash.h crypto_hash.cc crypto_hmac.h crypto_hmac.cc \
-	crypto_rng.h crypto_rng.cc $(am__append_1) $(am__append_2) \
-	$(am__append_3)
+	crypto_rng.h crypto_rng.cc $(am__append_1) $(am__append_2)
 libkea_cryptolink_la_LDFLAGS = $(CRYPTO_LDFLAGS) -no-undefined \
-	-version-info 4:0:0
+	-version-info 5:0:0
 libkea_cryptolink_la_LIBADD =  \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(CRYPTO_LIBS)
@@ -523,8 +513,7 @@ libkea_cryptolink_la_LIBADD =  \
 # Specify the headers for copying into the installation directory tree.
 libkea_cryptolink_includedir = $(pkgincludedir)/cryptolink
 libkea_cryptolink_include_HEADERS = crypto_hash.h crypto_hmac.h \
-	crypto_rng.h cryptolink.h $(am__append_4) $(am__append_5) \
-	$(am__append_6)
+	crypto_rng.h cryptolink.h $(am__append_3) $(am__append_4)
 all: all-recursive
 
 .SUFFIXES:
@@ -603,9 +592,6 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/botan1_hash.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/botan1_hmac.Plo@am__quote@
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/botan1_link.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/botan_hash.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/botan_hmac.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/botan_link.Plo@am__quote@

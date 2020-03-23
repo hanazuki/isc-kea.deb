@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -54,6 +54,22 @@ public:
     SkipRemainingOptionsError (const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) { };
 };
+
+/// @brief Exception thrown during option unpacking
+/// This exception is thrown when an error has occurred unpacking
+/// an option from a packet and rather than drop the whole packet, we
+/// wish to simply skip over the option (i.e. omit it from the unpacked
+/// results), and resume unpacking with the next option in the buffer.
+/// The intent is to allow us to be liberal with what we receive, and
+/// skip nonsensical options rather than drop the whole packet. This
+/// exception is thrown, for instance, when string options are found to
+/// be empty or to contain only nuls.
+class SkipThisOptionError : public Exception {
+public:
+    SkipThisOptionError (const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) { };
+};
+
 
 class Option {
 public:
@@ -164,6 +180,33 @@ public:
     ///
     /// @param source Option to be copied.
     Option(const Option& source);
+
+    /// @brief Factory function creating an instance of the @c Option.
+    ///
+    /// This function should be used to create an instance of the DHCP
+    /// option within a hooks library in cases when the library may be
+    /// unloaded before the object is destroyed. This ensures that the
+    /// ownership of the object by the Kea process is retained.
+    ///
+    /// @param u specifies universe (V4 or V6)
+    /// @param type option type (0-255 for V4 and 0-65535 for V6)
+    ///
+    /// @return Pointer to the @c Option instance.
+    static OptionPtr create(Universe u, uint16_t type);
+
+    /// @brief Factory function creating an instance of the @c Option.
+    ///
+    /// This function should be used to create an instance of the DHCP
+    /// option within a hooks library in cases when the library may be
+    /// unloaded before the object is destroyed. This ensures that the
+    /// ownership of the object by the Kea process is retained.
+    ///
+    /// @param u specifies universe (V4 or V6)
+    /// @param type option type (0-255 for V4 and 0-65535 for V6)
+    /// @param data content of the option
+    ///
+    /// @return Pointer to the @c Option instance.
+    static OptionPtr create(Universe u, uint16_t type, const OptionBuffer& data);
 
     /// @brief Assignment operator.
     ///

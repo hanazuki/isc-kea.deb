@@ -1,15 +1,21 @@
-// Copyright (C) 2014-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+#include <cc/data.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/option.h>
+#include <dhcp/option_custom.h>
 #include <dhcp/option_int.h>
+#include <dhcp/option_int_array.h>
 #include <dhcp/option_space.h>
+#include <dhcp/option_string.h>
+#include <dhcp/option4_addrlst.h>
 #include <dhcpsrv/cfg_option.h>
+#include <testutils/gtest_utils.h>
 #include <testutils/test_to_element.h>
 #include <boost/foreach.hpp>
 #include <boost/pointer_cast.hpp>
@@ -20,9 +26,56 @@
 #include <sstream>
 
 using namespace isc;
+using namespace isc::asiolink;
+using namespace isc::data;
 using namespace isc::dhcp;
 
 namespace {
+
+// This test verifies that the OptionDescriptor factory function creates a
+// valid instance.
+TEST(OptionDescriptorTest, create) {
+    OptionPtr option = Option::create(Option::V4, 234);
+    ElementPtr context = Element::createMap();
+    context->set("name", Element::create("value"));
+    auto desc = OptionDescriptor::create(option, true, "value", context);
+
+    ASSERT_TRUE(desc);
+    EXPECT_EQ(option, desc->option_);
+    EXPECT_TRUE(desc->persistent_);
+    EXPECT_EQ("value", desc->formatted_value_);
+    EXPECT_EQ(context, desc->getContext());
+}
+
+// This test verifies that the OptionDescriptor factory function variant
+// taking persistent flag as an argument creates valid instance.
+TEST(OptionDescriptorTest, createPersistent) {
+    auto desc = OptionDescriptor::create(true);
+    ASSERT_TRUE(desc);
+
+    EXPECT_FALSE(desc->option_);
+    EXPECT_TRUE(desc->persistent_);
+    EXPECT_TRUE(desc->formatted_value_.empty());
+    EXPECT_FALSE(desc->getContext());
+}
+
+// This test verifies that the OptionDescriptor factory function variant
+// copying a descriptor provided as an argument creates valid instance.
+TEST(OptionDescriptorTest, createCopy) {
+    OptionPtr option = Option::create(Option::V4, 234);
+    ElementPtr context = Element::createMap();
+    context->set("name", Element::create("value"));
+    auto desc = OptionDescriptor::create(option, true, "value", context);
+
+    auto desc_copy = OptionDescriptor::create(*desc);
+    ASSERT_TRUE(desc_copy);
+
+    ASSERT_TRUE(desc_copy);
+    EXPECT_EQ(option, desc_copy->option_);
+    EXPECT_TRUE(desc_copy->persistent_);
+    EXPECT_EQ("value", desc_copy->formatted_value_);
+    EXPECT_EQ(context, desc_copy->getContext());
+}
 
 /// This class fixture for testing @c CfgOption class, holding option
 /// configuration.
@@ -44,7 +97,11 @@ public:
             OptionUint16Ptr option = OptionUint16Ptr(new OptionUint16(Option::V6,
                                                                       code, 1234));
             option->setEncapsulatedSpace("foo");
-            ASSERT_NO_THROW(cfg.add(option, false, DHCP6_OPTION_SPACE));
+
+            // In order to easier identify the options by id, let's use the option
+            // code as the id.
+            ASSERT_NO_THROW(cfg.add(option, false, DHCP6_OPTION_SPACE,
+                                    static_cast<uint64_t>(code)));
         }
 
         // Create top level options encapsulating "bar" option space.
@@ -52,7 +109,8 @@ public:
             OptionUint16Ptr option = OptionUint16Ptr(new OptionUint16(Option::V6,
                                                                       code, 2345));
             option->setEncapsulatedSpace("bar");
-            ASSERT_NO_THROW(cfg.add(option, false, DHCP6_OPTION_SPACE));
+            ASSERT_NO_THROW(cfg.add(option, false, DHCP6_OPTION_SPACE,
+                                    static_cast<uint64_t>(code)));
         }
 
         // Create sub-options belonging to "foo" option space and encapsulating
@@ -61,7 +119,7 @@ public:
             OptionUint8Ptr option = OptionUint8Ptr(new OptionUint8(Option::V6, code,
                                                                    0x01));
             option->setEncapsulatedSpace("foo-subs");
-            ASSERT_NO_THROW(cfg.add(option, false, "foo"));
+            ASSERT_NO_THROW(cfg.add(option, false, "foo", static_cast<uint64_t>(code)));
         }
 
         // Create sub-options belonging to "bar" option space and encapsulating
@@ -70,21 +128,23 @@ public:
             OptionUint8Ptr option = OptionUint8Ptr(new OptionUint8(Option::V6,
                                                                    code, 0x02));
             option->setEncapsulatedSpace("bar-subs");
-            ASSERT_NO_THROW(cfg.add(option, false, "bar"));
+            ASSERT_NO_THROW(cfg.add(option, false, "bar", static_cast<uint64_t>(code)));
         }
 
         // Create sub-options belonging to "foo-subs" option space.
         for (uint16_t code = 1; code < 10; ++code) {
             OptionUint8Ptr option = OptionUint8Ptr(new OptionUint8(Option::V6, code,
                                                                    0x03));
-            ASSERT_NO_THROW(cfg.add(option, false, "foo-subs"));
+            ASSERT_NO_THROW(cfg.add(option, false, "foo-subs",
+                                    static_cast<uint64_t>(code)));
         }
 
         // Create sub-options belonging to "bar-subs" option space.
         for (uint16_t code = 501;  code < 510; ++code) {
             OptionUint8Ptr option = OptionUint8Ptr(new OptionUint8(Option::V6,
                                                                    code, 0x04));
-            ASSERT_NO_THROW(cfg.add(option, false, "bar-subs"));
+            ASSERT_NO_THROW(cfg.add(option, false, "bar-subs",
+                                    static_cast<uint64_t>(code)));
         }
     }
 };
@@ -213,8 +273,68 @@ TEST_F(CfgOptionTest, add) {
     EXPECT_TRUE(options->empty());
 }
 
-// This test verifies that two option configurations can be merged.
-TEST_F(CfgOptionTest, merge) {
+// This test verifies that options can be replaced with udpated content.
+TEST_F(CfgOptionTest, replace) {
+    CfgOption cfg;
+
+    // Let's add some options to the config to the config.
+    OptionStringPtr option(new OptionString(Option::V6, 1, "one"));
+    ASSERT_NO_THROW(cfg.add(option, false, "isc"));
+
+    option.reset(new OptionString(Option::V6, 2, "two"));
+    ASSERT_NO_THROW(cfg.add(option, false, "isc"));
+
+    option.reset(new OptionString(Option::V6, 3, "three"));
+    ASSERT_NO_THROW(cfg.add(option, false, "isc"));
+
+    // Now let's make sure we can find them and they are as expected.
+    OptionDescriptor desc = cfg.get("isc", 1);
+    ASSERT_TRUE(desc.option_);
+    OptionStringPtr opstr = boost::dynamic_pointer_cast<OptionString>(desc.option_);
+    ASSERT_TRUE(opstr);
+    EXPECT_EQ("one", opstr->getValue());
+
+    desc = cfg.get("isc", 2);
+    ASSERT_TRUE(desc.option_);
+    opstr = boost::dynamic_pointer_cast<OptionString>(desc.option_);
+    ASSERT_TRUE(opstr);
+    EXPECT_EQ("two", opstr->getValue());
+
+    desc = cfg.get("isc", 3);
+    ASSERT_TRUE(desc.option_);
+    opstr = boost::dynamic_pointer_cast<OptionString>(desc.option_);
+    ASSERT_TRUE(opstr);
+    EXPECT_EQ("three", opstr->getValue());
+
+    // Now let's replace one and three.
+    desc.option_.reset(new OptionString(Option::V6, 1, "new one"));
+    ASSERT_NO_THROW(cfg.replace(desc, "isc"));
+
+    desc.option_.reset(new OptionString(Option::V6, 3, "new three"));
+    ASSERT_NO_THROW(cfg.replace(desc, "isc"));
+
+    // Now let's make sure we can find them again and they are as expected.
+    desc = cfg.get("isc", 1);
+    ASSERT_TRUE(desc.option_);
+    opstr = boost::dynamic_pointer_cast<OptionString>(desc.option_);
+    ASSERT_TRUE(opstr);
+    EXPECT_EQ("new one", opstr->getValue());
+
+    desc = cfg.get("isc", 2);
+    ASSERT_TRUE(desc.option_);
+    opstr = boost::dynamic_pointer_cast<OptionString>(desc.option_);
+    ASSERT_TRUE(opstr);
+    EXPECT_EQ("two", opstr->getValue());
+
+    desc = cfg.get("isc", 3);
+    ASSERT_TRUE(desc.option_);
+    opstr = boost::dynamic_pointer_cast<OptionString>(desc.option_);
+    ASSERT_TRUE(opstr);
+    EXPECT_EQ("new three", opstr->getValue());
+}
+
+// This test verifies that one configuration can be merged into another.
+TEST_F(CfgOptionTest, mergeTo) {
     CfgOption cfg_src;
     CfgOption cfg_dst;
 
@@ -327,6 +447,214 @@ TEST_F(CfgOptionTest, copy) {
     EXPECT_EQ(10, container->size());
 }
 
+// This test verifies that DHCP options from one configuration
+// can be used to update options in another configuration.
+// In other words, options from an "other" configuration
+// can be merged into an existing configuration, with any
+// duplicates in other overwriting those in the existing
+// configuration.
+TEST_F(CfgOptionTest, validMerge) {
+    CfgOption this_cfg;
+    CfgOption other_cfg;
+
+    // We need to create a dictionary of defintions pass into option merge.
+    CfgOptionDefPtr defs(new CfgOptionDef());
+    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint8"))), "isc");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("two", 2, "uint8"))), "isc");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("four", 4, "uint8"))), "isc");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("three", 3, "uint8"))), "fluff");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("four", 4, "uint8"))), "fluff");
+
+    // Create our existing config, that gets merged into.
+    OptionPtr option(new Option(Option::V4, 1, OptionBuffer(1, 0x01)));
+    ASSERT_NO_THROW(this_cfg.add(option, false, "isc"));
+
+    // Add option 3 to "fluff"
+    option.reset(new Option(Option::V4, 3, OptionBuffer(1, 0x03)));
+    ASSERT_NO_THROW(this_cfg.add(option, false, "fluff"));
+
+    // Add option 4 to "fluff".
+    option.reset(new Option(Option::V4, 4, OptionBuffer(1, 0x04)));
+    ASSERT_NO_THROW(this_cfg.add(option, false, "fluff"));
+
+    // Create our other config that will be merged from.
+    // Add Option 1 to "isc",  this should "overwrite" the original.
+    option.reset(new Option(Option::V4, 1, OptionBuffer(1, 0x10)));
+    ASSERT_NO_THROW(other_cfg.add(option, false, "isc"));
+
+    // Add option 2  to "isc".
+    option.reset(new Option(Option::V4, 2, OptionBuffer(1, 0x20)));
+    ASSERT_NO_THROW(other_cfg.add(option, false, "isc"));
+
+    // Add option 4 to "isc".
+    option.reset(new Option(Option::V4, 4, OptionBuffer(1, 0x40)));
+    ASSERT_NO_THROW(other_cfg.add(option, false, "isc"));
+
+    // Merge source configuration to the destination configuration. The options
+    // in the destination should be preserved. The options from the source
+    // configuration should be added.
+    ASSERT_NO_THROW(this_cfg.merge(defs, other_cfg));
+
+    // isc:1 should come from "other" config.
+    OptionDescriptor desc = this_cfg.get("isc", 1);
+    ASSERT_TRUE(desc.option_);
+    OptionUint8Ptr opint = boost::dynamic_pointer_cast<OptionUint8>(desc.option_);
+    ASSERT_TRUE(opint);
+    EXPECT_EQ(16, opint->getValue());
+
+    // isc:2 should come from "other" config.
+    desc = this_cfg.get("isc", 2);
+    ASSERT_TRUE(desc.option_);
+    opint = boost::dynamic_pointer_cast<OptionUint8>(desc.option_);
+    ASSERT_TRUE(opint);
+    EXPECT_EQ(32, opint->getValue());
+
+    // isc:4 should come from "other" config.
+    desc = this_cfg.get("isc", 4);
+    ASSERT_TRUE(desc.option_);
+    opint = boost::dynamic_pointer_cast<OptionUint8>(desc.option_);
+    ASSERT_TRUE(opint);
+    EXPECT_EQ(64, opint->getValue());
+
+    // fluff:3 should come from "this" config.
+    desc = this_cfg.get("fluff", 3);
+    ASSERT_TRUE(desc.option_);
+    opint = boost::dynamic_pointer_cast<OptionUint8>(desc.option_);
+    ASSERT_TRUE(opint);
+    EXPECT_EQ(3, opint->getValue());
+
+    // fluff:4 should come from "this" config.
+    desc = this_cfg.get("fluff", 4);
+    ASSERT_TRUE(desc.option_);
+    opint = boost::dynamic_pointer_cast<OptionUint8>(desc.option_);
+    ASSERT_TRUE(opint);
+    EXPECT_EQ(4, opint->getValue());
+}
+
+// This test verifies that attempting to merge options
+// which are by incompatible with "known" option definitions
+// are detected.
+TEST_F(CfgOptionTest, mergeInvalid) {
+    CfgOption this_cfg;
+    CfgOption other_cfg;
+
+    // Create an empty dictionary of defintions pass into option merge.
+    CfgOptionDefPtr defs(new CfgOptionDef());
+
+    // Create our other config that will be merged from.
+    // Add an option without a formatted value.
+    OptionPtr option(new Option(Option::V4, 1, OptionBuffer(1, 0x01)));
+    ASSERT_NO_THROW(other_cfg.add(option, false, "isc"));
+
+    // Add an option with a formatted value.
+    option.reset(new Option(Option::V4, 2));
+    OptionDescriptor desc(option, false, "one,two,three");
+    ASSERT_NO_THROW(other_cfg.add(desc, "isc"));
+
+    // When we attempt to merge, it should fail, recognizing that
+    // option 2, which has a formatted value,  has no definition.
+    ASSERT_THROW_MSG(this_cfg.merge(defs, other_cfg), InvalidOperation,
+                     "option: isc.2 has a formatted value: "
+                     "'one,two,three' but no option definition");
+
+    // Now let's add an option definition that will force data truncated
+    // error for option 1.
+    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint16"))), "isc");
+
+    // When we attempt to merge, it should fail because option 1's data
+    // is not valid per its definition.
+    EXPECT_THROW_MSG(this_cfg.merge(defs, other_cfg), InvalidOperation,
+                     "could not create option: isc.1"
+                     " from data specified, reason:"
+                     " OptionInt 1 truncated");
+}
+
+// This test verifies the all of the valid option cases
+// in createDescriptorOption():
+// 1. standard option
+// 2. vendor option
+// 3. user-defined, unformatted option
+// 4. user-defined, formatted option
+// 5. undefined, unformatted option
+TEST_F(CfgOptionTest, createDescriptorOptionValid) {
+    // First we'll create our "known" user definitions
+    CfgOptionDefPtr defs(new CfgOptionDef());
+    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint8"))), "isc");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("two", 2, "uint8", true))), "isc");
+
+    // We'll try a standard V4 option first.
+    std::string space = "dhcp4";
+    std::string value = "v4.example.com";
+    OptionPtr option(new Option(Option::V6, DHO_HOST_NAME));
+    option->setData(value.begin(), value.end());
+    OptionDescriptorPtr desc(new OptionDescriptor(option, false));
+
+    bool updated = false;
+    ASSERT_NO_THROW(updated = CfgOption::createDescriptorOption(defs, space, *desc));
+    ASSERT_TRUE(updated);
+    OptionStringPtr opstr = boost::dynamic_pointer_cast<OptionString>(desc->option_);
+    ASSERT_TRUE(opstr);
+    EXPECT_EQ("v4.example.com", opstr->getValue());
+
+    // Next we'll try a standard V6 option.
+    space = "dhcp6";
+    std::vector<uint8_t> fqdn =
+        { 2, 'v', '6', 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0 };
+    option.reset(new Option(Option::V6, D6O_AFTR_NAME));
+    option->setData(fqdn.begin(), fqdn.end());
+    desc.reset(new OptionDescriptor(option, false));
+
+    ASSERT_NO_THROW(updated = CfgOption::createDescriptorOption(defs, space, *desc));
+    ASSERT_TRUE(updated);
+    OptionCustomPtr opcustom = boost::dynamic_pointer_cast<OptionCustom>(desc->option_);
+    ASSERT_TRUE(opcustom);
+    EXPECT_EQ("v6.example.com.", opcustom->readFqdn());
+
+    // Next we'll try a vendor option with a formatted value
+    space = "vendor-4491";
+    value = "192.0.2.1, 192.0.2.2";
+    option.reset(new Option(Option::V4, 2));
+    desc.reset(new OptionDescriptor(option, false, value));
+
+    ASSERT_NO_THROW(updated = CfgOption::createDescriptorOption(defs, space, *desc));
+    ASSERT_TRUE(updated);
+    Option4AddrLstPtr opaddrs = boost::dynamic_pointer_cast<Option4AddrLst>(desc->option_);
+    ASSERT_TRUE(opaddrs);
+    Option4AddrLst::AddressContainer exp_addresses = { IOAddress("192.0.2.1"), IOAddress("192.0.2.2") };
+    EXPECT_EQ(exp_addresses, opaddrs->getAddresses());
+
+    // Now, a user defined uint8 option
+    space = "isc";
+    option.reset(new Option(Option::V4, 1, OptionBuffer(1, 0x77)));
+    desc.reset(new OptionDescriptor(option, false));
+
+    ASSERT_NO_THROW(updated = CfgOption::createDescriptorOption(defs, space, *desc));
+    ASSERT_TRUE(updated);
+    OptionUint8Ptr opint = boost::dynamic_pointer_cast<OptionUint8>(desc->option_);
+    ASSERT_TRUE(opint);
+    EXPECT_EQ(119, opint->getValue());
+
+    // Now, a user defined array of ints from a formatted value
+    option.reset(new Option(Option::V4, 2));
+    desc.reset(new OptionDescriptor(option, false, "1,2,3"));
+
+    ASSERT_NO_THROW(updated = CfgOption::createDescriptorOption(defs, space, *desc));
+    ASSERT_TRUE(updated);
+    OptionUint8ArrayPtr oparray = boost::dynamic_pointer_cast<OptionUint8Array>(desc->option_);
+    ASSERT_TRUE(oparray);
+    std::vector<uint8_t> exp_ints = { 1, 2, 3 };
+    EXPECT_EQ(exp_ints, oparray->getValues());
+
+    // Finally, a generic, undefined option
+    option.reset(new Option(Option::V4, 199, OptionBuffer(1, 0x77)));
+    desc.reset(new OptionDescriptor(option, false));
+
+    ASSERT_NO_THROW(updated = CfgOption::createDescriptorOption(defs, space, *desc));
+    ASSERT_FALSE(updated);
+    ASSERT_EQ(1, desc->option_->getData().size());
+    EXPECT_EQ(0x77, desc->option_->getData()[0]);
+}
+
 // This test verifies that encapsulated options are added as sub-options
 // to the top level options on request.
 TEST_F(CfgOptionTest, encapsulate) {
@@ -397,6 +725,158 @@ TEST_F(CfgOptionTest, encapsulate) {
             }
         }
     }
+}
+
+// This test verifies that an option can be deleted from the configuration.
+TEST_F(CfgOptionTest, deleteOptions) {
+    CfgOption cfg;
+
+    generateEncapsulatedOptions(cfg);
+
+    // Append options from "foo" and "bar" space as sub-options and options
+    // from "foo-subs" and "bar-subs" as sub-options of "foo" and "bar"
+    // options.
+    ASSERT_NO_THROW(cfg.encapsulate());
+
+    // The option with the code 5 should exist in the option space "foo".
+    ASSERT_TRUE(cfg.get("foo", 5).option_);
+
+    // Because we called "encapsulate", this option should have been
+    // propagated to the options encapsulating option space "foo".
+    for (uint16_t code = 1000; code < 1020; ++code) {
+        OptionDescriptor top_level_option(false);
+        ASSERT_NO_THROW(top_level_option = cfg.get(DHCP6_OPTION_SPACE, code));
+        // Make sure that the option with code 5 is there.
+        ASSERT_TRUE(top_level_option.option_);
+        ASSERT_TRUE(top_level_option.option_->getOption(5));
+
+        // Make sure that options belonging to space "foo-subs" should contain
+        // options with the code of 5.
+        for (uint16_t code_subs = 1; code_subs != 19; ++code_subs) {
+            OptionPtr sub_option;
+            ASSERT_NO_THROW(sub_option = top_level_option.option_->getOption(code_subs));
+            ASSERT_TRUE(sub_option);
+            ASSERT_TRUE(sub_option->getOption(5));
+        }
+    }
+
+    // Delete option with the code 5 and belonging to option space "foo".
+    uint64_t deleted_num;
+    ASSERT_NO_THROW(deleted_num = cfg.del("foo", 5));
+    EXPECT_EQ(1, deleted_num);
+
+    // The option should now be gone from options config.
+    EXPECT_FALSE(cfg.get("foo", 5).option_);
+    // Option with the code of 5 in other option spaces should remain.
+    EXPECT_TRUE(cfg.get("foo-subs", 5).option_);
+
+    // Iterate over the options encapsulating "foo" option space. Make sure
+    // that the option with code 5 is no longer encapsulated by these options.
+    for (uint16_t code = 1000; code < 1020; ++code) {
+        OptionDescriptor top_level_option(false);
+        ASSERT_NO_THROW(top_level_option = cfg.get(DHCP6_OPTION_SPACE, code));
+        ASSERT_TRUE(top_level_option.option_);
+        EXPECT_FALSE(top_level_option.option_->getOption(5));
+        // Other options should remain.
+        EXPECT_TRUE(top_level_option.option_->getOption(1));
+
+        // Iterate over options within foo-subs option space and make sure
+        // that they still contain options with the code of 5.
+        for (uint16_t code_subs = 1; code_subs != 19; ++code_subs) {
+            // There shouldn't be option with the code of 5 in the "foo" space.
+            if (code_subs == 5) {
+                continue;
+            }
+
+            OptionPtr sub_option;
+            ASSERT_NO_THROW(sub_option = top_level_option.option_->getOption(code_subs));
+            // Options belonging to option space "foo-subs" should include option
+            // with the code of 5.
+            ASSERT_TRUE(sub_option);
+            ASSERT_TRUE(sub_option->getOption(5));
+        }
+    }
+}
+
+// This test verifies that an option can be deleted from the configuration
+// by database id.
+TEST_F(CfgOptionTest, deleteOptionsById) {
+    CfgOption cfg;
+
+    generateEncapsulatedOptions(cfg);
+
+    // Append options from "foo" and "bar" space as sub-options and options
+    // from "foo-subs" and "bar-subs" as sub-options of "foo" and "bar"
+    // options.
+    ASSERT_NO_THROW(cfg.encapsulate());
+
+    // Create multiple vendor options for vendor id 123.
+    for (uint16_t code = 100; code < 110; ++code) {
+        OptionPtr option(new Option(Option::V6, code, OptionBuffer(1, 0xFF)));
+        ASSERT_NO_THROW(cfg.add(option, false, "vendor-123", static_cast<uint64_t>(code)));
+    }
+
+    // Delete options with id of 100. It includes both regular options and
+    // the vendor options. There are two options with id of 100.
+    EXPECT_EQ(2, cfg.del(100));
+
+    // Make sure that the option 100 was deleted but another option
+    // in the same option space was not.
+    EXPECT_FALSE(cfg.get("bar", 100).option_);
+    EXPECT_TRUE(cfg.get("bar", 101).option_);
+
+    // Make sure that the deleted option was dereferenced from the
+    // top level options but that does not affect encapsulation of
+    // other options.
+    for (uint16_t option_code = 1020; option_code < 1040; ++option_code) {
+        auto top_level_option = cfg.get(DHCP6_OPTION_SPACE, option_code);
+        ASSERT_TRUE(top_level_option.option_);
+        EXPECT_FALSE(top_level_option.option_->getOption(100));
+
+        // The second level encapsulation should have been preserved.
+        auto second_level_option = top_level_option.option_->getOption(101);
+        ASSERT_TRUE(second_level_option);
+        EXPECT_TRUE(second_level_option->getOption(501));
+    }
+
+    // Vendor option with id of 100 should have been deleted too.
+    EXPECT_FALSE(cfg.get(123, 100).option_);
+    EXPECT_TRUE(cfg.get(123, 101).option_);
+}
+
+// This test verifies that a vendor option can be deleted from the configuration.
+TEST_F(CfgOptionTest, delVendorOption) {
+    CfgOption cfg;
+
+    // Create multiple vendor options for vendor id 123.
+    for (uint16_t code = 100; code < 110; ++code) {
+        OptionPtr option(new Option(Option::V6, code, OptionBuffer(1, 0xFF)));
+        ASSERT_NO_THROW(cfg.add(option, false, "vendor-123"));
+    }
+
+    // Create multiple vendor options for vendor id 234.
+    for (uint16_t code = 100; code < 110; ++code) {
+        OptionPtr option(new Option(Option::V6, code, OptionBuffer(1, 0xFF)));
+        ASSERT_NO_THROW(cfg.add(option, false, "vendor-234"));
+    }
+
+    // Make sure that the option we're trying to delete is there.
+    ASSERT_TRUE(cfg.get(123, 105).option_);
+    // There should also be an option 105 for vendor id 234.
+    ASSERT_TRUE(cfg.get(234, 105).option_);
+
+    // Delete the option for vendor id 123.
+    uint64_t deleted_num;
+    ASSERT_NO_THROW(deleted_num = cfg.del(123, 105));
+    EXPECT_EQ(1, deleted_num);
+
+    // Make sure the option is gone.
+    EXPECT_FALSE(cfg.get(123, 105).option_);
+    // Make sure that the option with code 105 is not affected for vendor id 234.
+    EXPECT_TRUE(cfg.get(234, 105).option_);
+
+    // Other options, like 107, shouldn't be gone.
+    EXPECT_TRUE(cfg.get(123, 107).option_);
 }
 
 // This test verifies that single option can be retrieved from the configuration

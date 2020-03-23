@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2017 Deutsche Telekom AG.
 //
 // Authors: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -17,14 +17,15 @@
 
 #include <config.h>
 
+#include <cql/testutils/cql_schema.h>
+
 #include <dhcpsrv/benchmarks/generic_lease_mgr_benchmark.h>
 #include <dhcpsrv/benchmarks/parameters.h>
 #include <dhcpsrv/lease_mgr_factory.h>
-#include <dhcpsrv/testutils/cql_schema.h>
 
-using namespace isc::dhcp::bench;
-using namespace isc::dhcp::test;
+using namespace isc::db::test;
 using namespace isc::dhcp;
+using namespace isc::dhcp::bench;
 using namespace std;
 
 namespace {
@@ -36,8 +37,8 @@ public:
     ///
     /// It cleans up schema and recreates tables, then instantiates LeaseMgr
     void SetUp(::benchmark::State const&) override {
-        destroyCqlSchema(false, true);
-        createCqlSchema(false, true);
+        // Ensure we have the proper schema with no transient data.
+        createCqlSchema();
         try {
             LeaseMgrFactory::destroy();
             LeaseMgrFactory::create(validCqlConnectionString());
@@ -46,6 +47,11 @@ public:
             throw;
         }
         lmptr_ = &(LeaseMgrFactory::instance());
+    }
+
+    void SetUp(::benchmark::State& s) override {
+        ::benchmark::State const& cs = s;
+        SetUp(cs);
     }
 
     /// @brief Cleans up after the test.
@@ -58,7 +64,13 @@ public:
                  << endl;
         }
         LeaseMgrFactory::destroy();
+        // If data wipe enabled, delete transient data otherwise destroy the schema
         destroyCqlSchema(false, true);
+    }
+
+    void TearDown(::benchmark::State& s) override {
+        ::benchmark::State const& cs = s;
+        TearDown(cs);
     }
 };
 
@@ -191,7 +203,6 @@ BENCHMARK_DEFINE_F(CqlLeaseMgrBenchmark, getExpiredLeases6)(benchmark::State& st
         benchGetExpiredLeases6();
     }
 }
-
 
 /// The following macros define run parameters for previously defined
 /// Cassandra benchmarks.

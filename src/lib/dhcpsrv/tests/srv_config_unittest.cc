@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -25,6 +25,13 @@ using namespace isc::process;
 
 namespace {
 
+/// @brief Derivation of the @c ConfigBase not being @c SrvConfig.
+///
+/// This is used to verify that the appropriate error is returned
+/// when other derivation of the @c ConfigBase than @c SrvConfig
+/// is used.
+class NonSrvConfig : public ConfigBase { };
+
 /// @brief Number of IPv4 and IPv6 subnets to be created for a test.
 const int TEST_SUBNETS_NUM = 3;
 
@@ -40,7 +47,7 @@ public:
           ref_dictionary_(new ClientClassDictionary()) {
 
         // Disable DDNS.
-        enableDDNS(false);
+        enableD2Client(false);
 
         // Create IPv4 subnets.
         for (int i = 0; i < TEST_SUBNETS_NUM; ++i) {
@@ -113,7 +120,7 @@ public:
     ///
     /// @param enable A boolean value indicating if the DDNS should be
     /// enabled (true) or disabled (false).
-    void enableDDNS(const bool enable);
+    void enableD2Client(const bool enable);
 
     /// @brief Stores configuration.
     SrvConfig conf_;
@@ -147,7 +154,7 @@ SrvConfigTest::addSubnet6(const unsigned int index) {
 }
 
 void
-SrvConfigTest::enableDDNS(const bool enable) {
+SrvConfigTest::enableD2Client(const bool enable) {
     const D2ClientConfigPtr& d2_config = conf_.getD2ClientConfig();
     ASSERT_TRUE(d2_config);
     d2_config->enableUpdates(enable);
@@ -190,11 +197,11 @@ TEST_F(SrvConfigTest, summaryDDNS) {
     EXPECT_EQ("DDNS: disabled",
               conf_.getConfigSummary(SrvConfig::CFGSEL_DDNS));
 
-    enableDDNS(true);
+    enableD2Client(true);
     EXPECT_EQ("DDNS: enabled",
               conf_.getConfigSummary(SrvConfig::CFGSEL_DDNS));
 
-    enableDDNS(false);
+    enableD2Client(false);
     EXPECT_EQ("no IPv4 subnets!; no IPv6 subnets!; DDNS: disabled",
               conf_.getConfigSummary(SrvConfig::CFGSEL_ALL));
 }
@@ -286,22 +293,6 @@ TEST_F(SrvConfigTest, echoClientId) {
     // Check the other constructor has the same default
     SrvConfig conf1(1);
     EXPECT_TRUE(conf1.getEchoClientId());
-}
-
-// This test verifies that server-tag may be configured.
-TEST_F(SrvConfigTest, serverTag) {
-    SrvConfig conf;
-
-    // Check that the default is an empty string.
-    EXPECT_TRUE(conf.getServerTag().empty());
-
-    // Check that it can be modified.
-    conf.setServerTag("boo");
-    EXPECT_EQ("boo", conf.getServerTag());
-
-    // Check the other constructor has the same default
-    SrvConfig conf1(1);
-    EXPECT_EQ("boo", conf.getServerTag());
 }
 
 // This test checks if entire configuration can be copied and that the sequence
@@ -502,6 +493,20 @@ TEST_F(SrvConfigTest, configuredGlobals) {
             ADD_FAILURE() << "unexpected element found:" << global->first;
         }
     }
+
+    // Verify that using getConfiguredGlobal() to fetch an individual
+    // parameters works.
+    ConstElementPtr global;
+    // We should find global "astring".
+    ASSERT_NO_THROW(global = conf.getConfiguredGlobal("astring"));
+    ASSERT_TRUE(global);
+    ASSERT_EQ(Element::string, global->getType());
+    EXPECT_EQ("okay", global->stringValue());
+
+    // Not finding global "not-there" should return an empty pointer
+    // without throwing.
+    ASSERT_NO_THROW(global = conf.getConfiguredGlobal("not-there"));
+    ASSERT_FALSE(global);
 }
 
 // Verifies that the toElement method works well (tests limited to
@@ -522,7 +527,7 @@ TEST_F(SrvConfigTest, unparse) {
     defaults += "\"lease-database\": { \"type\": \"memfile\" },\n";
     defaults += "\"hooks-libraries\": [ ],\n";
     defaults += "\"sanity-checks\": {\n";
-    defaults += "    \"lease-checks\": \"warn\"\n";
+    defaults += "    \"lease-checks\": \"none\"\n";
     defaults += "    },\n";
     defaults += "\"dhcp-ddns\": \n";
 
@@ -973,5 +978,588 @@ TEST_F(SrvConfigTest, unparseConfigControlInfo6) {
     ElementPtr info_elem = info->toElement();
     EXPECT_TRUE(info_elem->equals(*check));
 }
+
+// Verifies that exception is thrown when instead of SrvConfig
+// another derivation of ConfigBase is used in the call to
+// merge.
+TEST_F(SrvConfigTest, mergeBadCast) {
+    SrvConfig srv_config;
+    NonSrvConfig non_srv_config;
+    ASSERT_THROW(srv_config.merge(non_srv_config), isc::InvalidOperation);
+}
+
+// This test verifies that globals from one SrvConfig
+// can be merged into another. It verifies that values
+// in the from-config override those in to-config which
+// override those in GLOBAL4_DEFAULTS.
+TEST_F(SrvConfigTest, mergeGlobals4) {
+    // Set the family we're working with.
+    CfgMgr::instance().setFamily(AF_INET);
+
+    // Let's create the "existing" config we will merge into.
+    SrvConfig cfg_to;
+
+    // Set some explicit values.
+    cfg_to.setDeclinePeriod(100);
+    cfg_to.setEchoClientId(false);
+    cfg_to.setDhcp4o6Port(777);
+    cfg_to.setServerTag("not_this_server");
+
+    // Add some configured globals
+    cfg_to.addConfiguredGlobal("decline-probation-period", Element::create(300));
+    cfg_to.addConfiguredGlobal("dhcp4o6-port", Element::create(888));
+
+    // Now we'll create the config we'll merge from.
+    SrvConfig cfg_from;
+
+    // Set some explicit values. None of these should be preserved.
+    cfg_from.setDeclinePeriod(200);
+    cfg_from.setEchoClientId(true);
+    cfg_from.setDhcp4o6Port(888);
+    cfg_from.setServerTag("nor_this_server");
+
+    // Add some configured globals:
+    cfg_to.addConfiguredGlobal("dhcp4o6-port", Element::create(999));
+    cfg_to.addConfiguredGlobal("server-tag", Element::create("use_this_server"));
+
+    // Now let's merge.
+    ASSERT_NO_THROW(cfg_to.merge(cfg_from));
+
+    // Make sure the explicit values are set correctly.
+
+    // decline-probation-period should be the "to" configured value.
+    EXPECT_EQ(300, cfg_to.getDeclinePeriod());
+
+    // echo-client-id should be the preserved "to" member value.
+    EXPECT_FALSE(cfg_to.getEchoClientId());
+
+    //  dhcp4o6-port should be the "from" configured value.
+    EXPECT_EQ(999, cfg_to.getDhcp4o6Port());
+
+    //  server-tag port should be the "from" configured value.
+    EXPECT_EQ("use_this_server", cfg_to.getServerTag().get());
+
+    // Next we check the explicitly "configured" globals.
+    // The list should be all of the "to" + "from", with the
+    // latter overwriting the former.
+    std::string exp_globals =
+        "{ \n"
+        "   \"decline-probation-period\": 300,  \n"
+        "   \"dhcp4o6-port\": 999,  \n"
+        "   \"server-tag\": \"use_this_server\"  \n"
+        "} \n";
+
+    ConstElementPtr expected_globals;
+    ASSERT_NO_THROW(expected_globals = Element::fromJSON(exp_globals))
+                    << "exp_globals didn't parse, test is broken";
+
+    EXPECT_TRUE(isEquivalent(expected_globals, cfg_to.getConfiguredGlobals()));
+
+}
+
+// This test verifies that globals from one SrvConfig
+// can be merged into another. It verifies that values
+// in the from-config override those in to-config which
+// override those in GLOBAL6_DEFAULTS.
+TEST_F(SrvConfigTest, mergeGlobals6) {
+    // Set the family we're working with.
+    CfgMgr::instance().setFamily(AF_INET6);
+
+    // Let's create the "existing" config we will merge into.
+    SrvConfig cfg_to;
+
+    // Set some explicit values.
+    cfg_to.setDeclinePeriod(100);
+    cfg_to.setDhcp4o6Port(777);
+    cfg_to.setServerTag("not_this_server");
+
+    // Add some configured globals
+    cfg_to.addConfiguredGlobal("decline-probation-period", Element::create(300));
+    cfg_to.addConfiguredGlobal("dhcp4o6-port", Element::create(888));
+
+    // Now we'll create the config we'll merge from.
+    SrvConfig cfg_from;
+
+    // Set some explicit values. None of these should be preserved.
+    cfg_from.setDeclinePeriod(200);
+    cfg_from.setEchoClientId(true);
+    cfg_from.setDhcp4o6Port(888);
+    cfg_from.setServerTag("nor_this_server");
+
+    // Add some configured globals:
+    cfg_to.addConfiguredGlobal("dhcp4o6-port", Element::create(999));
+    cfg_to.addConfiguredGlobal("server-tag", Element::create("use_this_server"));
+
+    // Now let's merge.
+    ASSERT_NO_THROW(cfg_to.merge(cfg_from));
+
+    // Make sure the explicit values are set correctly.
+
+    // decline-probation-period should be the "to" configured value.
+    EXPECT_EQ(300, cfg_to.getDeclinePeriod());
+
+    //  dhcp4o6-port should be the "from" configured value.
+    EXPECT_EQ(999, cfg_to.getDhcp4o6Port());
+
+    //  server-tag port should be the "from" configured value.
+    EXPECT_EQ("use_this_server", cfg_to.getServerTag().get());
+
+    // Next we check the explicitly "configured" globals.
+    // The list should be all of the "to" + "from", with the
+    // latter overwriting the former.
+    std::string exp_globals =
+        "{ \n"
+        "   \"decline-probation-period\": 300,  \n"
+        "   \"dhcp4o6-port\": 999,  \n"
+        "   \"server-tag\": \"use_this_server\"  \n"
+        "} \n";
+
+    ConstElementPtr expected_globals;
+    ASSERT_NO_THROW(expected_globals = Element::fromJSON(exp_globals))
+                    << "exp_globals didn't parse, test is broken";
+
+    EXPECT_TRUE(isEquivalent(expected_globals, cfg_to.getConfiguredGlobals()));
+
+}
+
+// Validates SrvConfig::moveDdnsParams by ensuring that deprecated dhcp-ddns
+// parameters are:
+// 1. Translated to their global counterparts if they do not exist globally
+// 2. Removed from the dhcp-ddns element
+TEST_F(SrvConfigTest, moveDdnsParamsTest) {
+    DdnsParamsPtr params;
+
+    CfgMgr::instance().setFamily(AF_INET);
+
+    struct Scenario {
+        std::string description;
+        std::string input_cfg;
+        std::string exp_cfg;
+    };
+
+    std::vector<Scenario> scenarios {
+        {
+            "scenario 1, move with no global conflicts",
+            // input_cfg
+            "{\n"
+            "   \"dhcp-ddns\": {\n"
+            "       \"enable-updates\": true, \n"
+            "       \"server-ip\" : \"192.0.2.0\",\n"
+            "       \"server-port\" : 3432,\n"
+            "       \"sender-ip\" : \"192.0.2.1\",\n"
+            "       \"sender-port\" : 3433,\n"
+            "       \"max-queue-size\" : 2048,\n"
+            "       \"ncr-protocol\" : \"UDP\",\n"
+            "       \"ncr-format\" : \"JSON\",\n"
+            "       \"user-context\": { \"foo\": \"bar\" },\n"
+            "       \"override-no-update\": true,\n"
+            "       \"override-client-update\": false,\n"
+            "       \"replace-client-name\": \"always\",\n"
+            "       \"generated-prefix\": \"prefix\",\n"
+            "       \"qualifying-suffix\": \"suffix.com.\",\n"
+            "       \"hostname-char-set\": \"[^A-Z]\",\n"
+            "       \"hostname-char-replacement\": \"x\"\n"
+            "   }\n"
+            "}\n",
+            // exp_cfg
+            "{\n"
+            "   \"dhcp-ddns\": {\n"
+            "       \"enable-updates\": true, \n"
+            "       \"server-ip\" : \"192.0.2.0\",\n"
+            "       \"server-port\" : 3432,\n"
+            "       \"sender-ip\" : \"192.0.2.1\",\n"
+            "       \"sender-port\" : 3433,\n"
+            "       \"max-queue-size\" : 2048,\n"
+            "       \"ncr-protocol\" : \"UDP\",\n"
+            "       \"ncr-format\" : \"JSON\",\n"
+            "       \"user-context\": { \"foo\": \"bar\" }\n"
+            "   },\n"
+            "   \"ddns-override-no-update\": true,\n"
+            "   \"ddns-override-client-update\": false,\n"
+            "   \"ddns-replace-client-name\": \"always\",\n"
+            "   \"ddns-generated-prefix\": \"prefix\",\n"
+            "   \"ddns-qualifying-suffix\": \"suffix.com.\",\n"
+            "   \"hostname-char-set\": \"[^A-Z]\",\n"
+            "   \"hostname-char-replacement\": \"x\"\n"
+            "}\n"
+        },
+        {
+            "scenario 2, globals already exist for all movable params",
+            // input_cfg
+            "{\n"
+            "   \"dhcp-ddns\" : {\n"
+            "       \"enable-updates\": true, \n"
+            "       \"override-no-update\": true,\n"
+            "       \"override-client-update\": true,\n"
+            "       \"replace-client-name\": \"always\",\n"
+            "       \"generated-prefix\": \"prefix\",\n"
+            "       \"qualifying-suffix\": \"suffix.com.\",\n"
+            "       \"hostname-char-set\": \"[^A-Z]\",\n"
+            "       \"hostname-char-replacement\": \"x\"\n"
+            "   },\n"
+            "   \"ddns-override-no-update\": false,\n"
+            "   \"ddns-override-client-update\": false,\n"
+            "   \"ddns-replace-client-name\": \"when-present\",\n"
+            "   \"ddns-generated-prefix\": \"org_prefix\",\n"
+            "   \"ddns-qualifying-suffix\": \"org_suffix.com.\",\n"
+            "   \"hostname-char-set\": \"[^a-z]\",\n"
+            "   \"hostname-char-replacement\": \"y\"\n"
+            "}\n",
+            // exp_cfg
+            "{\n"
+            "   \"dhcp-ddns\" : {\n"
+            "       \"enable-updates\": true\n"
+            "   },\n"
+            "   \"ddns-override-no-update\": false,\n"
+            "   \"ddns-override-client-update\": false,\n"
+            "   \"ddns-replace-client-name\": \"when-present\",\n"
+            "   \"ddns-generated-prefix\": \"org_prefix\",\n"
+            "   \"ddns-qualifying-suffix\": \"org_suffix.com.\",\n"
+            "   \"hostname-char-set\": \"[^a-z]\",\n"
+            "   \"hostname-char-replacement\": \"y\"\n"
+            "}\n"
+        },
+        {
+            "scenario 3, nothing to move",
+            // input_cfg
+            "{\n"
+            "   \"dhcp-ddns\" : {\n"
+            "       \"enable-updates\": true, \n"
+            "       \"server-ip\" : \"192.0.2.0\",\n"
+            "       \"server-port\" : 3432,\n"
+            "       \"sender-ip\" : \"192.0.2.1\"\n"
+            "   }\n"
+            "}\n",
+            // exp_output
+            "{\n"
+            "   \"dhcp-ddns\" : {\n"
+            "       \"enable-updates\": true, \n"
+            "       \"server-ip\" : \"192.0.2.0\",\n"
+            "       \"server-port\" : 3432,\n"
+            "       \"sender-ip\" : \"192.0.2.1\"\n"
+            "   }\n"
+            "}\n"
+        }
+    };
+
+    for (auto scenario : scenarios) {
+        SrvConfig conf(32);
+        ElementPtr input_cfg;
+        ConstElementPtr exp_cfg;
+        {
+            SCOPED_TRACE(scenario.description);
+            // Parse the input cfg into a mutable Element map.
+            ASSERT_NO_THROW(input_cfg = boost::const_pointer_cast<Element>
+                            (Element::fromJSON(scenario.input_cfg)))
+                            << "input_cfg didn't parse, test is broken";
+
+            // Parse the expected cfg into an Element map.
+            ASSERT_NO_THROW(exp_cfg = Element::fromJSON(scenario.exp_cfg))
+                            << "exp_cfg didn't parse, test is broken";
+
+            // Now call moveDdnsParams.
+            ASSERT_NO_THROW(SrvConfig::moveDdnsParams(input_cfg));
+
+            // Make sure the resultant configuration is as expected.
+            EXPECT_TRUE(input_cfg->equals(*exp_cfg));
+        }
+    }
+}
+
+// Verifies that the scoped values for DDNS parameters can be fetched
+// for a given Subnet4.
+TEST_F(SrvConfigTest, getDdnsParamsTest4) {
+    DdnsParamsPtr params;
+
+    CfgMgr::instance().setFamily(AF_INET);
+    SrvConfig conf(32);
+
+    // This disables D2 connectivity. When it is false, updates
+    // are off at all scopes, regardless of ddns-send-updates values.
+    enableD2Client(false);
+
+    // Disable sending updates globally.
+    conf.addConfiguredGlobal("ddns-send-updates", Element::create(false));
+    // Configure global host sanitizing.
+    conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
+    conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+
+    // Add a plain subnet
+    Triplet<uint32_t> def_triplet;
+    Subnet4Ptr subnet1(new Subnet4(IOAddress("192.0.1.0"), 24,
+                                    def_triplet, def_triplet, 4000, SubnetID(1)));
+    // In order to take advantage of the dynamic inheritance of global
+    // parameters to a subnet we need to set a callback function for each
+    // subnet to allow for fetching global parameters.
+    subnet1->setFetchGlobalsFn([conf]() -> ConstElementPtr {
+        return (conf.getConfiguredGlobals());
+    });
+
+    conf.getCfgSubnets4()->add(subnet1);
+
+    // Add a shared network
+    SharedNetwork4Ptr frognet(new SharedNetwork4("frog"));
+    conf.getCfgSharedNetworks4()->add(frognet);
+
+    // Add a shared subnet
+    Subnet4Ptr subnet2(new Subnet4(IOAddress("192.0.2.0"), 24,
+                                    def_triplet, def_triplet, 4000, SubnetID(2)));
+
+    // In order to take advantage of the dynamic inheritance of global
+    // parameters to a subnet we need to set a callback function for each
+    // subnet to allow for fetching global parameters.
+    subnet2->setFetchGlobalsFn([conf]() -> ConstElementPtr {
+        return (conf.getConfiguredGlobals());
+    });
+
+    frognet->add(subnet2);
+    subnet2->setDdnsSendUpdates(true);
+    subnet2->setDdnsOverrideNoUpdate(true);
+    subnet2->setDdnsOverrideClientUpdate(true);
+    subnet2->setDdnsReplaceClientNameMode(D2ClientConfig::RCM_ALWAYS);
+    subnet2->setDdnsGeneratedPrefix("prefix");
+    subnet2->setDdnsQualifyingSuffix("example.com.");
+    subnet2->setHostnameCharSet("");
+
+    // Get DDNS params for subnet1.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
+
+    // Verify subnet1 values are right. Note, updates should be disabled.
+    EXPECT_FALSE(params->getEnableUpdates());
+    EXPECT_FALSE(params->getOverrideNoUpdate());
+    EXPECT_FALSE(params->getOverrideClientUpdate());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, params->getReplaceClientNameMode());
+    EXPECT_TRUE(params->getGeneratedPrefix().empty());
+    EXPECT_TRUE(params->getQualifyingSuffix().empty());
+    EXPECT_EQ("[^A-Z]", params->getHostnameCharSet());
+    EXPECT_EQ("x", params->getHostnameCharReplacement());
+
+    // We inherited a non-blank hostname_char_set so we
+    // should get a sanitizer instance.
+    isc::util::str::StringSanitizerPtr sanitizer;
+    ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
+    EXPECT_TRUE(sanitizer);
+
+    // Get DDNS params for subnet2.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet2));
+
+    // Verify subnet2 values are right. Note, updates should be disabled,
+    // because D2Client is disabled.
+    EXPECT_FALSE(params->getEnableUpdates());
+    EXPECT_TRUE(params->getOverrideNoUpdate());
+    EXPECT_TRUE(params->getOverrideClientUpdate());
+    EXPECT_EQ(D2ClientConfig::RCM_ALWAYS, params->getReplaceClientNameMode());
+    EXPECT_EQ("prefix", params->getGeneratedPrefix());
+    EXPECT_EQ("example.com.", params->getQualifyingSuffix());
+    EXPECT_EQ("", params->getHostnameCharSet());
+    EXPECT_EQ("x", params->getHostnameCharReplacement());
+
+    // We have a blank hostname-char-set so we should not get a sanitizer instance.
+    ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
+    ASSERT_FALSE(sanitizer);
+
+    // Enable D2Client.
+    enableD2Client(true);
+
+    // Make sure subnet1 udpates are still disabled.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
+    EXPECT_FALSE(params->getEnableUpdates());
+
+    // Make sure subnet2 udpates are now enabled.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet2));
+    EXPECT_TRUE(params->getEnableUpdates());
+
+    // Enable sending updates globally.  This should inherit down subnet1.
+    conf.addConfiguredGlobal("ddns-send-updates", Element::create(true));
+
+    // Make sure subnet1 udpates are now enabled.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
+    EXPECT_TRUE(params->getEnableUpdates());
+}
+
+// Verifies that the fallback values for DDNS parameters when
+// no Subnet4 has been selected.  In theory, we should never want
+// these values without a selected subnet.
+TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest4) {
+    DdnsParamsPtr params;
+
+    CfgMgr::instance().setFamily(AF_INET);
+    SrvConfig conf(32);
+
+    // Enable D2 connectivity.
+    enableD2Client(true);
+
+    // Give all of the parameters a global value.
+    conf.addConfiguredGlobal("ddns-send-updates", Element::create(true));
+    conf.addConfiguredGlobal("ddns-override-no-update", Element::create(true));
+    conf.addConfiguredGlobal("ddns-override-client-update", Element::create(true));
+    conf.addConfiguredGlobal("ddns-replace-client-name", Element::create("always"));
+    conf.addConfiguredGlobal("ddns-generated-prefix", Element::create("some_prefix"));
+    conf.addConfiguredGlobal("ddns-qualifying-suffix", Element::create("example.com"));
+    conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
+    conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+
+    // Get DDNS params for no subnet.
+    Subnet4Ptr subnet4;
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet4));
+
+    // Verify fallback values are right. Note, updates should be disabled.
+    EXPECT_FALSE(params->getEnableUpdates());
+    EXPECT_FALSE(params->getOverrideNoUpdate());
+    EXPECT_FALSE(params->getOverrideClientUpdate());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, params->getReplaceClientNameMode());
+    EXPECT_TRUE(params->getGeneratedPrefix().empty());
+    EXPECT_TRUE(params->getQualifyingSuffix().empty());
+    EXPECT_TRUE(params->getHostnameCharSet().empty());
+    EXPECT_TRUE(params->getHostnameCharReplacement().empty());
+}
+
+// Verifies that the scoped values for DDNS parameters can be fetched
+// for a given Subnet6.
+TEST_F(SrvConfigTest, getDdnsParamsTest6) {
+    DdnsParamsPtr params;
+
+    CfgMgr::instance().setFamily(AF_INET6);
+    SrvConfig conf(32);
+
+    // This disables D2 connectivity. When it is false, updates
+    // are off at all scopes, regardless of ddns-send-updates values.
+    enableD2Client(false);
+
+    // Disable sending updates globally.
+    conf.addConfiguredGlobal("ddns-send-updates", Element::create(false));
+    // Configure global host sanitizing.
+    conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
+    conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+    // Add a plain subnet
+    Triplet<uint32_t> def_triplet;
+    Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 64,
+                                   1000, 2000, 3000, 4000, SubnetID(1)));
+    // In order to take advantage of the dynamic inheritance of global
+    // parameters to a subnet we need to set a callback function for each
+    // subnet to allow for fetching global parameters.
+    subnet1->setFetchGlobalsFn([conf]() -> ConstElementPtr {
+        return (conf.getConfiguredGlobals());
+    });
+
+    conf.getCfgSubnets6()->add(subnet1);
+
+    // Add a shared network
+    SharedNetwork6Ptr frognet(new SharedNetwork6("frog"));
+    conf.getCfgSharedNetworks6()->add(frognet);
+
+    // Add a shared subnet
+    Subnet6Ptr subnet2(new Subnet6(IOAddress("2001:db8:2::"), 64,
+                                   1000, 2000, 3000, 4000, SubnetID(2)));
+
+    // In order to take advantage of the dynamic inheritance of global
+    // parameters to a subnet we need to set a callback function for each
+    // subnet to allow for fetching global parameters.
+    subnet2->setFetchGlobalsFn([conf]() -> ConstElementPtr {
+        return (conf.getConfiguredGlobals());
+    });
+
+    frognet->add(subnet2);
+    subnet2->setDdnsSendUpdates(true);
+    subnet2->setDdnsOverrideNoUpdate(true);
+    subnet2->setDdnsOverrideClientUpdate(true);
+    subnet2->setDdnsReplaceClientNameMode(D2ClientConfig::RCM_ALWAYS);
+    subnet2->setDdnsGeneratedPrefix("prefix");
+    subnet2->setDdnsQualifyingSuffix("example.com.");
+    subnet2->setHostnameCharSet("");
+
+    // Get DDNS params for subnet1.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
+
+    // Verify subnet1 values are right. Note, updates should be disabled.
+    EXPECT_FALSE(params->getEnableUpdates());
+    EXPECT_FALSE(params->getOverrideNoUpdate());
+    EXPECT_FALSE(params->getOverrideClientUpdate());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, params->getReplaceClientNameMode());
+    EXPECT_TRUE(params->getGeneratedPrefix().empty());
+    EXPECT_TRUE(params->getQualifyingSuffix().empty());
+    EXPECT_EQ("[^A-Z]", params->getHostnameCharSet());
+    EXPECT_EQ("x", params->getHostnameCharReplacement());
+
+    // We inherited a non-blank hostname_char_set so we
+    // should get a sanitizer instance.
+    isc::util::str::StringSanitizerPtr sanitizer;
+    ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
+    EXPECT_TRUE(sanitizer);
+
+    // Get DDNS params for subnet2.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet2));
+
+    // Verify subnet1 values are right. Note, updates should be disabled,
+    // because D2Client is disabled.
+    EXPECT_FALSE(params->getEnableUpdates());
+    EXPECT_TRUE(params->getOverrideNoUpdate());
+    EXPECT_TRUE(params->getOverrideClientUpdate());
+    EXPECT_EQ(D2ClientConfig::RCM_ALWAYS, params->getReplaceClientNameMode());
+    EXPECT_EQ("prefix", params->getGeneratedPrefix());
+    EXPECT_EQ("example.com.", params->getQualifyingSuffix());
+    EXPECT_EQ("", params->getHostnameCharSet());
+    EXPECT_EQ("x", params->getHostnameCharReplacement());
+
+    // We have a blank hostname-char-set so we should not get a sanitizer instance.
+    ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
+    ASSERT_FALSE(sanitizer);
+
+    // Enable D2Client.
+    enableD2Client(true);
+
+    // Make sure subnet1 udpates are still disabled.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
+    EXPECT_FALSE(params->getEnableUpdates());
+
+    // Make sure subnet2 udpates are now enabled.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet2));
+    EXPECT_TRUE(params->getEnableUpdates());
+
+    // Enable sending updates globally.  This should inherit down subnet1.
+    conf.addConfiguredGlobal("ddns-send-updates", Element::create(true));
+
+    // Make sure subnet1 udpates are now enabled.
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
+    EXPECT_TRUE(params->getEnableUpdates());
+}
+
+// Verifies that the fallback values for DDNS parameters when
+// no Subnet6 has been selected.  In theory, we should never want
+// these values without a selected subnet.
+TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest6) {
+    DdnsParamsPtr params;
+
+    CfgMgr::instance().setFamily(AF_INET6);
+    SrvConfig conf(32);
+
+    // Enable D2 connectivity.
+    enableD2Client(true);
+
+    // Give all of the parameters a global value.
+    conf.addConfiguredGlobal("ddns-send-updates", Element::create(true));
+    conf.addConfiguredGlobal("ddns-override-no-update", Element::create(true));
+    conf.addConfiguredGlobal("ddns-override-client-update", Element::create(true));
+    conf.addConfiguredGlobal("ddns-replace-client-name", Element::create("always"));
+    conf.addConfiguredGlobal("ddns-generated-prefix", Element::create("some_prefix"));
+    conf.addConfiguredGlobal("ddns-qualifying-suffix", Element::create("example.com"));
+    conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
+    conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+
+    // Get DDNS params for no subnet.
+    Subnet6Ptr subnet6;
+    ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet6));
+
+    // Verify fallback values are right. Note, updates should be disabled.
+    EXPECT_FALSE(params->getEnableUpdates());
+    EXPECT_FALSE(params->getOverrideNoUpdate());
+    EXPECT_FALSE(params->getOverrideClientUpdate());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, params->getReplaceClientNameMode());
+    EXPECT_TRUE(params->getGeneratedPrefix().empty());
+    EXPECT_TRUE(params->getQualifyingSuffix().empty());
+    EXPECT_TRUE(params->getHostnameCharSet().empty());
+    EXPECT_TRUE(params->getHostnameCharReplacement().empty());
+}
+
 
 } // end of anonymous namespace

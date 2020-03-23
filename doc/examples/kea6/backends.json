@@ -51,7 +51,7 @@
 // password is not necessary to connect and that timeout is 5 seconds.
 // Kea must be compiled with --with-pgsql option to use this backend.
 //  "lease-database": {
-//      "type": "pgsql",
+//      "type": "postgresql",
 //      "name": "keatest",
 //      "host": "localhost",
 //      "port": 5432,
@@ -94,13 +94,11 @@
       "subnet": "2001:db8:1::/64",
       "interface": "ethX"
     }
-  ]
-},
+  ],
 
 // The following configures logging. It assumes that messages with at
 // least informational level (info, warn, error and fatal) should be
 // logged to stdout.
-"Logging": {
     "loggers": [
         {
             "name": "kea-dhcp6",

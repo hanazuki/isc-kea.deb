@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,8 @@
 #include <cc/stamped_value.h>
 #include <config_backend/base_config_backend_pool.h>
 #include <database/backend_selector.h>
+#include <database/server.h>
+#include <database/server_collection.h>
 #include <database/server_selector.h>
 #include <dhcp/option.h>
 #include <dhcp/option_definition.h>
@@ -24,6 +26,9 @@ namespace isc {
 namespace dhcp {
 
 /// @brief Implementation of the Configuration Backend Pool for DHCPv4.
+///
+/// All POSIX times specified in the methods belonging to this
+/// class must be local times.
 class ConfigBackendPoolDHCPv4 : public cb::BaseConfigBackendPool<ConfigBackendDHCPv4> {
 public:
 
@@ -68,6 +73,18 @@ public:
     getModifiedSubnets4(const db::BackendSelector& backend_selector,
                         const db::ServerSelector& server_selector,
                         const boost::posix_time::ptime& modification_time) const;
+
+    /// @brief Retrieves all subnets belonging to a specified shared network.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @param server_selector Server selector.
+    /// @param shared_network_name Name of the shared network for which the
+    /// subnets should be retrieved.
+    /// @return Collection of subnets or empty collection if no subnet found.
+    virtual Subnet4Collection
+    getSharedNetworkSubnets4(const db::BackendSelector& backend_selector,
+                             const db::ServerSelector& server_selector,
+                             const std::string& shared_network_name) const;
 
     /// @brief Retrieves shared network by name.
     ///
@@ -204,6 +221,38 @@ public:
                                 const db::ServerSelector& server_selector,
                                 const boost::posix_time::ptime& modification_time) const;
 
+    /// @brief Retrieves the most recent audit entries.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @param server_selector Server selector.
+    /// @param modification_time Timestamp being a lower limit for the returned
+    /// result set, i.e. entries later than specified time are returned.
+    /// @return Collection of audit entries.
+    virtual db::AuditEntryCollection
+    getRecentAuditEntries(const db::BackendSelector& backend_selector,
+                          const db::ServerSelector& server_selector,
+                          const boost::posix_time::ptime& modification_time) const;
+
+    /// @brief Retrieves all servers from the particular backend.
+    ///
+    /// This method returns the list of servers excluding the logical server
+    /// 'all'.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @return Collection of servers from the backend.
+    virtual db::ServerCollection
+    getAllServers4(const db::BackendSelector& backend_selector) const;
+
+    /// @brief Retrieves a server from the particular backend.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @param server_tag Tag of the server to be retrieved.
+    /// @return Pointer to the server instance or null pointer if no server
+    /// with the particular tag was found.
+    virtual db::ServerPtr
+    getServer4(const db::BackendSelector& backend_selector,
+               const data::ServerTag& server_tag) const;
+
     /// @brief Creates or updates a subnet.
     ///
     /// @param backend_selector Backend selector.
@@ -295,6 +344,14 @@ public:
                                  const db::ServerSelector& server_selector,
                                  const data::StampedValuePtr& value);
 
+    /// @brief Creates or updates a server.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @param server Instance of the server to be stored.
+    virtual void
+    createUpdateServer4(const db::BackendSelector& backend_selector,
+                        const db::ServerPtr& server);
+
     /// @brief Deletes subnet by prefix.
     ///
     /// @param backend_selector Backend selector.
@@ -325,6 +382,18 @@ public:
     virtual uint64_t
     deleteAllSubnets4(const db::BackendSelector& backend_selector,
                       const db::ServerSelector& server_selector);
+
+    /// @brief Deletes all subnets belonging to a specified shared network.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @param server_selector Server selector.
+    /// @param shared_network_name Name of the shared network for which the
+    /// subnets should be deleted.
+    /// @return Number of deleted subnets.
+    virtual uint64_t
+    deleteSharedNetworkSubnets4(const db::BackendSelector& backend_selector,
+                                const db::ServerSelector& server_selector,
+                                const std::string& shared_network_name);
 
     /// @brief Deletes shared network by name.
     ///
@@ -449,6 +518,23 @@ public:
     virtual uint64_t
     deleteAllGlobalParameters4(const db::BackendSelector& backend_selector,
                                const db::ServerSelector& server_selector);
+
+    /// @brief Deletes a server from the backend.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @param server_tag Tag of the server to be deleted.
+    /// @return Number of deleted servers.
+    virtual uint64_t
+    deleteServer4(const db::BackendSelector& backend_selector,
+                  const data::ServerTag& server_tag);
+
+    /// @brief Deletes all servers from the backend except the logical
+    /// server 'all'.
+    ///
+    /// @param backend_selector Backend selector.
+    /// @return Number of deleted servers.
+    virtual uint64_t
+    deleteAllServers4(const db::BackendSelector& backend_selector);
 };
 
 

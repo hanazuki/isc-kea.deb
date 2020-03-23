@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,7 @@
 #include <ha_service_states.h>
 #include <asiolink/interval_timer.h>
 #include <asiolink/io_service.h>
+#include <cc/data.h>
 #include <dhcp/pkt.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/function.hpp>
@@ -99,6 +100,12 @@ public:
     /// those returned in response to a ha-heartbeat command.
     /// @throw BadValue if unsupported state value was provided.
     void setPartnerState(const std::string& state);
+
+    std::set<std::string> getPartnerScopes() const {
+        return (partner_scopes_);
+    }
+
+    void setPartnerScopes(data::ConstElementPtr new_scopes);
 
     /// @brief Starts recurring heartbeat (public interface).
     ///
@@ -276,7 +283,9 @@ public:
     /// calculated.
     ///
     /// @param time_text Partner's time received in response to a heartbeat. The
-    /// time must be provided in the RFC 1123 format.
+    /// time must be provided in the RFC 1123 format.  It stores the current
+    /// time, partner's time, and the difference (skew) between them.
+    ///
     /// @throw isc::http::HttpTimeConversionError if the time format is invalid.
     ///
     /// @todo Consider some other time formats which include millisecond
@@ -311,12 +320,21 @@ protected:
     /// Negative value means that the partner's state is unknown.
     int partner_state_;
 
+    /// @brief Last known set of scopes served by the partner server.
+    std::set<std::string> partner_scopes_;
+
     /// @brief Clock skew between the active servers.
     boost::posix_time::time_duration clock_skew_;
 
     /// @brief Holds a time when last warning about too high clock skew
     /// was issued.
     boost::posix_time::ptime last_clock_skew_warn_;
+
+    /// @brief My time when skew was calculated.
+    boost::posix_time::ptime my_time_at_skew_;
+
+    /// @brief Partner reported time when skew was calculated.
+    boost::posix_time::ptime partner_time_at_skew_;
 };
 
 /// @brief Type of the pointer to the @c CommunicationState object.

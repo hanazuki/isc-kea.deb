@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -186,7 +186,7 @@ public:
             isc_throw(OutOfRange, "option " << getType() << " empty");
         }
         if (distance(begin, end) % sizeof(T) != 0) {
-            isc_throw(OutOfRange, "option " << getType() << " truncated");
+            isc_throw(OutOfRange, "OptionIntArray " << getType() << " truncated");
         }
         // @todo consider what to do if buffer is longer than data type.
 

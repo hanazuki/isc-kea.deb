@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -80,6 +80,17 @@ public:
     createLease4GetPage(const dhcp::Lease4Ptr& lease4,
                         const uint32_t limit);
 
+    /// @brief Creates lease6-bulk-update command.
+    ///
+    /// @param leases Pointer to the collection of leases to be created
+    /// or/and updated.
+    /// @param deleted_leases Pointer to the collection of leases to be
+    /// deleted.
+    /// @return Pointer to the JSON representation of the command.
+    static data::ConstElementPtr
+    createLease6BulkApply(const dhcp::Lease6CollectionPtr& leases,
+                          const dhcp::Lease6CollectionPtr& deleted_leases);
+
     /// @brief Creates lease6-update command.
     ///
     /// It adds "force-create" parameter to the lease information to force
@@ -120,6 +131,15 @@ public:
     static data::ConstElementPtr
     createLease6GetPage(const dhcp::Lease6Ptr& lease6,
                         const uint32_t limit);
+
+    /// @brief Creates ha-maintenance-notify command.
+    ///
+    /// @param cancel boolean value indicating if the maintenance
+    /// is being cancelled (true) or requested (false).
+    /// @param server_type type of the DHCP server, i.e. v4 or v6.
+    /// @return Pointer to the JSON representation of the command.
+    static data::ConstElementPtr
+    createMaintenanceNotify(const bool cancel, const HAServerType& server_type);
 
 private:
 

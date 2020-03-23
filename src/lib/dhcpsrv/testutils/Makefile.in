@@ -88,20 +88,22 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_1 = $(MYSQL_CPPFLAGS)
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_2 = $(top_builddir)/src/lib/mysql/libkea-mysql.la
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_3 = $(PGSQL_CPPFLAGS)
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_4 = $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_5 = $(CQL_CPPFLAGS)
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_6 = $(top_builddir)/src/lib/cql/libkea-cql.la
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_7 = $(MYSQL_LIBS)
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_8 = $(PGSQL_LIBS)
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_9 = $(CQL_LIBS)
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_1 = mysql_generic_backend_unittest.cc mysql_generic_backend_unittest.h
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_2 = $(MYSQL_CPPFLAGS)
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_3 = $(top_builddir)/src/lib/mysql/libkea-mysql.la
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_4 = $(PGSQL_CPPFLAGS)
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_5 = $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
+@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_6 = $(CQL_CPPFLAGS)
+@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_7 = $(top_builddir)/src/lib/cql/libkea-cql.la
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_8 = $(MYSQL_LIBS)
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_9 = $(PGSQL_LIBS)
+@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_10 = $(CQL_LIBS)
 subdir = src/lib/dhcpsrv/testutils
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -117,8 +119,8 @@ CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 LTLIBRARIES = $(noinst_LTLIBRARIES)
-@HAVE_GTEST_TRUE@libdhcpsrvtest_la_DEPENDENCIES = $(am__append_2) \
-@HAVE_GTEST_TRUE@	$(am__append_4) $(am__append_6) \
+@HAVE_GTEST_TRUE@libdhcpsrvtest_la_DEPENDENCIES = $(am__append_3) \
+@HAVE_GTEST_TRUE@	$(am__append_5) $(am__append_7) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la
@@ -130,7 +132,11 @@ am__libdhcpsrvtest_la_SOURCES_DIST = config_result_check.cc \
 	generic_host_data_source_unittest.cc \
 	generic_host_data_source_unittest.h lease_file_io.cc \
 	lease_file_io.h test_config_backend.h \
-	test_config_backend_dhcp4.cc test_config_backend_dhcp4.h
+	test_config_backend_dhcp4.cc test_config_backend_dhcp4.h \
+	test_config_backend_dhcp6.cc test_config_backend_dhcp6.h \
+	mysql_generic_backend_unittest.cc \
+	mysql_generic_backend_unittest.h
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__objects_1 = libdhcpsrvtest_la-mysql_generic_backend_unittest.lo
 @HAVE_GTEST_TRUE@am_libdhcpsrvtest_la_OBJECTS =  \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-config_result_check.lo \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-dhcp4o6_test_ipc.lo \
@@ -139,7 +145,9 @@ am__libdhcpsrvtest_la_SOURCES_DIST = config_result_check.cc \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-generic_backend_unittest.lo \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-generic_host_data_source_unittest.lo \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-lease_file_io.lo \
-@HAVE_GTEST_TRUE@	libdhcpsrvtest_la-test_config_backend_dhcp4.lo
+@HAVE_GTEST_TRUE@	libdhcpsrvtest_la-test_config_backend_dhcp4.lo \
+@HAVE_GTEST_TRUE@	libdhcpsrvtest_la-test_config_backend_dhcp6.lo \
+@HAVE_GTEST_TRUE@	$(am__objects_1)
 libdhcpsrvtest_la_OBJECTS = $(am_libdhcpsrvtest_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -288,7 +296,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -309,7 +316,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -319,6 +325,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -328,7 +335,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -379,6 +385,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -396,17 +403,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -485,19 +492,21 @@ CLEANFILES = *.gcno *.gcda
 @HAVE_GTEST_TRUE@	lease_file_io.cc lease_file_io.h \
 @HAVE_GTEST_TRUE@	test_config_backend.h \
 @HAVE_GTEST_TRUE@	test_config_backend_dhcp4.cc \
-@HAVE_GTEST_TRUE@	test_config_backend_dhcp4.h
+@HAVE_GTEST_TRUE@	test_config_backend_dhcp4.h \
+@HAVE_GTEST_TRUE@	test_config_backend_dhcp6.cc \
+@HAVE_GTEST_TRUE@	test_config_backend_dhcp6.h $(am__append_1)
 @HAVE_GTEST_TRUE@libdhcpsrvtest_la_CXXFLAGS = $(AM_CXXFLAGS)
 @HAVE_GTEST_TRUE@libdhcpsrvtest_la_CPPFLAGS = $(AM_CPPFLAGS) \
-@HAVE_GTEST_TRUE@	$(GTEST_INCLUDES) $(am__append_1) \
-@HAVE_GTEST_TRUE@	$(am__append_3) $(am__append_5)
-@HAVE_GTEST_TRUE@libdhcpsrvtest_la_LIBADD = $(am__append_2) \
-@HAVE_GTEST_TRUE@	$(am__append_4) $(am__append_6) \
+@HAVE_GTEST_TRUE@	$(GTEST_INCLUDES) $(am__append_2) \
+@HAVE_GTEST_TRUE@	$(am__append_4) $(am__append_6)
+@HAVE_GTEST_TRUE@libdhcpsrvtest_la_LIBADD = $(am__append_3) \
+@HAVE_GTEST_TRUE@	$(am__append_5) $(am__append_7) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la
 @HAVE_GTEST_TRUE@libdhcpsrvtest_la_LDFLAGS = $(AM_LDFLAGS) \
-@HAVE_GTEST_TRUE@	$(am__append_7) $(am__append_8) \
-@HAVE_GTEST_TRUE@	$(am__append_9)
+@HAVE_GTEST_TRUE@	$(am__append_8) $(am__append_9) \
+@HAVE_GTEST_TRUE@	$(am__append_10)
 all: all-recursive
 
 .SUFFIXES:
@@ -559,7 +568,9 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-host_data_source_utils.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-lease_file_io.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-memory_host_data_source.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-mysql_generic_backend_unittest.Plo@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-test_config_backend_dhcp4.Plo@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-test_config_backend_dhcp6.Plo@am__quote@
 
 .cc.o:
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXXCOMPILE) -MT $@ -MD -MP -MF $(DEPDIR)/$*.Tpo -c -o $@ $<
@@ -637,6 +648,20 @@ libdhcpsrvtest_la-test_config_backend_dhcp4.lo: test_config_backend_dhcp4.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='test_config_backend_dhcp4.cc' object='libdhcpsrvtest_la-test_config_backend_dhcp4.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrvtest_la-test_config_backend_dhcp4.lo `test -f 'test_config_backend_dhcp4.cc' || echo '$(srcdir)/'`test_config_backend_dhcp4.cc
+
+libdhcpsrvtest_la-test_config_backend_dhcp6.lo: test_config_backend_dhcp6.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrvtest_la-test_config_backend_dhcp6.lo -MD -MP -MF $(DEPDIR)/libdhcpsrvtest_la-test_config_backend_dhcp6.Tpo -c -o libdhcpsrvtest_la-test_config_backend_dhcp6.lo `test -f 'test_config_backend_dhcp6.cc' || echo '$(srcdir)/'`test_config_backend_dhcp6.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrvtest_la-test_config_backend_dhcp6.Tpo $(DEPDIR)/libdhcpsrvtest_la-test_config_backend_dhcp6.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='test_config_backend_dhcp6.cc' object='libdhcpsrvtest_la-test_config_backend_dhcp6.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrvtest_la-test_config_backend_dhcp6.lo `test -f 'test_config_backend_dhcp6.cc' || echo '$(srcdir)/'`test_config_backend_dhcp6.cc
+
+libdhcpsrvtest_la-mysql_generic_backend_unittest.lo: mysql_generic_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrvtest_la-mysql_generic_backend_unittest.lo -MD -MP -MF $(DEPDIR)/libdhcpsrvtest_la-mysql_generic_backend_unittest.Tpo -c -o libdhcpsrvtest_la-mysql_generic_backend_unittest.lo `test -f 'mysql_generic_backend_unittest.cc' || echo '$(srcdir)/'`mysql_generic_backend_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrvtest_la-mysql_generic_backend_unittest.Tpo $(DEPDIR)/libdhcpsrvtest_la-mysql_generic_backend_unittest.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='mysql_generic_backend_unittest.cc' object='libdhcpsrvtest_la-mysql_generic_backend_unittest.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrvtest_la-mysql_generic_backend_unittest.lo `test -f 'mysql_generic_backend_unittest.cc' || echo '$(srcdir)/'`mysql_generic_backend_unittest.cc
 
 mostlyclean-libtool:
 	-rm -f *.lo

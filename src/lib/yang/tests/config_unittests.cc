@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -318,6 +318,12 @@ TEST_F(ConfigTest, validateIetf6) {
     ASSERT_NO_THROW(load(validTreeIetf6));
     EXPECT_TRUE(verify(validTreeIetf6));
 
+    // If this validation fails, make sure you have the model *and its
+    // dependencies* are installed. Note when you install ietf-dhcpv6-server
+    // module, its dependencies are semi-installed, which is not sufficient.
+    // This can be detected in output of sysrepoctl -l.
+    // Note the ietf-interfaces module. The conformance status must be
+    // "installed". "implemented" (installed as dependency) is not enough.
     EXPECT_TRUE(validate());
 }
 
@@ -328,15 +334,18 @@ TEST_F(ConfigTest, examples4) {
 
     vector<string> examples = {
         "advanced.json",
-        "all-keys.json",
+        "all-keys-netconf.json",
         "backends.json",
         "cassandra.json",
         "classify.json",
         "classify2.json",
         "comments.json",
+        "config-backend.json",
         "dhcpv4-over-dhcpv6.json",
         "global-reservations.json",
+        "ha-load-balancing-primary.json",
         "hooks.json",
+        "hooks-radius.json",
         "leases-expiration.json",
         "multiple-options.json",
         "mysql-reservations.json",
@@ -345,7 +354,7 @@ TEST_F(ConfigTest, examples4) {
         "several-subnets.json",
         "shared-network.json",
         "single-subnet.json",
-        "with-ddns.json"
+        // "with-ddns.json" removed for #35
     };
     for (string file : examples) {
         resetSession();
@@ -366,15 +375,17 @@ TEST_F(ConfigTest, examples6) {
 
     vector<string> examples = {
         "advanced.json",
-        "all-keys.json",
+        "all-keys-netconf.json",
         "backends.json",
         "cassandra.json",
         "classify.json",
         "classify2.json",
         "comments.json",
+        "config-backend.json",
         "dhcpv4-over-dhcpv6.json",
         "duid.json",
         "global-reservations.json",
+        "ha-hot-standby.json",
         "hooks.json",
         "iPXE.json",
         "leases-expiration.json",
@@ -387,7 +398,8 @@ TEST_F(ConfigTest, examples6) {
         "simple.json",
         "softwire46.json",
         "stateless.json",
-        "with-ddns.json"
+        "tee-times.json",
+        // "with-ddns.json" removed for #35
     };
     for (string file : examples) {
         resetSession();

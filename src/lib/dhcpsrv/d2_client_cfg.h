@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,7 +17,7 @@
 #include <cc/user_context.h>
 #include <dhcp_ddns/ncr_io.h>
 #include <exceptions/exceptions.h>
-#include <util/strutil.h>
+#include <util/optional.h>
 
 #include <boost/shared_ptr.hpp>
 
@@ -27,7 +27,6 @@
 
 namespace isc {
 namespace dhcp {
-
 
 /// An exception that is thrown if an error occurs while configuring
 /// the D2 DHCP DDNS client.
@@ -42,6 +41,10 @@ public:
     D2ClientError(const char* file, size_t line, const char* what)
         : isc::Exception(file, line, what) {}
 };
+
+/// @brief Callback function for @c D2ClientConfig that retrieves globally
+/// configured parameters.
+typedef std::function<data::ConstElementPtr()> FetchNetworkGlobalsFn;
 
 
 /// @brief Acts as a storage vault for D2 client configuration
@@ -88,21 +91,7 @@ public:
     /// Currently only UDP is supported.
     /// @param ncr_format Format of the kea-dhcp-ddns requests.
     /// Currently only JSON format is supported.
-    /// @param override_no_update Enables updates, even if clients request no
-    /// updates.
-    /// @param override_client_update Perform updates, even if client requested
-    /// delegation.
-    /// @param replace_client_name_mode enables replacement of the domain-name
-    /// supplied by the client with a generated name.
-    /// @param generated_prefix Prefix to use when generating domain-names.
-    /// @param qualifying_suffix Suffix to use to qualify partial domain-names.
-    /// @param hostname_char_set regular expression string which describes invalid
-    /// characters to be scrubbed from client host names 
-    /// @param hostname_char_replacement string of zero or more characters to
-    /// replace invalid chars when sanitizing client host names
-    ///
-    /// @c enable_updates is mandatory, @c qualifying_suffix is mandatory
-    /// when updates are enabled, other parameters are optional.
+    /// @c enable_updates is mandatory, other parameters are optional.
     ///
     /// @throw D2ClientError if given an invalid protocol or format.
     D2ClientConfig(const bool enable_updates,
@@ -112,15 +101,7 @@ public:
                    const size_t sender_port,
                    const size_t max_queue_size,
                    const dhcp_ddns::NameChangeProtocol& ncr_protocol,
-                   const dhcp_ddns::NameChangeFormat& ncr_format,
-                   const bool override_no_update,
-                   const bool override_client_update,
-                   const ReplaceClientNameMode replace_client_name_mode,
-                   const std::string& generated_prefix,
-                   const std::string& qualifying_suffix,
-                   const std::string& hostname_char_set,
-                   const std::string& hostname_char_replacement);
-
+                   const dhcp_ddns::NameChangeFormat& ncr_format);
 
     /// @brief Default constructor
     /// The default constructor creates an instance that has updates disabled.
@@ -169,47 +150,6 @@ public:
         return(ncr_format_);
     }
 
-    /// @brief Return if updates are done even if clients request no updates.
-    bool getOverrideNoUpdate() const {
-        return(override_no_update_);
-    }
-
-    /// @brief Return if updates are done even when clients request delegation.
-    bool getOverrideClientUpdate() const {
-        return(override_client_update_);
-    }
-
-    /// @brief Return mode of replacement to use regarding client's client's domain-name
-    ReplaceClientNameMode getReplaceClientNameMode() const {
-        return(replace_client_name_mode_);
-    }
-
-    /// @brief Return the prefix to use when generating domain-names.
-    const std::string& getGeneratedPrefix() const {
-        return(generated_prefix_);
-    }
-
-    /// @brief Return the suffix to use to qualify partial domain-names.
-    const std::string& getQualifyingSuffix() const {
-        return(qualifying_suffix_);
-    }
-
-    /// @brief Return the char set regexp used to sanitize client hostnames.
-    const std::string& getHostnameCharSet() const {
-        return(hostname_char_set_);
-    }
-
-    /// @brief Return the invalid char replacement used to sanitize client hostnames.
-    const std::string& getHostnameCharReplacement() const {
-        return(hostname_char_replacement_);
-    }
-
-    /// @brief Return pointer to compiled regular expression string sanitizer
-    /// Will be empty if hostname-char-set is empty.
-    util::str::StringSanitizerPtr getHostnameSanitizer() const {
-        return(hostname_sanitizer_);
-    }
-
     /// @brief Compares two D2ClientConfigs for equality
     bool operator == (const D2ClientConfig& other) const;
 
@@ -253,7 +193,6 @@ public:
     /// @return a pointer to unparsed configuration
     virtual isc::data::ElementPtr toElement() const;
 
-protected:
     /// @brief Validates member values.
     ///
     /// Method is used by the constructor to validate member contents.
@@ -287,33 +226,6 @@ private:
     /// @brief Format of the kea-dhcp-ddns requests.
     /// Currently only JSON format is supported.
     dhcp_ddns::NameChangeFormat ncr_format_;
-
-    /// @brief Should Kea perform updates, even if client requested no updates.
-    /// Overrides the client request for no updates via the N flag.
-    bool override_no_update_;
-
-    /// @brief Should Kea perform updates, even if client requested delegation.
-    bool override_client_update_;
-
-    /// @brief How Kea should handle the domain-name supplied by the client.
-    ReplaceClientNameMode replace_client_name_mode_;
-
-    /// @brief Prefix Kea should use when generating domain-names.
-    std::string generated_prefix_;
-
-    /// @brief Suffix Kea should use when to qualify partial domain-names.
-    std::string qualifying_suffix_;
-
-    /// @brief Regular expression describing invalid characters for client hostnames.
-    /// If empty, host name scrubbing is not done.
-    std::string hostname_char_set_;
-
-    /// @brief A string to replace invalid characters when scrubbing hostnames.
-    /// Meaningful only if hostname_char_set_ is not empty.
-    std::string hostname_char_replacement_;
-
-    /// @brief Pointer to compiled regular expression string sanitizer
-    util::str::StringSanitizerPtr hostname_sanitizer_;
 };
 
 std::ostream&

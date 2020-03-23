@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -139,6 +139,15 @@ public:
         return (Lease4Collection());
     }
 
+    /// @brief Returns all IPv4 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv4 lease found).
+    virtual Lease4Collection getLeases4(const std::string&) const {
+        return (Lease4Collection());
+    }
+
     /// @brief Returns all IPv4 leases.
     ///
     /// @return Lease collection (may be empty if no IPv4 lease found).
@@ -226,6 +235,15 @@ public:
         return (Lease6Collection());
     }
 
+    /// @brief Returns all IPv6 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv6 lease found).
+    virtual Lease6Collection getLeases6(const std::string&) const {
+        return (Lease6Collection());
+    }
+
     /// @brief Returns all IPv6 leases.
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
@@ -293,13 +311,21 @@ public:
     /// If no such lease is present, an exception will be thrown.
     virtual void updateLease6(const Lease6Ptr&) {}
 
-    /// @brief Deletes a lease.
+    /// @brief Deletes an IPv4 lease.
     ///
-    /// @param addr Address of the lease to be deleted. (This can be either
-    ///        a V4 address or a V6 address.)
+    /// @param lease IPv4 lease to be deleted.
     ///
-    /// @return true if deletion was successful, false if no such lease exists
-    virtual bool deleteLease(const isc::asiolink::IOAddress&) {
+    /// @return true if deletion was successful, false if no such lease exists.
+    virtual bool deleteLease(const Lease4Ptr&) {
+        return (false);
+    }
+
+    /// @brief Deletes an IPv6 lease.
+    ///
+    /// @param lease IPv6 lease to be deleted.
+    ///
+    /// @return true if deletion was successful, false if no such lease exists.
+    virtual bool deleteLease(const Lease6Ptr&) {
         return (false);
     }
 
@@ -416,7 +442,7 @@ TEST_F(LeaseMgrTest, getLease6) {
     EXPECT_NO_THROW(lease = mgr->getLease6(leasetype6_[1], *leases[1]->duid_,
                                            leases[1]->iaid_,
                                            leases[1]->subnet_id_));
-    EXPECT_TRUE(Lease6Ptr() == lease);
+    EXPECT_FALSE(lease);
 
     // For a single lease, the function should return that lease
     mgr->leases6_.push_back(leases[1]);
@@ -481,4 +507,4 @@ TEST (LeaseStatsQueryTest, subnetRangeCtor) {
 // are purely virtual, so we would only call ConcreteLeaseMgr methods.
 // Those methods are just stubs that do not return anything.
 
-}; // end of anonymous namespace
+}  // namespace

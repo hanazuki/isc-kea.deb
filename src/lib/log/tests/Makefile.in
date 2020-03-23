@@ -101,6 +101,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -127,7 +128,6 @@ buffer_logger_test_OBJECTS = $(am_buffer_logger_test_OBJECTS)
 am__DEPENDENCIES_1 =
 buffer_logger_test_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
@@ -144,7 +144,6 @@ am_init_logger_test_OBJECTS =  \
 init_logger_test_OBJECTS = $(am_init_logger_test_OBJECTS)
 init_logger_test_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
@@ -162,7 +161,6 @@ initializer_unittests_1_OBJECTS =  \
 	$(am_initializer_unittests_1_OBJECTS)
 @HAVE_GTEST_TRUE@am__DEPENDENCIES_2 = $(am__DEPENDENCIES_1) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
@@ -177,7 +175,6 @@ am_logger_example_OBJECTS = logger_example-logger_example.$(OBJEXT)
 logger_example_OBJECTS = $(am_logger_example_OBJECTS)
 logger_example_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
@@ -186,14 +183,11 @@ logger_example_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_CXXFLAGS) $(CXXFLAGS) $(logger_example_LDFLAGS) \
 	$(LDFLAGS) -o $@
 am_logger_lock_test_OBJECTS =  \
-	logger_lock_test-logger_lock_test.$(OBJEXT)
-nodist_logger_lock_test_OBJECTS =  \
+	logger_lock_test-logger_lock_test.$(OBJEXT) \
 	logger_lock_test-log_test_messages.$(OBJEXT)
-logger_lock_test_OBJECTS = $(am_logger_lock_test_OBJECTS) \
-	$(nodist_logger_lock_test_OBJECTS)
+logger_lock_test_OBJECTS = $(am_logger_lock_test_OBJECTS)
 logger_lock_test_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
@@ -207,7 +201,8 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 	logger_name_unittest.cc logger_support_unittest.cc \
 	logger_unittest.cc logger_specification_unittest.cc \
 	message_dictionary_unittest.cc message_reader_unittest.cc \
-	output_option_unittest.cc buffer_appender_unittest.cc
+	output_option_unittest.cc buffer_appender_unittest.cc \
+	log_test_messages.cc log_test_messages.h
 @HAVE_GTEST_TRUE@am_run_unittests_OBJECTS =  \
 @HAVE_GTEST_TRUE@	run_unittests-run_unittests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-log_formatter_unittest.$(OBJEXT) \
@@ -221,11 +216,9 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	run_unittests-message_dictionary_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-message_reader_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-output_option_unittest.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	run_unittests-buffer_appender_unittest.$(OBJEXT)
-@HAVE_GTEST_TRUE@nodist_run_unittests_OBJECTS =  \
+@HAVE_GTEST_TRUE@	run_unittests-buffer_appender_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-log_test_messages.$(OBJEXT)
-run_unittests_OBJECTS = $(am_run_unittests_OBJECTS) \
-	$(nodist_run_unittests_OBJECTS)
+run_unittests_OBJECTS = $(am_run_unittests_OBJECTS)
 @HAVE_GTEST_TRUE@run_unittests_DEPENDENCIES = $(am__DEPENDENCIES_2)
 run_unittests_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
@@ -286,8 +279,7 @@ am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
 SOURCES = $(buffer_logger_test_SOURCES) $(init_logger_test_SOURCES) \
 	$(initializer_unittests_1_SOURCES) $(logger_example_SOURCES) \
-	$(logger_lock_test_SOURCES) $(nodist_logger_lock_test_SOURCES) \
-	$(run_unittests_SOURCES) $(nodist_run_unittests_SOURCES)
+	$(logger_lock_test_SOURCES) $(run_unittests_SOURCES)
 DIST_SOURCES = $(buffer_logger_test_SOURCES) \
 	$(init_logger_test_SOURCES) \
 	$(am__initializer_unittests_1_SOURCES_DIST) \
@@ -405,7 +397,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -426,7 +417,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -436,6 +426,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -445,7 +436,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -496,6 +486,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -513,17 +504,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -588,18 +579,15 @@ AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 AM_LDADD = 
 AM_LDFLAGS = $(am__append_1)
-CLEANFILES = *.gcno *.gcda *.lock log_test_messages.h \
-	log_test_messages.cc s-messages
+CLEANFILES = *.gcno *.gcda *.lock
 DISTCLEANFILES = buffer_logger_test.sh console_test.sh \
 	destination_test.sh init_logger_test.sh local_file_test.sh \
 	logger_lock_test.sh severity_test.sh tempdir.h
 EXTRA_DIST = log_test_messages.mes
-BUILT_SOURCES = log_test_messages.h log_test_messages.cc
 logger_example_SOURCES = logger_example.cc
 logger_example_CPPFLAGS = $(AM_CPPFLAGS)
 logger_example_LDFLAGS = $(AM_LDFLAGS)
 logger_example_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(AM_LDADD) $(LOG4CPLUS_LIBS)
@@ -607,7 +595,6 @@ init_logger_test_SOURCES = init_logger_test.cc
 init_logger_test_CPPFLAGS = $(AM_CPPFLAGS)
 init_logger_test_LDFLAGS = $(AM_LDFLAGS)
 init_logger_test_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(AM_LDADD) $(LOG4CPLUS_LIBS)
@@ -615,16 +602,14 @@ buffer_logger_test_SOURCES = buffer_logger_test.cc
 buffer_logger_test_CPPFLAGS = $(AM_CPPFLAGS)
 buffer_logger_test_LDFLAGS = $(AM_LDFLAGS)
 buffer_logger_test_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(AM_LDADD) $(LOG4CPLUS_LIBS)
-logger_lock_test_SOURCES = logger_lock_test.cc
-nodist_logger_lock_test_SOURCES = log_test_messages.cc log_test_messages.h
+logger_lock_test_SOURCES = logger_lock_test.cc log_test_messages.cc \
+	log_test_messages.h
 logger_lock_test_CPPFLAGS = $(AM_CPPFLAGS)
 logger_lock_test_LDFLAGS = $(AM_LDFLAGS)
 logger_lock_test_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(AM_LDADD) $(LOG4CPLUS_LIBS)
@@ -638,7 +623,6 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@TESTSLDFLAGS = $(AM_LDFLAGS) $(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@TESTSLDADD = $(AM_LDADD) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
@@ -654,8 +638,8 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	message_dictionary_unittest.cc \
 @HAVE_GTEST_TRUE@	message_reader_unittest.cc \
 @HAVE_GTEST_TRUE@	output_option_unittest.cc \
-@HAVE_GTEST_TRUE@	buffer_appender_unittest.cc
-@HAVE_GTEST_TRUE@nodist_run_unittests_SOURCES = log_test_messages.cc log_test_messages.h
+@HAVE_GTEST_TRUE@	buffer_appender_unittest.cc \
+@HAVE_GTEST_TRUE@	log_test_messages.cc log_test_messages.h
 @HAVE_GTEST_TRUE@run_unittests_CPPFLAGS = $(TESTSCPPFLAGS)
 @HAVE_GTEST_TRUE@run_unittests_CXXFLAGS = $(TESTSCXXFLAGS)
 @HAVE_GTEST_TRUE@run_unittests_LDADD = $(TESTSLDADD)
@@ -671,8 +655,7 @@ TESTS_ENVIRONMENT = \
 noinst_SCRIPTS = console_test.sh destination_test.sh \
 	init_logger_test.sh local_file_test.sh logger_lock_test.sh \
 	severity_test.sh
-all: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+all: all-recursive
 
 .SUFFIXES:
 .SUFFIXES: .cc .lo .o .obj
@@ -1368,13 +1351,11 @@ distdir: $(DISTFILES)
 	done
 check-am: all-am
 	$(MAKE) $(AM_MAKEFLAGS) check-TESTS check-local
-check: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) check-recursive
+check: check-recursive
 all-am: Makefile $(PROGRAMS) $(SCRIPTS)
 installdirs: installdirs-recursive
 installdirs-am:
-install: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) install-recursive
+install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
 uninstall: uninstall-recursive
@@ -1406,7 +1387,6 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 clean: clean-recursive
 
 clean-am: clean-generic clean-libtool clean-noinstPROGRAMS \
@@ -1461,7 +1441,8 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
-maintainer-clean-am: distclean-am maintainer-clean-generic
+maintainer-clean-am: distclean-am maintainer-clean-generic \
+	maintainer-clean-local
 
 mostlyclean: mostlyclean-recursive
 
@@ -1478,8 +1459,7 @@ ps-am:
 
 uninstall-am:
 
-.MAKE: $(am__recursive_targets) all check check-am install install-am \
-	install-strip
+.MAKE: $(am__recursive_targets) check-am install-am install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am check \
 	check-TESTS check-am check-local clean clean-generic \
@@ -1492,17 +1472,12 @@ uninstall-am:
 	install-info-am install-man install-pdf install-pdf-am \
 	install-ps install-ps-am install-strip installcheck \
 	installcheck-am installdirs installdirs-am maintainer-clean \
-	maintainer-clean-generic mostlyclean mostlyclean-compile \
-	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
-	tags tags-am uninstall uninstall-am
+	maintainer-clean-generic maintainer-clean-local mostlyclean \
+	mostlyclean-compile mostlyclean-generic mostlyclean-libtool \
+	pdf pdf-am ps ps-am tags tags-am uninstall uninstall-am
 
 .PRECIOUS: Makefile
 
-log_test_messages.h log_test_messages.cc: s-messages
-
-s-messages: log_test_messages.mes
-	$(AM_V_GEN) $(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/lib/log/tests/log_test_messages.mes
-	touch $@
 
 # Additional test using the shell.  These are principally tests
 # where the global logging environment is affected, and where the
@@ -1516,6 +1491,33 @@ check-local:
 	$(SHELL) $(abs_builddir)/local_file_test.sh
 	$(SHELL) $(abs_builddir)/logger_lock_test.sh
 	$(SHELL) $(abs_builddir)/severity_test.sh
+
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f log_test_messages.h log_test_messages.cc
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
+# Define rule to build logging source files from message file
+@GENERATE_MESSAGES_TRUE@messages: log_test_messages.h log_test_messages.cc
+@GENERATE_MESSAGES_TRUE@	@echo Message files regenerated
+
+@GENERATE_MESSAGES_TRUE@log_test_messages.h log_test_messages.cc: log_test_messages.mes
+@GENERATE_MESSAGES_TRUE@	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/lib/log/tests/log_test_messages.mes
+
+@GENERATE_MESSAGES_FALSE@messages log_test_messages.h log_test_messages.cc:
+@GENERATE_MESSAGES_FALSE@	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

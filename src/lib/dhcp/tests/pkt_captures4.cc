@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -178,6 +178,59 @@ Bootstrap Protocol
     return (packetFromCapture(hex_string));
 }
 
+Pkt4Ptr PktCaptures::captureBadRelayedDiscover() {
+
+/* Modified packet 1 with a bad RAI.
+
+Bootstrap Protocol
+    Message type: Boot Request (1)
+    Hardware type: Ethernet
+    Hardware address length: 6
+    Hops: 1
+    Transaction ID: 0x5d05478d
+    Seconds elapsed: 0
+    Bootp flags: 0x0000 (Unicast)
+    Client IP address: 0.0.0.0 (0.0.0.0)
+    Your (client) IP address: 0.0.0.0 (0.0.0.0)
+    Next server IP address: 0.0.0.0 (0.0.0.0)
+    Relay agent IP address: 10.254.226.1 (10.254.226.1)
+    Client MAC address: Netgear_b8:15:14 (20:e5:2a:b8:15:14)
+    Client hardware address padding: 00000000000000000000
+    Server host name not given
+    Boot file name not given
+    Magic cookie: DHCP
+    Option: (53) DHCP Message Type
+    Option: (55) Parameter Request List
+    Option: (60) Vendor class identifier (docsis3.0)
+    Option: (125) V-I Vendor-specific Information
+      - suboption 1 (Option Request): requesting option 2
+      - suboption 5 (Modem Caps): 117 bytes
+    Option: (43) Vendor-Specific Information (CableLabs)
+    Option: (61) Client identifier
+    Option: (57) Maximum DHCP Message Size
+    Option: (82) Agent Information Option */
+
+    string hex_string =
+        "010106015d05478d000000000000000000000000000000000afee20120e52ab8151400"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000638253633501013707"
+        "0102030407067d3c0a646f63736973332e303a7d7f0000118b7a010102057501010102"
+        "010303010104010105010106010107010f0801100901030a01010b01180c01010d0200"
+        "400e0200100f010110040000000211010014010015013f160101170101180104190104"
+        "1a01041b01201c01021d01081e01201f01102001102101022201012301002401002501"
+        "01260200ff2701012b59020345434d030b45434d3a45524f55544552040d3242523232"
+        "39553430303434430504312e3034060856312e33332e30330707322e332e3052320806"
+        "30303039354209094347333030304443520a074e657467656172fe01083d0fff2ab815"
+        "140003000120e52ab81514390205dc52205141000102030405060708090a0b0c0d0e0f"
+        "101112131415161718191a1b1c1d";
+
+    return (packetFromCapture(hex_string));
+}
+
 Pkt4Ptr PktCaptures::discoverWithValidVIVSO() {
 /* DISCOVER that contains a valid VIVSO option 125
 User    Datagram    Protocol,   Src Port:   67, Dst Port:   67
@@ -279,6 +332,53 @@ Bootstrap   Protocol    (Discover)
         "06f726174696f6e3d0fff845ef7af000300017896845ef7af390205dc521b01048005"
         "03f802067896845ef7af090b0000118b06010401020300ff";
 
+    return (packetFromCapture(hex_string));
+}
+
+Pkt4Ptr PktCaptures::discoverGenexis() {
+
+/* Bootstrap Protocol (Discover)
+    Message type: Boot Request (1)
+    Hardware type: Ethernet (0x01)
+    Hardware address length: 6
+    Hops: 0
+    Transaction ID: 0x946a5b5a
+    Seconds elapsed: 0
+    Bootp flags: 0x8000, Broadcast flag (Broadcast)
+    Client IP address: 0.0.0.0
+    Your (client) IP address: 0.0.0.0
+    Next server IP address: 0.0.0.0
+    Relay agent IP address: 0.0.0.0
+    Client MAC address: GenexisB_6a:1a:93 (00:0f:94:6a:1a:93)
+    Client hardware address padding: 00000000000000000000
+    Server host name not given
+    Boot file name not given
+    Magic cookie: DHCP
+    Option: (53) DHCP Message Type (Discover)
+    Option: (60) Vendor class identifier (HMC1000.v1.3.0-R,Element-P1090,genexis.eu)
+    Option: (51) IP Address Lease Time
+    Option: (55) Parameter Request List
+    Option: (255) End
+    Padding: 000000000000000000000000000000000000000000000000... */
+
+    string hex_string =
+        "01010600946a5b5a0000800000000000000000000000000000000000000f946a1a9300"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000638253633501013c29"
+        "484d43313030302e76312e332e302d522c456c656d656e742d50313039302c67656e65"
+        "7869732e65753304ffffffff37040103067dff00000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "0000000000000000000000000000000000000000000000000000000000000000000000"
+        "00000000000000000000000000000000";
     return (packetFromCapture(hex_string));
 }
 

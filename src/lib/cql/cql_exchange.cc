@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2017 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -742,16 +742,9 @@ void
 CqlExchange::convertToDatabaseTime(const time_t& cltt,
                                    const uint32_t& valid_lifetime,
                                    cass_int64_t& expire) {
-    // Calculate expire time. Store it in the 64-bit value so as we can
-    // detect overflows.
+    // Calculate expire time.
     cass_int64_t expire_time = static_cast<cass_int64_t>(cltt) +
             static_cast<cass_int64_t>(valid_lifetime);
-
-    if (expire_time > DatabaseConnection::MAX_DB_TIME) {
-        isc_throw(BadValue,
-                  "CqlExchange(): convertToDatabaseTime(): time value "
-                      << expire_time << " is too large");
-    }
 
     expire = expire_time;
 }
@@ -760,11 +753,7 @@ void
 CqlExchange::convertFromDatabaseTime(const cass_int64_t& expire,
                                      const cass_int64_t& valid_lifetime,
                                      time_t& cltt) {
-    /// @todo: Although 2037 is still far away, there are people who use infinite
-    /// lifetimes. Cassandra doesn't have to support it right now, but at least
-    /// we should be able to detect a problem.
-
-    // Convert to local time
+    // Convert to local time.
     cltt = static_cast<time_t>(expire - valid_lifetime);
 }
 
@@ -810,6 +799,17 @@ CqlExchange::executeSelect(const CqlConnection& connection, const AnyArray& data
                       "consistency for statement "
                           << tagged_statement.name_
                           << ", Cassandra error code: " << cass_error_desc(rc));
+        }
+        if (connection.serial_consistency_ != CASS_CONSISTENCY_UNKNOWN) {
+            rc = cass_statement_set_serial_consistency(statement, connection.serial_consistency_);
+            if (rc != CASS_OK) {
+                cass_statement_free(statement);
+                isc_throw(DbOperationError,
+                          "CqlExchange::executeSelect(): unable to set statement "
+                          "serial consistency for statement "
+                              << tagged_statement.name_
+                              << ", Cassandra error code: " << cass_error_desc(rc));
+            }
         }
     }
 
@@ -900,6 +900,17 @@ CqlExchange::executeMutation(const CqlConnection& connection, const AnyArray& da
             isc_throw(DbOperationError, "CqlExchange::executeMutation(): unable to set"
                       " statement consistency for statement " << tagged_statement.name_
                       << ", Cassandra error code: " << cass_error_desc(rc));
+        }
+        if (connection.serial_consistency_ != CASS_CONSISTENCY_UNKNOWN) {
+            rc = cass_statement_set_serial_consistency(statement, connection.serial_consistency_);
+            if (rc != CASS_OK) {
+                cass_statement_free(statement);
+                isc_throw(DbOperationError,
+                          "CqlExchange::executeMutation(): unable to set statement "
+                          "serial consistency for statement "
+                              << tagged_statement.name_
+                              << ", Cassandra error code: " << cass_error_desc(rc));
+            }
         }
     }
 

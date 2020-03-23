@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -70,7 +70,7 @@ LibraryManagerCollection::loadLibraries() {
     // If the list of libraries is not empty, re-create the callout manager.
     // This deletes all callouts (including the pre-library and post-
     // library) ones.  It is up to the libraries to re-register their callouts.
-    //  The pre-library and post-library callouts will also need to be
+    // The pre-library and post-library callouts will also need to be
     // re-registered.
     //
     // If the list of libraries stays empty (as in the case of a reconfiguration

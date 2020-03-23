@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -77,6 +77,11 @@ namespace d2 {
 ///  "interface" : "eth1" ,
 ///  "ip-address" : "192.168.1.33" ,
 ///  "port" : 88 ,
+///  "control-socket":
+///  {
+///    "socket-type": "unix" ,
+///    "socket-name": "/tmp/kea-ddns-ctrl-socket"
+//// },
 ///  "tsig-keys":
 //// [
 ///    {

@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2017 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,10 +19,6 @@ the process name, the second contains the PID and PID file.
 % DCTL_CCSESSION_ENDING %1 ending control channel session
 This debug message is issued just before the controller attempts
 to disconnect from its session with the Kea control channel.
-
-% DCTL_CCSESSION_STARTING %1 starting control channel session, specfile: %2
-This debug message is issued just before the controller attempts
-to establish a session with the Kea control channel.
 
 % DCTL_CFG_FILE_RELOAD_ERROR configuration reload failed: %1, reverting to current configuration.
 This is an error message indicating that the application attempted to reload
@@ -48,6 +44,14 @@ This is an informational message announcing the successful processing of a
 new configuration. It is output during server startup, and when an updated
 configuration is committed by the administrator.  Additional information
 may be provided.
+
+% DCTL_CONFIG_DEPRECATED server configuration includes a deprecated object: %1
+This warning message is issued when the configuration includes a deprecated
+object (i.e. a top level element) which will be ignored.
+
+% DCTL_CONFIG_FETCH Fetching configuration data from config backends.
+This is an informational message emitted when the Kea server is about to begin
+retrieving configuration data from one or more configuration backends.
 
 % DCTL_CONFIG_FILE_LOAD_FAIL %1 reason: %2
 This fatal error message indicates that the application attempted to load its
@@ -83,6 +87,11 @@ application and will exit.
 A warning message is issued when an attempt is made to shut down the
 application when it is not running.
 
+% DCTL_OPEN_CONFIG_DB Opening configuration database: %1
+This message is printed when the Kea server is attempting to open a
+configuration database.  The database access string with password redacted
+is logged.
+
 % DCTL_PARSER_FAIL : %1
 On receipt of a new configuration, the server failed to create a parser to
 decode the contents of the named configuration element, or the creation
@@ -94,9 +103,9 @@ This is an error message that occurs when the server is unable to create
 its PID file.  The log message should contain details sufficient to
 determine the underlying cause.  The most likely culprits are that
 some portion of the pathname does not exist or a permissions issue. The
-default path is determined by --localstatedir configure parameter but
-may be overridden by setting environment variable, KEA_PIDFILE_DIR.  The
-first argument is the process name.
+default path is determined by --localstatedir or --runstatedir configure
+parameters but may be overridden by setting environment variable,
+KEA_PIDFILE_DIR.  The first argument is the process name.
 
 % DCTL_PROCESS_FAILED %1 application execution failed: %2
 The controller has encountered a fatal error while running the

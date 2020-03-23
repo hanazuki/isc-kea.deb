@@ -93,6 +93,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -151,7 +152,6 @@ libdhcp_lease_cmds_la_DEPENDENCIES = liblease_cmds.la \
 	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
@@ -170,11 +170,10 @@ liblease_cmds_la_LIBADD =
 am_liblease_cmds_la_OBJECTS = liblease_cmds_la-lease_cmds.lo \
 	liblease_cmds_la-lease_cmds_callouts.lo \
 	liblease_cmds_la-lease_parser.lo \
-	liblease_cmds_la-lease_cmds_log.lo liblease_cmds_la-version.lo
-nodist_liblease_cmds_la_OBJECTS =  \
-	liblease_cmds_la-lease_cmds_messages.lo
-liblease_cmds_la_OBJECTS = $(am_liblease_cmds_la_OBJECTS) \
-	$(nodist_liblease_cmds_la_OBJECTS)
+	liblease_cmds_la-lease_cmds_log.lo \
+	liblease_cmds_la-lease_cmds_messages.lo \
+	liblease_cmds_la-version.lo
+liblease_cmds_la_OBJECTS = $(am_liblease_cmds_la_OBJECTS)
 liblease_cmds_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
 	$(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) $(AM_LDFLAGS) \
@@ -231,8 +230,7 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(libdhcp_lease_cmds_la_SOURCES) $(liblease_cmds_la_SOURCES) \
-	$(nodist_liblease_cmds_la_SOURCES)
+SOURCES = $(libdhcp_lease_cmds_la_SOURCES) $(liblease_cmds_la_SOURCES)
 DIST_SOURCES = $(libdhcp_lease_cmds_la_SOURCES) \
 	$(liblease_cmds_la_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
@@ -319,7 +317,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -340,7 +337,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -350,6 +346,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -359,7 +356,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -410,6 +406,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -427,17 +424,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -501,27 +498,21 @@ AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 	$(BOOST_INCLUDES)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
-# Tell automake that the message files are built as part of the build process
-# (so that they are built before the main library is built).
-BUILT_SOURCES = lease_cmds_messages.h lease_cmds_messages.cc
-
 # Ensure that the message file and doxygen file is included in the distribution
 EXTRA_DIST = lease_cmds_messages.mes lease_cmds.dox
-
-# Get rid of generated message files on a clean
-CLEANFILES = *.gcno *.gcda lease_cmds_messages.h lease_cmds_messages.cc s-messages
+CLEANFILES = *.gcno *.gcda
 
 # convenience archive
 noinst_LTLIBRARIES = liblease_cmds.la
 liblease_cmds_la_SOURCES = lease_cmds.cc lease_cmds.h \
 	lease_cmds_callouts.cc lease_parser.h lease_parser.cc \
-	lease_cmds_log.cc lease_cmds_log.h version.cc
-nodist_liblease_cmds_la_SOURCES = lease_cmds_messages.cc lease_cmds_messages.h
+	lease_cmds_log.cc lease_cmds_log.h lease_cmds_messages.cc \
+	lease_cmds_messages.h version.cc
 liblease_cmds_la_CXXFLAGS = $(AM_CXXFLAGS)
 liblease_cmds_la_CPPFLAGS = $(AM_CPPFLAGS)
 
-# install the shared object into $(libdir)/hooks
-lib_hooksdir = $(libdir)/hooks
+# install the shared object into $(libdir)/kea/hooks
+lib_hooksdir = $(libdir)/kea/hooks
 lib_hooks_LTLIBRARIES = libdhcp_lease_cmds.la
 libdhcp_lease_cmds_la_SOURCES = 
 libdhcp_lease_cmds_la_LDFLAGS = $(AM_LDFLAGS) -avoid-version \
@@ -540,12 +531,10 @@ libdhcp_lease_cmds_la_LIBADD = liblease_cmds.la \
 	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
-all: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+all: all-recursive
 
 .SUFFIXES:
 .SUFFIXES: .cc .lo .o .obj
@@ -693,19 +682,19 @@ liblease_cmds_la-lease_cmds_log.lo: lease_cmds_log.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(liblease_cmds_la_CPPFLAGS) $(CPPFLAGS) $(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) -c -o liblease_cmds_la-lease_cmds_log.lo `test -f 'lease_cmds_log.cc' || echo '$(srcdir)/'`lease_cmds_log.cc
 
-liblease_cmds_la-version.lo: version.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(liblease_cmds_la_CPPFLAGS) $(CPPFLAGS) $(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) -MT liblease_cmds_la-version.lo -MD -MP -MF $(DEPDIR)/liblease_cmds_la-version.Tpo -c -o liblease_cmds_la-version.lo `test -f 'version.cc' || echo '$(srcdir)/'`version.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblease_cmds_la-version.Tpo $(DEPDIR)/liblease_cmds_la-version.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='version.cc' object='liblease_cmds_la-version.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(liblease_cmds_la_CPPFLAGS) $(CPPFLAGS) $(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) -c -o liblease_cmds_la-version.lo `test -f 'version.cc' || echo '$(srcdir)/'`version.cc
-
 liblease_cmds_la-lease_cmds_messages.lo: lease_cmds_messages.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(liblease_cmds_la_CPPFLAGS) $(CPPFLAGS) $(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) -MT liblease_cmds_la-lease_cmds_messages.lo -MD -MP -MF $(DEPDIR)/liblease_cmds_la-lease_cmds_messages.Tpo -c -o liblease_cmds_la-lease_cmds_messages.lo `test -f 'lease_cmds_messages.cc' || echo '$(srcdir)/'`lease_cmds_messages.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblease_cmds_la-lease_cmds_messages.Tpo $(DEPDIR)/liblease_cmds_la-lease_cmds_messages.Plo
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='lease_cmds_messages.cc' object='liblease_cmds_la-lease_cmds_messages.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(liblease_cmds_la_CPPFLAGS) $(CPPFLAGS) $(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) -c -o liblease_cmds_la-lease_cmds_messages.lo `test -f 'lease_cmds_messages.cc' || echo '$(srcdir)/'`lease_cmds_messages.cc
+
+liblease_cmds_la-version.lo: version.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(liblease_cmds_la_CPPFLAGS) $(CPPFLAGS) $(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) -MT liblease_cmds_la-version.lo -MD -MP -MF $(DEPDIR)/liblease_cmds_la-version.Tpo -c -o liblease_cmds_la-version.lo `test -f 'version.cc' || echo '$(srcdir)/'`version.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/liblease_cmds_la-version.Tpo $(DEPDIR)/liblease_cmds_la-version.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='version.cc' object='liblease_cmds_la-version.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(liblease_cmds_la_CPPFLAGS) $(CPPFLAGS) $(liblease_cmds_la_CXXFLAGS) $(CXXFLAGS) -c -o liblease_cmds_la-version.lo `test -f 'version.cc' || echo '$(srcdir)/'`version.cc
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -868,16 +857,14 @@ distdir: $(DISTFILES)
 	  fi; \
 	done
 check-am: all-am
-check: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) check-recursive
+check: check-recursive
 all-am: Makefile $(LTLIBRARIES)
 installdirs: installdirs-recursive
 installdirs-am:
 	for dir in "$(DESTDIR)$(lib_hooksdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
-install: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) install-recursive
+install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
 uninstall: uninstall-recursive
@@ -908,7 +895,6 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 clean: clean-recursive
 
 clean-am: clean-generic clean-lib_hooksLTLIBRARIES clean-libtool \
@@ -963,7 +949,8 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
-maintainer-clean-am: distclean-am maintainer-clean-generic
+maintainer-clean-am: distclean-am maintainer-clean-generic \
+	maintainer-clean-local
 
 mostlyclean: mostlyclean-recursive
 
@@ -980,8 +967,7 @@ ps-am:
 
 uninstall-am: uninstall-lib_hooksLTLIBRARIES
 
-.MAKE: $(am__recursive_targets) all check install install-am \
-	install-strip
+.MAKE: $(am__recursive_targets) install-am install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am check \
 	check-am clean clean-generic clean-lib_hooksLTLIBRARIES \
@@ -995,18 +981,40 @@ uninstall-am: uninstall-lib_hooksLTLIBRARIES
 	install-pdf install-pdf-am install-ps install-ps-am \
 	install-strip installcheck installcheck-am installdirs \
 	installdirs-am maintainer-clean maintainer-clean-generic \
-	mostlyclean mostlyclean-compile mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
-	uninstall-am uninstall-lib_hooksLTLIBRARIES
+	maintainer-clean-local mostlyclean mostlyclean-compile \
+	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
+	tags tags-am uninstall uninstall-am \
+	uninstall-lib_hooksLTLIBRARIES
 
 .PRECIOUS: Makefile
 
 
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f lease_cmds_messages.h lease_cmds_messages.cc
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
 # Define rule to build logging source files from message file
-lease_cmds_messages.h lease_cmds_messages.cc: s-messages
-s-messages: lease_cmds_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/hooks/dhcp/lease_cmds/lease_cmds_messages.mes
-	touch $@
+@GENERATE_MESSAGES_TRUE@messages: lease_cmds_messages.h lease_cmds_messages.cc
+@GENERATE_MESSAGES_TRUE@	@echo Message files regenerated
+
+@GENERATE_MESSAGES_TRUE@lease_cmds_messages.h lease_cmds_messages.cc: lease_cmds_messages.mes
+@GENERATE_MESSAGES_TRUE@	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/hooks/dhcp/lease_cmds/lease_cmds_messages.mes
+
+@GENERATE_MESSAGES_FALSE@messages lease_cmds_messages.h lease_cmds_messages.cc:
+@GENERATE_MESSAGES_FALSE@	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

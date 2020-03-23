@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -67,8 +67,8 @@ public:
     ///
     /// @param address Address to use for the initialization
     ///
-    /// @return Lease6Ptr.  This will not point to anything if the initialization
-    ///         failed (e.g. unknown address).
+    /// @return Lease6Ptr.  This will not point to anything if the
+    ///         initialization failed (e.g. unknown address).
     Lease6Ptr initializeLease6(std::string address);
 
     /// @brief Check Leases present and different
@@ -122,8 +122,11 @@ public:
     /// @param address - IPv4 address for the lease
     /// @param subnet_id - subnet ID to which the lease belongs
     /// @param state - the state of the lease
-    void makeLease4(const std::string& address, const SubnetID& subnet_id,
-                    const uint32_t state = Lease::STATE_DEFAULT);
+    ///
+    /// @return pointer to created Lease4
+    Lease4Ptr makeLease4(const std::string& address,
+                         const SubnetID& subnet_id,
+                         const uint32_t state = Lease::STATE_DEFAULT);
 
     /// @brief Constructs a minimal IPv6 lease and adds it to the lease storage
     ///
@@ -134,15 +137,22 @@ public:
     /// @param prefix_len = length of the prefix (should be 0 for TYPE_NA)
     /// @param subnet_id - subnet ID to which the lease belongs
     /// @param state - the state of the lease
-    void makeLease6(const Lease::Type& type, const std::string& address,
-                    uint8_t prefix_len, const SubnetID& subnet_id,
-                    const uint32_t state = Lease::STATE_DEFAULT);
+    ///
+    /// @return pointer to created Lease6
+    Lease6Ptr makeLease6(const Lease::Type& type,
+                         const std::string& address,
+                         uint8_t prefix_len,
+                         const SubnetID& subnet_id,
+                         const uint32_t state = Lease::STATE_DEFAULT);
 
     /// @brief checks that addLease, getLease4(addr) and deleteLease() works
     void testBasicLease4();
 
     /// @brief checks that invalid dates are safely handled.
     void testMaxDate4();
+
+    /// @brief checks that infinite lifetimes do not overflow.
+    void testInfiniteLifeTime4();
 
     /// @brief Test lease retrieval using client id.
     void testGetLease4ClientId();
@@ -200,6 +210,9 @@ public:
     /// @brief Test method which returns all IPv4 leases for Subnet ID.
     void testGetLeases4SubnetId();
 
+    /// @brief Test method which returns all IPv4 leases for Hostname.
+    void testGetLeases4Hostname();
+
     /// @brief Test method which returns all IPv4 leases.
     void testGetLeases4();
 
@@ -208,6 +221,12 @@ public:
 
     /// @brief Test method which returns all IPv6 leases for Subnet ID.
     void testGetLeases6SubnetId();
+
+    /// @brief Test method which returns all IPv6 leases for Hostname.
+    void testGetLeases6Hostname();
+
+    /// @brief Test making/fetching leases with IAIDs > signed 32-bit max.
+    void testLease6LargeIaidCheck();
 
     /// @brief Test method which returns all IPv6 leases.
     void testGetLeases6();
@@ -240,6 +259,9 @@ public:
     /// @brief Checks that invalid dates are safely handled.
     void testMaxDate6();
 
+    /// @brief checks that infinite lifetimes do not overflow.
+    void testInfiniteLifeTime6();
+
     /// @brief Checks that Lease6 can be stored with and without a hardware address.
     void testLease6MAC();
 
@@ -247,14 +269,7 @@ public:
     void testLease6HWTypeAndSource();
 
     /// @brief Test that IPv6 lease can be added, retrieved and deleted.
-    ///
-    /// This method checks basic IPv6 lease operations. There's check_t1_t2
-    /// parameter that controls whether the backend supports storing T1, T2
-    /// parameters. memfile supports it, while MySQL doesn't. If T1,T2
-    /// storage is not supported, the expected values are 0.
-    ///
-    /// @param check_t1_t2 controls whether T1,T2 timers should be checked
-    void testAddGetDelete6(bool check_t1_t2);
+    void testAddGetDelete6();
 
     /// @brief Check GetLease6 methods - access by DUID/IAID
     ///
@@ -278,7 +293,7 @@ public:
     /// Adds leases to the database and checks that they can be accessed via
     /// a combination of DIUID and IAID.
     void testGetLease6DuidIaidSubnetId();
-    
+
     /// @brief verifies getLeases6 method by DUID
     ///
     /// Adds 3 leases to backend and retrieves, verifes empty
@@ -305,10 +320,22 @@ public:
     /// Checks that the code is able to update an IPv4 lease in the database.
     void testUpdateLease4();
 
+    /// @brief Lease4 concurrent update test
+    ///
+    /// Checks that the code is not able to concurrently update an IPv4 lease in
+    /// the database.
+    void testConcurrentUpdateLease4();
+
     /// @brief Lease6 update test
     ///
     /// Checks that the code is able to update an IPv6 lease in the database.
     void testUpdateLease6();
+
+    /// @brief Lease6 concurrent update test
+    ///
+    /// Checks that the code is not able to concurrently update an IPv6 lease in
+    /// the database.
+    void testConcurrentUpdateLease6();
 
     /// @brief Check that the IPv6 lease can be added, removed and recreated.
     ///
@@ -344,6 +371,14 @@ public:
     ///   least expired
     /// - reclaimed leases are not returned.
     void testGetExpiredLeases6();
+
+    /// @brief Checks that DHCPv4 leases with infinite valid lifetime
+    /// will never expire.
+    void testInfiniteAreNotExpired4();
+
+    /// @brief Checks that DHCPv6 leases with infinite valid lifetime
+    /// will never expire.
+    void testInfiniteAreNotExpired6();
 
     /// @brief Checks that declined IPv4 leases that have expired can be retrieved.
     ///
@@ -446,13 +481,13 @@ public:
                          const std::vector<std::string>& expected_addresses);
 
     /// @brief String forms of IPv4 addresses
-    std::vector<std::string>  straddress4_;
+    std::vector<std::string> straddress4_;
 
     /// @brief IOAddress forms of IPv4 addresses
     std::vector<isc::asiolink::IOAddress> ioaddress4_;
 
     /// @brief String forms of IPv6 addresses
-    std::vector<std::string>  straddress6_;
+    std::vector<std::string> straddress6_;
 
     /// @brief Types of IPv6 Leases
     std::vector<Lease::Type> leasetype6_;
@@ -502,7 +537,7 @@ public:
 
     /// @brief Verifies open failures do NOT invoke db lost callback
     ///
-    /// The db lost callback should only be invoked after succesfully
+    /// The db lost callback should only be invoked after successfully
     /// opening the DB and then subsequently losing it. Failing to
     /// open should be handled directly by the application layer.
     void testNoCallbackOnOpenFailure();
@@ -529,8 +564,8 @@ public:
 
 };
 
-}; // namespace test
-}; // namespace dhcp
-}; // namespace isc
+}  // namespace test
+}  // namespace dhcp
+}  // namespace isc
 
 #endif

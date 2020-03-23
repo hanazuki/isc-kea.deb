@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -124,9 +124,12 @@ public:
     /// transaction completes.
     /// @param connect_callback Pointer to the callback function to be invoked when
     /// the client connects to the server.
+    /// @param close_callback Pointer to the callback function to be invoked when
+    /// the client closes the socket to the server.
     void doTransaction(const HttpRequestPtr& request, const HttpResponsePtr& response,
                        const long request_timeout, const HttpClient::RequestHandler& callback,
-                       const HttpClient::ConnectHandler& connect_callback);
+                       const HttpClient::ConnectHandler& connect_callback,
+                       const HttpClient::CloseHandler& close_callback);
 
     /// @brief Closes the socket and cancels the request timer.
     void close();
@@ -135,6 +138,30 @@ public:
     ///
     /// @return true if transaction has been initiated, false otherwise.
     bool isTransactionOngoing() const;
+
+    /// @brief Checks if a socket descriptor belongs to this connection.
+    ///
+    /// @param socket_fd socket descriptor to check
+    ///
+    /// @return True if the socket fd belongs to this connection.
+    bool isMySocket(int socket_fd) const;
+
+    /// @brief Checks and logs if premature transaction timeout is suspected.
+    ///
+    /// There are cases when the premature timeout occurs, e.g. as a result of
+    /// moving system clock, during the transaction. In such case, the
+    /// @c terminate function is called which resets the transaction state but
+    /// the transaction handlers may be already waiting for the execution.
+    /// Each such handler should call this function to check if the transaction
+    /// it is participating in is still alive. If it is not, it should simply
+    /// return. This method also logs such situation.
+    ///
+    /// @param transid identifier of the transaction for which the handler
+    /// is being invoked. It is compared against the current transaction
+    /// id for this connection.
+    ///
+    /// @return true if the premature timeout is suspected, false otherwise.
+    bool checkPrematureTimeout(const uint64_t transid);
 
 private:
 
@@ -164,12 +191,16 @@ private:
     /// @brief Asynchronously sends data over the socket.
     ///
     /// The data sent over the socket are stored in the @c buf_.
-    void doSend();
+    ///
+    /// @param transid Current transaction id.
+    void doSend(const uint64_t transid);
 
     /// @brief Asynchronously receives data over the socket.
     ///
     /// The data received over the socket are store into the @c input_buf_.
-    void doReceive();
+    ///
+    /// @param transid Current transaction id.
+    void doReceive(const uint64_t transid);
 
     /// @brief Local callback invoked when the connection is established.
     ///
@@ -178,8 +209,10 @@ private:
     ///
     /// @param Pointer to the callback to be invoked when client connects to
     /// the server.
+    /// @param transid Current transaction id.
     /// @param ec Error code being a result of the connection attempt.
     void connectCallback(HttpClient::ConnectHandler connect_callback,
+                         const uint64_t transid,
                          const boost::system::error_code& ec);
 
     /// @brief Local callback invoked when an attempt to send a portion of data
@@ -189,19 +222,34 @@ private:
     /// data from the buffer were sent, the callback will start to asynchronously
     /// receive a response from the server.
     ///
+    /// @param transid Current transaction id.
     /// @param ec Error code being a result of sending the data.
     /// @param length Number of bytes sent.
-    void sendCallback(const boost::system::error_code& ec, size_t length);
+    void sendCallback(const uint64_t transid, const boost::system::error_code& ec,
+                      size_t length);
 
     /// @brief Local callback invoked when an attempt to receive a portion of data
     /// over the socket has ended.
     ///
+    /// @param transid Current transaction id.
     /// @param ec Error code being a result of receiving the data.
     /// @param length Number of bytes received.
-    void receiveCallback(const boost::system::error_code& ec, size_t length);
+    void receiveCallback(const uint64_t transid, const boost::system::error_code& ec,
+                         size_t length);
 
     /// @brief Local callback invoked when request timeout occurs.
     void timerCallback();
+
+    /// @brief Local callback invoked when the connection is closed.
+    ///
+    /// Invokes the close callback (if one), passing in the socket's
+    /// descriptor, when the connection's socket about to be closed.
+    /// The callback invocation is wrapped in a try-catch to ensure
+    /// exception safety.
+    ///
+    /// @param clear dictates whether or not the callback is discarded
+    /// after invocation. Defaults to false.
+    void closeCallback(const bool clear = false);
 
     /// @brief Pointer to the connection pool owning this connection.
     ///
@@ -235,6 +283,12 @@ private:
 
     /// @brief Input buffer.
     std::array<char, 32768> input_buf_;
+
+    /// @brief Identifier of the current transaction.
+    uint64_t current_transid_;
+
+    /// @brief User supplied callback.
+    HttpClient::CloseHandler close_callback_;
 };
 
 /// @brief Shared pointer to the connection.
@@ -275,6 +329,8 @@ public:
     /// @param callback Pointer to the user callback for this request.
     /// @param connect_callback Pointer to the user callback invoked when
     /// the client connects to the server.
+    /// @param close_callback Pointer to the user callback invoked when
+    /// the client closes the connection to the server.
     ///
     /// @return true if the request for the given URL has been retrieved,
     /// false if there are no more requests queued for this URL.
@@ -283,7 +339,8 @@ public:
                         HttpResponsePtr& response,
                         long& request_timeout,
                         HttpClient::RequestHandler& callback,
-                        HttpClient::ConnectHandler& connect_callback) {
+                        HttpClient::ConnectHandler& connect_callback,
+                        HttpClient::CloseHandler& close_callback) {
         // Check if there is a queue for this URL. If there is no queue, there
         // is no request queued either.
         auto it = queue_.find(url);
@@ -297,6 +354,7 @@ public:
                 request_timeout = desc.request_timeout_,
                 callback = desc.callback_;
                 connect_callback = desc.connect_callback_;
+                close_callback = desc.close_callback_;
                 return (true);
             }
         }
@@ -319,12 +377,15 @@ public:
     /// transaction ends.
     /// @param connect_callback Pointer to the user callback to be invoked when the
     /// client connects to the server.
+    /// @param close_callback Pointer to the user callback to be invoked when the
+    /// client closes the connection to the server.
     void queueRequest(const Url& url,
                       const HttpRequestPtr& request,
                       const HttpResponsePtr& response,
                       const long request_timeout,
                       const HttpClient::RequestHandler& request_callback,
-                      const HttpClient::ConnectHandler& connect_callback) {
+                      const HttpClient::ConnectHandler& connect_callback,
+                      const HttpClient::CloseHandler& close_callback) {
         auto it = conns_.find(url);
         if (it != conns_.end()) {
             ConnectionPtr conn = it->second;
@@ -334,12 +395,13 @@ public:
                 queue_[url].push(RequestDescriptor(request, response,
                                                    request_timeout,
                                                    request_callback,
-                                                   connect_callback));
+                                                   connect_callback,
+                                                   close_callback));
 
             } else {
                 // Connection is idle, so we can start the transaction.
                 conn->doTransaction(request, response, request_timeout,
-                                    request_callback, connect_callback);
+                                    request_callback, connect_callback, close_callback);
             }
 
         } else {
@@ -348,7 +410,7 @@ public:
             ConnectionPtr conn(new Connection(io_service_, shared_from_this(),
                                               url));
             conn->doTransaction(request, response, request_timeout, request_callback,
-                                connect_callback);
+                                connect_callback, close_callback);
             conns_[url] = conn;
         }
     }
@@ -384,6 +446,44 @@ public:
         queue_.clear();
     }
 
+    /// @brief Closes a connection if it has an out-of-bandwidth socket event
+    ///
+    /// If the pool contains a connection using the given socket and that
+    /// connection is currently in a transaction the method returns as this
+    /// indicates a normal ready event.  If the connection is not in an
+    /// ongoing transaction, then the connection is closed.
+    ///
+    /// This is method is intended to be used to detect and clean up then
+    /// sockets that are marked ready outside of transactions. The most comman
+    /// case is the other end of the socket being closed.
+    ///
+    /// @param socket_fd socket descriptor to check
+    void closeIfOutOfBandwidth(int socket_fd) {
+        // First we look for a connection with the socket.
+        for (auto conns_it = conns_.begin(); conns_it != conns_.end();
+             ++conns_it) {
+
+            if (!conns_it->second->isMySocket(socket_fd)) {
+                // Not this connection.
+                continue;
+            }
+
+            if (conns_it->second->isTransactionOngoing()) {
+                // Matches but is in a transaction, all is well.
+                return;
+            }
+
+            // Socket has no transaction, so any ready event is
+            // out-of-bandwidth (other end probably closed), so
+            // let's close it.  Note we do not remove any queued
+            // requests, as this might somehow be occurring in
+            // between them.
+            conns_it->second->close();
+            conns_.erase(conns_it);
+            break;
+        }
+    }
+
 private:
 
     /// @brief Holds reference to the IO service.
@@ -404,15 +504,19 @@ private:
         /// @param callback Pointer to the user callback.
         /// @param connect_callback pointer to the user callback to be invoked
         /// when the client connects to the server.
+        /// @param close_callback pointer to the user callback to be invoked
+        /// when the client closes the connection to the server.
         RequestDescriptor(const HttpRequestPtr& request,
                           const HttpResponsePtr& response,
                           const long request_timeout,
                           const HttpClient::RequestHandler& callback,
-                          const HttpClient::ConnectHandler& connect_callback)
+                          const HttpClient::ConnectHandler& connect_callback,
+                          const HttpClient::CloseHandler& close_callback)
             : request_(request), response_(response),
               request_timeout_(request_timeout),
               callback_(callback),
-              connect_callback_(connect_callback) {
+              connect_callback_(connect_callback),
+              close_callback_(close_callback) {
         }
 
         /// @brief Holds pointer to the request.
@@ -425,6 +529,9 @@ private:
         HttpClient::RequestHandler callback_;
         /// @brief Holds pointer to the user callback for connect.
         HttpClient::ConnectHandler connect_callback_;
+
+        /// @brief Holds pointer to the user callback for close.
+        HttpClient::CloseHandler close_callback_;
     };
 
     /// @brief Holds the queue of requests for different URLs.
@@ -436,7 +543,7 @@ Connection::Connection(IOService& io_service,
                        const Url& url)
     : conn_pool_(conn_pool), url_(url), socket_(io_service), timer_(io_service),
       current_request_(), current_response_(), parser_(), current_callback_(),
-      buf_(), input_buf_() {
+      buf_(), input_buf_(), current_transid_(0), close_callback_() {
 }
 
 Connection::~Connection() {
@@ -451,18 +558,40 @@ Connection::resetState() {
     current_callback_ = HttpClient::RequestHandler();
 }
 
+
+void
+Connection::closeCallback(const bool clear) {
+    if (close_callback_) {
+        try {
+            close_callback_(socket_.getNative());
+        } catch (...) {
+            LOG_ERROR(http_logger, HTTP_CONNECTION_CLOSE_CALLBACK_FAILED);
+        }
+    }
+
+    if (clear) {
+        close_callback_ = HttpClient::CloseHandler();
+    }
+}
+
+
 void
 Connection::doTransaction(const HttpRequestPtr& request,
                           const HttpResponsePtr& response,
                           const long request_timeout,
                           const HttpClient::RequestHandler& callback,
-                          const HttpClient::ConnectHandler& connect_callback) {
+                          const HttpClient::ConnectHandler& connect_callback,
+                          const HttpClient::CloseHandler& close_callback) {
     try {
         current_request_ = request;
         current_response_ = response;
         parser_.reset(new HttpResponseParser(*current_response_));
         parser_->initModel();
         current_callback_ = callback;
+        close_callback_ = close_callback;
+
+        // Starting new transaction. Generate new transaction id.
+        ++current_transid_;
 
         buf_ = request->toString();
 
@@ -473,6 +602,7 @@ Connection::doTransaction(const HttpRequestPtr& request,
         // data over this socket, when the peer may close the connection. In this
         // case we'll need to re-transmit but we don't handle it here.
         if (socket_.getASIOSocket().is_open() && !socket_.isUsable()) {
+            closeCallback();
             socket_.close();
         }
 
@@ -496,7 +626,7 @@ Connection::doTransaction(const HttpRequestPtr& request,
         TCPEndpoint endpoint(url_.getStrippedHostname(),
                              static_cast<unsigned short>(url_.getPort()));
         SocketCallback socket_cb(boost::bind(&Connection::connectCallback, shared_from_this(),
-                                             connect_callback, _1));
+                                             connect_callback, current_transid_, _1));
 
         // Establish new connection or use existing connection.
         socket_.open(&endpoint, socket_cb);
@@ -509,6 +639,9 @@ Connection::doTransaction(const HttpRequestPtr& request,
 
 void
 Connection::close() {
+    // Pass in true to discard the callback.
+    closeCallback(true);
+
     timer_.cancel();
     socket_.close();
     resetState();
@@ -519,61 +652,84 @@ Connection::isTransactionOngoing() const {
     return (static_cast<bool>(current_request_));
 }
 
+bool
+Connection::isMySocket(int socket_fd) const {
+    return (socket_.getNative() == socket_fd);
+}
+
+bool
+Connection::checkPrematureTimeout(const uint64_t transid) {
+    // If there is no transaction but the handlers are invoked it means
+    // that the last transaction in the queue timed out prematurely.
+    // Also, if there is a transaction in progress but the ID of that
+    // transaction doesn't match the one associated with the handler it,
+    // also means that the transaction timed out prematurely.
+    if (!isTransactionOngoing() || (transid != current_transid_)) {
+        LOG_WARN(http_logger, HTTP_PREMATURE_CONNECTION_TIMEOUT_OCCURRED);
+        return (true);
+    }
+    return (false);
+}
+
 void
 Connection::terminate(const boost::system::error_code& ec,
                       const std::string& parsing_error) {
 
-    timer_.cancel();
-    socket_.cancel();
-
     HttpResponsePtr response;
 
-    if (!ec && current_response_->isFinalized()) {
-        response = current_response_;
+    if (isTransactionOngoing()) {
 
-        LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC,
-                  HTTP_SERVER_RESPONSE_RECEIVED)
-            .arg(url_.toText());
+        timer_.cancel();
+        socket_.cancel();
 
-        LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC_DATA,
-                  HTTP_SERVER_RESPONSE_RECEIVED_DETAILS)
-            .arg(url_.toText())
-            .arg(parser_->getBufferAsString(MAX_LOGGED_MESSAGE_SIZE));
+        if (!ec && current_response_->isFinalized()) {
+            response = current_response_;
 
-    } else {
-        std::string err = parsing_error.empty() ? ec.message() : parsing_error;
+            LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC,
+                      HTTP_SERVER_RESPONSE_RECEIVED)
+                .arg(url_.toText());
 
-        LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC,
-                  HTTP_BAD_SERVER_RESPONSE_RECEIVED)
-            .arg(url_.toText())
-            .arg(err);
-
-        // Only log the details if we have received anything and tried
-        // to parse it.
-        if (!parsing_error.empty()) {
             LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC_DATA,
-                      HTTP_BAD_SERVER_RESPONSE_RECEIVED_DETAILS)
+                      HTTP_SERVER_RESPONSE_RECEIVED_DETAILS)
                 .arg(url_.toText())
-                .arg(parser_->getBufferAsString());
+                .arg((parser_ ? parser_->getBufferAsString(MAX_LOGGED_MESSAGE_SIZE)
+                      : "[HttpResponseParser is null]"));
+
+        } else {
+            std::string err = parsing_error.empty() ? ec.message() : parsing_error;
+
+            LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC,
+                      HTTP_BAD_SERVER_RESPONSE_RECEIVED)
+                .arg(url_.toText())
+                .arg(err);
+
+            // Only log the details if we have received anything and tried
+            // to parse it.
+            if (!parsing_error.empty()) {
+                LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC_DATA,
+                          HTTP_BAD_SERVER_RESPONSE_RECEIVED_DETAILS)
+                    .arg(url_.toText())
+                    .arg((parser_ ? parser_->getBufferAsString()
+                          : "[HttpResponseParser is null]"));
+            }
         }
 
+        try {
+            // The callback should take care of its own exceptions but one
+            // never knows.
+            current_callback_(ec, response, parsing_error);
+
+        } catch (...) {
+        }
+
+        // If we're not requesting connection persistence, we should close the socket.
+        // We're going to reconnect for the next transaction.
+        if (!current_request_->isPersistent()) {
+            close();
+        }
+
+        resetState();
     }
-
-    try {
-        // The callback should take care of its own exceptions but one
-        // never knows.
-        current_callback_(ec, response, parsing_error);
-
-    } catch (...) {
-    }
-
-    // If we're not requesting connection persistence, we should close the socket.
-    // We're going to reconnect for the next transaction.
-    if (!current_request_->isPersistent()) {
-        close();
-    }
-
-    resetState();
 
     // Check if there are any requests queued for this connection and start
     // another transaction if there is at least one.
@@ -581,10 +737,12 @@ Connection::terminate(const boost::system::error_code& ec,
     long request_timeout;
     HttpClient::RequestHandler callback;
     HttpClient::ConnectHandler connect_callback;
+    HttpClient::CloseHandler close_callback;
     ConnectionPoolPtr conn_pool = conn_pool_.lock();
     if (conn_pool && conn_pool->getNextRequest(url_, request, response, request_timeout,
-                                               callback, connect_callback)) {
-        doTransaction(request, response, request_timeout, callback, connect_callback);
+                                               callback, connect_callback, close_callback)) {
+        doTransaction(request, response, request_timeout, callback,
+                      connect_callback, close_callback);
     }
 }
 
@@ -597,9 +755,9 @@ Connection::scheduleTimer(const long request_timeout) {
 }
 
 void
-Connection::doSend() {
+Connection::doSend(const uint64_t transid) {
     SocketCallback socket_cb(boost::bind(&Connection::sendCallback, shared_from_this(),
-                                         _1, _2));
+                                         transid, _1, _2));
     try {
         socket_.asyncSend(&buf_[0], buf_.size(), socket_cb);
 
@@ -609,10 +767,10 @@ Connection::doSend() {
 }
 
 void
-Connection::doReceive() {
+Connection::doReceive(const uint64_t transid) {
     TCPEndpoint endpoint;
     SocketCallback socket_cb(boost::bind(&Connection::receiveCallback, shared_from_this(),
-                                         _1, _2));
+                                         transid, _1, _2));
 
     try {
         socket_.asyncReceive(static_cast<void*>(input_buf_.data()), input_buf_.size(), 0,
@@ -624,37 +782,53 @@ Connection::doReceive() {
 
 void
 Connection::connectCallback(HttpClient::ConnectHandler connect_callback,
+                            const uint64_t transid,
                             const boost::system::error_code& ec) {
+    if (checkPrematureTimeout(transid)) {
+        return;
+    }
+
     // Run user defined connect callback if specified.
     if (connect_callback) {
         // If the user defined callback indicates that the connection
         // should not be continued.
-        if (!connect_callback(ec)) {
+        if (!connect_callback(ec, socket_.getNative())) {
             return;
         }
     }
+
+    if (ec && (ec.value() == boost::asio::error::operation_aborted)) {
+        return;
 
     // In some cases the "in progress" status code may be returned. It doesn't
     // indicate an error. Sending the request over the socket is expected to
     // be successful. Getting such status appears to be highly dependent on
     // the operating system.
-    if (ec &&
+    } else if (ec &&
         (ec.value() != boost::asio::error::in_progress) &&
         (ec.value() != boost::asio::error::already_connected)) {
         terminate(ec);
 
     } else {
         // Start sending the request asynchronously.
-        doSend();
+        doSend(transid);
     }
 }
 
 void
-Connection::sendCallback(const boost::system::error_code& ec, size_t length) {
+Connection::sendCallback(const uint64_t transid, const boost::system::error_code& ec,
+                         size_t length) {
+    if (checkPrematureTimeout(transid)) {
+        return;
+    }
+
     if (ec) {
+        if (ec.value() == boost::asio::error::operation_aborted) {
+            return;
+
         // EAGAIN and EWOULDBLOCK don't really indicate an error. The length
         // should be 0 in this case but let's be sure.
-        if ((ec.value() == boost::asio::error::would_block) ||
+        } else if ((ec.value() == boost::asio::error::would_block) ||
             (ec.value() == boost::asio::error::try_again)) {
             length = 0;
 
@@ -677,20 +851,28 @@ Connection::sendCallback(const boost::system::error_code& ec, size_t length) {
     // If there is no more data to be sent, start receiving a response. Otherwise,
     // continue sending.
     if (buf_.empty()) {
-        doReceive();
+        doReceive(transid);
 
     } else {
-        doSend();
+        doSend(transid);
     }
 }
 
 void
-Connection::receiveCallback(const boost::system::error_code& ec, size_t length) {
+Connection::receiveCallback(const uint64_t transid, const boost::system::error_code& ec,
+                            size_t length) {
+    if (checkPrematureTimeout(transid)) {
+        return;
+    }
+
     if (ec) {
+        if (ec.value() == boost::asio::error::operation_aborted) {
+            return;
+
         // EAGAIN and EWOULDBLOCK don't indicate an error in this case. All
         // other errors should terminate the transaction.
-        if ((ec.value() != boost::asio::error::try_again) &&
-            (ec.value() != boost::asio::error::would_block)) {
+        } if ((ec.value() != boost::asio::error::try_again) &&
+              (ec.value() != boost::asio::error::would_block)) {
             terminate(ec);
             return;
 
@@ -712,7 +894,7 @@ Connection::receiveCallback(const boost::system::error_code& ec, size_t length) 
 
     // If the parser still needs data, let's schedule another receive.
     if (parser_->needData()) {
-        doReceive();
+        doReceive(transid);
 
     } else if (parser_->httpParseOk()) {
         // No more data needed and parsing has been successful so far. Let's
@@ -769,7 +951,8 @@ HttpClient::asyncSendRequest(const Url& url, const HttpRequestPtr& request,
                              const HttpResponsePtr& response,
                              const HttpClient::RequestHandler& request_callback,
                              const HttpClient::RequestTimeout& request_timeout,
-                             const HttpClient::ConnectHandler& connect_callback) {
+                             const HttpClient::ConnectHandler& connect_callback,
+                             const HttpClient::CloseHandler& close_callback) {
     if (!url.isValid()) {
         isc_throw(HttpClientError, "invalid URL specified for the HTTP client");
     }
@@ -787,7 +970,12 @@ HttpClient::asyncSendRequest(const Url& url, const HttpRequestPtr& request,
     }
 
     impl_->conn_pool_->queueRequest(url, request, response, request_timeout.value_,
-                                    request_callback, connect_callback);
+                                    request_callback, connect_callback, close_callback);
+}
+
+void
+HttpClient::closeIfOutOfBandwidth(int socket_fd)  {
+    return (impl_->conn_pool_->closeIfOutOfBandwidth(socket_fd));
 }
 
 void

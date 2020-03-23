@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -25,7 +25,7 @@ CalloutHandle::CalloutHandle(const boost::shared_ptr<CalloutManager>& manager,
                     const boost::shared_ptr<LibraryManagerCollection>& lmcoll)
     : lm_collection_(lmcoll), arguments_(), context_collection_(),
       manager_(manager), server_hooks_(ServerHooks::getServerHooks()),
-      next_step_(NEXT_STEP_CONTINUE) {
+      current_library_(-1), current_hook_(-1), next_step_(NEXT_STEP_CONTINUE) {
 
     // Call the "context_create" hook.  We should be OK doing this - although
     // the constructor has not finished running, all the member variables
@@ -35,7 +35,6 @@ CalloutHandle::CalloutHandle(const boost::shared_ptr<CalloutManager>& manager,
 
 // Destructor
 CalloutHandle::~CalloutHandle() {
-
     // Call the "context_destroy" hook.  We should be OK doing this - although
     // the destructor is being called, all the member variables are still in
     // existence.
@@ -64,7 +63,6 @@ CalloutHandle::~CalloutHandle() {
 
 vector<string>
 CalloutHandle::getArgumentNames() const {
-
     vector<string> names;
     for (ElementCollection::const_iterator i = arguments_.begin();
          i != arguments_.end(); ++i) {
@@ -76,15 +74,7 @@ CalloutHandle::getArgumentNames() const {
 
 ParkingLotHandlePtr
 CalloutHandle::getParkingLotHandlePtr() const {
-    return (boost::make_shared<ParkingLotHandle>(server_hooks_.getParkingLotPtr(manager_->getHookIndex())));
-}
-
-// Return the library handle allowing the callout to access the CalloutManager
-// registration/deregistration functions.
-
-LibraryHandle&
-CalloutHandle::getLibraryHandle() const {
-    return (manager_->getLibraryHandle());
+    return (boost::make_shared<ParkingLotHandle>(server_hooks_.getParkingLotPtr(current_hook_)));
 }
 
 // Return the context for the currently pointed-to library.  This version is
@@ -93,11 +83,9 @@ CalloutHandle::getLibraryHandle() const {
 
 CalloutHandle::ElementCollection&
 CalloutHandle::getContextForLibrary() {
-    int libindex = manager_->getLibraryIndex();
-
     // Access a reference to the element collection for the given index,
     // creating a new element collection if necessary, and return it.
-    return (context_collection_[libindex]);
+    return (context_collection_[current_library_]);
 }
 
 // The "const" version of the above, used by the "getContext()" method.  If
@@ -105,13 +93,10 @@ CalloutHandle::getContextForLibrary() {
 
 const CalloutHandle::ElementCollection&
 CalloutHandle::getContextForLibrary() const {
-    int libindex = manager_->getLibraryIndex();
-
-    ContextCollection::const_iterator libcontext =
-        context_collection_.find(libindex);
+    auto libcontext = context_collection_.find(current_library_);
     if (libcontext == context_collection_.end()) {
         isc_throw(NoSuchCalloutContext, "unable to find callout context "
-                  "associated with the current library index (" << libindex <<
+                  "associated with the current library index (" << current_library_ <<
                   ")");
     }
 
@@ -124,9 +109,7 @@ CalloutHandle::getContextForLibrary() const {
 
 vector<string>
 CalloutHandle::getContextNames() const {
-
     vector<string> names;
-
     const ElementCollection& elements = getContextForLibrary();
     for (ElementCollection::const_iterator i = elements.begin();
          i != elements.end(); ++i) {
@@ -142,13 +125,9 @@ CalloutHandle::getContextNames() const {
 
 string
 CalloutHandle::getHookName() const {
-    // Get the current hook index.
-    int index = manager_->getHookIndex();
-
-    // ... and look up the hook.
     string hook = "";
     try {
-        hook = server_hooks_.getName(index);
+        hook = server_hooks_.getName(current_hook_);
     } catch (const NoSuchHook&) {
         // Hook index is invalid, so this methods probably called from outside
         // a callout being executed via a call to CalloutManager::callCallouts.

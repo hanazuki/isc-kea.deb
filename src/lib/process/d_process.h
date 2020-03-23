@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,6 +14,8 @@
 #include <boost/shared_ptr.hpp>
 
 #include <exceptions/exceptions.h>
+
+#include <atomic>
 
 namespace isc {
 namespace process {
@@ -40,8 +42,20 @@ static const std::string CONFIG_WRITE_COMMAND("config-write");
 /// @brief String value for the config-test command.
 static const std::string CONFIG_TEST_COMMAND("config-test");
 
+/// @brief String value for the config-reload command.
+static const std::string CONFIG_RELOAD_COMMAND("config-reload");
+
+/// @brief String value for the config-set command.
+static const std::string CONFIG_SET_COMMAND("config-set");
+
+/// @brief String value for the server-tag-get command.
+static const std::string SERVER_TAG_GET_COMMAND("server-tag-get");
+
 /// @brief String value for the shutdown command.
 static const std::string SHUT_DOWN_COMMAND("shutdown");
+
+/// @brief String value for the status-get command.
+static const std::string STATUS_GET_COMMAND("status-get");
 
 /// @brief Returned by the process to indicate a command was successful.
 static const int COMMAND_SUCCESS = 0;
@@ -125,7 +139,7 @@ public:
     /// Certainly once during process startup, and possibly later if the user
     /// alters configuration. This method must not throw, it should catch any
     /// processing errors and return a success or failure answer as described
-    /// below.
+    /// below. On success the last commit timestamp must be updated.
     ///
     /// @param config_set a new configuration (JSON) for the process
     /// @param check_only true if configuration is to be verified only, not applied
@@ -191,7 +205,7 @@ private:
     asiolink::IOServicePtr io_service_;
 
     /// @brief Boolean flag set when shutdown has been requested.
-    bool shut_down_flag_;
+    std::atomic<bool> shut_down_flag_;
 
     /// @brief  Pointer to the configuration manager.
     DCfgMgrBasePtr cfg_mgr_;

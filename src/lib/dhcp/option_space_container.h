@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,11 +7,15 @@
 #ifndef OPTION_SPACE_CONTAINER_H
 #define OPTION_SPACE_CONTAINER_H
 
+#include <exceptions/exceptions.h>
 #include <list>
 #include <string>
 
 namespace isc {
 namespace dhcp {
+
+/// @brief A tag for accessing DHCP options and definitions by id.
+struct OptionIdIndexTag { };
 
 /// @brief Simple container for option spaces holding various items.
 ///
@@ -44,7 +48,10 @@ public:
     /// @param option_space name or vendor-id of the option space
     void addItem(const ItemType& item, const Selector& option_space) {
         ItemsContainerPtr items = getItems(option_space);
-        items->push_back(item);
+        // Assume that the push_back() can't fail even when the
+        // ContainerType is a multi index container, i.e., assume
+        // there is no unique index which can raise a conflict.
+        static_cast<void>(items->push_back(item));
         option_space_map_[option_space] = items;
     }
 
@@ -86,6 +93,31 @@ public:
     /// @brief Remove all items from the container.
     void clearItems() {
         option_space_map_.clear();
+    }
+
+    /// @brief Remove all options or option definitions with a given
+    /// database identifier.
+    ///
+    /// Note that there are cases when there will be multiple options
+    /// or option definitions having the same id (typically id of 0).
+    /// When configuration backend is in use it sets the unique ids
+    /// from the database. In cases when the configuration backend is
+    /// not used, the ids default to 0. Passing the id of 0 would
+    /// result in deleting all options or option definitions that were
+    /// not added via the database.
+    ///
+    /// @param id Identifier of the items to be deleted.
+    ///
+    /// @return Number of deleted options or option definitions.
+    uint64_t deleteItems(const uint64_t id) {
+        uint64_t num_deleted = 0;
+        for (auto space : option_space_map_) {
+            auto container = space.second;
+            auto& index = container->template get<OptionIdIndexTag>();
+            num_deleted += index.erase(id);
+        }
+
+        return (num_deleted);
     }
 
     /// @brief Check if two containers are equal.

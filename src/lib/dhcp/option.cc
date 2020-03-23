@@ -1,15 +1,19 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+#include <dhcp/dhcp4.h>
 #include <dhcp/libdhcp++.h>
 #include <dhcp/option.h>
+#include <dhcp/option_space.h>
 #include <exceptions/exceptions.h>
 #include <util/encode/hex.h>
 #include <util/io_utilities.h>
+
+#include <boost/make_shared.hpp>
 
 #include <iomanip>
 #include <list>
@@ -35,12 +39,7 @@ Option::factory(Option::Universe u,
 
 Option::Option(Universe u, uint16_t type)
     :universe_(u), type_(type) {
-
-    // END option (type 255 is forbidden as well)
-    if ((u == V4) && ((type == 0) || (type > 254))) {
-        isc_throw(BadValue, "Can't create V4 option of type "
-                  << type << ", V4 options are in range 1..254");
-    }
+    check();
 }
 
 Option::Option(Universe u, uint16_t type, const OptionBuffer& data)
@@ -59,6 +58,16 @@ Option::Option(const Option& option)
       data_(option.data_), options_(),
       encapsulated_space_(option.encapsulated_space_) {
     option.getOptionsCopy(options_);
+}
+
+OptionPtr
+Option::create(Universe u, uint16_t type) {
+    return (boost::make_shared<Option>(u, type));
+}
+
+OptionPtr
+Option::create(Universe u, uint16_t type, const OptionBuffer& data) {
+    return (boost::make_shared<Option>(u, type, data));
 }
 
 Option&
@@ -158,7 +167,8 @@ Option::unpackOptions(const OptionBuffer& buf) {
     switch (universe_) {
     case V4:
         LibDHCP::unpackOptions4(buf, getEncapsulatedSpace(),
-                                options_, deferred);
+                                options_, deferred,
+                                getType() == DHO_VENDOR_ENCAPSULATED_OPTIONS);
         return;
     case V6:
         LibDHCP::unpackOptions6(buf, getEncapsulatedSpace(), options_);

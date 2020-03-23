@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,6 +32,7 @@
 #include <boost/algorithm/string/classification.hpp>
 #include <boost/algorithm/string/predicate.hpp>
 #include <boost/dynamic_bitset.hpp>
+#include <boost/make_shared.hpp>
 #include <sstream>
 
 using namespace std;
@@ -98,6 +99,38 @@ OptionDefinition::OptionDefinition(const std::string& name,
       record_fields_(),
       user_context_(),
       option_space_name_() {
+}
+
+OptionDefinitionPtr
+OptionDefinition::create(const std::string& name,
+                         const uint16_t code,
+                         const std::string& type,
+                         const bool array_type) {
+    return (boost::make_shared<OptionDefinition>(name, code, type, array_type));
+}
+
+OptionDefinitionPtr
+OptionDefinition::create(const std::string& name,
+                         const uint16_t code,
+                         const OptionDataType type,
+                         const bool array_type) {
+    return (boost::make_shared<OptionDefinition>(name, code, type, array_type));
+}
+
+OptionDefinitionPtr
+OptionDefinition::create(const std::string& name,
+                         const uint16_t code,
+                         const std::string& type,
+                         const char* encapsulated_space) {
+    return (boost::make_shared<OptionDefinition>(name, code, type, encapsulated_space));
+}
+
+OptionDefinitionPtr
+OptionDefinition::create(const std::string& name,
+                         const uint16_t code,
+                         const OptionDataType type,
+                         const char* encapsulated_space) {
+    return (boost::make_shared<OptionDefinition>(name, code, type, encapsulated_space));
 }
 
 bool
@@ -231,9 +264,12 @@ OptionDefinition::optionFactory(Option::Universe u, uint16_t type,
             ;
         }
         return (OptionPtr(new OptionCustom(*this, u, begin, end)));
-    } catch (const SkipRemainingOptionsError& ex) {
+    } catch (const SkipThisOptionError&) {
         // We need to throw this one as is.
-        throw ex;
+        throw;
+    } catch (const SkipRemainingOptionsError&) {
+        // We need to throw this one as is.
+        throw;
     } catch (const Exception& ex) {
         isc_throw(InvalidOptionValue, ex.what());
     }
@@ -672,9 +708,9 @@ OptionDefinition::writeToBuffer(Option::Universe u,
             OptionDataTypeUtil::writePrefix(PrefixLen(len), address, buf);
 
             return;
-    }
+        }
     case OPT_PSID_TYPE:
-    {
+        {
         std::string txt = value;
 
         // first let's remove any whitespaces

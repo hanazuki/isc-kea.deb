@@ -6,16 +6,16 @@ prefix=/usr/local
 if [ -e "${prefix}/share/kea/scripts/admin-utils.sh" ]; then
     . ${prefix}/share/kea/scripts/admin-utils.sh
 else
-    . /home/wlodek/dev/kea/src/bin/admin/admin-utils.sh
+    . /home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/bin/admin/admin-utils.sh
 fi
 
 # Need a path for temporary files created during upgrade data migration
-# Use the state directory in the  install path directory if it exists, otherwise
+# Use the state directory in the install path directory if it exists, otherwise
 # use the build tree
-if [ -e "${prefix}/var/kea" ]; then
-    temp_file_dir="${prefix}/var/kea"
+if [ -e "${prefix}/var/lib/kea" ]; then
+    temp_file_dir="${prefix}/var/lib/kea"
 else
-    temp_file_dir="/home/wlodek/dev/kea/src/share/database/scripts/cql"
+    temp_file_dir="/home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/share/database/scripts/cql"
 fi
 
 cqlargs=$@
@@ -36,16 +36,16 @@ update_schema() {
 -- This line starts database upgrade to version 3.0
 
 -- Add a column holding leases for user context.
-ALTER TABLE lease4 ADD user_context text;
-ALTER TABLE lease6 ADD user_context text;
+ALTER TABLE lease4 ADD user_context VARCHAR;
+ALTER TABLE lease6 ADD user_context VARCHAR;
 
 -- -----------------------------------------------------
 -- Table logs (it is used by forensic logging hook library)
 -- -----------------------------------------------------
 CREATE TABLE IF NOT EXISTS logs (
-    timeuuid timeuuid,  -- creation timeuuid, use dateOf() to get timestamp
-    address varchar,    -- address or prefix
-    log text,           -- the log itself
+    timeuuid TIMEUUID,  -- creation timeuuid, use dateOf() to get timestamp
+    address VARCHAR,    -- address or prefix
+    log VARCHAR,        -- the log itself
     PRIMARY KEY ((timeuuid))
 );
 
@@ -53,7 +53,7 @@ CREATE TABLE IF NOT EXISTS logs (
 CREATE INDEX IF NOT EXISTS logsindex ON logs (address);
 
 -- Add auth_key for storing keys for DHCPV6 reconfigure.
-ALTER TABLE host_reservations ADD auth_key text;
+ALTER TABLE host_reservations ADD auth_key VARCHAR;
 
 -- Cql requires primary keys in the WHERE here.
 DELETE FROM schema_version WHERE version=2;
@@ -120,16 +120,16 @@ exit_now() {
 # col - column name of the column in question
 #
 check_column() {
-   local val="$1";shift
-   local col="$1"
-   local old_id="0"
-   local new_id="-1"
-   local comma=""
+    local val="$1";shift
+    local col="$1"
+    local old_id="0"
+    local new_id="-1"
+    local comma=""
 
-   # If the current value equals the value to be replaced
-   # add it to the accumulator
-   if [ "$val" = "$old_id" ]
-   then
+    # If the current value equals the value to be replaced
+    # add it to the accumulator
+    if [ "$val" = "$old_id" ]
+    then
         # If the accumulator isn't empty, we need a comma
         if [ ! -z "$update_cols" ]
         then
@@ -137,7 +137,7 @@ check_column() {
         fi
 
         update_cols="$update_cols$comma $col = $new_id"
-   fi
+    fi
 }
 
 # This function converts subnet ID columns in of existing host_reservations
@@ -196,7 +196,7 @@ migrate_host_data() {
     line_cnt=0;
     update_cnt=0;
 
-    while read line
+    while read -r line
     do
         line_cnt=$((line_cnt + 1));
         update_cols=""

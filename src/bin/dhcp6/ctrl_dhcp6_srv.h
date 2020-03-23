@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,8 +27,10 @@ public:
 
     /// @brief Constructor
     ///
-    /// @param port UDP port to be opened for DHCP traffic
-    ControlledDhcpv6Srv(uint16_t port = DHCP6_SERVER_PORT);
+    /// @param server_port UDP port to be opened for DHCP traffic
+    /// @param client_port UDP port where all responses are sent to.
+    ControlledDhcpv6Srv(uint16_t server_port = DHCP6_SERVER_PORT,
+                        uint16_t client_port = 0);
 
     /// @brief Destructor.
     virtual ~ControlledDhcpv6Srv();
@@ -63,7 +65,7 @@ public:
     /// @brief Initiates shutdown procedure for the whole DHCPv6 server.
     void shutdown();
 
-    /// @brief command processor
+    /// @brief Command processor
     ///
     /// This method is uniform for all config backends. It processes received
     /// command (as a string + JSON arguments). Internally, it's just a
@@ -73,9 +75,9 @@ public:
     /// Currently supported commands are:
     /// - config-reload
     /// - config-test
-    /// - leases-reclaim
-    /// - libreload
     /// - shutdown
+    /// - libreload
+    /// - leases-reclaim
     /// ...
     ///
     /// @note It never throws.
@@ -87,7 +89,7 @@ public:
     static isc::data::ConstElementPtr
     processCommand(const std::string& command, isc::data::ConstElementPtr args);
 
-    /// @brief configuration processor
+    /// @brief Configuration processor
     ///
     /// This is a method for handling incoming configuration updates.
     /// This method should be called by all configuration backends when the
@@ -112,7 +114,7 @@ public:
     isc::data::ConstElementPtr
     checkConfig(isc::data::ConstElementPtr new_config);
 
-    /// @brief returns pointer to the sole instance of Dhcpv6Srv
+    /// @brief Returns pointer to the sole instance of Dhcpv6Srv
     ///
     /// @return server instance (may return NULL, if called before server is spawned)
     static ControlledDhcpv6Srv* getInstance() {
@@ -129,7 +131,7 @@ private:
     /// (that was sent from some yet unspecified sender).
     static void sessionReader(void);
 
-    /// @brief handler for processing 'shutdown' command
+    /// @brief Handler for processing 'shutdown' command
     ///
     /// This handler processes shutdown command, which initializes shutdown
     /// procedure.
@@ -141,7 +143,7 @@ private:
     commandShutdownHandler(const std::string& command,
                            isc::data::ConstElementPtr args);
 
-    /// @brief handler for processing 'libreload' command
+    /// @brief Handler for processing 'libreload' command
     ///
     /// This handler processes libreload command, which unloads all hook
     /// libraries and reloads them.
@@ -154,7 +156,7 @@ private:
     commandLibReloadHandler(const std::string& command,
                             isc::data::ConstElementPtr args);
 
-    /// @brief handler for processing 'config-reload' command
+    /// @brief Handler for processing 'config-reload' command
     ///
     /// This handler processes config-reload command, which processes
     /// configuration specified in args parameter.
@@ -203,7 +205,8 @@ private:
     /// @param command (parameter ignored)
     /// @param args configuration to be processed. Expected format:
     /// map containing Dhcp6 map that contains DHCPv6 server configuration.
-    /// May also contain Logging map that specifies logging configuration.
+    /// May also contain Logging map that specifies logging configuration
+    /// for backward compatibility.
     ///
     /// @return status of the command
     isc::data::ConstElementPtr
@@ -217,7 +220,8 @@ private:
     /// @param command (parameter ignored)
     /// @param args configuration to be checked. Expected format:
     /// map containing Dhcp6 map that contains DHCPv6 server configuration.
-    /// May also contain Logging map that specifies logging configuration.
+    /// May also contain Logging map that specifies logging configuration
+    /// for backward compatibility.
     ///
     /// @return status of the command
     isc::data::ConstElementPtr
@@ -287,6 +291,43 @@ private:
     commandLeasesReclaimHandler(const std::string& command,
                                 isc::data::ConstElementPtr args);
 
+    /// @brief handler for server-tag-get command
+    ///
+    /// This method handles the server-tag-get command, which retrieves
+    /// the current server tag and returns it in response.
+    ///
+    /// @param command (ignored)
+    /// @param args (ignored)
+    /// @return current configuration wrapped in a response
+    isc::data::ConstElementPtr
+    commandServerTagGetHandler(const std::string& command,
+                               isc::data::ConstElementPtr args);
+
+    /// @brief handler for config-backend-pull command
+    ///
+    /// This method handles the config-backend-pull command, which updates
+    /// the server configuration from the Config Backends immediately.
+    ///
+    /// @param command (parameter ignored)
+    /// @param args (ignored)
+    ///
+    /// @return status of the command/
+    isc::data::ConstElementPtr
+    commandConfigBackendPullHandler(const std::string& command,
+                                    isc::data::ConstElementPtr args);
+
+    /// @brief handler for processing 'status-get' command
+    ///
+    /// This handler processes status-get command, which retrieves
+    /// the server process information i.e. the pid and returns it in response.
+    ///
+    /// @param command (ignored)
+    /// @param args (ignored)
+    /// @return process information wrapped in a response
+    isc::data::ConstElementPtr
+    commandStatusGetHandler(const std::string& command,
+                            isc::data::ConstElementPtr args);
+
     /// @brief Reclaims expired IPv6 leases and reschedules timer.
     ///
     /// This is a wrapper method for @c AllocEngine::reclaimExpiredLeases6.
@@ -306,7 +347,6 @@ private:
     void reclaimExpiredLeases(const size_t max_leases, const uint16_t timeout,
                               const bool remove_lease,
                               const uint16_t max_unwarned_cycles);
-
 
     /// @brief Deletes reclaimed leases and reschedules the timer.
     ///
@@ -332,6 +372,7 @@ private:
     ///
     /// If the maximum number of retries has been exhausted an error is logged
     /// and the server shuts down.
+    ///
     /// @param db_reconnect_ctl pointer to the ReconnectCtl containing the
     /// configured reconnect parameters
     ///
@@ -345,15 +386,31 @@ private:
     /// between retry attempts.
     ///
     /// If either value is zero, reconnect is presumed to be disabled and
-    /// the function will returns false.  This instructs the DB backend
-    /// layer (the caller) to treat the connectivity loss as fatal.
+    /// the function will schedule a shutdown and return false.  This instructs
+    /// the DB backend layer (the caller) to treat the connectivity loss as fatal.
     ///
     /// Otherwise, the function saves db_reconnect_ctl and invokes
     /// dbReconnect to initiate the reconnect process.
     ///
     /// @param db_reconnect_ctl pointer to the ReconnectCtl containing the
     /// configured reconnect parameters
+    ///
+    /// @return false if reconnect is not configured, true otherwise
     bool dbLostCallback(db::ReconnectCtlPtr db_reconnect_ctl);
+
+    /// @brief Callback invoked periodically to fetch configuration updates
+    /// from the Config Backends.
+    ///
+    /// This method calls @c CBControlDHCPv6::databaseConfigFetch and then
+    /// reschedules the timer.
+    ///
+    /// @param srv_cfg Server configuration holding the database credentials
+    /// and server tag.
+    /// @param failure_count pointer to failure counter which causes this
+    /// callback to stop scheduling the timer after 10 consecutive failures
+    /// to fetch the updates.
+    void cbFetchUpdates(const SrvConfigPtr& srv_cfg,
+                        boost::shared_ptr<unsigned> failure_count);
 
     /// @brief Static pointer to the sole instance of the DHCP server.
     ///
@@ -371,7 +428,7 @@ private:
     TimerMgrPtr timer_mgr_;
 };
 
-}; // namespace isc::dhcp
-}; // namespace isc
+}  // namespace dhcp
+}  // namespace isc
 
 #endif

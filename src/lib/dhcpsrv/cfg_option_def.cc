@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -91,11 +91,19 @@ CfgOptionDef::add(const OptionDefinitionPtr& def,
         isc_throw(DuplicateOptionDefinition, "option definition with code '"
                   << def->getCode() << "' already exists in option"
                   " space '" << option_space << "'");
+    } else if (get(option_space, def->getName())) {
+        isc_throw(DuplicateOptionDefinition, "option definition with name '"
+                  << def->getName() << "' already exists in option"
+                  " space '" << option_space << "'");
 
     // Must not override standard option definition.
     } else if (LibDHCP::getOptionDef(option_space, def->getCode())) {
         isc_throw(BadValue, "unable to override definition of option '"
                   << def->getCode() << "' in standard option space '"
+                  << option_space << "'");
+    } else if (LibDHCP::getOptionDef(option_space, def->getName())) {
+        isc_throw(BadValue, "unable to override definition of option '"
+                  << def->getName() << "' in standard option space '"
                   << option_space << "'");
     }
     // Add the definition.
@@ -152,8 +160,18 @@ CfgOptionDef::get(const std::string& option_space,
     return (OptionDefinitionPtr());
 }
 
+uint64_t
+CfgOptionDef::del(const uint64_t id) {
+    return (option_definitions_.deleteItems(id));
+}
+
 ElementPtr
 CfgOptionDef::toElement() const {
+    return (toElementWithMetadata(false));
+}
+
+ElementPtr
+CfgOptionDef::toElementWithMetadata(const bool include_metadata) const {
     // option-defs value is a list of maps
     ElementPtr result = Element::createList();
     // Iterate through the container by names and definitions
@@ -199,11 +217,46 @@ CfgOptionDef::toElement() const {
             } else {
                 map->set("record-types", Element::create(std::string()));
             }
+
+            // Include metadata if requested.
+            if (include_metadata) {
+                map->set("metadata", (*def)->getMetadata());
+            }
+
             // Push on the list
             result->add(map);
         }
     }
     return (result);
+}
+
+void
+CfgOptionDef::merge(CfgOptionDef& other) {
+    // The definitions in "other" are presumed to be valid and
+    // not in conflict with standard definitions.
+    if (other.getContainer().getOptionSpaceNames().empty()) {
+        // Nothing to merge, don't waste cycles.
+        return;
+    }
+
+    // Iterate over this config's definitions in each space.
+    // If either a definition's name or code already exist in
+    // that space in "other", skip it.  Otherwise, add it to "other".
+    for (auto space : option_definitions_.getOptionSpaceNames()) {
+        for (auto my_def : *(getAll(space))) {
+            if ((other.get(space, my_def->getName())) ||
+                (other.get(space, my_def->getCode()))) {
+                // Already in "other" so skip it.
+                continue;
+            }
+
+            // Not in "other" so add it.
+            other.add(my_def, space);
+        }
+    }
+
+    // Replace the current definitions with the merged set.
+    other.copyTo(*this);
 }
 
 } // end of namespace isc::dhcp

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,10 +24,10 @@ Cfg4o6::toElement() const {
     // Set 4o6-interface
     result->set("4o6-interface", Element::create(iface4o6_));
     // Set 4o6-subnet
-    if (!subnet4o6_.first.isV6Zero() || (subnet4o6_.second != 128u)) {
+    if (!subnet4o6_.get().first.isV6Zero() || (subnet4o6_.get().second != 128u)) {
         std::ostringstream oss;
-        oss << subnet4o6_.first << "/"
-            << static_cast<unsigned>(subnet4o6_.second);
+        oss << subnet4o6_.get().first << "/"
+            << static_cast<unsigned>(subnet4o6_.get().second);
         result->set("4o6-subnet", Element::create(oss.str()));
     } else {
         result->set("4o6-subnet", Element::create(std::string()));

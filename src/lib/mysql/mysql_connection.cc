@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -22,6 +22,8 @@ using namespace std;
 
 namespace isc {
 namespace db {
+
+bool MySqlHolder::atexit_ = []{atexit([]{mysql_library_end();});return true;};
 
 /// @todo: Migrate this default value to src/bin/dhcpX/simple_parserX.cc
 const int MYSQL_DEFAULT_CONNECTION_TIMEOUT = 5; // seconds
@@ -210,6 +212,83 @@ MySqlConnection::openDatabase() {
     }
 }
 
+// Get schema version.
+
+std::pair<uint32_t, uint32_t>
+MySqlConnection::getVersion(const ParameterMap& parameters) {
+    // Get a connection.
+    MySqlConnection conn(parameters);
+
+    // Open the database.
+    conn.openDatabase();
+
+    // Allocate a new statement.
+    MYSQL_STMT *stmt = mysql_stmt_init(conn.mysql_);
+    if (stmt == NULL) {
+        isc_throw(DbOperationError, "unable to allocate MySQL prepared "
+                "statement structure, reason: " << mysql_error(conn.mysql_));
+    }
+
+    try {
+
+        // Prepare the statement from SQL text.
+        const char* version_sql = "SELECT version, minor FROM schema_version";
+        int status = mysql_stmt_prepare(stmt, version_sql, strlen(version_sql));
+        if (status != 0) {
+            isc_throw(DbOperationError, "unable to prepare MySQL statement <"
+                      << version_sql << ">, reason: "
+                      << mysql_error(conn.mysql_));
+        }
+
+        // Execute the prepared statement.
+        if (mysql_stmt_execute(stmt) != 0) {
+            isc_throw(DbOperationError, "cannot execute schema version query <"
+                      << version_sql << ">, reason: "
+                      << mysql_errno(conn.mysql_));
+        }
+
+        // Bind the output of the statement to the appropriate variables.
+        MYSQL_BIND bind[2];
+        memset(bind, 0, sizeof(bind));
+
+        uint32_t version;
+        bind[0].buffer_type = MYSQL_TYPE_LONG;
+        bind[0].is_unsigned = 1;
+        bind[0].buffer = &version;
+        bind[0].buffer_length = sizeof(version);
+
+        uint32_t minor;
+        bind[1].buffer_type = MYSQL_TYPE_LONG;
+        bind[1].is_unsigned = 1;
+        bind[1].buffer = &minor;
+        bind[1].buffer_length = sizeof(minor);
+
+        if (mysql_stmt_bind_result(stmt, bind)) {
+            isc_throw(DbOperationError, "unable to bind result set for <"
+                      << version_sql << ">, reason: "
+                      << mysql_errno(conn.mysql_));
+        }
+
+        // Fetch the data.
+        if (mysql_stmt_fetch(stmt)) {
+            isc_throw(DbOperationError, "unable to bind result set for <"
+                      << version_sql << ">, reason: "
+                      << mysql_errno(conn.mysql_));
+        }
+
+        // Discard the statement and its resources
+        mysql_stmt_close(stmt);
+
+        return (std::make_pair(version, minor));
+
+    } catch (const std::exception&) {
+        // Avoid a memory leak on error.
+        mysql_stmt_close(stmt);
+
+        // Send the exception to the caller.
+        throw;
+    }
+}
 
 // Prepared statement setup.  The textual form of an SQL statement is stored
 // in a vector of strings (text_statements_) and is used in the output of

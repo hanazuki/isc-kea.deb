@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -54,6 +54,17 @@ ConfigBackendPoolDHCPv4::getModifiedSubnets4(const BackendSelector& backend_sele
     getMultiplePropertiesConst<Subnet4Collection, const boost::posix_time::ptime&>
         (&ConfigBackendDHCPv4::getModifiedSubnets4, backend_selector, server_selector,
          subnets, modification_time);
+    return (subnets);
+}
+
+Subnet4Collection
+ConfigBackendPoolDHCPv4::getSharedNetworkSubnets4(const db::BackendSelector& backend_selector,
+                                                  const db::ServerSelector& server_selector,
+                                                  const std::string& shared_network_name) const {
+    Subnet4Collection subnets;
+    getMultiplePropertiesConst<Subnet4Collection, const std::string&>
+        (&ConfigBackendDHCPv4::getSharedNetworkSubnets4, backend_selector, server_selector,
+         subnets, shared_network_name);
     return (subnets);
 }
 
@@ -189,6 +200,36 @@ getModifiedGlobalParameters4(const db::BackendSelector& backend_selector,
     return (parameters);
 }
 
+AuditEntryCollection
+ConfigBackendPoolDHCPv4::
+getRecentAuditEntries(const db::BackendSelector& backend_selector,
+                      const db::ServerSelector& server_selector,
+                      const boost::posix_time::ptime& modification_time) const {
+    AuditEntryCollection audit_entries;
+    getMultiplePropertiesConst<AuditEntryCollection, const boost::posix_time::ptime&>
+        (&ConfigBackendDHCPv4::getRecentAuditEntries, backend_selector,
+         server_selector, audit_entries, modification_time);
+    return (audit_entries);
+}
+
+ServerCollection
+ConfigBackendPoolDHCPv4::getAllServers4(const BackendSelector& backend_selector) const {
+    ServerCollection servers;
+    getAllBackendPropertiesConst<ServerCollection>
+        (&ConfigBackendDHCPv4::getAllServers4, backend_selector, servers);
+    return (servers);
+}
+
+ServerPtr
+ConfigBackendPoolDHCPv4::getServer4(const BackendSelector& backend_selector,
+                                    const ServerTag& server_tag) const {
+    ServerPtr server;
+    getBackendPropertyPtrConst<ServerPtr, const ServerTag&>
+        (&ConfigBackendDHCPv4::getServer4, backend_selector, server,
+         server_tag);
+    return (server);
+}
+
 void
 ConfigBackendPoolDHCPv4::createUpdateSubnet4(const BackendSelector& backend_selector,
                                              const ServerSelector& server_selector,
@@ -267,6 +308,14 @@ ConfigBackendPoolDHCPv4::createUpdateGlobalParameter4(const BackendSelector& bac
          server_selector, value);
 }
 
+void
+ConfigBackendPoolDHCPv4::createUpdateServer4(const BackendSelector& backend_selector,
+                                             const ServerPtr& server) {
+    createUpdateDeleteBackendProperty<void, const ServerPtr&>
+        (&ConfigBackendDHCPv4::createUpdateServer4, backend_selector,
+         server);
+}
+
 uint64_t
 ConfigBackendPoolDHCPv4::deleteSubnet4(const BackendSelector& backend_selector,
                                        const ServerSelector& server_selector,
@@ -290,6 +339,15 @@ ConfigBackendPoolDHCPv4::deleteAllSubnets4(const BackendSelector& backend_select
                                           const ServerSelector& server_selector) {
     return (createUpdateDeleteProperty<uint64_t>
             (&ConfigBackendDHCPv4::deleteAllSubnets4, backend_selector, server_selector));
+}
+
+uint64_t
+ConfigBackendPoolDHCPv4::deleteSharedNetworkSubnets4(const db::BackendSelector& backend_selector,
+                                                     const db::ServerSelector& server_selector,
+                                                     const std::string& shared_network_name) {
+    return (createUpdateDeleteProperty<uint64_t, const std::string&>
+            (&ConfigBackendDHCPv4::deleteSharedNetworkSubnets4, backend_selector, server_selector,
+             shared_network_name));
 }
 
 uint64_t
@@ -388,6 +446,19 @@ ConfigBackendPoolDHCPv4::deleteAllGlobalParameters4(const BackendSelector& backe
              server_selector));
 }
 
+uint64_t
+ConfigBackendPoolDHCPv4::deleteServer4(const BackendSelector& backend_selector,
+                                       const ServerTag& server_tag) {
+    return (createUpdateDeleteBackendProperty<uint64_t>
+            (&ConfigBackendDHCPv4::deleteServer4, backend_selector,
+             server_tag));
+}
+
+uint64_t
+ConfigBackendPoolDHCPv4::deleteAllServers4(const BackendSelector& backend_selector) {
+    return (createUpdateDeleteBackendProperty<uint64_t>
+            (&ConfigBackendDHCPv4::deleteAllServers4, backend_selector));
+}
 
 } // end of namespace isc::dhcp
 } // end of namespace isc

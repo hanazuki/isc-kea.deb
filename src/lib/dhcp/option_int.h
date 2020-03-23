@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -146,7 +146,7 @@ public:
     /// because it is checked in a constructor.
     virtual void unpack(OptionBufferConstIter begin, OptionBufferConstIter end) {
         if (distance(begin, end) < sizeof(T)) {
-            isc_throw(OutOfRange, "Option " << getType() << " truncated");
+            isc_throw(OutOfRange, "OptionInt " << getType() << " truncated");
         }
         // @todo consider what to do if buffer is longer than data type.
 

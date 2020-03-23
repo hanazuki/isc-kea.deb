@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -75,6 +75,10 @@ using namespace std;
   DIGEST_BITS "digest-bits"
   SECRET "secret"
 
+  CONTROL_SOCKET "control-socket"
+  SOCKET_TYPE "socket-type"
+  SOCKET_NAME "socket-name"
+
   LOGGING "Logging"
   LOGGERS "loggers"
   NAME "name"
@@ -85,6 +89,7 @@ using namespace std;
   FLUSH "flush"
   MAXSIZE "maxsize"
   MAXVER "maxver"
+  PATTERN "pattern"
 
   // Not real tokens, just a way to signal what the parser is expected to
   // parse.
@@ -270,6 +275,8 @@ dhcpddns_param: ip_address
               | forward_ddns
               | reverse_ddns
               | tsig_keys
+              | control_socket
+              | loggers
               | user_context
               | comment
               | unknown_map_entry
@@ -665,6 +672,46 @@ tsig_key_secret: SECRET {
 
 // --- end of tsig-keys ---------------------------------
 
+// --- control socket ----------------------------------------
+
+control_socket: CONTROL_SOCKET {
+    ElementPtr m(new MapElement(ctx.loc2pos(@1)));
+    ctx.stack_.back()->set("control-socket", m);
+    ctx.stack_.push_back(m);
+    ctx.enter(ctx.CONTROL_SOCKET);
+} COLON LCURLY_BRACKET control_socket_params RCURLY_BRACKET {
+    ctx.stack_.pop_back();
+    ctx.leave();
+};
+
+control_socket_params: control_socket_param
+                     | control_socket_params COMMA control_socket_param
+                     ;
+
+control_socket_param: control_socket_type
+                    | control_socket_name
+                    | user_context
+                    | comment
+                    | unknown_map_entry
+                    ;
+
+control_socket_type: SOCKET_TYPE {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr stype(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("socket-type", stype);
+    ctx.leave();
+};
+
+control_socket_name: SOCKET_NAME {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr name(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("socket-name", name);
+    ctx.leave();
+};
+
+// ----------------------------------------------------------------
 
 dhcp6_json_object: DHCP6 {
     ctx.enter(ctx.NO_KEYWORD);
@@ -802,6 +849,7 @@ output_params: output
              | flush
              | maxsize
              | maxver
+             | pattern
              ;
 
 output: OUTPUT {
@@ -826,6 +874,14 @@ maxver: MAXVER COLON INTEGER {
     ElementPtr maxver(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxver", maxver);
 }
+
+pattern: PATTERN {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("pattern", sev);
+    ctx.leave();
+};
 
 %%
 

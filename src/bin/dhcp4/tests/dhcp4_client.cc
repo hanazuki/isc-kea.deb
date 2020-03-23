@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,7 +42,7 @@ Dhcp4Client::Configuration::reset() {
 
 Dhcp4Client::Dhcp4Client(const Dhcp4Client::State& state) :
     config_(),
-    ciaddr_(IOAddress("0.0.0.0")),
+    ciaddr_(),
     curr_transid_(0),
     dest_addr_("255.255.255.255"),
     hwaddr_(generateHWAddr()),
@@ -60,7 +60,7 @@ Dhcp4Client::Dhcp4Client(const Dhcp4Client::State& state) :
 Dhcp4Client::Dhcp4Client(boost::shared_ptr<NakedDhcpv4Srv> srv,
                          const Dhcp4Client::State& state) :
     config_(),
-    ciaddr_(IOAddress("0.0.0.0")),
+    ciaddr_(),
     curr_transid_(0),
     dest_addr_("255.255.255.255"),
     fqdn_(),
@@ -207,7 +207,7 @@ Dhcp4Client::applyConfiguration() {
         /// @todo Set the valid lifetime, t1, t2 etc.
         config_.lease_ = Lease4(IOAddress(context_.response_->getYiaddr()),
                                 context_.response_->getHWAddr(),
-                                0, 0, 0, 0, 0, time(NULL), 0, false, false,
+                                0, 0, 0, time(NULL), 0, false, false,
                                 "");
     }
 }
@@ -215,7 +215,7 @@ Dhcp4Client::applyConfiguration() {
 void
 Dhcp4Client::createLease(const asiolink::IOAddress& addr,
                          const uint32_t valid_lft) {
-    Lease4 lease(addr, hwaddr_, 0, 0, valid_lft, valid_lft / 2, valid_lft,
+    Lease4 lease(addr, hwaddr_, 0, 0, valid_lft,
                  time(NULL), 0, false, false, "");
     config_.lease_ = lease;
 }
@@ -259,8 +259,8 @@ Dhcp4Client::doDiscover(const boost::shared_ptr<IOAddress>& requested_addr) {
         addRequestedAddress(*requested_addr);
     }
     // Override the default ciaddr if specified by a test.
-    if (ciaddr_.isSpecified()) {
-        context_.query_->setCiaddr(ciaddr_.get());
+    if (!ciaddr_.unspecified()) {
+        context_.query_->setCiaddr(ciaddr_);
     }
     appendExtraOptions();
     appendClasses();
@@ -364,8 +364,8 @@ Dhcp4Client::doRequest() {
     context_.query_ = createMsg(DHCPREQUEST);
 
     // Override the default ciaddr if specified by a test.
-    if (ciaddr_.isSpecified()) {
-        context_.query_->setCiaddr(ciaddr_.get());
+    if (!ciaddr_.unspecified()) {
+        context_.query_->setCiaddr(ciaddr_);
     } else if ((state_ == SELECTING) || (state_ == INIT_REBOOT)) {
         context_.query_->setCiaddr(IOAddress("0.0.0.0"));
     } else {

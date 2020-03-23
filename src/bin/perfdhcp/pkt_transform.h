@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,9 +7,9 @@
 #ifndef PKT_TRANSFORM_H
 #define PKT_TRANSFORM_H
 
-#include <dhcp/option.h>
+#include <perfdhcp/localized_option.h>
 
-#include "localized_option.h"
+#include <dhcp/option.h>
 
 namespace isc {
 namespace perfdhcp {

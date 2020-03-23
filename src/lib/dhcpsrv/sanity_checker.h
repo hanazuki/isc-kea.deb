@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -28,20 +28,29 @@ class SanityChecker {
     /// correct subnet-id or discard the lease.
     ///
     /// @param lease Lease to be sanity-checked
-    /// @param current specify whether to use current (true) or staging(false)
-    ///                config
+    /// @param current specify whether to use current (true) or staging
+    ///        (false) config
     void checkLease(Lease4Ptr& lease, bool current = true);
 
-    /// @brief Sanity checks and possibly corrects an IPv4 lease
+    /// @brief Sanity checks and possibly corrects an IPv6 lease
     ///
     /// Depending on the sanity-checks/lease-checks parameter value (see
     /// @ref CfgConsistency for details), this code may print a warning,
-    /// correct subnet-id or discard the lease.
+    /// correct subnet-id or discard the lease.  Note that if the lease
+    /// type is TYPE_PD, it simply returns.
     ///
     /// @param lease Lease to be sanity-checked
-    /// @param current specify whether to use current (true) or staging(false)
-    ///                config
+    /// @param current specify whether to use current (true) or staging
+    ///        (false) config
     void checkLease(Lease6Ptr& lease, bool current = true);
+
+    /// @brief Indicates the specified configuration enables lease sanity checking.
+    ///
+    /// @param current specifies whether to use current (true) or staging(false)
+    /// server configuration
+    /// @return true if the sanity-checks/lease-checks parameter value (see
+    /// @ref CfgConsistency for details) is not CfgConsistency::LEASE_CHECK_NONE.
+    static bool leaseCheckingEnabled(bool current = true);
 
  private:
 

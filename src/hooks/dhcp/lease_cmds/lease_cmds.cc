@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,8 +11,10 @@
 #include <cc/data.h>
 #include <asiolink/io_address.h>
 #include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/dhcpsrv_exceptions.h>
 #include <dhcpsrv/lease_mgr.h>
 #include <dhcpsrv/lease_mgr_factory.h>
+#include <dhcpsrv/multi_threading_utils.h>
 #include <dhcpsrv/subnet_id.h>
 #include <dhcpsrv/sanity_checker.h>
 #include <dhcp/duid.h>
@@ -26,6 +28,7 @@
 
 #include <boost/bind.hpp>
 #include <boost/scoped_ptr.hpp>
+#include <boost/algorithm/string.hpp>
 #include <string>
 #include <sstream>
 
@@ -105,8 +108,8 @@ public:
 
         /// @brief Default constructor.
         Parameters()
-            :addr("::"), query_type(TYPE_ADDR), lease_type(Lease::TYPE_NA),
-             iaid(0) {
+            : addr("::"), query_type(TYPE_ADDR), lease_type(Lease::TYPE_NA),
+              iaid(0) {
         }
     };
 
@@ -121,6 +124,17 @@ public:
     /// @return 0 upon success, non-zero otherwise
     int
     leaseAddHandler(CalloutHandle& handle);
+
+    /// @brief lease6-bulk-apply command handler
+    ///
+    /// Provides the implementation for the
+    /// @ref isc::lease_cmds::LeaseCmds::lease6BulkApplyHandler.
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// add command JSON text in the "command" argument
+    /// @return 0 upon success, non-zero otherwise
+    int
+    lease6BulkApplyHandler(CalloutHandle& handle);
 
     /// @brief lease4-get, lease6-get command handler
     ///
@@ -161,6 +175,51 @@ public:
     /// error occurs, 3 if no leases are returned.
     int
     leaseGetPageHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease4-get-by-hw-address command handler
+    ///
+    /// Provides the implementation for @ref isc::lease_cmds::LeaseCmds::leaseGetByHwAddressHandler
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByHwAddressHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease4-get-by-client-id command handler
+    ///
+    /// Provides the implementation for @ref isc::lease_cmds::LeaseCmds::leaseGetByClientIdHandler
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByClientIdHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease6-get-by-duid command handler
+    ///
+    /// Provides the implementation for @ref isc::lease_cmds::LeaseCmds::leaseGetByDuidHandler
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByDuidHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease4-get-by-hostname and lease6-get-by-hostname commands
+    /// handler
+    ///
+    /// Provides the implementation for @ref isc::lease_cmds::LeaseCmds::leaseGetByHostnameHandler
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// get command JSON text in the "command" argument
+    /// @return 0 if the handler has been invoked successfully, 1 if an
+    /// error occurs, 3 if no leases are returned.
+    int
+    leaseGetByHostnameHandler(hooks::CalloutHandle& handle);
 
     /// @brief lease4-del command handler
     ///
@@ -232,6 +291,43 @@ public:
     /// @return parsed parameters
     /// @throw BadValue if input arguments don't make sense.
     Parameters getParameters(bool v6, const ConstElementPtr& args);
+
+    /// @brief Convenience function fetching IPv6 address to be used to
+    /// delete a lease.
+    ///
+    /// The returned parameter depends on the @c query_type value stored
+    /// in the passed object. Note that the HW address is not allowed and
+    /// this query type results in an exception. If the query type is of
+    /// the address type, the address is returned. If the type is set to
+    /// DUID, this function will try to find the lease for this DUID
+    /// and return the corresponding address.
+    ///
+    /// @param parameters parameters extracted from the command.
+    ///
+    /// @return Lease of the lease to be deleted.
+    ///
+    /// @throw InvalidParameter if the DUID is not found when needed to
+    /// find the lease or if the query type is by HW address.
+    /// @throw InvalidOperation if the query type is unknown.
+    Lease6Ptr getIPv6LeaseForDelete(const Parameters& parameters) const;
+
+    /// @brief Returns a map holding brief information about a lease which
+    /// failed to be deleted, updated or added.
+    ///
+    /// The DUID is only included if it is non-null. The address is only
+    /// included if it is non-zero.
+    ///
+    /// @param lease_type lease type.
+    /// @param lease_address lease address.
+    /// @param duid DUID of the client.
+    /// @param control_result Control result: "empty" of the lease was
+    /// not found, "error" otherwise.
+    /// @param error_message Error message.
+    ElementPtr createFailedLeaseMap(const Lease::Type& lease_type,
+                                    const IOAddress& lease_address,
+                                    const DuidPtr& duid,
+                                    const int control_result,
+                                    const std::string& error_message) const;
 };
 
 int
@@ -701,22 +797,244 @@ LeaseCmdsImpl::leaseGetPageHandler(CalloutHandle& handle) {
 }
 
 int
+LeaseCmdsImpl::leaseGetByHwAddressHandler(CalloutHandle& handle) {
+    try {
+        extractCommand(handle);
+
+        // arguments must always be present
+        if (!cmd_args_ || (cmd_args_->getType() != Element::map)) {
+            isc_throw(BadValue, "Command arguments missing or a not a map.");
+        }
+
+        // the hw-address parameter is mandatory.
+        ConstElementPtr hw_address = cmd_args_->get("hw-address");
+        if (!hw_address) {
+            isc_throw(BadValue, "'hw-address' parameter not specified");
+        }
+
+        // The 'hw-address' argument is a string.
+        if (hw_address->getType() != Element::string) {
+            isc_throw(BadValue, "'hw-address'parameter must be a string");
+        }
+
+        HWAddr hwaddr = HWAddr::fromText(hw_address->stringValue());
+
+        Lease4Collection leases =
+            LeaseMgrFactory::instance().getLease4(hwaddr);
+        ElementPtr leases_json = Element::createList();
+        for (auto lease : leases) {
+            ElementPtr lease_json = lease->toElement();
+            leases_json->add(lease_json);
+        }
+
+        std::ostringstream s;
+        s << leases_json->size() << " IPv4 lease(s) found.";
+        ElementPtr args = Element::createMap();
+        args->set("leases", leases_json);
+        ConstElementPtr response =
+            createAnswer(leases_json->size() > 0 ?
+                         CONTROL_RESULT_SUCCESS :
+                         CONTROL_RESULT_EMPTY,
+                         s.str(), args);
+        setResponse(handle, response);
+
+    } catch (const std::exception& ex) {
+        setErrorResponse(handle, ex.what());
+        return (CONTROL_RESULT_ERROR);
+    }
+
+    return (0);
+}
+
+int
+LeaseCmdsImpl::leaseGetByClientIdHandler(CalloutHandle& handle) {
+    try {
+        extractCommand(handle);
+
+        // arguments must always be present
+        if (!cmd_args_ || (cmd_args_->getType() != Element::map)) {
+            isc_throw(BadValue, "Command arguments missing or a not a map.");
+        }
+
+        // the client-id parameter is mandatory.
+        ConstElementPtr client_id = cmd_args_->get("client-id");
+        if (!client_id) {
+            isc_throw(BadValue, "'client-id' parameter not specified");
+        }
+
+        // The 'client-id' argument is a string.
+        if (client_id->getType() != Element::string) {
+            isc_throw(BadValue, "'client-id'parameter must be a string");
+        }
+
+        ClientIdPtr clientid = ClientId::fromText(client_id->stringValue());
+
+        Lease4Collection leases =
+            LeaseMgrFactory::instance().getLease4(*clientid);
+        ElementPtr leases_json = Element::createList();
+        for (auto lease : leases) {
+            ElementPtr lease_json = lease->toElement();
+            leases_json->add(lease_json);
+        }
+
+        std::ostringstream s;
+        s << leases_json->size() << " IPv4 lease(s) found.";
+        ElementPtr args = Element::createMap();
+        args->set("leases", leases_json);
+        ConstElementPtr response =
+            createAnswer(leases_json->size() > 0 ?
+                         CONTROL_RESULT_SUCCESS :
+                         CONTROL_RESULT_EMPTY,
+                         s.str(), args);
+        setResponse(handle, response);
+
+    } catch (const std::exception& ex) {
+        setErrorResponse(handle, ex.what());
+        return (CONTROL_RESULT_ERROR);
+    }
+
+    return (0);
+}
+
+int
+LeaseCmdsImpl::leaseGetByDuidHandler(CalloutHandle& handle) {
+    try {
+        extractCommand(handle);
+
+        // arguments must always be present
+        if (!cmd_args_ || (cmd_args_->getType() != Element::map)) {
+            isc_throw(BadValue, "Command arguments missing or a not a map.");
+        }
+
+        // the duid parameter is mandatory.
+        ConstElementPtr duid = cmd_args_->get("duid");
+        if (!duid) {
+            isc_throw(BadValue, "'duid' parameter not specified");
+        }
+
+        // The 'duid' argument is a string.
+        if (duid->getType() != Element::string) {
+            isc_throw(BadValue, "'duid'parameter must be a string");
+        }
+
+        DUID duid_ = DUID::fromText(duid->stringValue());
+
+        Lease6Collection leases =
+            LeaseMgrFactory::instance().getLeases6(duid_);
+        ElementPtr leases_json = Element::createList();
+        for (auto lease : leases) {
+            ElementPtr lease_json = lease->toElement();
+            leases_json->add(lease_json);
+        }
+
+        std::ostringstream s;
+        s << leases_json->size() << " IPv6 lease(s) found.";
+        ElementPtr args = Element::createMap();
+        args->set("leases", leases_json);
+        ConstElementPtr response =
+            createAnswer(leases_json->size() > 0 ?
+                         CONTROL_RESULT_SUCCESS :
+                         CONTROL_RESULT_EMPTY,
+                         s.str(), args);
+        setResponse(handle, response);
+
+    } catch (const std::exception& ex) {
+        setErrorResponse(handle, ex.what());
+        return (CONTROL_RESULT_ERROR);
+    }
+
+    return (0);
+}
+
+int
+LeaseCmdsImpl::leaseGetByHostnameHandler(CalloutHandle& handle) {
+    bool v4;
+    try {
+        extractCommand(handle);
+        v4 = (cmd_name_ == "lease4-get-by-hostname");
+
+        // arguments must always be present
+        if (!cmd_args_ || (cmd_args_->getType() != Element::map)) {
+            isc_throw(BadValue, "Command arguments missing or a not a map.");
+        }
+
+        // the hostname parameter is mandatory.
+        ConstElementPtr hostname = cmd_args_->get("hostname");
+        if (!hostname) {
+            isc_throw(BadValue, "'hostname' parameter not specified");
+        }
+
+        // The 'hostname' argument is a string.
+        if (hostname->getType() != Element::string) {
+            isc_throw(BadValue, "'hostname'parameter must be a string");
+        }
+
+        std::string hostname_ = hostname->stringValue();
+        /// The 'hostname' argument should not be empty.
+        if (hostname_.empty()) {
+            isc_throw(BadValue, "'hostname' parameter is empty");
+        }
+        boost::algorithm::to_lower(hostname_);
+
+        ElementPtr leases_json = Element::createList();
+        if (v4) {
+            Lease4Collection leases =
+                LeaseMgrFactory::instance().getLeases4(hostname_);
+
+            for (auto lease : leases) {
+                ElementPtr lease_json = lease->toElement();
+                leases_json->add(lease_json);
+            }
+        } else {
+            Lease6Collection leases =
+                LeaseMgrFactory::instance().getLeases6(hostname_);
+
+            for (auto lease : leases) {
+                ElementPtr lease_json = lease->toElement();
+                leases_json->add(lease_json);
+            }
+        }
+
+        std::ostringstream s;
+        s << leases_json->size()
+          << " IPv" << (v4 ? "4" : "6")
+          << " lease(s) found.";
+        ElementPtr args = Element::createMap();
+        args->set("leases", leases_json);
+        ConstElementPtr response =
+            createAnswer(leases_json->size() > 0 ?
+                         CONTROL_RESULT_SUCCESS :
+                         CONTROL_RESULT_EMPTY,
+                         s.str(), args);
+        setResponse(handle, response);
+
+    } catch (const std::exception& ex) {
+        setErrorResponse(handle, ex.what());
+        return (CONTROL_RESULT_ERROR);
+    }
+
+    return (0);
+}
+
+int
 LeaseCmdsImpl::lease4DelHandler(CalloutHandle& handle) {
     Parameters p;
     Lease4Ptr lease4;
-    IOAddress addr(IOAddress::IPV4_ZERO_ADDRESS());
     try {
         extractCommand(handle);
         p = getParameters(false, cmd_args_);
 
         switch (p.query_type) {
         case Parameters::TYPE_ADDR: {
-
             // If address was specified explicitly, let's use it as is.
-            addr = p.addr;
+            lease4 = LeaseMgrFactory::instance().getLease4(p.addr);
+            if (!lease4) {
+                setErrorResponse(handle, "IPv4 lease not found.", CONTROL_RESULT_EMPTY);
+                return (0);
+            }
             break;
         }
-        case Parameters::TYPE_HWADDR:
+        case Parameters::TYPE_HWADDR: {
             if (!p.hwaddr) {
                 isc_throw(InvalidParameter, "Program error: Query by hw-address "
                                             "requires hwaddr to be specified");
@@ -728,12 +1046,9 @@ LeaseCmdsImpl::lease4DelHandler(CalloutHandle& handle) {
                 setErrorResponse(handle, "IPv4 lease not found.", CONTROL_RESULT_EMPTY);
                 return (0);
             }
-
-            // Found it, can use it as is.
-            addr = lease4->addr_;
             break;
-
-        case Parameters::TYPE_CLIENT_ID:
+        }
+        case Parameters::TYPE_CLIENT_ID: {
             if (!p.client_id) {
                 isc_throw(InvalidParameter, "Program error: Query by client-id "
                                             "requires client-id to be specified");
@@ -745,22 +1060,19 @@ LeaseCmdsImpl::lease4DelHandler(CalloutHandle& handle) {
                 setErrorResponse(handle, "IPv4 lease not found.", CONTROL_RESULT_EMPTY);
                 return (0);
             }
-
-            // Found it, can use it as is.
-            addr = lease4->addr_;
             break;
-
-        case Parameters::TYPE_DUID:
+        }
+        case Parameters::TYPE_DUID: {
             isc_throw(InvalidParameter, "Delete by duid is not allowed in v4.");
             break;
-
+        }
         default: {
             isc_throw(InvalidOperation, "Unknown query type: " << static_cast<int>(p.query_type));
             break;
         }
         }
 
-        if (LeaseMgrFactory::instance().deleteLease(addr)) {
+        if (LeaseMgrFactory::instance().deleteLease(lease4)) {
             setSuccessResponse(handle, "IPv4 lease deleted.");
         } else {
             setErrorResponse (handle, "IPv4 lease not found.", CONTROL_RESULT_EMPTY);
@@ -774,6 +1086,194 @@ LeaseCmdsImpl::lease4DelHandler(CalloutHandle& handle) {
 }
 
 int
+LeaseCmdsImpl::lease6BulkApplyHandler(CalloutHandle& handle) {
+    try {
+        extractCommand(handle);
+
+        // Arguments are mandatory.
+        if (!cmd_args_ || (cmd_args_->getType() != Element::map)) {
+            isc_throw(BadValue, "Command arguments missing or a not a map.");
+        }
+
+        // At least one of the 'deleted-leases' or 'leases' must be present.
+        auto deleted_leases = cmd_args_->get("deleted-leases");
+        auto leases = cmd_args_->get("leases");
+
+        if (!deleted_leases && !leases) {
+            isc_throw(BadValue, "neither 'deleted-leases' nor 'leases' parameter"
+                      " specified");
+        }
+
+        // Make sure that 'deleted-leases' is a list, if present.
+        if (deleted_leases && (deleted_leases->getType() != Element::list)) {
+            isc_throw(BadValue, "the 'deleted-leases' parameter must be a list");
+        }
+
+        // Make sure that 'leases' is a list, if present.
+        if (leases && (leases->getType() != Element::list)) {
+            isc_throw(BadValue, "the 'leases' parameter must be a list");
+        }
+
+        // Parse deleted leases without deleting them from the database
+        // yet. If any of the deleted leases or new leases appears to be
+        // malformed we can easily rollback.
+        std::list<std::pair<Parameters, Lease6Ptr> > parsed_deleted_list;
+        if (deleted_leases) {
+            auto leases_list = deleted_leases->listValue();
+
+            // Iterate over leases to be deleted.
+            for (auto lease_params : leases_list) {
+                // Parsing the lease may throw and it means that the lease
+                // information is malformed.
+                Parameters p = getParameters(true, lease_params);
+                auto lease = getIPv6LeaseForDelete(p);
+                parsed_deleted_list.push_back(std::make_pair(p, lease));
+            }
+        }
+
+        // Parse new/updated leases without affecting the database to detect
+        // any errors that should cause an error response.
+        std::list<Lease6Ptr> parsed_leases_list;
+        if (leases) {
+            ConstSrvConfigPtr config = CfgMgr::instance().getCurrentCfg();
+
+            // Iterate over all leases.
+            auto leases_list = leases->listValue();
+            for (auto lease_params : leases_list) {
+
+                Lease6Parser parser;
+                bool force_update;
+
+                // If parsing the lease fails we throw, as it indicates that the
+                // command is malformed.
+                Lease6Ptr lease6 = parser.parse(config, lease_params, force_update);
+                parsed_leases_list.push_back(lease6);
+            }
+        }
+
+        // Count successful deletions and updates.
+        size_t success_count = 0;
+
+        ElementPtr failed_deleted_list;
+        if (!parsed_deleted_list.empty()) {
+
+            // Iterate over leases to be deleted.
+            for (auto lease_params_pair : parsed_deleted_list) {
+
+                // This part is outside of the try-catch because an exception
+                // indicates that the command is malformed.
+                Parameters p = lease_params_pair.first;
+                auto lease = lease_params_pair.second;
+
+                try {
+                    if (lease) {
+                        // This may throw if the lease couldn't be deleted for
+                        // any reason, but we still want to proceed with other
+                        // leases.
+                        if (LeaseMgrFactory::instance().deleteLease(lease)) {
+                            ++success_count;
+
+                        } else {
+                            // Lazy creation of the list of leases which failed to delete.
+                            if (!failed_deleted_list) {
+                                failed_deleted_list = Element::createList();
+                            }
+
+                            // If the lease doesn't exist we also want to put it
+                            // on the list of leases which failed to delete. That
+                            // corresponds to the lease6-del command which returns
+                            // an error when the lease doesn't exist.
+                            failed_deleted_list->add(createFailedLeaseMap(p.lease_type,
+                                                                          p.addr, p.duid,
+                                                                          CONTROL_RESULT_EMPTY,
+                                                                          "lease not found"));
+                        }
+                    }
+
+                } catch (const std::exception& ex) {
+                    // Lazy creation of the list of leases which failed to delete.
+                    if (!failed_deleted_list) {
+                         failed_deleted_list = Element::createList();
+                    }
+                    failed_deleted_list->add(createFailedLeaseMap(p.lease_type,
+                                                                  p.addr, p.duid,
+                                                                  CONTROL_RESULT_ERROR,
+                                                                  ex.what()));
+                }
+            }
+        }
+
+        // Process leases to be added or/and updated.
+        ElementPtr failed_leases_list;
+        if (!parsed_leases_list.empty()) {
+            ConstSrvConfigPtr config = CfgMgr::instance().getCurrentCfg();
+
+            // Iterate over all leases.
+            for (auto lease : parsed_leases_list) {
+
+                Lease6Parser parser;
+
+                try {
+                    try {
+                        // Try to update.
+                        LeaseMgrFactory::instance().updateLease6(lease);
+
+                    } catch (const NoSuchLease& ex) {
+                        // Lease to be updated not found, so add it.
+                        LeaseMgrFactory::instance().addLease(lease);
+                    }
+
+                    ++success_count;
+
+                } catch (const std::exception& ex) {
+                    // Lazy creation of the list of leases which failed to add/update.
+                    if (!failed_leases_list) {
+                         failed_leases_list = Element::createList();
+                    }
+                    failed_leases_list->add(createFailedLeaseMap(lease->type_,
+                                                                 lease->addr_,
+                                                                 lease->duid_,
+                                                                 CONTROL_RESULT_ERROR,
+                                                                 ex.what()));
+                }
+            }
+        }
+
+        // Start preparing the response.
+        ElementPtr args;
+
+        if (failed_deleted_list || failed_leases_list) {
+            // If there are any failed leases, let's include them in the response.
+            args = Element::createMap();
+
+            // failed-deleted-leases
+            if (failed_deleted_list) {
+                args->set("failed-deleted-leases", failed_deleted_list);
+            }
+
+            // failed-leases
+            if (failed_leases_list) {
+                args->set("failed-deleted-leases", failed_leases_list);
+            }
+        }
+
+        // Send the success response and include failed leases.
+        std::ostringstream resp_text;
+        resp_text << "Bulk apply of " << success_count << " IPv6 leases completed.";
+        auto answer = createAnswer(success_count > 0 ? CONTROL_RESULT_SUCCESS :
+                                   CONTROL_RESULT_EMPTY, resp_text.str(), args);
+        setResponse(handle, answer);
+
+    } catch (const std::exception& ex) {
+        // Unable to parse the command and similar issues.
+        setErrorResponse(handle, ex.what());
+        return (CONTROL_RESULT_ERROR);
+    }
+
+    return (CONTROL_RESULT_SUCCESS);
+}
+
+int
 LeaseCmdsImpl::lease6DelHandler(CalloutHandle& handle) {
     Parameters p;
     Lease6Ptr lease6;
@@ -784,16 +1284,21 @@ LeaseCmdsImpl::lease6DelHandler(CalloutHandle& handle) {
 
         switch (p.query_type) {
         case Parameters::TYPE_ADDR: {
-
             // If address was specified explicitly, let's use it as is.
-            addr = p.addr;
+
+            // Let's see if there's such a lease at all.
+            lease6 = LeaseMgrFactory::instance().getLease6(p.lease_type, p.addr);
+            if (!lease6) {
+                setErrorResponse(handle, "IPv6 lease not found.", CONTROL_RESULT_EMPTY);
+                return (0);
+            }
             break;
         }
-        case Parameters::TYPE_HWADDR:
+        case Parameters::TYPE_HWADDR: {
             isc_throw(InvalidParameter, "Delete by hw-address is not allowed in v6.");
             break;
-
-        case Parameters::TYPE_DUID:
+        }
+        case Parameters::TYPE_DUID: {
             if (!p.duid) {
                 isc_throw(InvalidParameter, "Program error: Query by duid "
                                             "requires duid to be specified");
@@ -806,18 +1311,15 @@ LeaseCmdsImpl::lease6DelHandler(CalloutHandle& handle) {
                 setErrorResponse(handle, "IPv6 lease not found.", CONTROL_RESULT_EMPTY);
                 return (0);
             }
-
-            // Found it, can use it as is.
-            addr = lease6->addr_;
             break;
-
+        }
         default: {
             isc_throw(InvalidOperation, "Unknown query type: " << static_cast<int>(p.query_type));
             break;
         }
         }
 
-        if (LeaseMgrFactory::instance().deleteLease(addr)) {
+        if (LeaseMgrFactory::instance().deleteLease(lease6)) {
             setSuccessResponse(handle, "IPv6 lease deleted.");
         } else {
             setErrorResponse (handle, "IPv6 lease not found.", CONTROL_RESULT_EMPTY);
@@ -998,14 +1500,88 @@ LeaseCmdsImpl::lease6WipeHandler(CalloutHandle& handle) {
     return (0);
 }
 
+Lease6Ptr
+LeaseCmdsImpl::getIPv6LeaseForDelete(const Parameters& parameters) const {
+    Lease6Ptr lease6;
+
+    switch (parameters.query_type) {
+    case Parameters::TYPE_ADDR: {
+        // If address was specified explicitly, let's use it as is.
+
+        // Let's see if there's such a lease at all.
+        lease6 = LeaseMgrFactory::instance().getLease6(parameters.lease_type,
+                                                       parameters.addr);
+        if (!lease6) {
+            lease6.reset(new Lease6());
+            lease6->addr_ = parameters.addr;
+        }
+        break;
+    }
+    case Parameters::TYPE_HWADDR: {
+        isc_throw(InvalidParameter, "Delete by hw-address is not allowed in v6.");
+        break;
+    }
+    case Parameters::TYPE_DUID: {
+        if (!parameters.duid) {
+            isc_throw(InvalidParameter, "Program error: Query by duid "
+                      "requires duid to be specified");
+        }
+
+        // Let's see if there's such a lease at all.
+        lease6 = LeaseMgrFactory::instance().getLease6(parameters.lease_type,
+                                                       *parameters.duid,
+                                                       parameters.iaid,
+                                                       parameters.subnet_id);
+        break;
+    }
+    default:
+        isc_throw(InvalidOperation, "Unknown query type: "
+                  << static_cast<int>(parameters.query_type));
+    }
+
+    return (lease6);
+}
+
+ElementPtr
+LeaseCmdsImpl::createFailedLeaseMap(const Lease::Type& lease_type,
+                                    const IOAddress& lease_address,
+                                    const DuidPtr& duid,
+                                    const int control_result,
+                                    const std::string& error_message) const {
+    auto failed_lease_map = Element::createMap();
+    failed_lease_map->set("type", Element::create(Lease::typeToText(lease_type)));
+
+    if (!lease_address.isV6Zero()) {
+        failed_lease_map->set("ip-address", Element::create(lease_address.toText()));
+
+    } else if (duid) {
+        failed_lease_map->set("duid", Element::create(duid->toText()));
+    }
+
+    // Associate the result with the lease.
+    failed_lease_map->set("result", Element::create(control_result));
+    failed_lease_map->set("error-message", Element::create(error_message));
+
+    return (failed_lease_map);
+}
+
+// Do lease changes in a critical section.
+
 int
 LeaseCmds::leaseAddHandler(CalloutHandle& handle) {
-    return(impl_->leaseAddHandler(handle));
+    MultiThreadingCriticalSection cs;
+    return (impl_->leaseAddHandler(handle));
+}
+
+int
+LeaseCmds::lease6BulkApplyHandler(CalloutHandle& handle) {
+    MultiThreadingCriticalSection cs;
+    return (impl_->lease6BulkApplyHandler(handle));
 }
 
 int
 LeaseCmds::leaseGetHandler(CalloutHandle& handle) {
-    return(impl_->leaseGetHandler(handle));
+    return (impl_->leaseGetHandler(handle));
 }
 
 int
@@ -1019,33 +1595,59 @@ LeaseCmds::leaseGetPageHandler(hooks::CalloutHandle& handle) {
 }
 
 int
+LeaseCmds::leaseGetByHwAddressHandler(hooks::CalloutHandle& handle) {
+    return (impl_->leaseGetByHwAddressHandler(handle));
+}
+
+int
+LeaseCmds::leaseGetByClientIdHandler(hooks::CalloutHandle& handle) {
+    return (impl_->leaseGetByClientIdHandler(handle));
+}
+
+int
+LeaseCmds::leaseGetByDuidHandler(hooks::CalloutHandle& handle) {
+    return (impl_->leaseGetByDuidHandler(handle));
+}
+
+int
+LeaseCmds::leaseGetByHostnameHandler(hooks::CalloutHandle& handle) {
+    return (impl_->leaseGetByHostnameHandler(handle));
+}
+
+int
 LeaseCmds::lease4DelHandler(CalloutHandle& handle) {
-    return(impl_->lease4DelHandler(handle));
+    MultiThreadingCriticalSection cs;
+    return (impl_->lease4DelHandler(handle));
 }
 
 int
 LeaseCmds::lease6DelHandler(CalloutHandle& handle) {
-    return(impl_->lease6DelHandler(handle));
+    MultiThreadingCriticalSection cs;
+    return (impl_->lease6DelHandler(handle));
 }
 
 int
 LeaseCmds::lease4UpdateHandler(CalloutHandle& handle) {
-    return(impl_->lease4UpdateHandler(handle));
+    MultiThreadingCriticalSection cs;
+    return (impl_->lease4UpdateHandler(handle));
 }
 
 int
 LeaseCmds::lease6UpdateHandler(CalloutHandle& handle) {
-    return(impl_->lease6UpdateHandler(handle));
+    MultiThreadingCriticalSection cs;
+    return (impl_->lease6UpdateHandler(handle));
 }
 
 int
 LeaseCmds::lease4WipeHandler(CalloutHandle& handle) {
-   return(impl_->lease4WipeHandler(handle));
+    MultiThreadingCriticalSection cs;
+    return (impl_->lease4WipeHandler(handle));
 }
 
 int
 LeaseCmds::lease6WipeHandler(CalloutHandle& handle) {
-   return(impl_->lease6WipeHandler(handle));
+    MultiThreadingCriticalSection cs;
+    return (impl_->lease6WipeHandler(handle));
 }
 
 LeaseCmds::LeaseCmds()

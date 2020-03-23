@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <exceptions/exceptions.h>
 #include <dhcpsrv/shared_network.h>
+#include <boost/make_shared.hpp>
 
 using namespace isc;
 using namespace isc::data;
@@ -53,6 +54,9 @@ public:
         if (getSubnet<SubnetPtrType>(subnets, subnet->getID())) {
             isc_throw(DuplicateSubnetID, "attempted to add subnet with a"
                       " duplicated subnet identifier " << subnet->getID());
+        } else if (getSubnet<SubnetPtrType>(subnets, subnet->toText())) {
+            isc_throw(DuplicateSubnetID, "attempted to add subnet with a"
+                      " duplicated subnet prefix " << subnet->toText());
         }
 
         // Check if the subnet is already associated with some network.
@@ -65,7 +69,54 @@ public:
         }
 
         // Add a subnet to the collection of subnets for this shared network.
-        subnets.push_back(subnet);
+        static_cast<void>(subnets.push_back(subnet));
+    }
+
+    /// @brief Replaces IPv4 subnet in a shared network.
+    ///
+    /// This generic method replaces a subnet by another subnet
+    /// with the same ID in a shared network.
+    /// The prefix should be the same too.
+    ///
+    /// @tparam SubnetPtrType Type of a pointer to a subnet, i.e. Subnet4Ptr
+    /// or @ref Subnet6Ptr.
+    /// @tparam SubnetCollectionType Type of a container holding subnets, i.e.
+    /// @ref Subnet4Collection or @ref Subnet6Collection.
+    ///
+    /// @param [out] subnets Container holding subnets for this shared network.
+    /// @param subnet Pointer to a subnet replacing the subnet with the same ID
+    /// in this shared network.
+    ///
+    /// @throw isc::BadValue if subnet is null.
+    /// @throw InvalidOperation if a subnet is already associated with some
+    /// shared network.
+    ////
+    /// @return true if the operation succeeded, false otherwise.
+    template<typename SubnetPtrType, typename SubnetCollectionType>
+    static bool replace(SubnetCollectionType& subnets,
+                        const SubnetPtrType& subnet) {
+
+        // Check if the new subnet is already associated with some network.
+        NetworkPtr network;
+        subnet->getSharedNetwork(network);
+        if (network) {
+            isc_throw(InvalidOperation, "subnet " << subnet->getID()
+                      << " being replaced in a shared network"
+                      " already belongs to a shared network");
+        }
+
+        // Get the subnet with the same ID.
+        const SubnetID& subnet_id = subnet->getID();
+        auto& index = subnets.template get<SubnetSubnetIdIndexTag>();
+        auto subnet_it = index.find(subnet_id);
+        if (subnet_it == index.end()) {
+            // Nothing to replace: return false to get the whole operation
+            // to be rollbacked.
+            return (false);
+        }
+
+        // Replace it.
+        return (index.replace(subnet_it, subnet));
     }
 
     /// @brief Removes a subnet from the shared network.
@@ -109,6 +160,31 @@ public:
                                    const SubnetID& subnet_id) {
         const auto& index = subnets.template get<SubnetSubnetIdIndexTag>();
         auto subnet_it = index.find(subnet_id);
+        if (subnet_it != index.cend()) {
+            return (*subnet_it);
+        }
+
+        // Subnet not found.
+        return (SubnetPtrType());
+    }
+
+    /// @brief Returns a subnet belonging to this network for a given subnet
+    /// prefix.
+    ///
+    /// @param subnets Container holding subnets for this shared network.
+    /// @param subnet_prefix Prefix of a subnet being retrieved.
+    ///
+    /// @tparam SubnetPtrType Type of a pointer to a subnet, i.e. Subnet4Ptr
+    /// or @ref Subnet6Ptr.
+    /// @tparam SubnetCollectionType Type of a container holding subnets, i.e.
+    /// @ref Subnet4Collection or @ref Subnet6Collection.
+    ///
+    /// @return Pointer to the subnet or null if the subnet doesn't exist.
+    template<typename SubnetPtrType, typename SubnetCollectionType>
+    static SubnetPtrType getSubnet(const SubnetCollectionType& subnets,
+                                   const std::string& subnet_prefix) {
+        const auto& index = subnets.template get<SubnetPrefixIndexTag>();
+        auto subnet_it = index.find(subnet_prefix);
         if (subnet_it != index.cend()) {
             return (*subnet_it);
         }
@@ -244,28 +320,51 @@ public:
 namespace isc {
 namespace dhcp {
 
-NetworkPtr
-SharedNetwork4::sharedFromThis() {
-    return (shared_from_this());
+SharedNetwork4Ptr
+SharedNetwork4::create(const std::string& name) {
+    return (boost::make_shared<SharedNetwork4>(name));
 }
 
 void
 SharedNetwork4::add(const Subnet4Ptr& subnet) {
     Impl::add(subnets_, subnet);
     // Associate the subnet with this network.
-    setSharedNetwork(subnet);
+    subnet->setSharedNetwork(shared_from_this());
+    subnet->setSharedNetworkName(name_);
+}
+
+bool
+SharedNetwork4::replace(const Subnet4Ptr& subnet) {
+    // Subnet must be non-null.
+    if (!subnet) {
+        isc_throw(BadValue, "null pointer specified when adding a subnet"
+                  " to a shared network");
+    }
+    const Subnet4Ptr& old = getSubnet(subnet->getID());
+    bool ret = Impl::replace(subnets_, subnet);
+    if (ret) {
+        // Associate the subnet with this network.
+        subnet->setSharedNetwork(shared_from_this());
+        subnet->setSharedNetworkName(name_);
+        // Deassociate the previous subnet.
+        old->setSharedNetwork(NetworkPtr());
+        old->setSharedNetworkName("");
+    }
+    return (ret);
 }
 
 void
 SharedNetwork4::del(const SubnetID& subnet_id) {
     Subnet4Ptr subnet = Impl::del<Subnet4Ptr>(subnets_, subnet_id);
-    clearSharedNetwork(subnet);
+    subnet->setSharedNetwork(NetworkPtr());
+    subnet->setSharedNetworkName("");
 }
 
 void
 SharedNetwork4::delAll() {
     for (auto subnet = subnets_.cbegin(); subnet != subnets_.cend(); ++subnet) {
-        clearSharedNetwork(*subnet);
+        (*subnet)->setSharedNetwork(NetworkPtr());
+        (*subnet)->setSharedNetworkName("");
     }
     subnets_.clear();
 }
@@ -273,6 +372,11 @@ SharedNetwork4::delAll() {
 Subnet4Ptr
 SharedNetwork4::getSubnet(const SubnetID& subnet_id) const {
     return (Impl::getSubnet<Subnet4Ptr>(subnets_, subnet_id));
+}
+
+Subnet4Ptr
+SharedNetwork4::getSubnet(const std::string& subnet_prefix) const {
+    return (Impl::getSubnet<Subnet4Ptr>(subnets_, subnet_prefix));
 }
 
 Subnet4Ptr
@@ -285,6 +389,28 @@ Subnet4Ptr
 SharedNetwork4::getPreferredSubnet(const Subnet4Ptr& selected_subnet) const {
     return (Impl::getPreferredSubnet<Subnet4Ptr>(subnets_, selected_subnet,
                                                  Lease::TYPE_V4));
+}
+
+bool
+SharedNetwork4::subnetsIncludeMatchClientId(const Subnet4Ptr& first_subnet,
+                                            const ClientClasses& client_classes) {
+    for (Subnet4Ptr subnet = first_subnet; subnet;
+         subnet = subnet->getNextSubnet(first_subnet, client_classes)) {
+        if (subnet->getMatchClientId()) {
+            return (true);
+        }
+    }
+    return (false);
+}
+
+Subnet4Ptr
+SharedNetwork4::subnetsAllHRGlobal() const {
+    for (auto subnet : *getAllSubnets()) {
+        if (subnet->getHostReservationMode() != Network::HR_GLOBAL) {
+            return (subnet);
+        }
+    }
+    return (Subnet4Ptr());
 }
 
 ElementPtr
@@ -306,34 +432,62 @@ SharedNetwork4::toElement() const {
     return (map);
 }
 
-NetworkPtr
-SharedNetwork6::sharedFromThis() {
-    return (shared_from_this());
+SharedNetwork6Ptr
+SharedNetwork6::create(const std::string& name) {
+    return (boost::make_shared<SharedNetwork6>(name));
 }
 
 void
 SharedNetwork6::add(const Subnet6Ptr& subnet) {
     Impl::add(subnets_, subnet);
     // Associate the subnet with this network.
-    setSharedNetwork(subnet);
+    subnet->setSharedNetwork(shared_from_this());
+    subnet->setSharedNetworkName(name_);
+}
+
+bool
+SharedNetwork6::replace(const Subnet6Ptr& subnet) {
+    // Subnet must be non-null.
+    if (!subnet) {
+        isc_throw(BadValue, "null pointer specified when adding a subnet"
+                  " to a shared network");
+    }
+    const Subnet6Ptr& old = getSubnet(subnet->getID());
+    bool ret = Impl::replace(subnets_, subnet);
+    if (ret) {
+        // Associate the subnet with this network.
+        subnet->setSharedNetwork(shared_from_this());
+        subnet->setSharedNetworkName(name_);
+        // Deassociate the previous subnet.
+        old->setSharedNetwork(NetworkPtr());
+        old->setSharedNetworkName("");
+    }
+    return (ret);
 }
 
 void
 SharedNetwork6::del(const SubnetID& subnet_id) {
     Subnet6Ptr subnet = Impl::del<Subnet6Ptr>(subnets_, subnet_id);
-    clearSharedNetwork(subnet);
+    subnet->setSharedNetwork(NetworkPtr());
+    subnet->setSharedNetworkName("");
 }
 
 void
 SharedNetwork6::delAll() {
     for (auto subnet = subnets_.cbegin(); subnet != subnets_.cend(); ++subnet) {
-        clearSharedNetwork(*subnet);
+        (*subnet)->setSharedNetwork(NetworkPtr());
     }
     subnets_.clear();
 }
+
 Subnet6Ptr
 SharedNetwork6::getSubnet(const SubnetID& subnet_id) const {
     return (Impl::getSubnet<Subnet6Ptr>(subnets_, subnet_id));
+}
+
+Subnet6Ptr
+SharedNetwork6::getSubnet(const std::string& subnet_prefix) const {
+    return (Impl::getSubnet<Subnet6Ptr>(subnets_, subnet_prefix));
 }
 
 Subnet6Ptr
@@ -346,6 +500,16 @@ Subnet6Ptr
 SharedNetwork6::getPreferredSubnet(const Subnet6Ptr& selected_subnet,
                                    const Lease::Type& lease_type) const {
     return (Impl::getPreferredSubnet(subnets_, selected_subnet, lease_type));
+}
+
+Subnet6Ptr
+SharedNetwork6::subnetsAllHRGlobal() const {
+    for (auto subnet : *getAllSubnets()) {
+        if (subnet->getHostReservationMode() != Network::HR_GLOBAL) {
+            return (subnet);
+        }
+    }
+    return (Subnet6Ptr());
 }
 
 ElementPtr

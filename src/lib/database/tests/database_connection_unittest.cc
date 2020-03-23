@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -95,8 +95,8 @@ TEST_F(DatabaseConnectionCallbackTest, dbLostCallback) {
     /// Create the connection..
     DatabaseConnection datasrc(pmap);
 
-    /// We should be able to invoke the callback and glean
-    /// the correct reconnect contorl parameters from it.
+    /// We should be able to invoke the callback and get
+    /// the correct reconnect control parameters from it.
     bool ret = false;
     ASSERT_NO_THROW(ret = datasrc.invokeDbLostCallback());
     EXPECT_TRUE(ret);
@@ -260,6 +260,8 @@ TEST(DatabaseConnection, toElementDbAccessStringValid) {
         "{\n"
         "\"connect-timeout\" : 200, \n"
         "\"contact-points\": \"contact_str\", \n"
+        "\"consistency\": \"quorum\", \n"
+        "\"serial-consistency\": \"serial\", \n"
         "\"host\": \"host_str\", \n"
         "\"keyspace\": \"keyspace_str\", \n"
         "\"lfc-interval\" : 100, \n"
@@ -275,7 +277,8 @@ TEST(DatabaseConnection, toElementDbAccessStringValid) {
         "\"tcp-keepalive\": 101, \n"
         "\"tcp-nodelay\": false, \n"
         "\"type\": \"memfile\", \n"
-        "\"user\": \"user_str\" \n"
+        "\"user\": \"user_str\", \n"
+        "\"max-row-errors\": 50 \n"
         "}\n"
     };
 

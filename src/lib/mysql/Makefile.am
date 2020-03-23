@@ -16,12 +16,11 @@ libkea_mysql_la_LIBADD  = $(top_builddir)/src/lib/database/libkea-database.la
 libkea_mysql_la_LIBADD += $(top_builddir)/src/lib/cc/libkea-cc.la
 libkea_mysql_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 libkea_mysql_la_LIBADD += $(top_builddir)/src/lib/log/libkea-log.la
-libkea_mysql_la_LIBADD += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 libkea_mysql_la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_mysql_la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_mysql_la_LIBADD += $(LOG4CPLUS_LIBS) $(BOOST_LIBS)
 
-libkea_mysql_la_LDFLAGS = -no-undefined -version-info 0:1:0
+libkea_mysql_la_LDFLAGS = -no-undefined -version-info 3:2:2
 
 libkea_mysql_la_LDFLAGS += $(MYSQL_LIBS)
 

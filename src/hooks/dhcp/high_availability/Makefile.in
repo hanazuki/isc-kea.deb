@@ -93,6 +93,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -151,7 +152,6 @@ libdhcp_ha_la_DEPENDENCIES = libha.la \
 	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 am_libdhcp_ha_la_OBJECTS =
@@ -167,11 +167,10 @@ libha_la_LIBADD =
 am_libha_la_OBJECTS = libha_la-command_creator.lo \
 	libha_la-communication_state.lo libha_la-ha_callouts.lo \
 	libha_la-ha_config.lo libha_la-ha_config_parser.lo \
-	libha_la-ha_impl.lo libha_la-ha_log.lo libha_la-ha_service.lo \
-	libha_la-ha_service_states.lo libha_la-query_filter.lo \
-	libha_la-version.lo
-nodist_libha_la_OBJECTS = libha_la-ha_messages.lo
-libha_la_OBJECTS = $(am_libha_la_OBJECTS) $(nodist_libha_la_OBJECTS)
+	libha_la-ha_impl.lo libha_la-ha_log.lo libha_la-ha_messages.lo \
+	libha_la-ha_service.lo libha_la-ha_service_states.lo \
+	libha_la-query_filter.lo libha_la-version.lo
+libha_la_OBJECTS = $(am_libha_la_OBJECTS)
 libha_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) \
 	$(LIBTOOLFLAGS) --mode=link $(CXXLD) $(libha_la_CXXFLAGS) \
 	$(CXXFLAGS) $(AM_LDFLAGS) $(LDFLAGS) -o $@
@@ -227,8 +226,7 @@ AM_V_CCLD = $(am__v_CCLD_@AM_V@)
 am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
 am__v_CCLD_0 = @echo "  CCLD    " $@;
 am__v_CCLD_1 = 
-SOURCES = $(libdhcp_ha_la_SOURCES) $(libha_la_SOURCES) \
-	$(nodist_libha_la_SOURCES)
+SOURCES = $(libdhcp_ha_la_SOURCES) $(libha_la_SOURCES)
 DIST_SOURCES = $(libdhcp_ha_la_SOURCES) $(libha_la_SOURCES)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
 	ctags-recursive dvi-recursive html-recursive info-recursive \
@@ -314,7 +312,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -335,7 +332,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -345,6 +341,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -354,7 +351,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -405,6 +401,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -422,17 +419,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -491,20 +488,14 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-SUBDIRS = . tests
+SUBDIRS = . libloadtests tests
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 	$(BOOST_INCLUDES)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
-# Tell automake that the message files are built as part of the build process
-# (so that they are built before the main library is built).
-BUILT_SOURCES = ha_messages.h ha_messages.cc
-
 # Ensure that the message file is included in the distribution
 EXTRA_DIST = ha_messages.mes ha.dox
-
-# Get rid of generated message files on a clean
-CLEANFILES = *.gcno *.gcda ha_messages.h ha_messages.cc s-messages
+CLEANFILES = *.gcno *.gcda
 
 # convenience archive
 noinst_LTLIBRARIES = libha.la
@@ -512,15 +503,14 @@ libha_la_SOURCES = command_creator.cc command_creator.h \
 	communication_state.cc communication_state.h ha_callouts.cc \
 	ha_config.cc ha_config.h ha_config_parser.cc \
 	ha_config_parser.h ha_impl.cc ha_impl.h ha_log.cc ha_log.h \
-	ha_server_type.h ha_service.cc ha_service.h \
-	ha_service_states.cc ha_service_states.h query_filter.cc \
-	query_filter.h version.cc
-nodist_libha_la_SOURCES = ha_messages.cc ha_messages.h
+	ha_messages.cc ha_messages.h ha_server_type.h ha_service.cc \
+	ha_service.h ha_service_states.cc ha_service_states.h \
+	query_filter.cc query_filter.h version.cc
 libha_la_CXXFLAGS = $(AM_CXXFLAGS)
 libha_la_CPPFLAGS = $(AM_CPPFLAGS)
 
-# install the shared object into $(libdir)/hooks
-lib_hooksdir = $(libdir)/hooks
+# install the shared object into $(libdir)/kea/hooks
+lib_hooksdir = $(libdir)/kea/hooks
 lib_hooks_LTLIBRARIES = libdhcp_ha.la
 libdhcp_ha_la_SOURCES = 
 libdhcp_ha_la_LDFLAGS = $(AM_LDFLAGS) -avoid-version -export-dynamic \
@@ -540,11 +530,9 @@ libdhcp_ha_la_LIBADD = libha.la \
 	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/threads/libkea-threads.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la
-all: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) all-recursive
+all: all-recursive
 
 .SUFFIXES:
 .SUFFIXES: .cc .lo .o .obj
@@ -719,6 +707,13 @@ libha_la-ha_log.lo: ha_log.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libha_la_CPPFLAGS) $(CPPFLAGS) $(libha_la_CXXFLAGS) $(CXXFLAGS) -c -o libha_la-ha_log.lo `test -f 'ha_log.cc' || echo '$(srcdir)/'`ha_log.cc
 
+libha_la-ha_messages.lo: ha_messages.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libha_la_CPPFLAGS) $(CPPFLAGS) $(libha_la_CXXFLAGS) $(CXXFLAGS) -MT libha_la-ha_messages.lo -MD -MP -MF $(DEPDIR)/libha_la-ha_messages.Tpo -c -o libha_la-ha_messages.lo `test -f 'ha_messages.cc' || echo '$(srcdir)/'`ha_messages.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libha_la-ha_messages.Tpo $(DEPDIR)/libha_la-ha_messages.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='ha_messages.cc' object='libha_la-ha_messages.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libha_la_CPPFLAGS) $(CPPFLAGS) $(libha_la_CXXFLAGS) $(CXXFLAGS) -c -o libha_la-ha_messages.lo `test -f 'ha_messages.cc' || echo '$(srcdir)/'`ha_messages.cc
+
 libha_la-ha_service.lo: ha_service.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libha_la_CPPFLAGS) $(CPPFLAGS) $(libha_la_CXXFLAGS) $(CXXFLAGS) -MT libha_la-ha_service.lo -MD -MP -MF $(DEPDIR)/libha_la-ha_service.Tpo -c -o libha_la-ha_service.lo `test -f 'ha_service.cc' || echo '$(srcdir)/'`ha_service.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libha_la-ha_service.Tpo $(DEPDIR)/libha_la-ha_service.Plo
@@ -746,13 +741,6 @@ libha_la-version.lo: version.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='version.cc' object='libha_la-version.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libha_la_CPPFLAGS) $(CPPFLAGS) $(libha_la_CXXFLAGS) $(CXXFLAGS) -c -o libha_la-version.lo `test -f 'version.cc' || echo '$(srcdir)/'`version.cc
-
-libha_la-ha_messages.lo: ha_messages.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libha_la_CPPFLAGS) $(CPPFLAGS) $(libha_la_CXXFLAGS) $(CXXFLAGS) -MT libha_la-ha_messages.lo -MD -MP -MF $(DEPDIR)/libha_la-ha_messages.Tpo -c -o libha_la-ha_messages.lo `test -f 'ha_messages.cc' || echo '$(srcdir)/'`ha_messages.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libha_la-ha_messages.Tpo $(DEPDIR)/libha_la-ha_messages.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='ha_messages.cc' object='libha_la-ha_messages.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libha_la_CPPFLAGS) $(CPPFLAGS) $(libha_la_CXXFLAGS) $(CXXFLAGS) -c -o libha_la-ha_messages.lo `test -f 'ha_messages.cc' || echo '$(srcdir)/'`ha_messages.cc
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -915,16 +903,14 @@ distdir: $(DISTFILES)
 	  fi; \
 	done
 check-am: all-am
-check: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) check-recursive
+check: check-recursive
 all-am: Makefile $(LTLIBRARIES)
 installdirs: installdirs-recursive
 installdirs-am:
 	for dir in "$(DESTDIR)$(lib_hooksdir)"; do \
 	  test -z "$$dir" || $(MKDIR_P) "$$dir"; \
 	done
-install: $(BUILT_SOURCES)
-	$(MAKE) $(AM_MAKEFLAGS) install-recursive
+install: install-recursive
 install-exec: install-exec-recursive
 install-data: install-data-recursive
 uninstall: uninstall-recursive
@@ -955,7 +941,6 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
-	-test -z "$(BUILT_SOURCES)" || rm -f $(BUILT_SOURCES)
 clean: clean-recursive
 
 clean-am: clean-generic clean-lib_hooksLTLIBRARIES clean-libtool \
@@ -1010,7 +995,8 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 	-rm -rf ./$(DEPDIR)
 	-rm -f Makefile
-maintainer-clean-am: distclean-am maintainer-clean-generic
+maintainer-clean-am: distclean-am maintainer-clean-generic \
+	maintainer-clean-local
 
 mostlyclean: mostlyclean-recursive
 
@@ -1027,8 +1013,7 @@ ps-am:
 
 uninstall-am: uninstall-lib_hooksLTLIBRARIES
 
-.MAKE: $(am__recursive_targets) all check install install-am \
-	install-strip
+.MAKE: $(am__recursive_targets) install-am install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am check \
 	check-am clean clean-generic clean-lib_hooksLTLIBRARIES \
@@ -1042,18 +1027,40 @@ uninstall-am: uninstall-lib_hooksLTLIBRARIES
 	install-pdf install-pdf-am install-ps install-ps-am \
 	install-strip installcheck installcheck-am installdirs \
 	installdirs-am maintainer-clean maintainer-clean-generic \
-	mostlyclean mostlyclean-compile mostlyclean-generic \
-	mostlyclean-libtool pdf pdf-am ps ps-am tags tags-am uninstall \
-	uninstall-am uninstall-lib_hooksLTLIBRARIES
+	maintainer-clean-local mostlyclean mostlyclean-compile \
+	mostlyclean-generic mostlyclean-libtool pdf pdf-am ps ps-am \
+	tags tags-am uninstall uninstall-am \
+	uninstall-lib_hooksLTLIBRARIES
 
 .PRECIOUS: Makefile
 
 
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f ha_messages.h ha_messages.cc
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
 # Define rule to build logging source files from message file
-ha_messages.h ha_messages.cc: s-messages
-s-messages: ha_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/hooks/dhcp/high_availability/ha_messages.mes
-	touch $@
+@GENERATE_MESSAGES_TRUE@messages: ha_messages.h ha_messages.cc
+@GENERATE_MESSAGES_TRUE@	@echo Message files regenerated
+
+@GENERATE_MESSAGES_TRUE@ha_messages.h ha_messages.cc: ha_messages.mes
+@GENERATE_MESSAGES_TRUE@	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/hooks/dhcp/high_availability/ha_messages.mes
+
+@GENERATE_MESSAGES_FALSE@messages ha_messages.h ha_messages.cc:
+@GENERATE_MESSAGES_FALSE@	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

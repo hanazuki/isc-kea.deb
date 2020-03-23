@@ -4,6 +4,9 @@
 /* config.h inclusion marker */
 #define CONFIG_H_WAS_INCLUDED 1
 
+/* AFL fuzzing was enabled. */
+/* #undef ENABLE_AFL */
+
 /* Enable low-performing debugging facilities? */
 /* #undef ENABLE_DEBUG */
 
@@ -22,8 +25,14 @@
 /* Define to 1 if you have the <boost/asio/ip/address.hpp> header file. */
 #define HAVE_BOOST_ASIO_IP_ADDRESS_HPP 1
 
+/* Define to 1 if you have the <boost/atomic.hpp> header file. */
+#define HAVE_BOOST_ATOMIC_HPP 1
+
 /* Define to 1 if you have the <boost/bind.hpp> header file. */
 #define HAVE_BOOST_BIND_HPP 1
+
+/* Define to 1 if you have the <boost/circular_buffer.hpp> header file. */
+#define HAVE_BOOST_CIRCULAR_BUFFER_HPP 1
 
 /* Define to 1 if you have the
    <boost/date_time/posix_time/posix_time_types.hpp> header file. */
@@ -34,6 +43,10 @@
 
 /* Define to 1 if you have the <boost/function.hpp> header file. */
 #define HAVE_BOOST_FUNCTION_HPP 1
+
+/* Define to 1 if you have the <boost/integer/common_factor.hpp> header file.
+   */
+#define HAVE_BOOST_INTEGER_COMMON_FACTOR_HPP 1
 
 /* Define to 1 if you have the
    <boost/interprocess/sync/interprocess_upgradable_mutex.hpp> header file. */
@@ -52,7 +65,7 @@
 /* #undef HAVE_CQL */
 
 /* Define to 1 if gtest defines edit_distance::CreateUnifiedDiff */
-#define HAVE_CREATE_UNIFIED_DIFF 1
+/* #undef HAVE_CREATE_UNIFIED_DIFF */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
@@ -72,11 +85,17 @@
 /* MySQL is present */
 /* #undef HAVE_MYSQL */
 
+/* MySQL uses my_bool */
+/* #undef HAVE_MYSQL_MY_BOOL */
+
 /* Check for optreset? */
 /* #undef HAVE_OPTRESET */
 
 /* PostgreSQL is present */
 /* #undef HAVE_PGSQL */
+
+/* Using sysrepo > 0.7.7 */
+/* #undef HAVE_POST_0_7_7_SYSREPO */
 
 /* Using sysrepo < 0.7.6 */
 /* #undef HAVE_PRE_0_7_6_SYSREPO */
@@ -87,9 +106,6 @@
 /* Define to 1 if sockaddr has a sa_len member, and corresponding sin_len and
    sun_len */
 /* #undef HAVE_SA_LEN */
-
-/* Define to 1 if you have the `srandomdev' function. */
-/* #undef HAVE_SRANDOMDEV */
 
 /* Define to 1 if stdbool.h conforms to C99. */
 /* #undef HAVE_STDBOOL_H */
@@ -136,6 +152,9 @@
 /* Define to 1 if the system has the type `_Bool'. */
 /* #undef HAVE__BOOL */
 
+/* Explicit initialization of log4cplus possible */
+/* #undef LOG4CPLUS_INITIALIZER_H */
+
 /* Define to the sub-directory where libtool stores uninstalled libraries. */
 #define LT_OBJDIR ".libs/"
 
@@ -170,7 +189,7 @@
 #define PACKAGE_NAME "kea"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kea 1.5.0"
+#define PACKAGE_STRING "kea 1.7.5"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kea"
@@ -179,7 +198,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.5.0"
+#define PACKAGE_VERSION "1.7.5"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -191,13 +210,13 @@
 /* #undef USE_STATIC_LINK */
 
 /* Version number of package */
-#define VERSION "1.5.0"
+#define VERSION "1.7.5"
 
 /* Compile with Botan crypto */
-#define WITH_BOTAN /**/
+/* #undef WITH_BOTAN */
 
 /* Compile with OpenSSL crypto */
-/* #undef WITH_OPENSSL */
+#define WITH_OPENSSL /**/
 
 /* Define to 1 if `lex' declares `yytext' as a `char *' by default, not a
    `char[]'. */

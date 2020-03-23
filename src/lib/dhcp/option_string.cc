@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #include <config.h>
 
 #include <dhcp/option_string.h>
+#include <util/strutil.h>
 #include <sstream>
 
 namespace isc {
@@ -50,7 +51,17 @@ OptionString::setValue(const std::string& value) {
                   << getType() << "' must not be empty");
     }
 
-    setData(value.begin(), value.end());
+    // Trim off any trailing nuls.
+    auto begin = value.begin();
+    auto end = util::str::seekTrimmed(begin, value.end(), 0x0);
+
+    if (std::distance(begin, end) == 0) {
+        isc_throw(isc::OutOfRange, "string value carried by the option '"
+                  << getType() << "' contained only nuls");
+    }
+
+    // Now set the value.
+    setData(begin, end);
 }
 
 
@@ -74,11 +85,15 @@ OptionString::pack(isc::util::OutputBuffer& buf) const {
 void
 OptionString::unpack(OptionBufferConstIter begin,
                      OptionBufferConstIter end) {
+    // Trim off trailing nul(s)
+    end = util::str::seekTrimmed(begin, end, 0x0);
     if (std::distance(begin, end) == 0) {
-        isc_throw(isc::OutOfRange, "failed to parse an option '"
+        isc_throw(isc::dhcp::SkipThisOptionError, "failed to parse an option '"
                   << getType() << "' holding string value"
-                  << " - empty value is not accepted");
+                  << "' was empty or contained only nuls");
     }
+
+    // Now set the data.
     setData(begin, end);
 }
 

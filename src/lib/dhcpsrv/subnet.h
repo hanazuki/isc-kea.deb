@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,12 +11,11 @@
 #include <cc/data.h>
 #include <cc/user_context.h>
 #include <dhcp/option_space_container.h>
-#include <dhcpsrv/assignable_network.h>
 #include <dhcpsrv/lease.h>
+#include <dhcpsrv/network.h>
 #include <dhcpsrv/pool.h>
 #include <dhcpsrv/subnet_id.h>
 #include <dhcpsrv/triplet.h>
-
 #include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/indexed_by.hpp>
 #include <boost/multi_index/ordered_index.hpp>
@@ -32,12 +31,7 @@
 namespace isc {
 namespace dhcp {
 
-class Subnet : public virtual data::UserContext, public data::CfgToElement {
-
-    // Assignable network is our friend to allow it to call
-    // @ref Subnet::setSharedNetwork private function.
-    friend class AssignableNetwork;
-
+class Subnet : public virtual Network {
 public:
 
     /// @brief checks if specified address is in range
@@ -251,10 +245,8 @@ public:
     template<typename SharedNetworkPtrType>
     void getSharedNetwork(SharedNetworkPtrType& shared_network) const {
         shared_network = boost::dynamic_pointer_cast<
-            typename SharedNetworkPtrType::element_type>(shared_network_.lock());
+            typename SharedNetworkPtrType::element_type>(parent_network_.lock());
     }
-
-private:
 
     /// @brief Assigns shared network to a subnet.
     ///
@@ -264,10 +256,8 @@ private:
     /// @param shared_network Pointer to a new shared network to be associated
     /// with the subnet.
     void setSharedNetwork(const NetworkPtr& shared_network) {
-        shared_network_ = shared_network;
+        parent_network_ = shared_network;
     }
-
-public:
 
     /// @brief Returns shared network name.
     std::string getSharedNetworkName() const {
@@ -290,7 +280,6 @@ public:
         shared_network_name_ = shared_network_name;
     }
 
-protected:
     /// @brief Returns all pools (non-const variant)
     ///
     /// The reference is only valid as long as the object that returned it.
@@ -298,6 +287,8 @@ protected:
     /// @param type lease type to be set
     /// @return a collection of all pools
     PoolCollection& getPoolsWritable(Lease::Type type);
+
+protected:
 
     /// @brief Protected constructor
     //
@@ -444,9 +435,6 @@ protected:
     /// @brief Name of the network interface (if connected directly)
     std::string iface_;
 
-    /// @brief Pointer to a shared network that subnet belongs to.
-    WeakNetworkPtr shared_network_;
-
     /// @brief Shared network name.
     std::string shared_network_name_;
 };
@@ -487,6 +475,29 @@ public:
             const Triplet<uint32_t>& t2,
             const Triplet<uint32_t>& valid_lifetime,
             const SubnetID id = 0);
+
+    /// @brief Factory function creating an instance of the @c Subnet4.
+    ///
+    /// This function should be used to create an instance of the subnet
+    /// object within a hooks library in cases when the library may be
+    /// unloaded before the object is destroyed. This ensures that the
+    /// ownership of the object by the Kea process is retained.
+    ///
+    /// @param prefix Subnet4 prefix
+    /// @param length prefix length
+    /// @param t1 renewal timer (in seconds)
+    /// @param t2 rebind timer (in seconds)
+    /// @param valid_lifetime preferred lifetime of leases (in seconds)
+    /// @param id arbitrary subnet id, default value of 0 triggers
+    /// autogeneration of subnet id
+    ///
+    /// @return Pointer to the @c Subnet4 instance.
+    static Subnet4Ptr
+    create(const isc::asiolink::IOAddress& prefix, uint8_t length,
+           const Triplet<uint32_t>& t1,
+           const Triplet<uint32_t>& t2,
+           const Triplet<uint32_t>& valid_lifetime,
+           const SubnetID id = 0);
 
     /// @brief Returns next subnet within shared network.
     ///
@@ -530,38 +541,6 @@ public:
     /// @return true if client can be supported, false otherwise.
     virtual bool
     clientSupported(const isc::dhcp::ClientClasses& client_classes) const;
-
-    /// @brief Sets siaddr for the Subnet4
-    ///
-    /// Will be used for siaddr field (the next server) that typically is used
-    /// as TFTP server. If not specified, the default value of 0.0.0.0 is
-    /// used.
-    void setSiaddr(const isc::asiolink::IOAddress& siaddr);
-
-    /// @brief Returns siaddr for this subnet
-    ///
-    /// @return siaddr value
-    isc::asiolink::IOAddress getSiaddr() const;
-
-    /// @brief Sets server hostname for the Subnet4 
-    ///
-    /// Will be used for server hostname field (may be empty if not defined)
-    void setSname(const std::string& sname);
-
-    /// @brief Returns server hostname for this subnet
-    ///
-    /// @return server hostname value
-    const std::string& getSname() const;
-
-    /// @brief Sets boot file name for the Subnet4 
-    ///
-    /// Will be used for boot file name (may be empty if not defined)
-    void setFilename(const std::string& filename);
-
-    /// @brief Returns boot file name for this subnet
-    ///
-    /// @return boot file name value
-    const std::string& getFilename() const;
 
     /// @brief Returns DHCP4o6 configuration parameters.
     ///
@@ -607,15 +586,6 @@ private:
     /// @throw BadValue if invalid value is used
     virtual void checkType(Lease::Type type) const;
 
-    /// @brief siaddr value for this subnet
-    isc::asiolink::IOAddress siaddr_;
-
-    /// @brief server hostname for this subnet
-    std::string sname_;
-
-    /// @brief boot file name for this subnet
-    std::string filename_;
-
     /// @brief All the information related to DHCP4o6
     Cfg4o6 dhcp4o6_;
 };
@@ -654,6 +624,31 @@ public:
             const Triplet<uint32_t>& preferred_lifetime,
             const Triplet<uint32_t>& valid_lifetime,
             const SubnetID id = 0);
+
+    /// @brief Factory function creating an instance of the @c Subnet4.
+    ///
+    /// This function should be used to create an instance of the subnet
+    /// object within a hooks library in cases when the library may be
+    /// unloaded before the object is destroyed. This ensures that the
+    /// ownership of the object by the Kea process is retained.
+    ///
+    /// @param prefix Subnet6 prefix
+    /// @param length prefix length
+    /// @param t1 renewal timer (in seconds)
+    /// @param t2 rebind timer (in seconds)
+    /// @param preferred_lifetime preferred lifetime of leases (in seconds)
+    /// @param valid_lifetime preferred lifetime of leases (in seconds)
+    /// @param id arbitrary subnet id, default value of 0 triggers
+    /// autogeneration of subnet id
+    ///
+    /// @return Pointer to the @c Subnet6 instance.
+    static Subnet6Ptr
+    create(const isc::asiolink::IOAddress& prefix, uint8_t length,
+           const Triplet<uint32_t>& t1,
+           const Triplet<uint32_t>& t2,
+           const Triplet<uint32_t>& preferred_lifetime,
+           const Triplet<uint32_t>& valid_lifetime,
+           const SubnetID id = 0);
 
     /// @brief Returns next subnet within shared network.
     ///
@@ -744,6 +739,9 @@ struct SubnetPrefixIndexTag { };
 /// @brief Tag for the index for searching by server identifier.
 struct SubnetServerIdIndexTag { };
 
+/// @brief Tag for the index for searching by subnet modification time.
+struct SubnetModificationTimeIndexTag { };
+
 /// @brief A collection of @c Subnet4 objects
 ///
 /// This container provides a set of indexes which can be used to retrieve
@@ -788,11 +786,19 @@ typedef boost::multi_index_container<
             boost::multi_index::const_mem_fun<Subnet, std::string, &Subnet::toText>
         >,
 
-        // Fourth index allows for searching using an output from getServerId
+        // Fourth index allows for searching using an output from getServerId.
         boost::multi_index::ordered_non_unique<
             boost::multi_index::tag<SubnetServerIdIndexTag>,
             boost::multi_index::const_mem_fun<Network4, asiolink::IOAddress,
                                               &Network4::getServerId>
+        >,
+
+        // Fifth index allows for searching using subnet modification time.
+        boost::multi_index::ordered_non_unique<
+            boost::multi_index::tag<SubnetModificationTimeIndexTag>,
+            boost::multi_index::const_mem_fun<data::BaseStampedElement,
+                                              boost::posix_time::ptime,
+                                              &data::BaseStampedElement::getModificationTime>
         >
     >
 > Subnet4Collection;
@@ -838,9 +844,52 @@ typedef boost::multi_index_container<
         boost::multi_index::ordered_unique<
             boost::multi_index::tag<SubnetPrefixIndexTag>,
             boost::multi_index::const_mem_fun<Subnet, std::string, &Subnet::toText>
+        >,
+        // Fourth index allows for searching using subnet modification time.
+        boost::multi_index::ordered_non_unique<
+            boost::multi_index::tag<SubnetModificationTimeIndexTag>,
+            boost::multi_index::const_mem_fun<data::BaseStampedElement,
+                                              boost::posix_time::ptime,
+                                              &data::BaseStampedElement::getModificationTime>
         >
     >
 > Subnet6Collection;
+
+/// @brief A class containing static convenience methods to fetch the subnets
+/// from the containers.
+///
+/// @tparam ReturnPtrType Type of the returned object, i.e. @c Subnet4Ptr
+/// or @c Subnet6Ptr.
+/// @tparam CollectionType One of the @c Subnet4Collection or @c Subnet6Collection.
+template<typename ReturnPtrType, typename CollectionType>
+class SubnetFetcher {
+public:
+
+    /// @brief Fetches subnets by id.
+    ///
+    /// @param collection Const reference to the collection from which the
+    /// subnet is to be fetched.
+    /// @param subnet_id Id of the subnet to be fetched.
+    /// @return Pointer to the fetched subnet or null if no such subnet
+    /// could be found.
+    static ReturnPtrType get(const CollectionType& collection,
+                             const SubnetID& subnet_id) {
+        auto& index = collection.template get<SubnetSubnetIdIndexTag>();
+        auto s = index.find(subnet_id);
+        if (s != index.end()) {
+            return (*s);
+        }
+        // No subnet found. Return null pointer.
+        return (ReturnPtrType());
+    }
+};
+
+/// @brief Type of the @c SubnetFetcher used for IPv4.
+using SubnetFetcher4 = SubnetFetcher<Subnet4Ptr, Subnet4Collection>;
+
+/// @brief Type of the @c SubnetFetcher used for IPv6.
+using SubnetFetcher6 = SubnetFetcher<Subnet6Ptr, Subnet6Collection>;
+
 
 //@}
 

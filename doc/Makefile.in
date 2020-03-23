@@ -93,6 +93,7 @@ ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
+	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
@@ -106,7 +107,7 @@ DIST_COMMON = $(srcdir)/Makefile.am $(nobase_dist_doc_DATA) \
 	$(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
-CONFIG_CLEAN_FILES = version.ent
+CONFIG_CLEAN_FILES =
 CONFIG_CLEAN_VPATH_FILES =
 AM_V_P = $(am__v_P_@AM_V@)
 am__v_P_ = $(am__v_P_@AM_DEFAULT_V@)
@@ -192,7 +193,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = $(SUBDIRS)
-am__DIST_COMMON = $(srcdir)/Makefile.in $(srcdir)/version.ent.in
+am__DIST_COMMON = $(srcdir)/Makefile.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -235,7 +236,6 @@ BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
 BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
-BOTAN1_TOOL = @BOTAN1_TOOL@
 BOTAN_TOOL = @BOTAN_TOOL@
 CC = @CC@
 CCDEPMODE = @CCDEPMODE@
@@ -256,7 +256,6 @@ CXXCPP = @CXXCPP@
 CXXDEPMODE = @CXXDEPMODE@
 CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
-DBLATEX = @DBLATEX@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
 DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
@@ -266,6 +265,7 @@ DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
@@ -275,7 +275,6 @@ ECHO_C = @ECHO_C@
 ECHO_N = @ECHO_N@
 ECHO_T = @ECHO_T@
 EGREP = @EGREP@
-ELINKS = @ELINKS@
 EXEEXT = @EXEEXT@
 FGREP = @FGREP@
 GENHTML = @GENHTML@
@@ -326,6 +325,7 @@ PACKAGE_TARNAME = @PACKAGE_TARNAME@
 PACKAGE_URL = @PACKAGE_URL@
 PACKAGE_VERSION = @PACKAGE_VERSION@
 PATH_SEPARATOR = @PATH_SEPARATOR@
+PDFLATEX = @PDFLATEX@
 PERL = @PERL@
 PGSQL_CPPFLAGS = @PGSQL_CPPFLAGS@
 PGSQL_LIBS = @PGSQL_LIBS@
@@ -343,17 +343,17 @@ SED = @SED@
 SEP = @SEP@
 SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
+SPHINXBUILD = @SPHINXBUILD@
 STRIP = @STRIP@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
+SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
 SYSREPO_REPO = @SYSREPO_REPO@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
 VERSION = @VERSION@
 WARNING_GCC_44_STRICT_ALIASING_CFLAG = @WARNING_GCC_44_STRICT_ALIASING_CFLAG@
-XSLTPROC = @XSLTPROC@
 YACC = @YACC@
-YFLAGS = @YFLAGS@
 abs_builddir = @abs_builddir@
 abs_srcdir = @abs_srcdir@
 abs_top_builddir = @abs_top_builddir@
@@ -412,48 +412,8 @@ target_alias = @target_alias@
 top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
-SUBDIRS = guide docgen
-
-# These are files that document our APIs. They're not really needed as the
-# content is included in the api.xml, but may be useful for people who
-# want to document the API.
-EXTRA_DIST = version.ent.in Doxyfile Doxyfile-xml devel/bison.dox \
-	devel/config-backend.dox devel/contribute.dox \
-	devel/mainpage.dox devel/terminology.dox devel/unit-tests.dox \
-	devel/doc.dox devel/congestion-handling.dox \
-	api/build-report.json api/cache-clear.json api/cache-get.json \
-	api/cache-insert.json api/cache-load.json \
-	api/cache-remove.json api/cache-write.json api/class-add.json \
-	api/class-del.json api/class-get.json api/class-list.json \
-	api/class-update.json api/config-get.json \
-	api/config-reload.json api/config-set.json \
-	api/config-test.json api/config-write.json \
-	api/dhcp-disable.json api/dhcp-enable.json \
-	api/ha-continue.json api/ha-heartbeat.json api/ha-scopes.json \
-	api/ha-sync.json api/lease4-add.json api/lease4-del.json \
-	api/lease4-get-all.json api/lease4-get.json \
-	api/lease4-update.json api/lease4-wipe.json \
-	api/lease6-add.json api/lease6-del.json \
-	api/lease6-get-all.json api/lease6-get.json \
-	api/lease6-update.json api/lease6-wipe.json \
-	api/leases-reclaim.json api/libreload.json \
-	api/list-commands.json api/network4-add.json \
-	api/network4-del.json api/network4-get.json \
-	api/network4-list.json api/network4-subnet-add.json \
-	api/network4-subnet-del.json api/network6-add.json \
-	api/network6-del.json api/network6-get.json \
-	api/network6-list.json api/network6-subnet-add.json \
-	api/network6-subnet-del.json api/reservation-add.json \
-	api/reservation-del.json api/reservation-get.json \
-	api/shutdown.json api/statistic-get-all.json \
-	api/statistic-get.json api/statistic-remove-all.json \
-	api/statistic-remove.json api/statistic-reset-all.json \
-	api/statistic-reset.json api/stat-lease4-get.json \
-	api/stat-lease6-get.json api/subnet4-add.json \
-	api/subnet4-del.json api/subnet4-get.json \
-	api/subnet4-list.json api/subnet6-add.json \
-	api/subnet6-del.json api/subnet6-get.json \
-	api/subnet6-list.json api/_template.json api/version-get.json
+SUBDIRS = sphinx devel
+EXTRA_DIST = images/kea-logo-100x70.png
 nobase_dist_doc_DATA = examples/agent/comments.json \
 	examples/agent/simple.json examples/ddns/comments.json \
 	examples/ddns/sample1.json examples/ddns/template.json \
@@ -461,9 +421,10 @@ nobase_dist_doc_DATA = examples/agent/comments.json \
 	examples/https/nginx/kea-nginx.conf \
 	examples/https/shell/kea-stunnel.conf \
 	examples/kea4/advanced.json examples/kea4/all-keys.json \
+	examples/kea4/all-keys-netconf.json \
 	examples/kea4/backends.json examples/kea4/cassandra.json \
 	examples/kea4/classify.json examples/kea4/classify2.json \
-	examples/kea4/comments.json \
+	examples/kea4/comments.json examples/kea4/config-backend.json \
 	examples/kea4/dhcpv4-over-dhcpv6.json \
 	examples/kea4/global-reservations.json \
 	examples/kea4/ha-load-balancing-primary.json \
@@ -477,9 +438,10 @@ nobase_dist_doc_DATA = examples/agent/comments.json \
 	examples/kea4/shared-network.json \
 	examples/kea4/single-subnet.json examples/kea4/with-ddns.json \
 	examples/kea6/advanced.json examples/kea6/all-keys.json \
+	examples/kea6/all-keys-netconf.json \
 	examples/kea6/backends.json examples/kea6/cassandra.json \
 	examples/kea6/classify.json examples/kea6/classify2.json \
-	examples/kea6/comments.json \
+	examples/kea6/comments.json examples/kea6/config-backend.json \
 	examples/kea6/dhcpv4-over-dhcpv6.json examples/kea6/duid.json \
 	examples/kea6/global-reservations.json \
 	examples/kea6/ha-hot-standby.json examples/kea6/hooks.json \
@@ -491,10 +453,7 @@ nobase_dist_doc_DATA = examples/agent/comments.json \
 	examples/kea6/several-subnets.json \
 	examples/kea6/shared-network.json examples/kea6/simple.json \
 	examples/kea6/softwire46.json examples/kea6/stateless.json \
-	examples/kea6/with-ddns.json \
-	examples/netconf/kea-dhcp6-operations/BAD-config.xml \
-	examples/netconf/kea-dhcp6-operations/BAD-schema.xml \
-	examples/netconf/kea-dhcp6-operations/BAD-translator.xml \
+	examples/kea6/tee-times.json examples/kea6/with-ddns.json \
 	examples/netconf/kea-dhcp6-operations/boot.json \
 	examples/netconf/kea-dhcp6-operations/logging.xml \
 	examples/netconf/kea-dhcp6-operations/netconf.json \
@@ -536,8 +495,6 @@ $(top_srcdir)/configure:  $(am__configure_deps)
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
-version.ent: $(top_builddir)/config.status $(srcdir)/version.ent.in
-	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -761,6 +718,8 @@ distclean-generic:
 maintainer-clean-generic:
 	@echo "This command is intended for maintainers to use"
 	@echo "it deletes files that may require special tools to rebuild."
+clean: clean-recursive
+
 clean-am: clean-generic clean-libtool mostlyclean-am
 
 distclean: distclean-recursive
@@ -843,60 +802,6 @@ uninstall-am: uninstall-nobase_dist_docDATA
 
 .PRECIOUS: Makefile
 
-
-devel:
-	mkdir -p html
-	(cat Doxyfile; echo PROJECT_NUMBER=$(PACKAGE_VERSION)) | doxygen - > html/doxygen.log 2> html/doxygen-error.log
-	echo `grep -i ": warning:" html/doxygen-error.log | wc -l` warnings/errors detected.
-
-guide:
-	$(MAKE) -C guide kea-guide.html
-
-clean:
-	rm -rf html
-
-# There are several steps needed to document new API command:
-#
-# 1. edit docgen/cmds-list and add the new command
-# 2. ./configure --enable-generate-docs
-# 3. make - you need to build the sources first, am afraid. The reason why you
-#    need to do this is that the tool kea-docgen depends on libkea-cc as it
-#    loads JSON files. This means that the libs need to be built first.
-# 4. (optional) run: make templates
-#    This will go through the list of commands listed in cmds-list
-#    and will check if there are corresponding JSON files in api/name.json
-#    If the file is missing, a new JSON will be created using template.
-#    If you dislike this generator, you can always use api/_template.json
-#    and copy it over under the name of a new command.
-# 5. Edit api/command-name.json. If the command is provided by the daemon
-#    out of its own (and not via hook), simply delete the hook entry.
-#    If you don't want to provide command syntax (cmd-syntax key),
-#    any comments about the syntax (cmd-comment key) or response syntax
-#    (resp-syntax) or any comment about response (resp-comment), simply
-#    remove those unused keys. The generator will attempt to generate
-#    boilerplates for it.
-# 6. Generate api.xml: make api
-# 7. Rebuild User's Guide as usual: make guide
-
-# This target will generate templates. There's no need to run it, unless
-# new commands have been added or there are existing commands that are
-# still not documented.
-templates: docgen
-	docgen/generate-templates docgen/cmds-list
-
-# This will generate the api.xml file using docgen generator. It will
-# read the JSON files from api/ directory. Make sure they're up to date.
-api: docgen
-	docgen/kea-docgen api/*.json
-
-# This convenience target makes sure the docgen tool is built properly
-docgen:
-	$(MAKE) -C docgen
-
-# That's a bit of a hack, but we are making sure that devel target
-# is always valid. The alternative is to make devel depend on all
-# *.cc *.h files in the whole tree.
-.PHONY: devel guide docgen
 
 # Tell versions [3.59,3.63) of GNU make to not export all variables.
 # Otherwise a system limit (for SysV at least) may be exceeded.

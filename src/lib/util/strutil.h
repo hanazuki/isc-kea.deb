@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -54,6 +54,26 @@ void normalizeSlash(std::string& name);
 /// \return String with leading and trailing spaces removed
 std::string trim(const std::string& instring);
 
+/// \brief Finds the "trimmed" end of a buffer
+///
+/// Works backward from the the end of the buffer, looking for the first
+/// character not equal to the trim value, and returns an iterator
+/// pointing that that position.
+///
+/// \param begin - Forward iterator pointing to the beginning of the
+/// buffer to trim
+/// \param end - Forward iterator pointing to the untrimmed end of
+/// the buffer to trim
+/// \param trim_val - byte value to trim off
+///
+/// \return Iterator pointing the first character from the end of the
+/// buffer not equal to the  trim value
+template<typename Iterator>
+Iterator
+seekTrimmed(Iterator begin, Iterator end, uint8_t trim_val) {
+    for ( ; end != begin && *(end - 1) == trim_val; --end);
+    return(end);
+}
 
 /// \brief Split String into Tokens
 ///
@@ -219,10 +239,12 @@ tokenToNum(const std::string& num_token) {
 std::vector<uint8_t>
 quotedStringToBinary(const std::string& quoted_string);
 
-/// \brief Converts a string of hexadecimal digits with colons into
-///  a vector.
+/// \brief Converts a string of separated hexadecimal digits
+/// into a vector.
 ///
-/// This function supports the following formats:
+/// Octets may contain 1 or 2 digits. For example, using a colon
+/// for a separator all of the following are valid:
+///
 /// - yy:yy:yy:yy:yy
 /// - y:y:y:y:y
 /// - y:yy:yy:y:y
@@ -230,6 +252,21 @@ quotedStringToBinary(const std::string& quoted_string);
 /// If the decoded string doesn't match any of the supported formats,
 /// an exception is thrown.
 ///
+/// \param hex_string Input string.
+/// \param sep character to use a a separator.
+/// \param binary Vector receiving converted string into binary.
+/// \throw isc::BadValue if the format of the input string is invalid.
+void
+decodeSeparatedHexString(const std::string& hex_string,
+                         const std::string& sep,
+                         std::vector<uint8_t>& binary);
+
+/// \brief Converts a string of hexadecimal digits with colons into
+///  a vector.
+///
+/// Convenience method which calls @c decodeSeparatedHexString() passing
+/// in a colon for the separator.
+
 /// \param hex_string Input string.
 /// \param binary Vector receiving converted string into binary.
 /// \throw isc::BadValue if the format of the input string is invalid.
@@ -240,9 +277,11 @@ decodeColonSeparatedHexString(const std::string& hex_string,
 /// \brief Converts a formatted string of hexadecimal digits into
 /// a vector.
 ///
-/// This function supports formats supported by
-/// @ref decodeColonSeparatedHexString and the following additional
-/// formats:
+/// This function supports the following formats:
+///
+/// - yy:yy:yy:yy or yy yy yy yy - octets delimited by colons or
+/// spaces, see @c decodeSeparatedHexString
+///
 /// - yyyyyyyyyy
 /// - 0xyyyyyyyyyy
 ///

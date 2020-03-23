@@ -1,4 +1,4 @@
-// Copyright (C) 2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,156 +10,425 @@
 #include <stats/stats_mgr.h>
 #include <cc/data.h>
 #include <cc/command_interpreter.h>
+#include <util/boost_time_utils.h>
+#include <util/multi_threading_mgr.h>
+#include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/make_shared.hpp>
 
 using namespace std;
 using namespace isc::data;
 using namespace isc::config;
+using namespace isc::util;
 
 namespace isc {
 namespace stats {
 
-StatsMgr& StatsMgr::instance() {
+StatsMgr&
+StatsMgr::instance() {
     static StatsMgr stats_mgr;
     return (stats_mgr);
 }
 
-StatsMgr::StatsMgr()
-    :global_(new StatContext()) {
-
+StatsMgr::StatsMgr() :
+    global_(boost::make_shared<StatContext>()), mutex_(new mutex) {
 }
 
-void StatsMgr::setValue(const std::string& name, const int64_t value) {
-    setValueInternal(name, value);
+void
+StatsMgr::setValue(const string& name, const int64_t value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setValueInternal(name, value);
+    } else {
+        setValueInternal(name, value);
+    }
 }
 
-void StatsMgr::setValue(const std::string& name, const double value) {
-    setValueInternal(name, value);
+void
+StatsMgr::setValue(const string& name, const double value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setValueInternal(name, value);
+    } else {
+        setValueInternal(name, value);
+    }
 }
 
-void StatsMgr::setValue(const std::string& name, const StatsDuration& value) {
-    setValueInternal(name, value);
-}
-void StatsMgr::setValue(const std::string& name, const std::string& value) {
-    setValueInternal(name, value);
-}
-
-void StatsMgr::addValue(const std::string& name, const int64_t value) {
-    addValueInternal(name, value);
-}
-
-void StatsMgr::addValue(const std::string& name, const double value) {
-    addValueInternal(name, value);
+void
+StatsMgr::setValue(const string& name, const StatsDuration& value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setValueInternal(name, value);
+    } else {
+        setValueInternal(name, value);
+    }
 }
 
-void StatsMgr::addValue(const std::string& name, const StatsDuration& value) {
-    addValueInternal(name, value);
+void
+StatsMgr::setValue(const string& name, const string& value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setValueInternal(name, value);
+    } else {
+        setValueInternal(name, value);
+    }
 }
 
-void StatsMgr::addValue(const std::string& name, const std::string& value) {
-    addValueInternal(name, value);
+void
+StatsMgr::addValue(const string& name, const int64_t value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        addValueInternal(name, value);
+    } else {
+        addValueInternal(name, value);
+    }
 }
 
-ObservationPtr StatsMgr::getObservation(const std::string& name) const {
+void
+StatsMgr::addValue(const string& name, const double value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        addValueInternal(name, value);
+    } else {
+        addValueInternal(name, value);
+    }
+}
+
+void
+StatsMgr::addValue(const string& name, const StatsDuration& value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        addValueInternal(name, value);
+    } else {
+        addValueInternal(name, value);
+    }
+}
+
+void
+StatsMgr::addValue(const string& name, const string& value) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        addValueInternal(name, value);
+    } else {
+        addValueInternal(name, value);
+    }
+}
+
+ObservationPtr
+StatsMgr::getObservation(const string& name) const {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (getObservationInternal(name));
+    } else {
+        return (getObservationInternal(name));
+    }
+}
+
+ObservationPtr
+StatsMgr::getObservationInternal(const string& name) const {
     /// @todo: Implement contexts.
     // Currently we keep everything in a global context.
     return (global_->get(name));
 }
 
-void StatsMgr::addObservation(const ObservationPtr& stat) {
-    /// @todo: Implement contexts.
-    // Currently we keep everything in a global context.
-    return (global_->add(stat));
+void
+StatsMgr::addObservation(const ObservationPtr& stat) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        addObservationInternal(stat);
+    } else {
+        addObservationInternal(stat);
+    }
 }
 
-bool StatsMgr::deleteObservation(const std::string& name) {
+void
+StatsMgr::addObservationInternal(const ObservationPtr& stat) {
+    /// @todo: Implement contexts.
+    // Currently we keep everything in a global context.
+    global_->add(stat);
+}
+
+bool
+StatsMgr::deleteObservation(const string& name) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (deleteObservationInternal(name));
+    } else {
+        return (deleteObservationInternal(name));
+    }
+}
+
+bool
+StatsMgr::deleteObservationInternal(const string& name) {
     /// @todo: Implement contexts.
     // Currently we keep everything in a global context.
     return (global_->del(name));
 }
 
-void StatsMgr::setMaxSampleAge(const std::string& ,
-                               const StatsDuration&) {
-    isc_throw(NotImplemented, "setMaxSampleAge not implemented");
+bool
+StatsMgr::setMaxSampleAge(const string& name, const StatsDuration& duration) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (setMaxSampleAgeInternal(name, duration));
+    } else {
+        return (setMaxSampleAgeInternal(name, duration));
+    }
 }
 
-void StatsMgr::setMaxSampleCount(const std::string& , uint32_t){
-    isc_throw(NotImplemented, "setMaxSampleCount not implemented");
+bool
+StatsMgr::setMaxSampleAgeInternal(const string& name,
+                                  const StatsDuration& duration) {
+    ObservationPtr obs = getObservationInternal(name);
+    if (obs) {
+        obs->setMaxSampleAge(duration);
+        return (true);
+    }
+    return (false);
 }
 
-bool StatsMgr::reset(const std::string& name) {
-    ObservationPtr obs = getObservation(name);
+bool
+StatsMgr::setMaxSampleCount(const string& name, uint32_t max_samples) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (setMaxSampleCountInternal(name, max_samples));
+    } else {
+        return (setMaxSampleCountInternal(name, max_samples));
+    }
+}
+
+bool
+StatsMgr::setMaxSampleCountInternal(const string& name,
+                                    uint32_t max_samples) {
+    ObservationPtr obs = getObservationInternal(name);
+    if (obs) {
+        obs->setMaxSampleCount(max_samples);
+        return (true);
+    }
+    return (false);
+}
+
+void
+StatsMgr::setMaxSampleAgeAll(const StatsDuration& duration) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setMaxSampleAgeAllInternal(duration);
+    } else {
+        setMaxSampleAgeAllInternal(duration);
+    }
+}
+
+void
+StatsMgr::setMaxSampleAgeAllInternal(const StatsDuration& duration) {
+    global_->setMaxSampleAgeAll(duration);
+}
+
+void
+StatsMgr::setMaxSampleCountAll(uint32_t max_samples) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setMaxSampleCountAllInternal(max_samples);
+    } else {
+        setMaxSampleCountAllInternal(max_samples);
+    }
+}
+
+void
+StatsMgr::setMaxSampleCountAllInternal(uint32_t max_samples) {
+    global_->setMaxSampleCountAll(max_samples);
+}
+
+bool
+StatsMgr::reset(const string& name) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (resetInternal(name));
+    } else {
+        return (resetInternal(name));
+    }
+}
+
+bool
+StatsMgr::resetInternal(const string& name) {
+    ObservationPtr obs = getObservationInternal(name);
     if (obs) {
         obs->reset();
         return (true);
+    }
+    return (false);
+}
+
+bool
+StatsMgr::del(const string& name) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (delInternal(name));
     } else {
-        return (false);
+        return (delInternal(name));
     }
 }
 
-bool StatsMgr::del(const std::string& name) {
+bool
+StatsMgr::delInternal(const string& name) {
     return (global_->del(name));
 }
 
-void StatsMgr::removeAll() {
-    global_->stats_.clear();
-}
-
-isc::data::ConstElementPtr StatsMgr::get(const std::string& name) const {
-    isc::data::ElementPtr response = isc::data::Element::createMap(); // a map
-    ObservationPtr obs = getObservation(name);
-    if (obs) {
-        response->set(name, obs->getJSON()); // that contains the observation
+void
+StatsMgr::removeAll() {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        removeAllInternal();
+    } else {
+        removeAllInternal();
     }
-    return (response);
 }
 
-isc::data::ConstElementPtr StatsMgr::getAll() const {
-    isc::data::ElementPtr map = isc::data::Element::createMap(); // a map
+void
+StatsMgr::removeAllInternal() {
+    global_->clear();
+}
 
-    // Let's iterate over all stored statistics...
-    for (std::map<std::string, ObservationPtr>::iterator s = global_->stats_.begin();
-         s != global_->stats_.end(); ++s) {
+ConstElementPtr
+StatsMgr::get(const string& name) const {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (getInternal(name));
+    } else {
+        return (getInternal(name));
+    }
+}
 
-        // ... and add each of them to the map.
-        map->set(s->first, s->second->getJSON());
+ConstElementPtr
+StatsMgr::getInternal(const string& name) const {
+    ElementPtr map = Element::createMap(); // a map
+    ObservationPtr obs = getObservationInternal(name);
+    if (obs) {
+        map->set(name, obs->getJSON()); // that contains observations
     }
     return (map);
 }
 
-void StatsMgr::resetAll() {
-    // Let's iterate over all stored statistics...
-    for (std::map<std::string, ObservationPtr>::iterator s = global_->stats_.begin();
-         s != global_->stats_.end(); ++s) {
-
-        // ... and reset each statistic.
-        s->second->reset();
+ConstElementPtr
+StatsMgr::getAll() const {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (getAllInternal());
+    } else {
+        return (getAllInternal());
     }
 }
 
-size_t StatsMgr::count() const {
-    return (global_->stats_.size());
+ConstElementPtr
+StatsMgr::getAllInternal() const {
+    return (global_->getAll());
 }
 
-isc::data::ConstElementPtr
-StatsMgr::statisticGetHandler(const std::string& /*name*/,
-                              const isc::data::ConstElementPtr& params) {
-    std::string name, error;
-    if (!getStatName(params, name, error)) {
+void
+StatsMgr::resetAll() {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        resetAllInternal();
+    } else {
+        resetAllInternal();
+    }
+}
+
+void
+StatsMgr::resetAllInternal() {
+    global_->resetAll();
+}
+
+size_t
+StatsMgr::getSize(const string& name) const {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (getSizeInternal(name));
+    } else {
+        return (getSizeInternal(name));
+    }
+}
+
+size_t
+StatsMgr::getSizeInternal(const string& name) const {
+    ObservationPtr obs = getObservationInternal(name);
+    if (obs) {
+        return (obs->getSize());
+    }
+    return (0);
+}
+
+size_t
+StatsMgr::count() const {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (countInternal());
+    } else {
+        return (countInternal());
+    }
+}
+
+size_t
+StatsMgr::countInternal() const {
+    return (global_->size());
+}
+
+ConstElementPtr
+StatsMgr::statisticSetMaxSampleAgeHandler(const string& /*name*/,
+                                          const ConstElementPtr& params) {
+    string name, error;
+    StatsDuration duration;
+    if (!StatsMgr::getStatName(params, name, error)) {
+        return (createAnswer(CONTROL_RESULT_ERROR, error));
+    }
+    if (!StatsMgr::getStatDuration(params, duration, error)) {
+        return (createAnswer(CONTROL_RESULT_ERROR, error));
+    }
+    if (StatsMgr::instance().setMaxSampleAge(name, duration)) {
+        return (createAnswer(CONTROL_RESULT_SUCCESS,
+                            "Statistic '" + name + "' duration limit is set."));
+    } else {
+        return (createAnswer(CONTROL_RESULT_ERROR,
+                             "No '" + name + "' statistic found"));
+    }
+}
+
+ConstElementPtr
+StatsMgr::statisticSetMaxSampleCountHandler(const string& /*name*/,
+                                            const ConstElementPtr& params) {
+    string name, error;
+    uint32_t max_samples;
+    if (!StatsMgr::getStatName(params, name, error)) {
+        return (createAnswer(CONTROL_RESULT_ERROR, error));
+    }
+    if (!StatsMgr::getStatMaxSamples(params, max_samples, error)) {
+        return (createAnswer(CONTROL_RESULT_ERROR, error));
+    }
+    if (StatsMgr::instance().setMaxSampleCount(name, max_samples)) {
+        return (createAnswer(CONTROL_RESULT_SUCCESS,
+                            "Statistic '" + name + "' count limit is set."));
+    } else {
+        return (createAnswer(CONTROL_RESULT_ERROR,
+                           "No '" + name + "' statistic found"));
+    }
+}
+
+ConstElementPtr
+StatsMgr::statisticGetHandler(const string& /*name*/,
+                              const ConstElementPtr& params) {
+    string name, error;
+    if (!StatsMgr::getStatName(params, name, error)) {
         return (createAnswer(CONTROL_RESULT_ERROR, error));
     }
     return (createAnswer(CONTROL_RESULT_SUCCESS,
-                         instance().get(name)));
+                         StatsMgr::instance().get(name)));
 }
 
-isc::data::ConstElementPtr
-StatsMgr::statisticResetHandler(const std::string& /*name*/,
-                                const isc::data::ConstElementPtr& params) {
-    std::string name, error;
-    if (!getStatName(params, name, error)) {
+ConstElementPtr
+StatsMgr::statisticResetHandler(const string& /*name*/,
+                                const ConstElementPtr& params) {
+    string name, error;
+    if (!StatsMgr::getStatName(params, name, error)) {
         return (createAnswer(CONTROL_RESULT_ERROR, error));
     }
-
-    if (instance().reset(name)) {
+    if (StatsMgr::instance().reset(name)) {
         return (createAnswer(CONTROL_RESULT_SUCCESS,
                              "Statistic '" + name + "' reset."));
     } else {
@@ -168,14 +437,14 @@ StatsMgr::statisticResetHandler(const std::string& /*name*/,
     }
 }
 
-isc::data::ConstElementPtr
-StatsMgr::statisticRemoveHandler(const std::string& /*name*/,
-                                 const isc::data::ConstElementPtr& params) {
-    std::string name, error;
-    if (!getStatName(params, name, error)) {
+ConstElementPtr
+StatsMgr::statisticRemoveHandler(const string& /*name*/,
+                                 const ConstElementPtr& params) {
+    string name, error;
+    if (!StatsMgr::getStatName(params, name, error)) {
         return (createAnswer(CONTROL_RESULT_ERROR, error));
     }
-    if (instance().del(name)) {
+    if (StatsMgr::instance().del(name)) {
         return (createAnswer(CONTROL_RESULT_SUCCESS,
                              "Statistic '" + name + "' removed."));
     } else {
@@ -185,33 +454,59 @@ StatsMgr::statisticRemoveHandler(const std::string& /*name*/,
 
 }
 
-isc::data::ConstElementPtr
-StatsMgr::statisticRemoveAllHandler(const std::string& /*name*/,
-                                    const isc::data::ConstElementPtr& /*params*/) {
-    instance().removeAll();
+ConstElementPtr
+StatsMgr::statisticRemoveAllHandler(const string& /*name*/,
+                                    const ConstElementPtr& /*params*/) {
+    StatsMgr::instance().removeAll();
     return (createAnswer(CONTROL_RESULT_SUCCESS,
                          "All statistics removed."));
 }
 
-isc::data::ConstElementPtr
-StatsMgr::statisticGetAllHandler(const std::string& /*name*/,
-                                 const isc::data::ConstElementPtr& /*params*/) {
-    ConstElementPtr all_stats = instance().getAll();
+ConstElementPtr
+StatsMgr::statisticGetAllHandler(const string& /*name*/,
+                                 const ConstElementPtr& /*params*/) {
+    ConstElementPtr all_stats = StatsMgr::instance().getAll();
     return (createAnswer(CONTROL_RESULT_SUCCESS, all_stats));
 }
 
-isc::data::ConstElementPtr
-StatsMgr::statisticResetAllHandler(const std::string& /*name*/,
-                                   const isc::data::ConstElementPtr& /*params*/) {
-    instance().resetAll();
+ConstElementPtr
+StatsMgr::statisticResetAllHandler(const string& /*name*/,
+                                   const ConstElementPtr& /*params*/) {
+    StatsMgr::instance().resetAll();
     return (createAnswer(CONTROL_RESULT_SUCCESS,
                          "All statistics reset to neutral values."));
 }
 
+ConstElementPtr
+StatsMgr::statisticSetMaxSampleAgeAllHandler(const string& /*name*/,
+                                             const ConstElementPtr& params) {
+    string error;
+    StatsDuration duration;
+    if (!StatsMgr::getStatDuration(params, duration, error)) {
+        return (createAnswer(CONTROL_RESULT_ERROR, error));
+    }
+    StatsMgr::instance().setMaxSampleAgeAll(duration);
+    return (createAnswer(CONTROL_RESULT_SUCCESS,
+                         "All statistics duration limit are set."));
+}
+
+ConstElementPtr
+StatsMgr::statisticSetMaxSampleCountAllHandler(const string& /*name*/,
+                                               const ConstElementPtr& params) {
+    string error;
+    uint32_t max_samples;
+    if (!StatsMgr::getStatMaxSamples(params, max_samples, error)) {
+        return (createAnswer(CONTROL_RESULT_ERROR, error));
+    }
+    StatsMgr::instance().setMaxSampleCountAll(max_samples);
+    return (createAnswer(CONTROL_RESULT_SUCCESS,
+                         "All statistics count limit are set."));
+}
+
 bool
-StatsMgr::getStatName(const isc::data::ConstElementPtr& params,
-                      std::string& name,
-                      std::string& reason) {
+StatsMgr::getStatName(const ConstElementPtr& params,
+                      string& name,
+                      string& reason) {
     if (!params) {
         reason = "Missing mandatory 'name' parameter.";
         return (false);
@@ -225,8 +520,51 @@ StatsMgr::getStatName(const isc::data::ConstElementPtr& params,
         reason = "'name' parameter expected to be a string.";
         return (false);
     }
-
     name = stat_name->stringValue();
+    return (true);
+}
+
+bool
+StatsMgr::getStatDuration(const ConstElementPtr& params,
+                          StatsDuration& duration,
+                          string& reason) {
+    if (!params) {
+        reason = "Missing mandatory 'duration' parameter.";
+        return (false);
+    }
+    ConstElementPtr stat_duration = params->get("duration");
+    if (!stat_duration) {
+        reason = "Missing mandatory 'duration' parameter.";
+        return (false);
+    }
+    int64_t time_duration = stat_duration->intValue();
+    int64_t hours = time_duration / 3600;
+    time_duration -= hours * 3600;
+    int64_t minutes = time_duration / 60;
+    time_duration -= minutes * 60;
+    int64_t seconds = time_duration;
+    duration = boost::posix_time::time_duration(hours, minutes, seconds, 0);
+    return (true);
+}
+
+bool
+StatsMgr::getStatMaxSamples(const ConstElementPtr& params,
+                            uint32_t& max_samples,
+                            string& reason) {
+    if (!params) {
+        reason = "Missing mandatory 'max-samples' parameter.";
+        return (false);
+    }
+    ConstElementPtr stat_max_samples = params->get("max-samples");
+    if (!stat_max_samples) {
+        reason = "Missing mandatory 'max-samples' parameter.";
+        return (false);
+    }
+    if (stat_max_samples->getType() != Element::integer) {
+        reason = "'max-samples' parameter expected to be an integer.";
+        return (false);
+    }
+    max_samples = stat_max_samples->intValue();
     return (true);
 }
 

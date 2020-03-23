@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,15 +7,20 @@
 #ifndef COMMAND_OPTIONS_H
 #define COMMAND_OPTIONS_H
 
-#include <boost/noncopyable.hpp>
-
 #include <dhcp/option.h>
+
+#include <boost/noncopyable.hpp>
 #include <stdint.h>
 #include <string>
 #include <vector>
 
 namespace isc {
 namespace perfdhcp {
+
+enum class Scenario {
+    BASIC,
+    AVALANCHE
+};
 
 /// \brief Command Options.
 ///
@@ -24,6 +29,14 @@ namespace perfdhcp {
 ///
 class CommandOptions : public boost::noncopyable {
 public:
+
+    /// \brief Default Constructor.
+    ///
+    /// Private constructor as this is a singleton class.
+    /// Use CommandOptions::instance() to get instance of it.
+    CommandOptions() {
+        reset();
+    }
 
     /// @brief A vector holding MAC addresses.
     typedef std::vector<std::vector<uint8_t> > MacAddrsVector;
@@ -106,13 +119,7 @@ public:
         DORA_SARR
     };
 
-    /// CommandOptions is a singleton class. This method returns reference
-    /// to its sole instance.
-    ///
-    /// \return the only existing instance of command options
-    static CommandOptions& instance();
-
-    /// \brief Reset to defaults
+    /// \brief Reset to defaults.
     ///
     /// Reset data members to default values. This is specifically
     /// useful when unit tests are performed using different
@@ -186,6 +193,11 @@ public:
     /// \return all base values specified.
     std::vector<std::string> getBase() const { return base_; }
 
+    /// \brief Returns address uniqueness value.
+    ///
+    /// \return address uniqueness specified value.
+    bool getAddrUnique() const { return addr_unique_; }
+
     /// \brief Returns maximum number of exchanges.
     ///
     /// \return number of exchange requests before test is aborted.
@@ -196,7 +208,7 @@ public:
     /// \return test period before it is aborted.
     int getPeriod() const { return period_; }
 
-    /// \brief Returns drop time
+    /// \brief Returns drop time.
     ///
     /// The method returns maximum time elapsed from
     /// sending the packet before it is assumed dropped.
@@ -238,15 +250,15 @@ public:
     /// \return number of preload exchanges.
     int getPreload() const { return preload_; }
 
-    /// \brief Returns aggressivity value.
-    ///
-    /// \return aggressivity value.
-    int getAggressivity() const { return aggressivity_; }
-
     /// \brief Returns local port number.
     ///
     /// \return local port number.
     int getLocalPort() const { return local_port_; }
+
+    /// \brief Returns remote port number.
+    ///
+    /// \return remote port number.
+    int getRemotePort() const { return remote_port_; }
 
     /// @brief Returns the time in microseconds to delay the program by.
     ///
@@ -340,13 +352,35 @@ public:
 
     /// @brief Returns extra options to be inserted.
     ///
-    /// @return container with options
+    /// @return container with options.
     const isc::dhcp::OptionCollection& getExtraOpts() const { return extra_opts_; }
+
+    /// \brief Check if single-threaded mode is enabled.
+    ///
+    /// \return true if single-threaded mode is enabled.
+    bool isSingleThreaded() const { return single_thread_mode_; }
+
+    /// \brief Returns selected scenario.
+    ///
+    /// \return enum Scenario.
+    Scenario getScenario() const { return scenario_; }
 
     /// \brief Returns server name.
     ///
     /// \return server name.
     std::string getServerName() const { return server_name_; }
+
+
+    /// \brief Find if diagnostic flag has been set.
+    ///
+    /// \param diag diagnostic flag (a,e,i,s,r,t,T).
+    /// \return true if diagnostics flag has been set.
+    bool testDiags(const char diag) {
+        if (getDiags().find(diag) != std::string::npos) {
+            return (true);
+        }
+        return (false);
+    }
 
     /// \brief Print command line arguments.
     void printCommandLine() const;
@@ -362,15 +396,6 @@ public:
     void version() const;
 
 private:
-
-    /// \brief Default Constructor.
-    ///
-    /// Private constructor as this is a singleton class.
-    /// Use CommandOptions::instance() to get instance of it.
-    CommandOptions() {
-        reset();
-    }
-
     /// \brief Initializes class members based on the command line.
     ///
     /// Reads each command line parameter and sets class member values.
@@ -384,8 +409,11 @@ private:
 
     /// \brief Validates initialized options.
     ///
+    /// It checks provided options. If there are issues they are reported
+    /// and exception is raised. If possible some options are corrected
+    /// e.g. overriding drop_time in case of avalanche scenario.
     /// \throws isc::InvalidParameter if command line validation fails.
-    void validate() const;
+    void validate();
 
     /// \brief Throws !InvalidParameter exception if condition is true.
     ///
@@ -497,25 +525,25 @@ private:
     bool decodeMacString(const std::string& line);
 
     /// IP protocol version to be used, expected values are:
-    /// 4 for IPv4 and 6 for IPv6, default value 0 means "not set"
+    /// 4 for IPv4 and 6 for IPv6, default value 0 means "not set".
     uint8_t ipversion_;
 
-    /// Packet exchange mode (e.g. DORA/SARR)
+    /// Packet exchange mode (e.g. DORA/SARR).
     ExchangeMode exchange_mode_;
 
     /// Lease Type to be obtained: address only, IPv6 prefix only.
     LeaseType lease_type_;
 
-    /// Rate in exchange per second
-    int rate_;
+    /// Rate in exchange per second.
+    unsigned int rate_;
 
     /// A rate at which DHCPv6 Renew messages are sent.
-    int renew_rate_;
+    unsigned int renew_rate_;
 
     /// A rate at which DHCPv6 Release messages are sent.
-    int release_rate_;
+    unsigned int release_rate_;
 
-    /// Delay between generation of two consecutive performance reports
+    /// Delay between generation of two consecutive performance reports.
     int report_delay_;
 
     /// Number of simulated clients (aka randomization range).
@@ -526,20 +554,23 @@ private:
     std::vector<uint8_t> mac_template_;
 
     /// DUID template used to generate unique DUIDs for
-    /// simulated clients
+    /// simulated clients.
     std::vector<uint8_t> duid_template_;
 
+    /// Check address uniqueness.
+    bool addr_unique_;
+
     /// Collection of base values specified with -b<value>
-    /// options. Supported "bases" are mac=<mac> and duid=<duid>
+    /// options. Supported "bases" are mac=<mac> and duid=<duid>.
     std::vector<std::string> base_;
 
-    /// Number of microseconds by which you should delay the exit
+    /// Number of microseconds by which you should delay the exit.
     int exit_wait_time_;
 
     /// Number of 2 or 4-way exchanges to perform.
     std::vector<int> num_request_;
 
-    /// Test period in seconds
+    /// Test period in seconds.
     int period_;
 
     /// Indicates number of -d<value> parameters specified by user.
@@ -548,7 +579,7 @@ private:
 
     /// Time to elapse before request is lost. The first value of
     /// two-element vector refers to DO/SA exchanges,
-    /// second value refers to RA/RR. Default values are { 1, 1 }
+    /// second value refers to RA/RR. Default values are { 1, 1 }.
     std::vector<double> drop_time_;
 
     /// Maximum number of drops request before aborting test.
@@ -566,7 +597,7 @@ private:
     std::string localname_;
 
     /// Indicates that specified value with -l<value> is
-    /// rather interface (not address)
+    /// rather interface (not address).
     bool is_interface_;
 
     /// Number of preload packets. Preload packets are used to
@@ -574,11 +605,11 @@ private:
     /// measurements.
     int preload_;
 
-    /// Number of exchanges sent before next pause.
-    int aggressivity_;
-
-    /// Local port number (host endian)
+    /// Local port number (host endian).
     int local_port_;
+
+    /// Remote port number (host endian).
+    int remote_port_;
 
     /// Randomization seed.
     uint32_t seed_;
@@ -613,7 +644,7 @@ private:
     /// Offset of transaction id in template files. First vector
     /// element points to offset for DISCOVER/SOLICIT messages,
     /// second element points to transaction id offset for
-    /// REQUEST messages
+    /// REQUEST messages.
     std::vector<int> xid_offset_;
 
     /// Random value offset in templates. Random value offset
@@ -627,7 +658,7 @@ private:
     /// Offset of server id option in template packet.
     int sid_offset_;
 
-    /// Offset of requested ip data in template packet
+    /// Offset of requested ip data in template packet.
     int rip_offset_;
 
     /// String representing diagnostic selectors specified
@@ -646,6 +677,12 @@ private:
 
     /// @brief Extra options to be sent in each packet.
     isc::dhcp::OptionCollection extra_opts_;
+
+    /// @brief Option to switch modes between single-threaded and multi-threaded.
+    bool single_thread_mode_;
+
+    /// @brief Selected performance scenario. Default is basic.
+    Scenario scenario_;
 };
 
 }  // namespace perfdhcp

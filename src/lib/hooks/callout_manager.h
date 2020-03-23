@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -39,22 +39,18 @@ public:
 /// In operation, the class needs to know two items of data:
 ///
 /// - The list of server hooks, which is used in two ways.  Firstly, when a
-///   callout registers or deregisters a hook, it does so by name: the
+///   library registers or deregisters a hook, it does so by name: the
 ///   @ref isc::hooks::ServerHooks object supplies the names of registered
 ///   hooks.  Secondly, when the callouts associated with a hook are called by
 ///   the server, the server supplies the index of the relevant hook: this is
-///   validated by reference to the list of hook.
+///   validated by reference to the list of hooks.
 ///
 /// - The number of loaded libraries.  Each callout registered by a user
 ///   library is associated with that library, the callout manager storing both
 ///   a pointer to the callout and the index of the library in the list of
-///   loaded libraries.  Callouts are allowed to dynamically register and
-///   deregister callouts in the same library (including themselves): they
-///   cannot affect callouts registered by another library.  When calling a
-///   callout, the callout manager maintains the idea of a "current library
-///   index": if the callout calls one of the callout registration functions
-///   (indirectly via the @ref LibraryHandle object), the registration
-///   functions use the "current library index" in their processing.
+///   loaded libraries.  When calling a callout, the callout manager maintains
+///   the idea of a "current library index": this is used to access the context
+///   associated with the library.
 ///
 /// These two items of data are supplied when an object of this class is
 /// constructed.  The latter (number of libraries) can be updated after the
@@ -72,9 +68,7 @@ public:
 /// A1 and A2 (in that order) B registers B1 and B2 (in that order) and C
 /// registers C1 and C2 (in that order).  Internally, the callouts are stored
 /// in the order A1, A2, B1, B2, C1, and C2: this is also the order in which
-/// the are called.  If B now registers another callout (B3), it is added to
-/// the vector after the list of callouts associated with B: the new order is
-/// therefore A1, A2, B1, B2, B3, C1 and C2.
+/// they are called.
 ///
 /// Indexes range between 1 and n (where n is the number of the libraries
 /// loaded) and are assigned to libraries based on the order the libraries
@@ -159,48 +153,52 @@ public:
 
     /// @brief Register a callout on a hook for the current library
     ///
-    /// Registers a callout function for the current library with a given hook
-    /// (the index of the "current library" being given by the current_library_
-    /// member).  The callout is added to the end of the callouts for this
-    /// library that are associated with that hook.
+    /// Registers a callout function for the current library with a given hook.
+    /// The callout is added to the end of the callouts for this library that
+    /// are associated with that hook.
     ///
     /// @param name Name of the hook to which the callout is added.
     /// @param callout Pointer to the callout function to be registered.
+    /// @param library_index Library index used for registering the callout.
     ///
     /// @throw NoSuchHook The hook name is unrecognized.
     /// @throw Unexpected The hook name is valid but an internal data structure
     ///        is of the wrong size.
-    void registerCallout(const std::string& name, CalloutPtr callout);
+    void registerCallout(const std::string& name,
+                         CalloutPtr callout,
+                         int library_index);
 
     /// @brief De-Register a callout on a hook for the current library
     ///
     /// Searches through the functions registered by the the current library
-    /// (the index of the "current library" being given by the current_library_
-    /// member) with the named hook and removes all entries matching the
+    /// with the named hook and removes all entries matching the
     /// callout.
     ///
     /// @param name Name of the hook from which the callout is removed.
     /// @param callout Pointer to the callout function to be removed.
+    /// @param library_index Library index used for deregistering the callout.
     ///
     /// @return true if a one or more callouts were deregistered.
     ///
     /// @throw NoSuchHook The hook name is unrecognized.
     /// @throw Unexpected The hook name is valid but an internal data structure
     ///        is of the wrong size.
-    bool deregisterCallout(const std::string& name, CalloutPtr callout);
+    bool deregisterCallout(const std::string& name,
+                           CalloutPtr callout,
+                           int library_index);
 
     /// @brief Removes all callouts on a hook for the current library
     ///
     /// Removes all callouts associated with a given hook that were registered
-    /// by the current library (the index of the "current library" being given
-    /// by the current_library_ member).
+    /// by the current library.
     ///
     /// @param name Name of the hook from which the callouts are removed.
+    /// @param library_index Library index used for deregistering all callouts.
     ///
     /// @return true if one or more callouts were deregistered.
     ///
     /// @throw NoSuchHook Thrown if the hook name is unrecognized.
-    bool deregisterAllCallouts(const std::string& name);
+    bool deregisterAllCallouts(const std::string& name, int library_index);
 
     /// @brief Checks if callouts are present on a hook
     ///
@@ -265,14 +263,6 @@ public:
     /// @param command_name Command name for which the hook point should be
     ///        registered.
     void registerCommandHook(const std::string& command_name);
-
-    /// @brief Get current hook index
-    ///
-    /// Made available during callCallouts, this is the index of the hook
-    /// on which callouts are being called.
-    int getHookIndex() const {
-        return (current_hook_);
-    }
 
     /// @brief Get number of libraries
     ///
@@ -381,7 +371,7 @@ private:
     /// from global static objects. ServerHooks object creates hooks_ collection
     /// and CalloutManager creates its own hook_vector_ and both are initialized
     /// to the same size. All works well so far. However, if some code at a
-    /// later time (e.g. a hook library) register new hook point, then
+    /// later time (e.g. a hook library) registers new hook point, then
     /// ServerHooks::registerHook() will extend its hooks_ collection, but
     /// the CalloutManager will keep the old hook_vector_ that is too small by
     /// one. Now when the library is unloaded, deregisterAllCallouts will
@@ -401,30 +391,11 @@ private:
     /// the hook registration functions.
     ///
     /// @param library_index Value to check for validity as a library index.
-    ///        Valid values are 0 - numlib+1 and -1: see @ref setLibraryIndex
+    ///        Valid values are 0 -> numlib + 1 and -1: see @ref setLibraryIndex
     ///        for the meaning of the various values.
     ///
     /// @throw NoSuchLibrary Library index is not valid.
     void checkLibraryIndex(int library_index) const;
-
-    /// @brief Compare two callout entries for library equality
-    ///
-    /// This is used in callout removal code when all callouts on a hook for a
-    /// given library are being removed.  It checks whether two callout entries
-    /// have the same library index.
-    ///
-    /// @param ent1 First callout entry to check
-    /// @param ent2 Second callout entry to check
-    ///
-    /// @return bool true if the library entries are the same
-    class CalloutLibraryEqual :
-        public std::binary_function<CalloutEntry, CalloutEntry, bool> {
-    public:
-        bool operator()(const CalloutEntry& ent1,
-                        const CalloutEntry& ent2) const {
-            return (ent1.first == ent2.first);
-        }
-    };
 
     // Member variables
 
@@ -432,11 +403,6 @@ private:
     /// @ref hooksmgMaintenanceGuide for information as to why the class holds
     /// a reference instead of accessing the singleton within the code.
     ServerHooks& server_hooks_;
-
-    /// Current hook.  When a call is made to callCallouts, this holds the
-    /// index of the current hook.  It is set to an invalid value (-1)
-    /// otherwise.
-    int current_hook_;
 
     /// Current library index.  When a call is made to any of the callout
     /// registration methods, this variable indicates the index of the user
@@ -466,7 +432,7 @@ private:
     int num_libraries_;
 };
 
-} // namespace util
-} // namespace isc
+}  // namespace util
+}  // namespace isc
 
 #endif // CALLOUT_MANAGER_H

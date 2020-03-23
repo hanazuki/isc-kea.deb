@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,9 +19,10 @@
 #include <dhcpsrv/cfg_option_def.h>
 #include <dhcpsrv/cfg_mac_source.h>
 #include <dhcpsrv/srv_config.h>
+#include <dhcpsrv/parsers/base_network_parser.h>
 #include <cc/simple_parser.h>
 #include <exceptions/exceptions.h>
-#include <util/optional_value.h>
+#include <util/optional.h>
 
 #include <boost/shared_ptr.hpp>
 
@@ -227,6 +228,11 @@ typedef std::pair<isc::dhcp::OptionDefinitionPtr, std::string> OptionDefinitionT
 /// This parser creates an instance of a single option definition.
 class OptionDefParser : public isc::data::SimpleParser {
 public:
+    /// @brief Constructor.
+    ///
+    /// @param address_family Address family: @c AF_INET or @c AF_INET6.
+    OptionDefParser(const uint16_t address_family);
+
     /// @brief Parses an entry that describes single option definition.
     ///
     /// @param option_def a configuration entry to be parsed.
@@ -235,6 +241,10 @@ public:
     /// @throw DhcpConfigError if parsing was unsuccessful.
     OptionDefinitionTuple
     parse(isc::data::ConstElementPtr option_def);
+
+private:
+    /// @brief Address family: @c AF_INET or @c AF_INET6.
+    uint16_t address_family_;
 };
 
 /// @brief Parser for a list of option definitions.
@@ -245,6 +255,11 @@ public:
 /// is put into the provided storage.
 class OptionDefListParser : public isc::data::SimpleParser {
 public:
+    /// @brief Constructor.
+    ///
+    /// @param address_family Address family: @c AF_INET or @c AF_INET6.
+    OptionDefListParser(const uint16_t address_family);
+
     /// @brief Parses a list of option definitions, create them and store in cfg
     ///
     /// This method iterates over def_list, which is a JSON list of option definitions,
@@ -254,6 +269,10 @@ public:
     /// @param def_list JSON list describing option definitions
     /// @param cfg parsed option definitions will be stored here
     void parse(CfgOptionDefPtr cfg, isc::data::ConstElementPtr def_list);
+
+private:
+    /// @brief Address family: @c AF_INET or @c AF_INET6.
+    uint16_t address_family_;
 };
 
 /// @brief a collection of pools
@@ -420,7 +439,7 @@ public:
     /// @throw isc::dhcp::DhcpConfigError if the address string is not a valid
     /// IP address, is an address of the wrong family, or is already in the
     /// relay address list
-    void addAddress(const std::string& name, const std::string& address_str, 
+    void addAddress(const std::string& name, const std::string& address_str,
                     isc::data::ConstElementPtr relay_elem,
                     const isc::dhcp::Network::RelayInfoPtr& relay_info);
 private:
@@ -449,14 +468,15 @@ private:
 ///        instantiated here and family specific parameters are set)
 /// 5.     Control returns to createSubnet() (step 3) and common parameters
 ///        are set.
-
-class SubnetConfigParser : public isc::data::SimpleParser {
+class SubnetConfigParser : public BaseNetworkParser {
 public:
 
     /// @brief constructor
     ///
     /// @param family address family: @c AF_INET or @c AF_INET6
-    explicit SubnetConfigParser(uint16_t family);
+    /// @param check_iface Check if the specified interface exists in
+    /// the system.
+    explicit SubnetConfigParser(uint16_t family, bool check_iface = true);
 
     /// @brief virtual destructor (does nothing)
     virtual ~SubnetConfigParser() { }
@@ -481,18 +501,6 @@ protected:
     /// @param len is the prefix length
     virtual void initSubnet(isc::data::ConstElementPtr params,
                             isc::asiolink::IOAddress addr, uint8_t len) = 0;
-
-    /// @brief Attempts to convert text representation to HRMode enum.
-    ///
-    /// Allowed values are "disabled", "off" (alias for disabled),
-    /// "out-of-pool" and "all". See Subnet::HRMode for their exact meaning.
-    ///
-    /// @param txt Host Reservation mode in the textual form.
-    ///
-    /// @throw BadValue if the text cannot be converted.
-    ///
-    /// @return one of allowed HRMode values
-    static Network::HRMode hrModeFromText(const std::string& txt);
 
 private:
 
@@ -519,6 +527,9 @@ protected:
 
     /// Pointer to the options configuration.
     CfgOptionPtr options_;
+
+    /// Check if the specified interface exists in the system.
+    bool check_iface_;
 };
 
 /// @anchor Subnet4ConfigParser
@@ -532,7 +543,10 @@ public:
     /// @brief Constructor
     ///
     /// stores global scope parameters, options, option definitions.
-    Subnet4ConfigParser();
+    ///
+    /// @param check_iface Check if the specified interface exists in
+    /// the system.
+    Subnet4ConfigParser(bool check_iface = true);
 
     /// @brief Parses a single IPv4 subnet configuration and adds to the
     /// Configuration Manager.
@@ -561,6 +575,12 @@ protected:
 class Subnets4ListConfigParser : public isc::data::SimpleParser {
 public:
 
+    /// @brief constructor
+    ///
+    /// @param check_iface Check if the specified interface exists in
+    /// the system.
+    Subnets4ListConfigParser(bool check_iface = true);
+
     /// @brief parses contents of the list
     ///
     /// Iterates over all entries on the list, parses its content
@@ -579,6 +599,11 @@ public:
     /// @return Number of subnets created.
     size_t parse(Subnet4Collection& subnets,
                  data::ConstElementPtr subnets_list);
+
+protected:
+
+    /// Check if the specified interface exists in the system.
+    bool check_iface_;
 };
 
 /// @brief Parser for IPv6 pool definitions.
@@ -715,7 +740,10 @@ public:
     /// @brief Constructor
     ///
     /// stores global scope parameters, options, option definitions.
-    Subnet6ConfigParser();
+    ///
+    /// @param check_iface Check if the specified interface exists in
+    /// the system.
+    Subnet6ConfigParser(bool check_iface = true);
 
     /// @brief Parses a single IPv6 subnet configuration and adds to the
     /// Configuration Manager.
@@ -754,6 +782,12 @@ protected:
 class Subnets6ListConfigParser : public isc::data::SimpleParser {
 public:
 
+    /// @brief constructor
+    ///
+    /// @param check_iface Check if the specified interface exists in
+    /// the system.
+    Subnets6ListConfigParser(bool check_iface = true);
+
     /// @brief parses contents of the list
     ///
     /// Iterates over all entries on the list, parses its content
@@ -769,10 +803,16 @@ public:
     ///
     /// @param [out] subnets Container where parsed subnets will be stored.
     /// @param subnets_list pointer to a list of IPv6 subnets
+    /// @param check_iface Check if the specified interface exists in
+    /// the system.
     /// @return Number of subnets created.
     size_t parse(Subnet6Collection& subnets,
                  data::ConstElementPtr subnets_list);
 
+protected:
+
+    /// Check if the specified interface exists in the system.
+    bool check_iface_;
 };
 
 /// @brief Parser for  D2ClientConfig
@@ -790,7 +830,6 @@ public:
     /// The elements currently supported are (see isc::dhcp::D2ClientConfig
     /// for details on each):
     /// -# enable-updates
-    /// -# qualifying-suffix
     /// -# server-ip
     /// -# server-port
     /// -# sender-ip
@@ -798,10 +837,6 @@ public:
     /// -# max-queue-size
     /// -# ncr-protocol
     /// -# ncr-format
-    /// -# override-no-update
-    /// -# override-client-update
-    /// -# replace-client-name
-    /// -# generated-prefix
     ///
     /// @return returns a pointer to newly created D2ClientConfig.
     D2ClientConfigPtr parse(isc::data::ConstElementPtr d2_client_cfg);

@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -665,7 +665,8 @@ public:
     }
     using Element::get;
     ConstElementPtr get(const std::string& s) const {
-        return (contains(s) ? m.find(s)->second : ConstElementPtr());
+        auto found = m.find(s);
+        return (found != m.end() ? found->second : ConstElementPtr());
     }
     using Element::set;
     void set(const std::string& key, ConstElementPtr value);
@@ -746,7 +747,7 @@ void merge(ElementPtr element, ConstElementPtr other);
 /// negative means outbound and perhaps looping forever).
 /// @return a pointer to a fresh copy
 /// @throw raises a BadValue is a null pointer occurs.
-ElementPtr copy(ConstElementPtr from, int level = 100); 
+ElementPtr copy(ConstElementPtr from, int level = 100);
 
 /// @brief Compares the data with other using unordered lists
 ///

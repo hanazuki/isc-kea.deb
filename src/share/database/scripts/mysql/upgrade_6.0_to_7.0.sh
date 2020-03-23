@@ -1,11 +1,12 @@
 #!/bin/sh
 
+prefix=/usr/local
 # Include utilities. Use installed version if available and
 # use build version if it isn't.
 if [ -e ${prefix}/share/kea/scripts/admin-utils.sh ]; then
     . ${prefix}/share/kea/scripts/admin-utils.sh
 else
-    . /home/wlodek/dev/kea/src/bin/admin/admin-utils.sh
+    . /home/jenkins/workspace/kea-1.7/tarball-internal/kea/src/bin/admin/admin-utils.sh
 fi
 
 VERSION=`mysql_version "$@"`
@@ -213,7 +214,7 @@ CREATE TABLE IF NOT EXISTS dhcp4_option_def (
     space VARCHAR(128) NOT NULL,
     type TINYINT UNSIGNED NOT NULL,
     modification_ts TIMESTAMP NOT NULL,
-    array TINYINT(1) NOT NULL,
+    is_array TINYINT(1) NOT NULL,
     encapsulate VARCHAR(128) NOT NULL,
     record_types VARCHAR(512) DEFAULT NULL,
     user_context LONGTEXT,
@@ -456,7 +457,7 @@ CREATE TABLE IF NOT EXISTS dhcp6_option_def (
     space VARCHAR(128) NOT NULL,
     type TINYINT UNSIGNED NOT NULL,
     modification_ts TIMESTAMP NOT NULL,
-    array TINYINT(1) NOT NULL,
+    is_array TINYINT(1) NOT NULL,
     encapsulate VARCHAR(128) NOT NULL,
     record_types VARCHAR(512) DEFAULT NULL,
     user_context LONGTEXT,

@@ -1,8 +1,4 @@
-SUBDIRS = interprocess .
-if !CROSS_COMPILING
-SUBDIRS += compiler
-endif
-SUBDIRS += tests
+SUBDIRS = interprocess . compiler tests
 
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
 AM_CPPFLAGS += $(BOOST_INCLUDES)
@@ -50,11 +46,10 @@ libkea_log_la_CXXFLAGS += -Wno-unused-parameter -Wno-deprecated-declarations
 endif
 libkea_log_la_CPPFLAGS = $(AM_CPPFLAGS) $(LOG4CPLUS_INCLUDES)
 libkea_log_la_LIBADD   = $(top_builddir)/src/lib/log/interprocess/libkea-log_interprocess.la
-libkea_log_la_LIBADD  += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 libkea_log_la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_log_la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_log_la_LIBADD  += $(LOG4CPLUS_LIBS)
-libkea_log_la_LDFLAGS = -no-undefined -version-info 3:1:0
+libkea_log_la_LDFLAGS = -no-undefined -version-info 5:0:0
 
 # Specify the headers for copying into the installation directory tree.
 libkea_log_includedir = $(pkgincludedir)/log

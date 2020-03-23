@@ -1,18 +1,23 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+#include <exceptions/exceptions.h>
 #include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/parsers/simple_parser4.h>
 #include <dhcpsrv/srv_config.h>
 #include <dhcpsrv/lease_mgr_factory.h>
+#include <dhcpsrv/dhcpsrv_log.h>
 #include <dhcpsrv/cfg_hosts_util.h>
 #include <process/logging_info.h>
 #include <log/logger_manager.h>
 #include <log/logger_specification.h>
 #include <dhcp/pkt.h> // Needed for HWADDR_SOURCE_*
+#include <util/strutil.h>
+
 #include <list>
 #include <sstream>
 
@@ -36,10 +41,11 @@ SrvConfig::SrvConfig()
       cfg_host_operations6_(CfgHostOperations::createConfig6()),
       class_dictionary_(new ClientClassDictionary()),
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
+      server_threads_(0),
+      server_max_thread_queue_size_(0),
       d2_client_config_(new D2ClientConfig()),
       configured_globals_(Element::createMap()),
-      cfg_consist_(new CfgConsistency()), 
-      server_tag_("") {
+      cfg_consist_(new CfgConsistency()) {
 }
 
 SrvConfig::SrvConfig(const uint32_t sequence)
@@ -55,10 +61,11 @@ SrvConfig::SrvConfig(const uint32_t sequence)
       cfg_host_operations6_(CfgHostOperations::createConfig6()),
       class_dictionary_(new ClientClassDictionary()),
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
+      server_threads_(0),
+      server_max_thread_queue_size_(0),
       d2_client_config_(new D2ClientConfig()),
       configured_globals_(Element::createMap()),
-      cfg_consist_(new CfgConsistency()),
-      server_tag_("") {
+      cfg_consist_(new CfgConsistency()) {
 }
 
 std::string
@@ -157,8 +164,99 @@ SrvConfig::equals(const SrvConfig& other) const {
 }
 
 void
-SrvConfig::removeStatistics() {
+SrvConfig::merge(ConfigBase& other) {
+    ConfigBase::merge(other);
+    try {
+        SrvConfig& other_srv_config = dynamic_cast<SrvConfig&>(other);
+        // We merge objects in order of dependency (real or theoretical).
+        // First we merge the common stuff.
 
+        // Merge globals.
+        mergeGlobals(other_srv_config);
+
+        // Merge option defs. We need to do this next so we
+        // pass these into subsequent merges so option instances
+        // at each level can be created based on the merged
+        // definitions.
+        cfg_option_def_->merge((*other_srv_config.getCfgOptionDef()));
+
+        // Merge options.
+        cfg_option_->merge(cfg_option_def_, (*other_srv_config.getCfgOption()));
+
+        if (CfgMgr::instance().getFamily() == AF_INET) {
+            merge4(other_srv_config);
+        } else {
+            merge6(other_srv_config);
+        }
+    } catch (const std::bad_cast&) {
+        isc_throw(InvalidOperation, "internal server error: must use derivation"
+                  " of the SrvConfig as an argument of the call to"
+                  " SrvConfig::merge()");
+    }
+}
+
+void
+SrvConfig::merge4(SrvConfig& other) {
+    // Merge shared networks.
+    cfg_shared_networks4_->merge(cfg_option_def_, *(other.getCfgSharedNetworks4()));
+
+    // Merge subnets.
+    cfg_subnets4_->merge(cfg_option_def_, getCfgSharedNetworks4(),
+                         *(other.getCfgSubnets4()));
+
+    /// @todo merge other parts of the configuration here.
+}
+
+void
+SrvConfig::merge6(SrvConfig& other) {
+    // Merge shared networks.
+    cfg_shared_networks6_->merge(cfg_option_def_, *(other.getCfgSharedNetworks6()));
+
+    // Merge subnets.
+    cfg_subnets6_->merge(cfg_option_def_, getCfgSharedNetworks6(),
+                         *(other.getCfgSubnets6()));
+
+    /// @todo merge other parts of the configuration here.
+}
+
+void
+SrvConfig::mergeGlobals(SrvConfig& other) {
+    // Iterate over the "other" globals, adding/overwriting them into
+    // this config's list of globals.
+    for (auto other_global : other.getConfiguredGlobals()->mapValue()) {
+        addConfiguredGlobal(other_global.first, other_global.second);
+    }
+
+    // A handful of values are stored as members in SrvConfig. So we'll
+    // iterate over the merged globals, setting approprate members.
+    for (auto merged_global : getConfiguredGlobals()->mapValue()) {
+        std::string name = merged_global.first;
+        ConstElementPtr element = merged_global.second;
+        try {
+            if (name == "decline-probation-period") {
+                setDeclinePeriod(element->intValue());
+            }
+            else if (name == "echo-client-id") {
+                // echo-client-id is v4 only, but we'll let upstream
+                // worry about that.
+                setEchoClientId(element->boolValue());
+            }
+            else if (name == "dhcp4o6-port") {
+                setDhcp4o6Port(element->intValue());
+            }
+            else if (name == "server-tag") {
+                setServerTag(element->stringValue());
+            }
+        } catch(const std::exception& ex) {
+            isc_throw (BadValue, "Invalid value:" << element->str()
+                       << " explict global:" << name);
+        }
+    }
+}
+
+
+void
+SrvConfig::removeStatistics() {
     // Removes statistics for v4 and v6 subnets
     getCfgSubnets4()->removeStatistics();
 
@@ -180,6 +278,92 @@ SrvConfig::updateStatistics() {
     }
 }
 
+isc::data::ConstElementPtr
+SrvConfig::getConfiguredGlobal(std::string name) const {
+    isc::data::ConstElementPtr global;
+    if (configured_globals_->contains(name)) {
+        global = configured_globals_->get(name);
+    }
+
+    return (global);
+}
+
+void
+SrvConfig::clearConfiguredGlobals() {
+    configured_globals_ = isc::data::Element::createMap();
+}
+
+void
+SrvConfig::applyDefaultsConfiguredGlobals(const SimpleDefaults& defaults) {
+    // Code from SimpleParser::setDefaults
+    // This is the position representing a default value. As the values
+    // we're inserting here are not present in whatever the config file
+    // came from, we need to make sure it's clearly labeled as default.
+    const Element::Position pos("<default-value>", 0, 0);
+    ConstElementPtr globals = getConfiguredGlobals();
+
+    // Let's go over all parameters we have defaults for.
+    for (auto def_value : defaults) {
+
+        // Try if such a parameter is there. If it is, let's
+        // skip it, because user knows best *cough*.
+        ConstElementPtr x = globals->get(def_value.name_);
+        if (x) {
+            // There is such a value already, skip it.
+            continue;
+        }
+
+        // There isn't such a value defined, let's create the default
+        // value...
+        switch (def_value.type_) {
+        case Element::string: {
+            x.reset(new StringElement(def_value.value_, pos));
+            break;
+        }
+        case Element::integer: {
+            try {
+                int int_value = boost::lexical_cast<int>(def_value.value_);
+                x.reset(new IntElement(int_value, pos));
+            }
+            catch (const std::exception& ex) {
+                isc_throw(BadValue,
+                          "Internal error. Integer value expected for: "
+                          << def_value.name_ << ", value is: "
+                          << def_value.value_ );
+            }
+
+            break;
+        }
+        case Element::boolean: {
+            bool bool_value;
+            if (def_value.value_ == std::string("true")) {
+                bool_value = true;
+            } else if (def_value.value_ == std::string("false")) {
+                bool_value = false;
+            } else {
+                isc_throw(BadValue,
+                          "Internal error. Boolean value for "
+                          << def_value.name_ << " specified as "
+                          << def_value.value_ << ", expected true or false");
+            }
+            x.reset(new BoolElement(bool_value, pos));
+            break;
+        }
+        case Element::real: {
+            double dbl_value = boost::lexical_cast<double>(def_value.value_);
+            x.reset(new DoubleElement(dbl_value, pos));
+            break;
+        }
+        default:
+            // No default values for null, list or map
+            isc_throw(BadValue,
+                      "Internal error. Incorrect default value type for "
+                      << def_value.name_);
+        }
+        addConfiguredGlobal(def_value.name_, x);
+    }
+}
+
 void
 SrvConfig::extractConfiguredGlobals(isc::data::ConstElementPtr config) {
     if (config->getType() != Element::map) {
@@ -198,18 +382,27 @@ SrvConfig::extractConfiguredGlobals(isc::data::ConstElementPtr config) {
 ElementPtr
 SrvConfig::toElement() const {
     // Toplevel map
-    ElementPtr result = ConfigBase::toElement();
+    ElementPtr result = Element::createMap();
 
     // Get family for the configuration manager
     uint16_t family = CfgMgr::instance().getFamily();
     // DhcpX global map
-    ElementPtr dhcp = Element::createMap();
+    ElementPtr dhcp = ConfigBase::toElement();
 
     // Add in explicitly configured globals.
     dhcp->setValue(configured_globals_->mapValue());
 
     // Set user-context
     contextToElement(dhcp);
+
+    // Set data directory if DHCPv6 and specified.
+    if (family == AF_INET6) {
+        const util::Optional<std::string>& datadir =
+            CfgMgr::instance().getDataDir();
+        if (!datadir.unspecified()) {
+            dhcp->set("data-directory", Element::create(datadir));
+        }
+    }
 
     // Set decline-probation-period
     dhcp->set("decline-probation-period",
@@ -372,7 +565,7 @@ SrvConfig::toElement() const {
     }
     // Set client-classes
     ConstElementPtr client_classes = class_dictionary_->toElement();
-    // @todo accept empty list
+    /// @todo accept empty list
     if (!client_classes->empty()) {
         dhcp->set("client-classes", client_classes);
     }
@@ -401,5 +594,156 @@ SrvConfig::toElement() const {
     return (result);
 }
 
+DdnsParamsPtr
+SrvConfig::getDdnsParams(const Subnet4Ptr& subnet) const {
+    return (DdnsParamsPtr(new DdnsParams(subnet, 
+                                         getD2ClientConfig()->getEnableUpdates())));
 }
+
+DdnsParamsPtr
+SrvConfig::getDdnsParams(const Subnet6Ptr& subnet) const {
+   return(DdnsParamsPtr(new DdnsParams(subnet,
+                                       getD2ClientConfig()->getEnableUpdates())));
 }
+
+void
+SrvConfig::moveDdnsParams(isc::data::ElementPtr srv_elem) {
+    if (!srv_elem || (srv_elem->getType() != Element::map)) {
+        isc_throw(BadValue, "moveDdnsParams server config must be given a map element");
+    }
+
+    if (!srv_elem->contains("dhcp-ddns")) {
+        /* nothing to do */
+        return;
+    }
+
+    ElementPtr d2_elem = boost::const_pointer_cast<Element>(srv_elem->get("dhcp-ddns"));
+    if (!d2_elem || (d2_elem->getType() != Element::map)) {
+        isc_throw(BadValue, "moveDdnsParams dhcp-ddns is not a map");
+    }
+
+    struct Param {
+        std::string from_name;
+        std::string to_name;
+    };
+
+    std::vector<Param> params {
+        { "override-no-update", "ddns-override-no-update" },
+        { "override-client-update", "ddns-override-client-update" },
+        { "replace-client-name", "ddns-replace-client-name" },
+        { "generated-prefix", "ddns-generated-prefix" },
+        { "qualifying-suffix", "ddns-qualifying-suffix" },
+        { "hostname-char-set", "hostname-char-set" },
+        { "hostname-char-replacement", "hostname-char-replacement" }
+    };
+
+    for (auto param : params) {
+        if (d2_elem->contains(param.from_name)) {
+            if (!srv_elem->contains(param.to_name)) {
+                // No global value for it already, so let's add it.
+                srv_elem->set(param.to_name, d2_elem->get(param.from_name));
+                LOG_INFO(dhcpsrv_logger, DHCPSRV_CFGMGR_DDNS_PARAMETER_MOVED)
+                        .arg(param.from_name).arg(param.to_name);
+            } else {
+                // Already a global value, we'll use it and ignore this one.
+                LOG_INFO(dhcpsrv_logger, DHCPSRV_CFGMGR_DDNS_PARAMETER_IGNORED)
+                        .arg(param.from_name).arg(param.to_name);
+            }
+
+            // Now remove it from d2_data, so D2ClientCfg won't complain.
+            d2_elem->remove(param.from_name);
+        }
+    }
+}
+
+bool
+DdnsParams::getEnableUpdates() const {
+    if (!subnet_) {
+        return (false);
+    }
+
+    return (d2_client_enabled_ && subnet_->getDdnsSendUpdates().get());
+}
+
+bool
+DdnsParams::getOverrideNoUpdate() const {
+    if (!subnet_) {
+        return (false);
+    }
+
+    return (subnet_->getDdnsOverrideNoUpdate().get());
+}
+bool DdnsParams::getOverrideClientUpdate() const {
+    if (!subnet_) {
+        return (false);
+    }
+
+    return (subnet_->getDdnsOverrideClientUpdate().get());
+}
+
+D2ClientConfig::ReplaceClientNameMode
+DdnsParams::getReplaceClientNameMode() const {
+    if (!subnet_) {
+        return (D2ClientConfig::RCM_NEVER);
+    }
+
+    return (subnet_->getDdnsReplaceClientNameMode().get());
+}
+
+std::string
+DdnsParams::getGeneratedPrefix() const {
+    if (!subnet_) {
+        return ("");
+    }
+
+    return (subnet_->getDdnsGeneratedPrefix().get());
+}
+
+std::string
+DdnsParams::getQualifyingSuffix() const {
+    if (!subnet_) {
+        return ("");
+    }
+
+    return (subnet_->getDdnsQualifyingSuffix().get());
+}
+
+std::string
+DdnsParams::getHostnameCharSet() const {
+    if (!subnet_) {
+        return ("");
+    }
+
+    return (subnet_->getHostnameCharSet().get());
+}
+
+std::string
+DdnsParams::getHostnameCharReplacement() const {
+    if (!subnet_) {
+        return ("");
+    }
+
+    return (subnet_->getHostnameCharReplacement().get());
+}
+
+util::str::StringSanitizerPtr
+DdnsParams::getHostnameSanitizer() const {
+    util::str::StringSanitizerPtr sanitizer;
+    if (subnet_) {
+        std::string char_set = getHostnameCharSet();
+        if (!char_set.empty()) {
+            try {
+                sanitizer.reset(new util::str::StringSanitizer(char_set,
+                                                               getHostnameCharReplacement()));
+            } catch (const std::exception& ex) {
+                isc_throw(BadValue, "hostname_char_set_: '" << char_set <<
+                                    "' is not a valid regular expression");
+            }
+        }
+    }
+
+    return (sanitizer);
+}
+
+} // namespace dhcp
+} // namespace isc

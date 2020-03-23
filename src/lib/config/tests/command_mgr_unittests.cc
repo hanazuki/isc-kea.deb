@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <gtest/gtest.h>
 
+#include <testutils/sandbox.h>
 #include <asiolink/io_service.h>
 #include <config/base_command_mgr.h>
 #include <config/command_mgr.h>
@@ -28,6 +29,7 @@ using namespace std;
 // Test class for Command Manager
 class CommandMgrTest : public ::testing::Test {
 public:
+    isc::test::Sandbox sandbox;
 
     /// Default constructor
     CommandMgrTest()
@@ -58,13 +60,12 @@ public:
     /// @brief Returns socket path (using either hardcoded path or env variable)
     /// @return path to the unix socket
     std::string getSocketPath() {
-
         std::string socket_path;
         const char* env = getenv("KEA_SOCKET_TEST_DIR");
         if (env) {
             socket_path = std::string(env) + "/test-socket";
         } else {
-            socket_path = std::string(TEST_DATA_BUILDDIR) + "/test-socket";
+            socket_path = sandbox.join("test-socket");
         }
         return (socket_path);
     }
@@ -541,4 +542,29 @@ TEST_F(CommandMgrTest, commandProcessedHookReplaceResponse) {
     EXPECT_EQ("change-response:[ \"just\", \"some\", \"data\" ]:"
              "{ \"result\": 2, \"text\": \"'change-response' command not supported.\" }",
               processed_log_);
+}
+
+// Verifies that a socket cannot be concurrently opened more than once.
+TEST_F(CommandMgrTest, exclusiveOpen) {
+    // Pass in valid parameters.
+    ElementPtr socket_info = Element::createMap();
+    socket_info->set("socket-type", Element::create("unix"));
+    socket_info->set("socket-name", Element::create(getSocketPath()));
+
+    EXPECT_NO_THROW(CommandMgr::instance().openCommandSocket(socket_info));
+    EXPECT_GE(CommandMgr::instance().getControlSocketFD(), 0);
+
+    // Should not be able to open it twice.
+    EXPECT_THROW(CommandMgr::instance().openCommandSocket(socket_info),
+                 isc::config::SocketError);
+
+    // Now let's close it.
+    EXPECT_NO_THROW(CommandMgr::instance().closeCommandSocket());
+
+    // Should be able to re-open it now.
+    EXPECT_NO_THROW(CommandMgr::instance().openCommandSocket(socket_info));
+    EXPECT_GE(CommandMgr::instance().getControlSocketFD(), 0);
+
+    // Now let's close it.
+    EXPECT_NO_THROW(CommandMgr::instance().closeCommandSocket());
 }

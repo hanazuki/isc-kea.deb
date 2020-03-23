@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -50,8 +50,11 @@ using namespace std;
   NULL_TYPE "null"
 
   DHCP6 "Dhcp6"
+  DATA_DIRECTORY "data-directory"
   CONFIG_CONTROL "config-control"
   CONFIG_DATABASES "config-databases"
+  CONFIG_FETCH_WAIT_TIME "config-fetch-wait-time"
+
   INTERFACES_CONFIG "interfaces-config"
   INTERFACES "interfaces"
   RE_DETECT "re-detect"
@@ -76,16 +79,32 @@ using namespace std;
   MAX_RECONNECT_TRIES "max-reconnect-tries"
   RECONNECT_WAIT_TIME "reconnect-wait-time"
   KEYSPACE "keyspace"
+  CONSISTENCY "consistency"
+  SERIAL_CONSISTENCY "serial-consistency"
   REQUEST_TIMEOUT "request-timeout"
   TCP_KEEPALIVE "tcp-keepalive"
   TCP_NODELAY "tcp-nodelay"
+  MAX_ROW_ERRORS "max-row-errors"
 
   PREFERRED_LIFETIME "preferred-lifetime"
+  MIN_PREFERRED_LIFETIME "min-preferred-lifetime"
+  MAX_PREFERRED_LIFETIME "max-preferred-lifetime"
   VALID_LIFETIME "valid-lifetime"
+  MIN_VALID_LIFETIME "min-valid-lifetime"
+  MAX_VALID_LIFETIME "max-valid-lifetime"
   RENEW_TIMER "renew-timer"
   REBIND_TIMER "rebind-timer"
+  CALCULATE_TEE_TIMES "calculate-tee-times"
+  T1_PERCENT "t1-percent"
+  T2_PERCENT "t2-percent"
   DECLINE_PROBATION_PERIOD "decline-probation-period"
   SERVER_TAG "server-tag"
+  DDNS_SEND_UPDATES "ddns-send-updates"
+  DDNS_OVERRIDE_NO_UPDATE "ddns-override-no-update"
+  DDNS_OVERRIDE_CLIENT_UPDATE "ddns-override-client-update"
+  DDNS_REPLACE_CLIENT_NAME "ddns-replace-client-name"
+  DDNS_GENERATED_PREFIX "ddns-generated-prefix"
+  DDNS_QUALIFYING_SUFFIX "ddns-qualifying-suffix"
   SUBNET6 "subnet6"
   OPTION_DEF "option-def"
   OPTION_DATA "option-data"
@@ -174,6 +193,9 @@ using namespace std;
   SOCKET_NAME "socket-name"
 
   DHCP_QUEUE_CONTROL "dhcp-queue-control"
+  ENABLE_QUEUE "enable-queue"
+  QUEUE_TYPE "queue-type"
+  CAPACITY "capacity"
 
   DHCP_DDNS "dhcp-ddns"
   ENABLE_UPDATES "enable-updates"
@@ -208,6 +230,7 @@ using namespace std;
   FLUSH "flush"
   MAXSIZE "maxsize"
   MAXVER "maxver"
+  PATTERN "pattern"
 
   DHCP4 "Dhcp4"
   DHCPDDNS "DhcpDdns"
@@ -243,7 +266,7 @@ using namespace std;
 %type <ElementPtr> hr_mode
 %type <ElementPtr> duid_type
 %type <ElementPtr> ncr_protocol_value
-%type <ElementPtr> replace_client_name_value
+%type <ElementPtr> ddns_replace_client_name_value
 
 %printer { yyoutput << $$; } <*>;
 
@@ -435,8 +458,13 @@ global_params: global_param
 
 // These are the parameters that are allowed in the top-level for
 // Dhcp6.
-global_param: preferred_lifetime
+global_param: data_directory
+            | preferred_lifetime
+            | min_preferred_lifetime
+            | max_preferred_lifetime
             | valid_lifetime
+            | min_valid_lifetime
+            | max_valid_lifetime
             | renew_timer
             | rebind_timer
             | decline_probation_period
@@ -466,17 +494,57 @@ global_param: preferred_lifetime
             | config_control
             | server_tag
             | reservation_mode
+            | calculate_tee_times
+            | t1_percent
+            | t2_percent
+            | loggers
+            | hostname_char_set
+            | hostname_char_replacement
+            | ddns_send_updates
+            | ddns_override_no_update
+            | ddns_override_client_update
+            | ddns_replace_client_name
+            | ddns_generated_prefix
+            | ddns_qualifying_suffix
             | unknown_map_entry
             ;
+
+data_directory: DATA_DIRECTORY {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr datadir(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("data-directory", datadir);
+    ctx.leave();
+};
 
 preferred_lifetime: PREFERRED_LIFETIME COLON INTEGER {
     ElementPtr prf(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("preferred-lifetime", prf);
 };
 
+min_preferred_lifetime: MIN_PREFERRED_LIFETIME COLON INTEGER {
+    ElementPtr prf(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("min-preferred-lifetime", prf);
+};
+
+max_preferred_lifetime: MAX_PREFERRED_LIFETIME COLON INTEGER {
+    ElementPtr prf(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("max-preferred-lifetime", prf);
+};
+
 valid_lifetime: VALID_LIFETIME COLON INTEGER {
     ElementPtr prf(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("valid-lifetime", prf);
+};
+
+min_valid_lifetime: MIN_VALID_LIFETIME COLON INTEGER {
+    ElementPtr prf(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("min-valid-lifetime", prf);
+};
+
+max_valid_lifetime: MAX_VALID_LIFETIME COLON INTEGER {
+    ElementPtr prf(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("max-valid-lifetime", prf);
 };
 
 renew_timer: RENEW_TIMER COLON INTEGER {
@@ -489,12 +557,100 @@ rebind_timer: REBIND_TIMER COLON INTEGER {
     ctx.stack_.back()->set("rebind-timer", prf);
 };
 
+calculate_tee_times: CALCULATE_TEE_TIMES COLON BOOLEAN {
+    ElementPtr ctt(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("calculate-tee-times", ctt);
+};
+
+t1_percent: T1_PERCENT COLON FLOAT {
+    ElementPtr t1(new DoubleElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("t1-percent", t1);
+};
+
+t2_percent: T2_PERCENT COLON FLOAT {
+    ElementPtr t2(new DoubleElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("t2-percent", t2);
+};
+
 decline_probation_period: DECLINE_PROBATION_PERIOD COLON INTEGER {
     ElementPtr dpp(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("decline-probation-period", dpp);
 };
 
-server_tag: SERVER_TAG  {
+ddns_send_updates: DDNS_SEND_UPDATES COLON BOOLEAN {
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("ddns-send-updates", b);
+};
+
+ddns_override_no_update: DDNS_OVERRIDE_NO_UPDATE COLON BOOLEAN {
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("ddns-override-no-update", b);
+};
+
+ddns_override_client_update: DDNS_OVERRIDE_CLIENT_UPDATE COLON BOOLEAN {
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("ddns-override-client-update", b);
+};
+
+ddns_replace_client_name: DDNS_REPLACE_CLIENT_NAME {
+    ctx.enter(ctx.REPLACE_CLIENT_NAME);
+} COLON ddns_replace_client_name_value {
+    ctx.stack_.back()->set("ddns-replace-client-name", $4);
+    ctx.leave();
+};
+
+ddns_replace_client_name_value:
+    WHEN_PRESENT {
+      $$ = ElementPtr(new StringElement("when-present", ctx.loc2pos(@1)));
+      }
+  | NEVER {
+      $$ = ElementPtr(new StringElement("never", ctx.loc2pos(@1)));
+      }
+  | ALWAYS {
+      $$ = ElementPtr(new StringElement("always", ctx.loc2pos(@1)));
+      }
+  | WHEN_NOT_PRESENT {
+      $$ = ElementPtr(new StringElement("when-not-present", ctx.loc2pos(@1)));
+      }
+  | BOOLEAN  {
+      error(@1, "boolean values for the replace-client-name are "
+                "no longer supported");
+      }
+  ;
+
+ddns_generated_prefix: DDNS_GENERATED_PREFIX {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("ddns-generated-prefix", s);
+    ctx.leave();
+};
+
+ddns_qualifying_suffix: DDNS_QUALIFYING_SUFFIX {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("ddns-qualifying-suffix", s);
+    ctx.leave();
+};
+
+hostname_char_set: HOSTNAME_CHAR_SET {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("hostname-char-set", s);
+    ctx.leave();
+};
+
+hostname_char_replacement: HOSTNAME_CHAR_REPLACEMENT {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("hostname-char-replacement", s);
+    ctx.leave();
+};
+
+server_tag: SERVER_TAG {
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr stag(new StringElement($4, ctx.loc2pos(@4)));
@@ -622,6 +778,9 @@ database_map_param: database_type
                   | tcp_keepalive
                   | tcp_nodelay
                   | keyspace
+                  | consistency
+                  | serial_consistency
+                  | max_row_errors
                   | unknown_map_entry
                   ;
 
@@ -700,6 +859,11 @@ reconnect_wait_time: RECONNECT_WAIT_TIME COLON INTEGER {
     ctx.stack_.back()->set("reconnect-wait-time", n);
 };
 
+max_row_errors: MAX_ROW_ERRORS COLON INTEGER {
+    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("max-row-errors", n);
+};
+
 request_timeout: REQUEST_TIMEOUT COLON INTEGER {
     ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("request-timeout", n);
@@ -733,6 +897,22 @@ keyspace: KEYSPACE {
 } COLON STRING {
     ElementPtr ks(new StringElement($4, ctx.loc2pos(@4)));
     ctx.stack_.back()->set("keyspace", ks);
+    ctx.leave();
+};
+
+consistency: CONSISTENCY {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr c(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("consistency", c);
+    ctx.leave();
+};
+
+serial_consistency: SERIAL_CONSISTENCY {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr c(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("serial-consistency", c);
     ctx.leave();
 };
 
@@ -1025,7 +1205,11 @@ subnet6_params: subnet6_param
 
 // This defines a list of allowed parameters for each subnet.
 subnet6_param: preferred_lifetime
+             | min_preferred_lifetime
+             | max_preferred_lifetime
              | valid_lifetime
+             | min_valid_lifetime
+             | max_valid_lifetime
              | renew_timer
              | rebind_timer
              | option_data_list
@@ -1043,6 +1227,17 @@ subnet6_param: preferred_lifetime
              | relay
              | user_context
              | comment
+             | calculate_tee_times
+             | t1_percent
+             | t2_percent
+             | hostname_char_set
+             | hostname_char_replacement
+             | ddns_send_updates
+             | ddns_override_no_update
+             | ddns_override_client_update
+             | ddns_replace_client_name
+             | ddns_generated_prefix
+             | ddns_qualifying_suffix
              | unknown_map_entry
              ;
 
@@ -1158,10 +1353,25 @@ shared_network_param: name
                     | client_class
                     | require_client_classes
                     | preferred_lifetime
+                    | min_preferred_lifetime
+                    | max_preferred_lifetime
                     | rapid_commit
                     | valid_lifetime
+                    | min_valid_lifetime
+                    | max_valid_lifetime
                     | user_context
                     | comment
+                    | calculate_tee_times
+                    | t1_percent
+                    | t2_percent
+                    | hostname_char_set
+                    | hostname_char_replacement
+                    | ddns_send_updates
+                    | ddns_override_no_update
+                    | ddns_override_client_update
+                    | ddns_replace_client_name
+                    | ddns_generated_prefix
+                    | ddns_qualifying_suffix
                     | unknown_map_entry
                     ;
 
@@ -1928,40 +2138,51 @@ socket_name: SOCKET_NAME {
 // --- dhcp-queue-control ---------------------------------------------
 
 dhcp_queue_control: DHCP_QUEUE_CONTROL {
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON map_value {
-    ElementPtr qc = $4;
+    ElementPtr qc(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("dhcp-queue-control", qc);
+    ctx.stack_.push_back(qc);
+    ctx.enter(ctx.DHCP_QUEUE_CONTROL);
+} COLON LCURLY_BRACKET queue_control_params RCURLY_BRACKET {
+    // The enable queue parameter is required.
+    ctx.require("enable-queue", ctx.loc2pos(@4), ctx.loc2pos(@6));
+    ctx.stack_.pop_back();
+    ctx.leave();
+};
 
-    // Doing this manually, because dhcp-queue-control
-    // content is otherwise arbitrary
-    if (!qc->contains("enable-queue")) {
-        std::stringstream msg;
-        msg << "'enable-queue' is required: ";
-        msg  << "(" << qc->getPosition().str() << ")";
-        error(@1, msg.str());
-    }
+queue_control_params: queue_control_param
+                    | queue_control_params COMMA queue_control_param
+                    ;
 
-    // queue-enable is mandatory
-    ConstElementPtr enable_queue = qc->get("enable-queue");
-    if (enable_queue->getType() != Element::boolean) {
-        std::stringstream msg;
-        msg << "'enable-queue' must be boolean: ";
-        msg  << "(" << qc->getPosition().str() << ")";
-        error(@1, msg.str());
-     }
+queue_control_param: enable_queue
+                   | queue_type
+                   | capacity
+                   | user_context
+                   | comment
+                   | arbitrary_map_entry
+                   ;
 
-    // if queue-type is supplied make sure it's a string
-    if (qc->contains("queue-type")) {
-        ConstElementPtr queue_type = qc->get("queue-type");
-        if (queue_type->getType() != Element::string) {
-            std::stringstream msg;
-            msg << "'queue-type' must be a string: ";
-            msg  << "(" << qc->getPosition().str() << ")";
-            error(@1, msg.str());
-        }
-    }
+enable_queue: ENABLE_QUEUE COLON BOOLEAN {
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("enable-queue", b);
+};
 
+queue_type: QUEUE_TYPE {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr qt(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("queue-type", qt);
+    ctx.leave();
+};
+
+capacity: CAPACITY COLON INTEGER {
+    ElementPtr c(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("capacity", c);
+};
+
+arbitrary_map_entry: STRING {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON value {
+    ctx.stack_.back()->set($1, $4);
     ctx.leave();
 };
 
@@ -2002,12 +2223,12 @@ dhcp_ddns_param: enable_updates
                | max_queue_size
                | ncr_protocol
                | ncr_format
-               | override_no_update
-               | override_client_update
-               | replace_client_name
-               | generated_prefix
-               | hostname_char_set
-               | hostname_char_replacement
+               | dep_override_no_update
+               | dep_override_client_update
+               | dep_replace_client_name
+               | dep_generated_prefix
+               | dep_hostname_char_set
+               | dep_hostname_char_replacement
                | user_context
                | comment
                | unknown_map_entry
@@ -2077,43 +2298,28 @@ ncr_format: NCR_FORMAT {
     ctx.leave();
 };
 
-override_no_update: OVERRIDE_NO_UPDATE COLON BOOLEAN {
+// Deprecated, moved to global/network scopes. Eventually it should be removed.
+dep_override_no_update: OVERRIDE_NO_UPDATE COLON BOOLEAN {
     ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("override-no-update", b);
 };
 
-override_client_update: OVERRIDE_CLIENT_UPDATE COLON BOOLEAN {
+// Deprecated, moved to global/network scopes. Eventually it should be removed.
+dep_override_client_update: OVERRIDE_CLIENT_UPDATE COLON BOOLEAN {
     ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("override-client-update", b);
 };
 
-replace_client_name: REPLACE_CLIENT_NAME {
+// Deprecated, moved to global/network scopes. Eventually it should be removed.
+dep_replace_client_name: REPLACE_CLIENT_NAME {
     ctx.enter(ctx.REPLACE_CLIENT_NAME);
-} COLON replace_client_name_value {
+} COLON ddns_replace_client_name_value {
     ctx.stack_.back()->set("replace-client-name", $4);
     ctx.leave();
 };
 
-replace_client_name_value:
-    WHEN_PRESENT {
-      $$ = ElementPtr(new StringElement("when-present", ctx.loc2pos(@1)));
-      }
-  | NEVER {
-      $$ = ElementPtr(new StringElement("never", ctx.loc2pos(@1)));
-      }
-  | ALWAYS {
-      $$ = ElementPtr(new StringElement("always", ctx.loc2pos(@1)));
-      }
-  | WHEN_NOT_PRESENT {
-      $$ = ElementPtr(new StringElement("when-not-present", ctx.loc2pos(@1)));
-      }
-  | BOOLEAN  {
-      error(@1, "boolean values for the replace-client-name are "
-                "no longer supported");
-      }
-  ;
-
-generated_prefix: GENERATED_PREFIX {
+// Deprecated, moved to global/network scopes. Eventually it should be removed.
+dep_generated_prefix: GENERATED_PREFIX {
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
@@ -2121,7 +2327,8 @@ generated_prefix: GENERATED_PREFIX {
     ctx.leave();
 };
 
-hostname_char_set: HOSTNAME_CHAR_SET {
+// Deprecated, moved to global/network scopes. Eventually it should be removed.
+dep_hostname_char_set: HOSTNAME_CHAR_SET {
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
@@ -2129,7 +2336,8 @@ hostname_char_set: HOSTNAME_CHAR_SET {
     ctx.leave();
 };
 
-hostname_char_replacement: HOSTNAME_CHAR_REPLACEMENT {
+// Deprecated, moved to global/network scopes. Eventually it should be removed.
+dep_hostname_char_replacement: HOSTNAME_CHAR_REPLACEMENT {
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
@@ -2189,6 +2397,7 @@ config_control_params: config_control_param
 
 // This defines a list of allowed parameters for each subnet.
 config_control_param: config_databases
+                    | config_fetch_wait_time
                     ;
 
 config_databases: CONFIG_DATABASES {
@@ -2199,6 +2408,11 @@ config_databases: CONFIG_DATABASES {
 } COLON LSQUARE_BRACKET database_list RSQUARE_BRACKET {
     ctx.stack_.pop_back();
     ctx.leave();
+};
+
+config_fetch_wait_time: CONFIG_FETCH_WAIT_TIME COLON INTEGER {
+    ElementPtr value(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("config-fetch-wait-time", value);
 };
 
 // --- logging entry -----------------------------------------
@@ -2317,6 +2531,7 @@ output_params: output
              | flush
              | maxsize
              | maxver
+             | pattern
              ;
 
 output: OUTPUT {
@@ -2340,6 +2555,14 @@ maxsize: MAXSIZE COLON INTEGER {
 maxver: MAXVER COLON INTEGER {
     ElementPtr maxver(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxver", maxver);
+};
+
+pattern: PATTERN {
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("pattern", sev);
+    ctx.leave();
 };
 
 %%

@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -80,15 +80,39 @@ ConfigBase::copy(ConfigBase& other) const {
     } else {
         other.config_ctl_info_.reset();
     }
+
+    // Clone server tag.
+    other.server_tag_ = server_tag_;
+}
+
+void
+ConfigBase::merge(ConfigBase& other) {
+    // Merge logging info.
+    if (!other.logging_info_.empty()) {
+        logging_info_ = other.logging_info_;
+    }
+
+    // Merge the config control info
+    if (other.config_ctl_info_) {
+        if (config_ctl_info_) {
+            config_ctl_info_->merge(*other.config_ctl_info_);
+        } else {
+            config_ctl_info_ = other.config_ctl_info_;
+        }
+    }
+
+    // Merge server tag.
+    if (!other.server_tag_.unspecified()) {
+        server_tag_ = other.server_tag_.get();
+    }
 }
 
 ElementPtr
 ConfigBase::toElement() const {
     ElementPtr result = Element::createMap();
 
-    // Logging global map (skip if empty)
+    // Was in the Logging global map.
     if (!logging_info_.empty()) {
-        ElementPtr logging = Element::createMap();
         // Set loggers list
         ElementPtr loggers = Element::createList();
         for (LoggingInfoStorage::const_iterator logger =
@@ -96,13 +120,13 @@ ConfigBase::toElement() const {
              logger != logging_info_.cend(); ++logger) {
             loggers->add(logger->toElement());
         }
-        logging->set("loggers", loggers);
-        result->set("Logging", logging);
+        result->set("loggers", loggers);
     }
 
-    // We do NOT output ConfigControlInfo here, as it is not a
-    // top level element, but rather belongs within the process
-    // element.
+    // server-tag
+    if (!server_tag_.unspecified()) {
+        result->set("server-tag", Element::create(server_tag_.get()));
+    }
 
     return (result);
 }

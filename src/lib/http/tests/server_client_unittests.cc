@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,7 @@
 #include <http/client.h>
 #include <http/http_types.h>
 #include <http/listener.h>
+#include <http/listener_impl.h>
 #include <http/post_request_json.h>
 #include <http/response_creator.h>
 #include <http/response_creator_factory.h>
@@ -189,6 +190,201 @@ public:
         return (response_creator);
     }
 };
+
+/// @brief Implementation of the HTTP listener used in tests.
+///
+/// This implementation replaces the @c HttpConnection type with a custom
+/// implementation.
+///
+/// @tparam HttpConnectionType Type of the connection object to be used by
+/// the listener implementation.
+template<typename HttpConnectionType>
+class HttpListenerImplCustom : public HttpListenerImpl {
+public:
+
+    HttpListenerImplCustom(IOService& io_service,
+                           const IOAddress& server_address,
+                           const unsigned short server_port,
+                           const HttpResponseCreatorFactoryPtr& creator_factory,
+                           const long request_timeout,
+                           const long idle_timeout)
+        : HttpListenerImpl(io_service, server_address, server_port,
+                           creator_factory, request_timeout,
+                           idle_timeout) {
+    }
+
+protected:
+
+    /// @brief Creates an instance of the @c HttpConnection.
+    ///
+    /// This method is virtual so as it can be overriden when customized
+    /// connections are to be used, e.g. in case of unit testing.
+    ///
+    /// @param io_service IO service to be used by the connection.
+    /// @param acceptor Reference to the TCP acceptor object used to listen for
+    /// new HTTP connections.
+    /// @param connection_pool Connection pool in which this connection is
+    /// stored.
+    /// @param response_creator Pointer to the response creator object used to
+    /// create HTTP response from the HTTP request received.
+    /// @param callback Callback invoked when new connection is accepted.
+    /// @param request_timeout Configured timeout for a HTTP request.
+    /// @param idle_timeout Timeout after which persistent HTTP connection is
+    /// closed by the server.
+    ///
+    /// @return Pointer to the created connection.
+    virtual HttpConnectionPtr createConnection(const HttpResponseCreatorPtr& response_creator,
+                                               const HttpAcceptorCallback& callback) {
+        HttpConnectionPtr
+            conn(new HttpConnectionType(io_service_, acceptor_, connections_,
+                                        response_creator, callback,
+                                        request_timeout_, idle_timeout_));
+        return (conn);
+    }
+
+
+};
+
+/// @brief Derivation of the @c HttpListener used in tests.
+///
+/// This class replaces the default implementation instance with the
+/// @c HttpListenerImplCustom using the customized connection type.
+///
+/// @tparam HttpConnectionType Type of the connection object to be used by
+/// the listener implementation.
+template<typename HttpConnectionType>
+class HttpListenerCustom : public HttpListener {
+public:
+
+    /// @brief Constructor.
+    ///
+    /// @param io_service IO service to be used by the listener.
+    /// @param server_address Address on which the HTTP service should run.
+    /// @param server_port Port number on which the HTTP service should run.
+    /// @param creator_factory Pointer to the caller-defined
+    /// @ref HttpResponseCreatorFactory derivation which should be used to
+    /// create @ref HttpResponseCreator instances.
+    /// @param request_timeout Timeout after which the HTTP Request Timeout
+    /// is generated.
+    /// @param idle_timeout Timeout after which an idle persistent HTTP
+    /// connection is closed by the server.
+    ///
+    /// @throw HttpListenerError when any of the specified parameters is
+    /// invalid.
+    HttpListenerCustom(IOService& io_service,
+                       const IOAddress& server_address,
+                       const unsigned short server_port,
+                       const HttpResponseCreatorFactoryPtr& creator_factory,
+                       const HttpListener::RequestTimeout& request_timeout,
+                       const HttpListener::IdleTimeout& idle_timeout)
+        : HttpListener(io_service, server_address, server_port, creator_factory,
+                       request_timeout, idle_timeout) {
+        // Replace the default implementation with the customized version
+        // using the custom derivation of the HttpConnection.
+        impl_.reset(new HttpListenerImplCustom<HttpConnectionType>
+                    (io_service, server_address, server_port,
+                     creator_factory, request_timeout.value_,
+                     idle_timeout.value_));
+    }
+};
+
+/// @brief Implementation of the @c HttpConnection which injects greater
+/// length value than the buffer size into the write socket callback.
+class HttpConnectionLongWriteBuffer : public HttpConnection {
+public:
+
+    /// @brief Constructor.
+    ///
+    /// @param io_service IO service to be used by the connection.
+    /// @param acceptor Reference to the TCP acceptor object used to listen for
+    /// new HTTP connections.
+    /// @param connection_pool Connection pool in which this connection is
+    /// stored.
+    /// @param response_creator Pointer to the response creator object used to
+    /// create HTTP response from the HTTP request received.
+    /// @param callback Callback invoked when new connection is accepted.
+    /// @param request_timeout Configured timeout for a HTTP request.
+    /// @param idle_timeout Timeout after which persistent HTTP connection is
+    /// closed by the server.
+    HttpConnectionLongWriteBuffer(IOService& io_service,
+                                  HttpAcceptor& acceptor,
+                                  HttpConnectionPool& connection_pool,
+                                  const HttpResponseCreatorPtr& response_creator,
+                                  const HttpAcceptorCallback& callback,
+                                  const long request_timeout,
+                                  const long idle_timeout)
+        : HttpConnection(io_service, acceptor, connection_pool,
+                         response_creator, callback, request_timeout,
+                         idle_timeout) {
+    }
+
+    /// @brief Callback invoked when data is sent over the socket.
+    ///
+    /// @param transaction Pointer to the transaction for which the callback
+    /// is invoked.
+    /// @param ec Error code.
+    /// @param length Length of the data sent.
+    virtual void socketWriteCallback(HttpConnection::TransactionPtr transaction,
+                                     boost::system::error_code ec,
+                                     size_t length) {
+        // Pass greater length of the data written. The callback should deal
+        // with this and adjust the data length.
+        HttpConnection::socketWriteCallback(transaction, ec, length + 1);
+    }
+
+};
+
+/// @brief Implementation of the @c HttpConnection which replaces
+/// transaction instance prior to calling write socket callback.
+class HttpConnectionTransactionChange : public HttpConnection {
+public:
+
+
+    /// @brief Constructor.
+    ///
+    /// @param io_service IO service to be used by the connection.
+    /// @param acceptor Reference to the TCP acceptor object used to listen for
+    /// new HTTP connections.
+    /// @param connection_pool Connection pool in which this connection is
+    /// stored.
+    /// @param response_creator Pointer to the response creator object used to
+    /// create HTTP response from the HTTP request received.
+    /// @param callback Callback invoked when new connection is accepted.
+    /// @param request_timeout Configured timeout for a HTTP request.
+    /// @param idle_timeout Timeout after which persistent HTTP connection is
+    /// closed by the server.
+    HttpConnectionTransactionChange(IOService& io_service,
+                                    HttpAcceptor& acceptor,
+                                    HttpConnectionPool& connection_pool,
+                                    const HttpResponseCreatorPtr& response_creator,
+                                    const HttpAcceptorCallback& callback,
+                                    const long request_timeout,
+                                    const long idle_timeout)
+        : HttpConnection(io_service, acceptor, connection_pool,
+                         response_creator, callback, request_timeout,
+                         idle_timeout) {
+    }
+
+    /// @brief Callback invoked when data is sent over the socket.
+    ///
+    /// @param transaction Pointer to the transaction for which the callback
+    /// is invoked.
+    /// @param ec Error code.
+    /// @param length Length of the data sent.
+    virtual void socketWriteCallback(HttpConnection::TransactionPtr transaction,
+                                     boost::system::error_code ec,
+                                     size_t length) {
+        // Replace the transaction. The socket callback should deal with this
+        // gracefully. It should detect that the output buffer is empty. Then
+        // try to see if the connection is persistent. This check should fail,
+        // because the request hasn't been created/finalized. The exception
+        // thrown upon checking the persistence should be caught and the
+        // connection closed.
+        transaction = HttpConnection::Transaction::create(response_creator_);
+        HttpConnection::socketWriteCallback(transaction, ec, length);
+    }
+};
+
 
 /// @brief Entity which can connect to the HTTP server endpoint.
 class TestHttpClient : public boost::noncopyable {
@@ -466,6 +662,86 @@ public:
             "\r\n"
             "{  }";
         return (s.str());
+    }
+
+    /// @brief Tests that HTTP request tiemout status is returned when the
+    /// server does not receive the entire request.
+    ///
+    /// @param request Partial request for which the parser will be waiting for
+    /// the next chunks of data.
+    /// @param expected_version HTTP version expected in the response.
+    void testRequestTimeout(const std::string& request,
+                            const HttpVersion& expected_version) {
+        // Open the listener with the Request Timeout of 1 sec and post the
+        // partial request.
+        HttpListener listener(io_service_, IOAddress(SERVER_ADDRESS), SERVER_PORT,
+                              factory_, HttpListener::RequestTimeout(1000),
+                              HttpListener::IdleTimeout(IDLE_TIMEOUT));
+        ASSERT_NO_THROW(listener.start());
+        ASSERT_NO_THROW(startRequest(request));
+        ASSERT_NO_THROW(runIOService());
+        ASSERT_EQ(1, clients_.size());
+        TestHttpClientPtr client = *clients_.begin();
+        ASSERT_TRUE(client);
+
+        // Build the reference response.
+        std::ostringstream expected_response;
+        expected_response
+            << "HTTP/" << expected_version.major_ << "." << expected_version.minor_
+            << " 408 Request Timeout\r\n"
+            "Content-Length: 44\r\n"
+            "Content-Type: application/json\r\n"
+            "Date: Tue, 19 Dec 2016 18:53:35 GMT\r\n"
+            "\r\n"
+            "{ \"result\": 408, \"text\": \"Request Timeout\" }";
+
+        // The server should wait for the missing part of the request for 1 second.
+        // The missing part never arrives so the server should respond with the
+        // HTTP Request Timeout status.
+        EXPECT_EQ(expected_response.str(), client->getResponse());
+    }
+
+    /// @brief Tests various cases when unexpected data is passed to the
+    /// socket write handler.
+    ///
+    /// This test uses the custom listener and the test specific derivations of
+    /// the @c HttpConnection class to enforce injection of the unexpected
+    /// data to the socket write callback. The two example applications of
+    /// this test are:
+    /// - injecting greater length value than the output buffer size,
+    /// - replacing the transaction with another transaction.
+    ///
+    /// It is expected that the socket write callback deals gracefully with
+    /// those situations.
+    ///
+    /// @tparam HttpConnectionType Test specific derivation of the
+    /// @c HttpConnection class.
+    template<typename HttpConnectionType>
+    void testWriteBufferIssues() {
+        // The HTTP/1.1 requests are by default persistent.
+        std::string request = "POST /foo/bar HTTP/1.1\r\n"
+            "Content-Type: application/json\r\n"
+            "Content-Length: 3\r\n\r\n"
+            "{ }";
+
+        // Use custom listener and the specialized connection object.
+        HttpListenerCustom<HttpConnectionType>
+            listener(io_service_, IOAddress(SERVER_ADDRESS), SERVER_PORT,
+                     factory_, HttpListener::RequestTimeout(REQUEST_TIMEOUT),
+                     HttpListener::IdleTimeout(IDLE_TIMEOUT));
+
+        ASSERT_NO_THROW(listener.start());
+
+        // Send the request.
+        ASSERT_NO_THROW(startRequest(request));
+
+        // Injecting unexpected data should not result in an exception.
+        ASSERT_NO_THROW(runIOService());
+
+        ASSERT_EQ(1, clients_.size());
+        TestHttpClientPtr client = *clients_.begin();
+        ASSERT_TRUE(client);
+        EXPECT_EQ(httpOk(HttpVersion::HTTP_11()), client->getResponse());
     }
 
     /// @brief IO service used in the tests.
@@ -861,36 +1137,42 @@ TEST_F(HttpListenerTest, addressInUse) {
 }
 
 // This test verifies that HTTP Request Timeout status is returned as
-// expected.
-TEST_F(HttpListenerTest, requestTimeout) {
+// expected when the read part of the request contains the HTTP
+// version number. The timeout response should contain the same
+// HTTP version number as the partial request.
+TEST_F(HttpListenerTest, requestTimeoutHttpVersionFound) {
     // The part of the request specified here is correct but it is not
     // a complete request.
     const std::string request = "POST /foo/bar HTTP/1.1\r\n"
         "Content-Type: application/json\r\n"
         "Content-Length:";
 
-    // Open the listener with the Request Timeout of 1 sec and post the
-    // partial request.
-    HttpListener listener(io_service_, IOAddress(SERVER_ADDRESS), SERVER_PORT,
-                          factory_, HttpListener::RequestTimeout(1000),
-                          HttpListener::IdleTimeout(IDLE_TIMEOUT));
-    ASSERT_NO_THROW(listener.start());
-    ASSERT_NO_THROW(startRequest(request));
-    ASSERT_NO_THROW(runIOService());
-    ASSERT_EQ(1, clients_.size());
-    TestHttpClientPtr client = *clients_.begin();
-    ASSERT_TRUE(client);
+    testRequestTimeout(request, HttpVersion::HTTP_11());
+}
 
-    // The server should wait for the missing part of the request for 1 second.
-    // The missing part never arrives so the server should respond with the
-    // HTTP Request Timeout status.
-    EXPECT_EQ("HTTP/1.1 408 Request Timeout\r\n"
-              "Content-Length: 44\r\n"
-              "Content-Type: application/json\r\n"
-              "Date: Tue, 19 Dec 2016 18:53:35 GMT\r\n"
-              "\r\n"
-              "{ \"result\": 408, \"text\": \"Request Timeout\" }",
-              client->getResponse());
+// This test verifies that HTTP Request Timeout status is returned as
+// expected when the read part of the request does not contain
+// the HTTP version number. The timeout response should by default
+// contain HTTP/1.0 version number.
+TEST_F(HttpListenerTest, requestTimeoutHttpVersionNotFound) {
+    // The part of the request specified here is correct but it is not
+    // a complete request.
+    const std::string request = "POST /foo/bar HTTP";
+
+    testRequestTimeout(request, HttpVersion::HTTP_10());
+}
+
+// This test verifies that injecting length value greater than the
+// output buffer length to the socket write callback does not cause
+// an exception.
+TEST_F(HttpListenerTest, tooLongWriteBuffer) {
+    testWriteBufferIssues<HttpConnectionLongWriteBuffer>();
+}
+
+// This test verifies that changing the transaction before calling
+// the socket write callback does not cause an exception.
+TEST_F(HttpListenerTest, transactionChangeDuringWrite) {
+    testWriteBufferIssues<HttpConnectionTransactionChange>();
 }
 
 /// @brief Test fixture class for testing HTTP client.
@@ -1003,6 +1285,364 @@ public:
         EXPECT_NE(sequence1->intValue(), sequence2->intValue());
     }
 
+    /// @brief Tests the behavior of the HTTP client when the premature
+    /// timeout occurs.
+    ///
+    /// The premature timeout may occur when the system clock is moved
+    /// during the transaction. This test simulates this behavior by
+    /// starting new transaction and waiting for the timeout to occur
+    /// before the IO service is ran. The timeout handler is invoked
+    /// first and it resets the transaction state. This test verifies
+    /// that the started transaction tears down gracefully after the
+    /// transaction state is reset.
+    ///
+    /// There are two variants of this test. The first variant schedules
+    /// one transaction before running the IO service. The second variant
+    /// schedules two transactions prior to running the IO service. The
+    /// second transaction is queued, so it is expected that it doesn't
+    /// time out and it runs successfully.
+    ///
+    /// @param queue_two_requests Boolean value indicating if a single
+    /// transaction should be queued (false), or two (true).
+    void testClientRequestLateStart(const bool queue_two_requests) {
+        // Start the server.
+        ASSERT_NO_THROW(listener_.start());
+
+        // Create the client.
+        HttpClient client(io_service_);
+
+        // Specify the URL of the server.
+        Url url("http://127.0.0.1:18123");
+
+        // Generate first request.
+        PostHttpRequestJsonPtr request1 = createRequest("sequence", 1);
+        HttpResponseJsonPtr response1(new HttpResponseJson());
+
+        // Use very short timeout to make sure that it occurs before we actually
+        // run the transaction.
+        ASSERT_NO_THROW(client.asyncSendRequest(url, request1, response1,
+            [](const boost::system::error_code& ec,
+               const HttpResponsePtr& response,
+               const std::string&) {
+
+            // In this particular case we know exactly the type of the
+            // IO error returned, because the client explicitly sets this
+            // error code.
+            EXPECT_TRUE(ec.value() == boost::asio::error::timed_out);
+            // There should be no response returned.
+            EXPECT_FALSE(response);
+        }, HttpClient::RequestTimeout(1)));
+
+        if (queue_two_requests) {
+            PostHttpRequestJsonPtr request2 = createRequest("sequence", 2);
+            HttpResponseJsonPtr response2(new HttpResponseJson());
+            ASSERT_NO_THROW(client.asyncSendRequest(url, request2, response2,
+                [](const boost::system::error_code& ec,
+                   const HttpResponsePtr& response,
+                   const std::string&) {
+
+                // This second request should be successful.
+                EXPECT_TRUE(ec.value() == 0);
+                EXPECT_TRUE(response);
+            }));
+        }
+
+        // This waits for 3ms to make sure that the timeout occurs before we
+        // run the transaction. This leads to an unusual situation that the
+        // transaction state is reset as a result of the timeout but the
+        // transaction is alive. We want to make sure that the client can
+        // gracefully deal with this situation.
+        usleep(3000);
+
+        // Run the transaction and hope it will gracefully tear down.
+        ASSERT_NO_THROW(runIOService(100));
+
+        // Now try to send another request to make sure that the client
+        // is healthy.
+        PostHttpRequestJsonPtr request3 = createRequest("sequence", 3);
+        HttpResponseJsonPtr response3(new HttpResponseJson());
+        ASSERT_NO_THROW(client.asyncSendRequest(url, request3, response3,
+                         [this](const boost::system::error_code& ec,
+                                const HttpResponsePtr&,
+                                const std::string&) {
+            io_service_.stop();
+
+            // Everything should be ok.
+            EXPECT_TRUE(ec.value() == 0);
+        }));
+
+        // Actually trigger the requests.
+        ASSERT_NO_THROW(runIOService());
+    }
+
+    /// @brief Tests that underlying TCP socket can be registered and
+    /// unregsitered via connection and close callbacks.
+    ///
+    /// It conducts to consequetive requests over the same client.
+    ///
+    /// @param version HTTP version to be used.
+    void testConnectCloseCallbacks(const HttpVersion& version) {
+        // Start the server.
+        ASSERT_NO_THROW(listener_.start());
+
+        // Create a client and specify the URL on which the server can be reached.
+        HttpClient client(io_service_);
+        Url url("http://127.0.0.1:18123");
+
+        // Initiate request to the server.
+        PostHttpRequestJsonPtr request1 = createRequest("sequence", 1, version);
+        HttpResponseJsonPtr response1(new HttpResponseJson());
+        unsigned resp_num = 0;
+        ExternalMonitor monitor;
+
+        ASSERT_NO_THROW(client.asyncSendRequest(url, request1, response1,
+            [this, &resp_num](const boost::system::error_code& ec,
+                              const HttpResponsePtr&,
+                              const std::string&) {
+            if (++resp_num > 1) {
+                io_service_.stop();
+            }
+
+            EXPECT_FALSE(ec);
+        },
+            HttpClient::RequestTimeout(10000),
+            boost::bind(&ExternalMonitor::connectHandler, &monitor, _1, _2),
+            boost::bind(&ExternalMonitor::closeHandler, &monitor, _1)
+        ));
+
+        // Initiate another request to the destination.
+        PostHttpRequestJsonPtr request2 = createRequest("sequence", 2, version);
+        HttpResponseJsonPtr response2(new HttpResponseJson());
+        ASSERT_NO_THROW(client.asyncSendRequest(url, request2, response2,
+            [this, &resp_num](const boost::system::error_code& ec,
+                              const HttpResponsePtr&,
+                              const std::string&) {
+            if (++resp_num > 1) {
+                io_service_.stop();
+            }
+            EXPECT_FALSE(ec);
+        },
+            HttpClient::RequestTimeout(10000),
+            boost::bind(&ExternalMonitor::connectHandler, &monitor, _1, _2),
+            boost::bind(&ExternalMonitor::closeHandler, &monitor, _1)
+        ));
+
+        // Actually trigger the requests. The requests should be handlded by the
+        // server one after another. While the first request is being processed
+        // the server should queue another one.
+        ASSERT_NO_THROW(runIOService());
+
+        // We should have had 2 connect invocations, no closes
+        // and a valid registered fd
+        EXPECT_EQ(2, monitor.connect_cnt_);
+        EXPECT_EQ(0, monitor.close_cnt_);
+        EXPECT_GT(monitor.registered_fd_, -1);
+
+        // Make sure that the received responses are different. We check that by
+        // comparing value of the sequence parameters.
+        ASSERT_TRUE(response1);
+        ConstElementPtr sequence1 = response1->getJsonElement("sequence");
+        ASSERT_TRUE(sequence1);
+
+        ASSERT_TRUE(response2);
+        ConstElementPtr sequence2 = response2->getJsonElement("sequence");
+        ASSERT_TRUE(sequence2);
+        EXPECT_NE(sequence1->intValue(), sequence2->intValue());
+
+        // Stopping the client the close the connection.
+        client.stop();
+
+        // We should have had 2 connect invocations, 1 closes
+        // and an invalid registered fd
+        EXPECT_EQ(2, monitor.connect_cnt_);
+        EXPECT_EQ(1, monitor.close_cnt_);
+        EXPECT_EQ(-1, monitor.registered_fd_);
+    }
+
+    /// @brief Tests detection and handling out-of-bandwidth socket events
+    ///
+    /// It initiates a transacation and verifies that a mid-transacation call
+    /// to HttpClient::closeIfOutOfBandwidth() has no affect on the connection.
+    /// After succesful completion of the transaction, a second call is made
+    /// HttpClient::closeIfOutOfBandwidth().  This should result in the connection
+    /// being closed.
+    /// This step is repeated to verify that after an OOB closure, transactions
+    /// to the same destination can be processed.
+    ///
+    /// Lastly, we verify that HttpClient::stop() closes the connection correctly.
+    ///
+    /// @param version HTTP version to be used.
+    void testCloseIfOutOfBandwidth(const HttpVersion& version) {
+        // Start the server.
+        ASSERT_NO_THROW(listener_.start());
+
+        // Create a client and specify the URL on which the server can be reached.
+        HttpClient client(io_service_);
+        Url url("http://127.0.0.1:18123");
+
+        // Initiate request to the server.
+        PostHttpRequestJsonPtr request1 = createRequest("sequence", 1, version);
+        HttpResponseJsonPtr response1(new HttpResponseJson());
+        unsigned resp_num = 0;
+        ExternalMonitor monitor;
+
+        ASSERT_NO_THROW(client.asyncSendRequest(url, request1, response1,
+            [this, &client, &resp_num, &monitor](const boost::system::error_code& ec,
+                              const HttpResponsePtr&,
+                              const std::string&) {
+            if (++resp_num == 1) {
+                io_service_.stop();
+            }
+
+            EXPECT_EQ(1, monitor.connect_cnt_);      // We should have 1 connect.
+            EXPECT_EQ(0, monitor.close_cnt_);        // We should have 0 closes
+            ASSERT_GT(monitor.registered_fd_, -1);   // We should have a valid fd.
+            int orig_fd = monitor.registered_fd_;
+
+            // Test our socket for OOBness.
+            client.closeIfOutOfBandwidth(monitor.registered_fd_);
+
+            // Since we're in a transaction, we should have no closes and
+            // the same valid fd.
+            EXPECT_EQ(0, monitor.close_cnt_);
+            ASSERT_EQ(monitor.registered_fd_, orig_fd);
+
+            EXPECT_FALSE(ec);
+        },
+            HttpClient::RequestTimeout(10000),
+            boost::bind(&ExternalMonitor::connectHandler, &monitor, _1, _2),
+            boost::bind(&ExternalMonitor::closeHandler, &monitor, _1)
+        ));
+
+        // Actually trigger the requests. The requests should be handlded by the
+        // server one after another. While the first request is being processed
+        // the server should queue another one.
+        ASSERT_NO_THROW(runIOService());
+
+        // Make sure that we received a response.
+        ASSERT_TRUE(response1);
+        ConstElementPtr sequence1 = response1->getJsonElement("sequence");
+        ASSERT_TRUE(sequence1);
+        EXPECT_EQ(1, sequence1->intValue());
+
+        // We should have had 1 connect invocations, no closes
+        // and a valid registered fd
+        EXPECT_EQ(1, monitor.connect_cnt_);
+        EXPECT_EQ(0, monitor.close_cnt_);
+        EXPECT_GT(monitor.registered_fd_, -1);
+
+        // Test our socket for OOBness.
+        client.closeIfOutOfBandwidth(monitor.registered_fd_);
+
+        // Since we're in a transaction, we should have no closes and
+        // the same valid fd.
+        EXPECT_EQ(1, monitor.close_cnt_);
+        EXPECT_EQ(-1, monitor.registered_fd_);
+
+        // Now let's do another request to the destination to verify that
+        // we'll reopen the connection without issue.
+        PostHttpRequestJsonPtr request2 = createRequest("sequence", 2, version);
+        HttpResponseJsonPtr response2(new HttpResponseJson());
+        resp_num = 0;
+        ASSERT_NO_THROW(client.asyncSendRequest(url, request2, response2,
+            [this, &client, &resp_num, &monitor](const boost::system::error_code& ec,
+                              const HttpResponsePtr&,
+                              const std::string&) {
+            if (++resp_num == 1) {
+                io_service_.stop();
+            }
+
+            EXPECT_EQ(2, monitor.connect_cnt_);      // We should have 1 connect.
+            EXPECT_EQ(1, monitor.close_cnt_);        // We should have 0 closes
+            ASSERT_GT(monitor.registered_fd_, -1);   // We should have a valid fd.
+            int orig_fd = monitor.registered_fd_;
+
+            // Test our socket for OOBness.
+            client.closeIfOutOfBandwidth(monitor.registered_fd_);
+
+            // Since we're in a transaction, we should have no closes and
+            // the same valid fd.
+            EXPECT_EQ(1, monitor.close_cnt_);
+            ASSERT_EQ(monitor.registered_fd_, orig_fd);
+
+            EXPECT_FALSE(ec);
+        },
+            HttpClient::RequestTimeout(10000),
+            boost::bind(&ExternalMonitor::connectHandler, &monitor, _1, _2),
+            boost::bind(&ExternalMonitor::closeHandler, &monitor, _1)
+        ));
+
+        // Actually trigger the requests. The requests should be handlded by the
+        // server one after another. While the first request is being processed
+        // the server should queue another one.
+        ASSERT_NO_THROW(runIOService());
+
+        // Make sure that we received the second response.
+        ASSERT_TRUE(response2);
+        ConstElementPtr sequence2 = response2->getJsonElement("sequence");
+        ASSERT_TRUE(sequence2);
+        EXPECT_EQ(2, sequence2->intValue());
+
+        // Stopping the client the close the connection.
+        client.stop();
+
+        // We should have had 2 connect invocations, 2 closes
+        // and an invalid registered fd
+        EXPECT_EQ(2, monitor.connect_cnt_);
+        EXPECT_EQ(2, monitor.close_cnt_);
+        EXPECT_EQ(-1, monitor.registered_fd_);
+    }
+
+    /// @brief Simulates external registery of Connection TCP sockets
+    ///
+    /// Provides methods compatible with Connection callbacks for connnect
+    /// and close operations.
+    class ExternalMonitor {
+    public:
+        /// @brief Constructor
+        ExternalMonitor()
+            : registered_fd_(-1), connect_cnt_(0), close_cnt_(0) {};
+
+        /// @brief Connect callback handler
+        /// @param ec Error status of the ASIO connect
+        /// @param tcp_native_fd socket descriptor to register
+        bool connectHandler(const boost::system::error_code& ec, int tcp_native_fd) {
+            ++connect_cnt_;
+            if ((!ec || (ec.value() == boost::asio::error::in_progress))
+                && (tcp_native_fd >= 0)) {
+                registered_fd_ = tcp_native_fd;
+                return (true);
+            } else if ((ec.value() == boost::asio::error::already_connected)
+                       && (registered_fd_ != tcp_native_fd)) {
+                return (false);
+            }
+
+            // ec indicates an error, return true, so that error can be handled
+            // by Connection logic.
+            return (true);
+        }
+
+        /// @brief Close callback handler
+        ///
+        /// @param tcp_native_fd socket descriptor to register
+        void closeHandler(int tcp_native_fd) {
+            ++close_cnt_;
+            EXPECT_EQ(tcp_native_fd, registered_fd_) << "closeHandler fd mismatch";
+            if (tcp_native_fd >= 0) {
+                registered_fd_ = -1;
+            }
+        }
+
+        /// @brief Keeps track of socket currently "registered" for external monitoring.
+        int registered_fd_;
+
+        /// @brief Tracks how many times the connect callback is invoked.
+        int connect_cnt_;
+
+        /// @brief Tracks how many times the close callback is invoked.
+        int close_cnt_;
+    };
+
     /// @brief Instance of the listener used in the tests.
     HttpListener listener_;
 
@@ -1012,6 +1652,7 @@ public:
     /// @brief Instance of the third listener used in the tests (with short idle
     /// timeout).
     HttpListener listener3_;
+
 };
 
 // Test that two conscutive requests can be sent over the same (persistent)
@@ -1249,6 +1890,20 @@ TEST_F(HttpClientTest, clientRequestTimeout) {
     ASSERT_NO_THROW(runIOService());
 }
 
+// This test verifies the behavior of the HTTP client when the premature
+// (and unexpected) timeout occurs. The premature timeout may be caused
+// by the system clock move.
+TEST_F(HttpClientTest, clientRequestLateStartNoQueue) {
+    testClientRequestLateStart(false);
+}
+
+// This test verifies the behavior of the HTTP client when the premature
+// timeout occurs and there are requests queued after the request which
+// times out.
+TEST_F(HttpClientTest, clientRequestLateStartQueue) {
+    testClientRequestLateStart(true);
+}
+
 // Test that client times out when connection takes too long.
 TEST_F(HttpClientTest, clientConnectTimeout) {
     // Start the server.
@@ -1285,7 +1940,7 @@ TEST_F(HttpClientTest, clientConnectTimeout) {
        // try to send a request to the server. This simulates the
        // case of connect() taking very long and should eventually
        // cause the transaction to time out.
-       [](const boost::system::error_code& /*ec*/) {
+       [](const boost::system::error_code& /*ec*/, int) {
            return (false);
     }));
 
@@ -1302,5 +1957,14 @@ TEST_F(HttpClientTest, clientConnectTimeout) {
     ASSERT_NO_THROW(runIOService());
 }
 
+/// Tests that connect and close callbacks work correctly.
+TEST_F(HttpClientTest, connectCloseCallbacks) {
+    ASSERT_NO_FATAL_FAILURE(testConnectCloseCallbacks(HttpVersion(1, 1)));
+}
+
+/// Tests that HttpClient::closeIfOutOfBandwidth works correctly.
+TEST_F(HttpClientTest, closeIfOutOfBandwidth) {
+    ASSERT_NO_FATAL_FAILURE(testCloseIfOutOfBandwidth(HttpVersion(1, 1)));
+}
 
 }

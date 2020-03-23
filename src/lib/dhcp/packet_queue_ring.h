@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,11 +8,12 @@
 #define PACKET_QUEUE_RING_H
 
 #include <dhcp/packet_queue.h>
-#include <util/threads/sync.h>
 
 #include <boost/function.hpp>
 #include <boost/circular_buffer.hpp>
+#include <boost/scoped_ptr.hpp>
 #include <sstream>
+#include <mutex>
 
 namespace isc {
 
@@ -36,6 +37,7 @@ public:
     PacketQueueRing(const std::string& queue_type, size_t capacity)
         : PacketQueue<PacketTypePtr>(queue_type) {
         queue_.set_capacity(capacity);
+        mutex_.reset(new std::mutex);
     }
 
     /// @brief virtual Destructor
@@ -105,7 +107,7 @@ public:
     /// @param to specifies the end of the queue to which the packet
     /// should be added.
     virtual void pushPacket(PacketTypePtr& packet, const QueueEnd& to=QueueEnd::BACK) {
-        isc::util::thread::Mutex::Locker lock(mutex_);
+        std::lock_guard<std::mutex> lock(*mutex_);
         if (to == QueueEnd::BACK) {
             queue_.push_back(packet);
         } else {
@@ -123,8 +125,9 @@ public:
     /// @return A pointer to dequeued packet, or an empty pointer
     /// if the queue is empty.
     virtual PacketTypePtr popPacket(const QueueEnd& from = QueueEnd::FRONT) {
-        isc::util::thread::Mutex::Locker lock(mutex_);
         PacketTypePtr packet;
+        std::lock_guard<std::mutex> lock(*mutex_);
+
         if (queue_.empty()) {
             return (packet);
         }
@@ -161,6 +164,7 @@ public:
 
     /// @brief Returns True if the queue is empty.
     virtual bool empty() const {
+        std::lock_guard<std::mutex> lock(*mutex_);
         return(queue_.empty());
     }
 
@@ -210,7 +214,7 @@ private:
     boost::circular_buffer<PacketTypePtr> queue_;
 
     /// @brief Mutex for protecting queue accesses.
-    isc::util::thread::Mutex mutex_;
+    boost::scoped_ptr<std::mutex> mutex_;
 };
 
 

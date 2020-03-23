@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,7 +32,7 @@ void LogConfigParser::parseConfiguration(const isc::data::ConstElementPtr& logge
                                          bool verbose) {
     verbose_ = verbose;
 
-    // Iterate over all entries in "Logging/loggers" list
+    // Iterate over all entries in "Server/loggers" list
     BOOST_FOREACH(ConstElementPtr logger, loggers->listValue()) {
         parseConfigEntry(logger);
     }
@@ -68,7 +68,7 @@ void LogConfigParser::parseConfigEntry(isc::data::ConstElementPtr entry) {
 
     // Get severity
     isc::data::ConstElementPtr severity_ptr = entry->get("severity");
-    if (!name_ptr) {
+    if (!severity_ptr) {
         isc_throw(BadValue, "loggers entry does not have a mandatory "
                   "'severity' element (" << entry->getPosition() << ")");
     }
@@ -148,6 +148,11 @@ void LogConfigParser::parseOutputOptions(std::vector<LoggingDestination>& destin
         isc::data::ConstElementPtr flush_ptr = output_option->get("flush");
         if (flush_ptr) {
             dest.flush_ = flush_ptr->boolValue();
+        }
+
+        isc::data::ConstElementPtr pattern = output_option->get("pattern");
+        if (pattern) {
+            dest.pattern_ = pattern->stringValue();
         }
 
         destination.push_back(dest);

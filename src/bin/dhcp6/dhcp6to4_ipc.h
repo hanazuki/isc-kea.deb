@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -44,7 +44,11 @@ public:
     /// @brief On receive handler
     ///
     /// The handler sends the DHCPv6 packet back to the remote address
-    static void handler();
+    static void handler(int /* fd */);
+
+    /// @param client_port UDP port where all responses are sent to.
+    /// Not zero is mostly useful for testing purposes.
+    static uint16_t client_port;
 };
 
 } // namespace isc

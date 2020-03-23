@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2018 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -30,7 +30,8 @@ namespace db {
 
 CqlConnection::CqlConnection(const ParameterMap& parameters)
     : DatabaseConnection(parameters), statements_(), cluster_(NULL),
-      session_(NULL), consistency_(CASS_CONSISTENCY_QUORUM), schema_meta_(NULL),
+      session_(NULL), consistency_(CASS_CONSISTENCY_QUORUM),
+      serial_consistency_(CASS_CONSISTENCY_UNKNOWN), schema_meta_(NULL),
       keyspace_meta_(NULL), force_consistency_(true) {
 }
 
@@ -72,6 +73,41 @@ CqlConnection::~CqlConnection() {
         // We're closing the connection anyway. Let's not throw at this stage.
         DB_LOG_ERROR(CQL_DEALLOC_ERROR).arg(error);
     }
+}
+
+std::pair<uint32_t, uint32_t>
+CqlConnection::getVersion(const ParameterMap& parameters) {
+    // Get a connection.
+    CqlConnection conn(parameters);
+
+    // Open the database.
+    conn.openDatabase();
+
+    // Prepare statement.
+    conn.prepareStatements(CqlVersionExchange::tagged_statements_);
+
+    std::unique_ptr<CqlVersionExchange> version_exchange(new CqlVersionExchange());
+    return version_exchange->retrieveVersion(conn);
+}
+
+CassConsistency CqlConnection::parseConsistency(std::string value) {
+    static std::map<std::string, CassConsistency> consistency_map {
+        {"any", CASS_CONSISTENCY_ANY},
+        {"one", CASS_CONSISTENCY_ONE},
+        {"two", CASS_CONSISTENCY_TWO},
+        {"three", CASS_CONSISTENCY_THREE},
+        {"quorum", CASS_CONSISTENCY_QUORUM},
+        {"all", CASS_CONSISTENCY_ALL},
+        {"local-quorum", CASS_CONSISTENCY_LOCAL_QUORUM},
+        {"each-quorum", CASS_CONSISTENCY_EACH_QUORUM},
+        {"serial", CASS_CONSISTENCY_SERIAL},
+        {"local-serial", CASS_CONSISTENCY_LOCAL_SERIAL},
+        {"local-one", CASS_CONSISTENCY_LOCAL_ONE}
+    };
+    if (consistency_map.find(value) == consistency_map.end()) {
+        return CASS_CONSISTENCY_UNKNOWN;
+    }
+    return consistency_map[value];
 }
 
 void
@@ -121,6 +157,24 @@ CqlConnection::openDatabase() {
         keyspace = skeyspace.c_str();
     } catch (...) {
         // No keyspace name. Fine, we'll use "keatest".
+    }
+
+    const char* consistency = NULL;
+    std::string sconsistency;
+    try {
+        sconsistency = getParameter("consistency");
+        consistency = sconsistency.c_str();
+    } catch (...) {
+        // No consistency. Fine, we'll use "quorum".
+    }
+
+    const char* serial_consistency = NULL;
+    std::string sserial_consistency;
+    try {
+        sserial_consistency = getParameter("serial-consistency");
+        serial_consistency = sserial_consistency.c_str();
+    } catch (...) {
+        // No serial consistency. Fine, we'll use "serial".
     }
 
     const char* reconnect_wait_time = NULL;
@@ -192,6 +246,17 @@ CqlConnection::openDatabase() {
                            << "\", " << ex.what());
         }
         cass_cluster_set_port(cluster_, port_number);
+    }
+
+    if (consistency) {
+        CassConsistency desired_consistency = CqlConnection::parseConsistency(sconsistency);
+        CassConsistency desired_serial_consistency = CASS_CONSISTENCY_UNKNOWN;
+        if (serial_consistency) {
+            desired_serial_consistency = CqlConnection::parseConsistency(sserial_consistency);
+        }
+        if (desired_consistency != CASS_CONSISTENCY_UNKNOWN) {
+            setConsistency(true, desired_consistency, desired_serial_consistency);
+        }
     }
 
     if (reconnect_wait_time) {
@@ -343,9 +408,12 @@ CqlConnection::prepareStatements(StatementMap& statements) {
 }
 
 void
-CqlConnection::setConsistency(bool force, CassConsistency consistency) {
+CqlConnection::setConsistency(bool force,
+                              CassConsistency consistency,
+                              CassConsistency serial_consistency) {
     force_consistency_ = force;
     consistency_ = consistency;
+    serial_consistency_ = serial_consistency;
 }
 
 void

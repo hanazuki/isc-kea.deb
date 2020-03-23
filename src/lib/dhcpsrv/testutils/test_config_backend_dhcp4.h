@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,29 +10,37 @@
 #include <config.h>
 
 #include <database/database_connection.h>
+#include <database/server.h>
+#include <database/server_collection.h>
 #include <dhcpsrv/config_backend_dhcp4_mgr.h>
 #include <dhcpsrv/testutils/test_config_backend.h>
 
 #include <boost/shared_ptr.hpp>
-#include <boost/lexical_cast.hpp>
+
+#include <map>
+#include <string>
 
 namespace isc {
 namespace dhcp {
 namespace test {
 
-/// @brief Test backend that implements all of the DHCPv4 API calls
+/// @brief Test config backend that implements all of the DHCPv4 API calls
 ///
-/// Currently all API get calls which return a single entry, will return an
-/// empty pointer of appropriate type. API calls which return a collection of
-/// entires will return an empty collection of the appropriate type.
+/// This backend should be used for unit testing the DHCPv4 server and the
+/// commands which manpiluate the configuration information stored in the
+/// database.
 ///
-/// In addition provides static register and unregister methods so it may be
-/// registered with a configuration backend manager.
+/// Server selectors supported by this test configuration backend are a
+/// superset of the server selectors allowed by the API. Therefore, if
+/// additional server selectors are allowed by the API in the future
+/// this backend should not require any additional changes to support them.
+///
+/// This backend stores server configuration information in memory.
 class TestConfigBackendDHCPv4 : public TestConfigBackend<ConfigBackendDHCPv4> {
 public:
     /// @brief Constructor
     ///
-    ///
+    /// @param params Database connection parameters.
     TestConfigBackendDHCPv4(const db::DatabaseConnection::ParameterMap& params)
         : TestConfigBackend(params) {
     }
@@ -88,6 +96,16 @@ public:
     virtual Subnet4Collection
     getModifiedSubnets4(const db::ServerSelector& server_selector,
                         const boost::posix_time::ptime& modification_time) const;
+
+    /// @brief Retrieves all subnets belonging to a specified shared network.
+    ///
+    /// @param server_selector Server selector.
+    /// @param shared_network_name Name of the shared network for which the
+    /// subnets should be retrieved.
+    /// @return Collection of subnets or empty collection if no subnet found.
+    virtual Subnet4Collection
+    getSharedNetworkSubnets4(const db::ServerSelector& server_selector,
+                             const std::string& shared_network_name) const;
 
     /// @brief Retrieves shared network by name.
     ///
@@ -182,6 +200,9 @@ public:
     getGlobalParameter4(const db::ServerSelector& server_selector,
                         const std::string& name) const;
 
+    /// @brief Retrieves all global parameters.
+    ///
+    /// @param backend_selector Backend selector.
     /// @return Collection of global parameters.
     virtual data::StampedValueCollection
     getAllGlobalParameters4(const db::ServerSelector& server_selector) const;
@@ -193,6 +214,30 @@ public:
     virtual data::StampedValueCollection
     getModifiedGlobalParameters4(const db::ServerSelector& server_selector,
                                  const boost::posix_time::ptime& modification_time) const;
+
+    /// @brief Retrieves the most recent audit entries.
+    ///
+    /// @param server_selector Server selector.
+    /// @param modification_time Timestamp being a lower limit for the returned
+    /// result set, i.e. entries later than specified time are returned.
+    /// @return Collection of audit entries.
+    virtual db::AuditEntryCollection
+    getRecentAuditEntries(const db::ServerSelector& server_selector,
+                          const boost::posix_time::ptime& modification_time) const;
+
+    /// @brief Retrieves all servers.
+    ///
+    /// @return Collection of servers from the backend.
+    virtual db::ServerCollection
+    getAllServers4() const;
+
+    /// @brief Retrieves a server.
+    ///
+    /// @param server_tag Tag of the server to be retrieved.
+    /// @return Pointer to the server instance or null pointer if no server
+    /// with the particular tag was found.
+    virtual db::ServerPtr
+    getServer4(const data::ServerTag& server_tag) const;
 
     /// @brief Creates or updates a subnet.
     ///
@@ -269,6 +314,12 @@ public:
     createUpdateGlobalParameter4(const db::ServerSelector& server_selector,
                                  const data::StampedValuePtr& value);
 
+    /// @brief Creates or updates a server.
+    ///
+    /// @param server Instance of the server to be stored.
+    virtual void
+    createUpdateServer4(const db::ServerPtr& server);
+
     /// @brief Deletes subnet by prefix.
     ///
     /// @param server_selector Server selector.
@@ -292,6 +343,16 @@ public:
     /// @return Number of deleted subnets.
     virtual uint64_t
     deleteAllSubnets4(const db::ServerSelector& server_selector);
+
+    /// @brief Deletes all subnets belonging to a specified shared network.
+    ///
+    /// @param server_selector Server selector.
+    /// @param shared_network_name Name of the shared network for which the
+    /// subnets should be deleted.
+    /// @return Number of deleted subnets.
+    virtual uint64_t
+    deleteSharedNetworkSubnets4(const db::ServerSelector& server_selector,
+                                const std::string& shared_network_name);
 
     /// @brief Deletes shared network by name.
     ///
@@ -394,6 +455,20 @@ public:
     virtual uint64_t
     deleteAllGlobalParameters4(const db::ServerSelector& server_selector);
 
+    /// @brief Deletes a server from the backend.
+    ///
+    /// @param server_tag Tag of the server to be deleted.
+    /// @return Number of deleted servers.
+    virtual uint64_t
+    deleteServer4(const data::ServerTag& server_tag);
+
+    /// @brief Deletes all servers from the backend except the logical
+    /// server 'all'.
+    ///
+    /// @return Number of deleted servers.
+    virtual uint64_t
+    deleteAllServers4();
+
 /// @{
 /// @brief Containers used to house the "database" entries
     Subnet4Collection subnets_;
@@ -401,6 +476,7 @@ public:
     OptionDefContainer option_defs_;
     OptionContainer options_;
     data::StampedValueCollection globals_;
+    db::ServerCollection servers_;
 /// @}
 };
 

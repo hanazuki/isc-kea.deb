@@ -20,35 +20,11 @@ if USE_STATIC_LINK
 AM_LDFLAGS = -static
 endif
 
-CLEANFILES  = *.gcno *.gcda dhcp4_messages.h dhcp4_messages.cc s-messages
+CLEANFILES  = *.gcno *.gcda
 
-man_MANS = kea-dhcp4.8
-DISTCLEANFILES = $(man_MANS)
-EXTRA_DIST = $(man_MANS) kea-dhcp4.xml
-EXTRA_DIST += dhcp4.dox dhcp4_hooks.dox dhcp4o6.dox
+EXTRA_DIST = dhcp4.dox dhcp4_hooks.dox dhcp4o6.dox
 EXTRA_DIST += dhcp4_parser.yy
 
-if GENERATE_DOCS
-kea-dhcp4.8: kea-dhcp4.xml
-	@XSLTPROC@ --novalid --xinclude --nonet -o $@ \
-        http://docbook.sourceforge.net/release/xsl/current/manpages/docbook.xsl \
-	$(srcdir)/kea-dhcp4.xml
-
-else
-
-$(man_MANS):
-	@echo Man generation disabled.  Creating dummy $@.  Configure with --enable-generate-docs to enable it.
-	@echo Man generation disabled.  Remove this file, configure with --enable-generate-docs, and rebuild Kea > $@
-
-endif
-
-dhcp4_messages.h dhcp4_messages.cc: s-messages
-
-s-messages: dhcp4_messages.mes
-	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/dhcp4/dhcp4_messages.mes
-	touch $@
-
-BUILT_SOURCES = dhcp4_messages.h dhcp4_messages.cc
 
 # convenience archive
 
@@ -63,8 +39,7 @@ libdhcp4_la_SOURCES += dhcp4to6_ipc.cc dhcp4to6_ipc.h
 libdhcp4_la_SOURCES += dhcp4_lexer.ll location.hh position.hh stack.hh
 libdhcp4_la_SOURCES += dhcp4_parser.cc dhcp4_parser.h
 libdhcp4_la_SOURCES += parser_context.cc parser_context.h parser_context_decl.h
-
-nodist_libdhcp4_la_SOURCES = dhcp4_messages.h dhcp4_messages.cc
+libdhcp4_la_SOURCES += dhcp4_messages.h dhcp4_messages.cc
 EXTRA_DIST += dhcp4_messages.mes
 
 sbin_PROGRAMS = kea-dhcp4
@@ -98,7 +73,6 @@ kea_dhcp4_LDADD += $(top_builddir)/src/lib/process/libkea-process.la
 kea_dhcp4_LDADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
 kea_dhcp4_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 kea_dhcp4_LDADD += $(top_builddir)/src/lib/log/libkea-log.la
-kea_dhcp4_LDADD += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 kea_dhcp4_LDADD += $(top_builddir)/src/lib/util/libkea-util.la
 kea_dhcp4_LDADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 kea_dhcp4_LDADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
@@ -115,6 +89,39 @@ kea_dhcp4_LDFLAGS += $(CQL_LIBS)
 endif
 
 kea_dhcp4dir = $(pkgdatadir)
+
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+maintainer-clean-local:
+	rm -f dhcp4_messages.h dhcp4_messages.cc
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean: maintainer-clean-local
+
+if GENERATE_MESSAGES
+
+# Define rule to build logging source files from message file
+messages: dhcp4_messages.h dhcp4_messages.cc
+	@echo Message files regenerated
+
+dhcp4_messages.h dhcp4_messages.cc: dhcp4_messages.mes
+	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/bin/dhcp4/dhcp4_messages.mes
+
+else
+
+messages dhcp4_messages.h dhcp4_messages.cc:
+	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
+
+endif
 
 if GENERATE_PARSER
 

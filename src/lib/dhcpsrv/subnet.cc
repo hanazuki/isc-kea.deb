@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,12 +12,14 @@
 #include <dhcpsrv/shared_network.h>
 #include <dhcpsrv/subnet.h>
 #include <boost/lexical_cast.hpp>
+#include <boost/make_shared.hpp>
 #include <algorithm>
 #include <sstream>
 
 using namespace isc::asiolink;
 using namespace isc::data;
 using namespace isc::dhcp;
+using namespace isc::util;
 
 namespace {
 
@@ -58,7 +60,9 @@ Subnet::Subnet(const isc::asiolink::IOAddress& prefix, uint8_t len,
       last_allocated_ia_(lastAddrInPrefix(prefix, len)),
       last_allocated_ta_(lastAddrInPrefix(prefix, len)),
       last_allocated_pd_(lastAddrInPrefix(prefix, len)),
-      last_allocated_time_() {
+      last_allocated_time_(),
+      iface_(),
+      shared_network_name_() {
     if ((prefix.isV6() && len > 128) ||
         (prefix.isV4() && len > 32)) {
         isc_throw(BadValue,
@@ -241,13 +245,12 @@ void Subnet4::checkType(Lease::Type type) const {
     }
 }
 
-Subnet4::Subnet4(const isc::asiolink::IOAddress& prefix, uint8_t length,
+Subnet4::Subnet4(const IOAddress& prefix, uint8_t length,
                  const Triplet<uint32_t>& t1,
                  const Triplet<uint32_t>& t2,
                  const Triplet<uint32_t>& valid_lifetime,
                  const SubnetID id)
-    : Subnet(prefix, length, id), Network4(),
-      siaddr_(IOAddress("0.0.0.0")) {
+    : Subnet(prefix, length, id), Network4() {
     if (!prefix.isV4()) {
         isc_throw(BadValue, "Non IPv4 prefix " << prefix.toText()
                   << " specified in subnet4");
@@ -257,6 +260,17 @@ Subnet4::Subnet4(const isc::asiolink::IOAddress& prefix, uint8_t length,
     setT1(t1);
     setT2(t2);
     setValid(valid_lifetime);
+}
+
+Subnet4Ptr
+Subnet4::create(const IOAddress& prefix, uint8_t length,
+                const Triplet<uint32_t>& t1,
+                const Triplet<uint32_t>& t2,
+                const Triplet<uint32_t>& valid_lifetime,
+                const SubnetID id) {
+    Subnet4Ptr subnet = boost::make_shared<Subnet4>
+        (prefix, length, t1, t2, valid_lifetime, id);
+    return (subnet);
 }
 
 Subnet4Ptr
@@ -307,33 +321,6 @@ Subnet4::clientSupported(const isc::dhcp::ClientClasses& client_classes) const {
     }
 
     return (Network4::clientSupported(client_classes));
-}
-
-void Subnet4::setSiaddr(const isc::asiolink::IOAddress& siaddr) {
-    if (!siaddr.isV4()) {
-        isc_throw(BadValue, "Can't set siaddr to non-IPv4 address "
-                  << siaddr);
-    }
-    siaddr_ = siaddr;
-}
-
-isc::asiolink::IOAddress Subnet4::getSiaddr() const {
-    return (siaddr_);
-}
-
-void Subnet4::setSname(const std::string& sname) {
-    sname_ = sname;
-}
-
-const std::string& Subnet4::getSname() const {
-    return (sname_);
-}
-void Subnet4::setFilename(const std::string& filename) {
-    filename_ = filename;
-}
-
-const std::string& Subnet4::getFilename() const {
-    return (filename_);
 }
 
 const PoolCollection& Subnet::getPools(Lease::Type type) const {
@@ -610,7 +597,7 @@ Subnet::poolOverlaps(const Lease::Type& pool_type, const PoolPtr& pool) const {
 }
 
 
-Subnet6::Subnet6(const isc::asiolink::IOAddress& prefix, uint8_t length,
+Subnet6::Subnet6(const IOAddress& prefix, uint8_t length,
                  const Triplet<uint32_t>& t1,
                  const Triplet<uint32_t>& t2,
                  const Triplet<uint32_t>& preferred_lifetime,
@@ -627,6 +614,18 @@ Subnet6::Subnet6(const isc::asiolink::IOAddress& prefix, uint8_t length,
     setT2(t2);
     setPreferred(preferred_lifetime);
     setValid(valid_lifetime);
+}
+
+Subnet6Ptr
+Subnet6::create(const IOAddress& prefix, uint8_t length,
+                const Triplet<uint32_t>& t1,
+                const Triplet<uint32_t>& t2,
+                const Triplet<uint32_t>& preferred_lifetime,
+                const Triplet<uint32_t>& valid_lifetime,
+                const SubnetID id) {
+    Subnet6Ptr subnet = boost::make_shared<Subnet6>
+        (prefix, length, t1, t2, preferred_lifetime, valid_lifetime, id);
+    return (subnet);
 }
 
 void Subnet6::checkType(Lease::Type type) const {
@@ -715,15 +714,6 @@ Subnet4::toElement() const {
     // Set DHCP4o6
     const Cfg4o6& d4o6 = get4o6();
     isc::data::merge(map, d4o6.toElement());
-
-    // Set next-server
-    map->set("next-server", Element::create(getSiaddr().toText()));
-
-    // Set server-hostname
-    map->set("server-hostname", Element::create(getSname()));
-
-    // Set boot-file-name
-    map->set("boot-file-name",Element::create(getFilename()));
 
     // Set pools
     const PoolCollection& pools = getPools(Lease::TYPE_V4);

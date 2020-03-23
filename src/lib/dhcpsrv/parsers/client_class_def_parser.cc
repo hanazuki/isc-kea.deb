@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -108,10 +108,10 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
                 SimpleParser4::OPTION4_DEF_DEFAULTS :
                 SimpleParser6::OPTION6_DEF_DEFAULTS);
 
-        OptionDefParser parser;
+        OptionDefParser parser(family);
         BOOST_FOREACH(ConstElementPtr option_def, option_defs->listValue()) {
             OptionDefinitionTuple def;
-                
+
             def = parser.parse(option_def);
             // Verify if the defition is for an option which are
             // in a deferred processing list.
@@ -201,6 +201,32 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
                       << getPosition("boot-file-name", class_def_cfg) << ")");
         }
 
+    }
+
+    // Sanity checks on built-in classes
+    for (auto bn : builtinNames) {
+        if (name == bn) {
+            if (required) {
+                isc_throw(DhcpConfigError, "built-in class '" << name
+                          << "' only-if-required flag must be false");
+            }
+            if (!test.empty()) {
+                isc_throw(DhcpConfigError, "built-in class '" << name
+                          << "' test expression must be empty");
+            }
+        }
+    }
+
+    // Sanity checks on DROP
+    if (name == "DROP") {
+        if (required) {
+            isc_throw(DhcpConfigError, "special class '" << name
+                      << "' only-if-required flag must be false");
+        }
+        if (depend_on_known) {
+            isc_throw(DhcpConfigError, "special class '" << name
+                      << "' must not depend on 'KNOWN'/'UNKNOWN' classes");
+        }
     }
 
     // Add the client class definition

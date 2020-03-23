@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -263,6 +263,15 @@ void D2SimpleParser::parse(const D2CfgContextPtr& ctx,
     ConstElementPtr user = config->get("user-context");
     if (user) {
         ctx->setContext(user);
+    }
+
+    ConstElementPtr socket = config->get("control-socket");
+    if (socket) {
+        if (socket->getType() != Element::map) {
+            isc_throw(D2CfgError, "Specified control-socket is expected to be a map"
+                      ", i.e. a structure defined within { }");
+        }
+        ctx->setControlSocketInfo(socket);
     }
 
     // Attempt to create the new client config. This ought to fly as

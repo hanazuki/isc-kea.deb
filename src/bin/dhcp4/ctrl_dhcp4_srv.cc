@@ -1,33 +1,40 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
-#include <cc/data.h>
+
 #include <cc/command_interpreter.h>
+#include <cc/data.h>
+#include <cfgrpt/config_report.h>
 #include <config/command_mgr.h>
+#include <dhcp/libdhcp++.h>
 #include <dhcp4/ctrl_dhcp4_srv.h>
 #include <dhcp4/dhcp4_log.h>
 #include <dhcp4/dhcp4to6_ipc.h>
-#include <dhcp4/parser_context.h>
 #include <dhcp4/json_config_parser.h>
-#include <dhcpsrv/cfgmgr.h>
+#include <dhcp4/parser_context.h>
 #include <dhcpsrv/cfg_db_access.h>
+#include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/db_type.h>
 #include <hooks/hooks.h>
 #include <hooks/hooks_manager.h>
 #include <stats/stats_mgr.h>
-#include <cfgrpt/config_report.h>
+#include <util/multi_threading_mgr.h>
+
 #include <signal.h>
+
 #include <sstream>
 
+using namespace isc::config;
 using namespace isc::data;
 using namespace isc::db;
 using namespace isc::dhcp;
 using namespace isc::hooks;
-using namespace isc::config;
 using namespace isc::stats;
+using namespace isc::util;
 using namespace std;
 
 namespace {
@@ -78,11 +85,15 @@ ControlledDhcpv4Srv* ControlledDhcpv4Srv::server_ = NULL;
 
 void
 ControlledDhcpv4Srv::init(const std::string& file_name) {
+    // Keep the call timestamp.
+    start_ = boost::posix_time::second_clock::universal_time();
+
     // Configure the server using JSON file.
     ConstElementPtr result = loadConfigFile(file_name);
+
     int rcode;
     ConstElementPtr comment = isc::config::parseAnswer(rcode, result);
-    if (rcode != 0) {
+    if (rcode != CONTROL_RESULT_SUCCESS) {
         string reason = comment ? comment->stringValue() :
             "no details available";
         isc_throw(isc::BadValue, reason);
@@ -120,8 +131,6 @@ ControlledDhcpv4Srv::loadConfigFile(const std::string& file_name) {
     // configuration from a JSON file.
 
     isc::data::ConstElementPtr json;
-    isc::data::ConstElementPtr dhcp4;
-    isc::data::ConstElementPtr logger;
     isc::data::ConstElementPtr result;
 
     // Basic sanity check: file name must not be empty.
@@ -160,11 +169,15 @@ ControlledDhcpv4Srv::loadConfigFile(const std::string& file_name) {
                       "processCommand(\"config-set\", json)");
         }
 
+        // @todo enable multi-threading - disabled for now
+        MultiThreadingMgr::instance().apply(false,
+            CfgMgr::instance().getCurrentCfg()->getServerThreadCount());
+
         // Now check is the returned result is successful (rcode=0) or not
         // (see @ref isc::config::parseAnswer).
         int rcode;
         ConstElementPtr comment = isc::config::parseAnswer(rcode, result);
-        if (rcode != 0) {
+        if (rcode != CONTROL_RESULT_SUCCESS) {
             string reason = comment ? comment->stringValue() :
                 "no details available";
             isc_throw(isc::BadValue, reason);
@@ -180,9 +193,13 @@ ControlledDhcpv4Srv::loadConfigFile(const std::string& file_name) {
                   << file_name << "': " << ex.what());
     }
 
+    LOG_INFO(dhcp4_logger, DHCP4_MULTI_THREADING_INFO)
+        .arg(MultiThreadingMgr::instance().getMode())
+        .arg(MultiThreadingMgr::instance().getPktThreadPoolSize())
+        .arg(CfgMgr::instance().getCurrentCfg()->getServerMaxThreadQueueSize());
+
     return (result);
 }
-
 
 ConstElementPtr
 ControlledDhcpv4Srv::commandShutdownHandler(const string&, ConstElementPtr) {
@@ -200,7 +217,6 @@ ControlledDhcpv4Srv::commandShutdownHandler(const string&, ConstElementPtr) {
 
 ConstElementPtr
 ControlledDhcpv4Srv::commandLibReloadHandler(const string&, ConstElementPtr) {
-
     /// @todo delete any stored CalloutHandles referring to the old libraries
     /// Get list of currently loaded libraries and reload them.
     HookLibsCollection loaded = HooksManager::getLibraryInfo();
@@ -219,7 +235,6 @@ ControlledDhcpv4Srv::commandLibReloadHandler(const string&, ConstElementPtr) {
 ConstElementPtr
 ControlledDhcpv4Srv::commandConfigReloadHandler(const string&,
                                                 ConstElementPtr /*args*/) {
-
     // Get configuration file name.
     std::string file = ControlledDhcpv4Srv::getInstance()->getConfigFile();
     try {
@@ -232,7 +247,7 @@ ControlledDhcpv4Srv::commandConfigReloadHandler(const string&,
         LOG_ERROR(dhcp4_logger, DHCP4_DYNAMIC_RECONFIGURATION_FAIL)
             .arg(file);
         return (createAnswer(CONTROL_RESULT_ERROR,
-                             "Config reload failed:" + string(ex.what())));
+                             "Config reload failed: " + string(ex.what())));
     }
 }
 
@@ -265,6 +280,7 @@ ControlledDhcpv4Srv::commandConfigWriteHandler(const string&,
 
     if (filename.empty()) {
         // filename parameter was not specified, so let's use whatever we remember
+        // from the command-line
         filename = getConfigFile();
     }
 
@@ -299,14 +315,13 @@ ControlledDhcpv4Srv::commandConfigWriteHandler(const string&,
 ConstElementPtr
 ControlledDhcpv4Srv::commandConfigSetHandler(const string&,
                                              ConstElementPtr args) {
-    const int status_code = CONTROL_RESULT_ERROR; // 1 indicates an error
+    const int status_code = CONTROL_RESULT_ERROR;
     ConstElementPtr dhcp4;
     string message;
 
     // Command arguments are expected to be:
-    // { "Dhcp4": { ... }, "Logging": { ... } }
-    // The Logging component is technically optional. If it's not supplied
-    // logging will revert to default logging.
+    // { "Dhcp4": { ... } }
+    // The Logging component is supported by backward compatiblity.
     if (!args) {
         message = "Missing mandatory 'arguments' parameter.";
     } else {
@@ -330,18 +345,38 @@ ControlledDhcpv4Srv::commandConfigSetHandler(const string&,
     // configuration attempts.
     CfgMgr::instance().rollback();
 
-    // Logging is a sibling element and must be parsed explicitly.
-    // The call to configureLogger parses the given Logging element if
-    // not null, into the staging config.  Note this does not alter the
-    // current loggers, they remain in effect until we apply the
-    // logging config below.  If no logging is supplied logging will
-    // revert to default logging.
-    Daemon::configureLogger(args->get("Logging"),
-                            CfgMgr::instance().getStagingCfg());
+    // Check deprecated, obsolete or unknown (aka unsupported) objects.
+    list<string> unsupported;
+    for (auto obj : args->mapValue()) {
+        const string& obj_name = obj.first;
+        if ((obj_name == "Dhcp4") || (obj_name == "Logging")) {
+            continue;
+        }
+        unsupported.push_back(obj_name);
+    }
+
+    // Relocate Logging: if there is a global Logging object takes its
+    // loggers entry, move the entry to Dhcp4 and remove now empty Logging.
+    Daemon::relocateLogging(args, "Dhcp4");
+
+    // Parse the logger configuration explicitly into the staging config.
+    // Note this does not alter the current loggers, they remain in
+    // effect until we apply the logging config below.  If no logging
+    // is supplied logging will revert to default logging.
+    Daemon::configureLogger(dhcp4, CfgMgr::instance().getStagingCfg());
 
     // Let's apply the new logging. We do it early, so we'll be able to print
-    // out what exactly is wrong with the new socnfig in case of problems.
+    // out what exactly is wrong with the new config in case of problems.
     CfgMgr::instance().getStagingCfg()->applyLoggingCfg();
+
+    // Log unsupported objects.
+    if (!unsupported.empty()) {
+        for (auto name : unsupported) {
+            LOG_ERROR(dhcp4_logger, DHCP4_CONFIG_UNSUPPORTED_OBJECT).arg(name);
+        }
+
+        // Will return an error in a future version.
+    }
 
     // Now we configure the server proper.
     ConstElementPtr result = processConfig(dhcp4);
@@ -374,9 +409,8 @@ ControlledDhcpv4Srv::commandConfigTestHandler(const string&,
     string message;
 
     // Command arguments are expected to be:
-    // { "Dhcp4": { ... }, "Logging": { ... } }
-    // The Logging component is technically optional. If it's not supplied
-    // logging will revert to default logging.
+    // { "Dhcp4": { ... } }
+    // The Logging component is supported by backward compatiblity.
     if (!args) {
         message = "Missing mandatory 'arguments' parameter.";
     } else {
@@ -399,6 +433,13 @@ ControlledDhcpv4Srv::commandConfigTestHandler(const string&,
     // staging configuration that has been created during previous
     // configuration attempts.
     CfgMgr::instance().rollback();
+
+    // Check obsolete objects.
+
+    // Relocate Logging. Note this allows to check the loggers configuration.
+    Daemon::relocateLogging(args, "Dhcp4");
+
+    // Log obsolete objects and return an error.
 
     // Now we check the server proper.
     return (checkConfig(dhcp4));
@@ -508,6 +549,71 @@ ControlledDhcpv4Srv::commandLeasesReclaimHandler(const string&,
 }
 
 ConstElementPtr
+ControlledDhcpv4Srv::commandServerTagGetHandler(const std::string&,
+                                                ConstElementPtr) {
+    const std::string& tag =
+        CfgMgr::instance().getCurrentCfg()->getServerTag();
+    ElementPtr response = Element::createMap();
+    response->set("server-tag", Element::create(tag));
+
+    return (createAnswer(CONTROL_RESULT_SUCCESS, response));
+}
+
+ConstElementPtr
+ControlledDhcpv4Srv::commandConfigBackendPullHandler(const std::string&,
+                                                     ConstElementPtr) {
+    auto ctl_info = CfgMgr::instance().getCurrentCfg()->getConfigControlInfo();
+    if (!ctl_info) {
+        return (createAnswer(CONTROL_RESULT_EMPTY, "No config backend."));
+    }
+
+    // Reschedule the periodic CB fetch.
+    if (TimerMgr::instance()->isTimerRegistered("Dhcp4CBFetchTimer")) {
+        TimerMgr::instance()->cancel("Dhcp4CBFetchTimer");
+        TimerMgr::instance()->setup("Dhcp4CBFetchTimer");
+    }
+
+    // Code from cbFetchUpdates.
+    try {
+        auto srv_cfg = CfgMgr::instance().getStagingCfg();
+        auto mode = CBControlDHCPv4::FetchMode::FETCH_UPDATE;
+        server_->getCBControl()->databaseConfigFetch(srv_cfg, mode);
+    } catch (const std::exception& ex) {
+        LOG_ERROR(dhcp4_logger, DHCP4_CB_ON_DEMAND_FETCH_UPDATES_FAIL)
+            .arg(ex.what());
+        return (createAnswer(CONTROL_RESULT_ERROR,
+                             "On demand configuration update failed: " +
+                             string(ex.what())));
+    }
+    return (createAnswer(CONTROL_RESULT_SUCCESS,
+                         "On demand configuration update successful."));
+}
+
+ConstElementPtr
+ControlledDhcpv4Srv::commandStatusGetHandler(const string&,
+                                             ConstElementPtr /*args*/) {
+    ElementPtr status = Element::createMap();
+    status->set("pid", Element::create(static_cast<int>(getpid())));
+
+    auto now = boost::posix_time::second_clock::universal_time();
+    // Sanity check: start_ is always initialized.
+    if (!start_.is_not_a_date_time()) {
+        auto uptime = now - start_;
+        status->set("uptime", Element::create(uptime.total_seconds()));
+    }
+
+    auto last_commit = CfgMgr::instance().getCurrentCfg()->getLastCommitTime();
+    if (!last_commit.is_not_a_date_time()) {
+        auto reload = now - last_commit;
+        status->set("reload", Element::create(reload.total_seconds()));
+    }
+
+    // todo: number of service threads.
+
+    return (createAnswer(0, status));
+}
+
+ConstElementPtr
 ControlledDhcpv4Srv::processCommand(const string& command,
                                     ConstElementPtr args) {
     string txt = args ? args->str() : "(none)";
@@ -561,6 +667,14 @@ ControlledDhcpv4Srv::processCommand(const string& command,
         } else if (command == "config-write") {
             return (srv->commandConfigWriteHandler(command, args));
 
+        } else if (command == "server-tag-get") {
+            return (srv->commandServerTagGetHandler(command, args));
+
+        } else if (command == "config-backend-pull") {
+            return (srv->commandConfigBackendPullHandler(command, args));
+
+        } else if (command == "status-get") {
+            return (srv->commandStatusGetHandler(command, args));
         }
         ConstElementPtr answer = isc::config::createAnswer(1,
                                  "Unrecognized command:" + command);
@@ -640,7 +754,7 @@ ControlledDhcpv4Srv::processConfig(isc::data::ConstElementPtr config) {
         qc  = CfgMgr::instance().getStagingCfg()->getDHCPQueueControl();
         if (IfaceMgr::instance().configureDHCPPacketQueue(AF_INET, qc)) {
             LOG_INFO(dhcp4_logger, DHCP4_CONFIG_PACKET_QUEUE)
-                      .arg(IfaceMgr::instance().getPacketQueue4()->getInfoStr());
+                     .arg(IfaceMgr::instance().getPacketQueue4()->getInfoStr());
         }
 
     } catch (const std::exception& ex) {
@@ -657,7 +771,8 @@ ControlledDhcpv4Srv::processConfig(isc::data::ConstElementPtr config) {
     // is no need to rollback configuration if socket fails to open on any
     // of the interfaces.
     CfgMgr::instance().getStagingCfg()->getCfgIface()->
-        openSockets(AF_INET, srv->getPort(), getInstance()->useBroadcast());
+        openSockets(AF_INET, srv->getServerPort(),
+                    getInstance()->useBroadcast());
 
     // Install the timers for handling leases reclamation.
     try {
@@ -672,6 +787,38 @@ ControlledDhcpv4Srv::processConfig(isc::data::ConstElementPtr config) {
             << ex.what() << ".";
         return (isc::config::createAnswer(1, err.str()));
     }
+
+    // Setup config backend polling, if configured for it.
+    auto ctl_info = CfgMgr::instance().getStagingCfg()->getConfigControlInfo();
+    if (ctl_info) {
+        long fetch_time = static_cast<long>(ctl_info->getConfigFetchWaitTime());
+        // Only schedule the CB fetch timer if the fetch wait time is greater
+        // than 0.
+        if (fetch_time > 0) {
+            // When we run unit tests, we want to use milliseconds unit for the
+            // specified interval. Otherwise, we use seconds. Note that using
+            // milliseconds as a unit in unit tests prevents us from waiting 1
+            // second on more before the timer goes off. Instead, we wait one
+            // millisecond which significantly reduces the test time.
+            if (!server_->inTestMode()) {
+                fetch_time = 1000 * fetch_time;
+            }
+
+            boost::shared_ptr<unsigned> failure_count(new unsigned(0));
+            TimerMgr::instance()->
+                registerTimer("Dhcp4CBFetchTimer",
+                              boost::bind(&ControlledDhcpv4Srv::cbFetchUpdates,
+                                          server_, CfgMgr::instance().getStagingCfg(),
+                                          failure_count),
+                              fetch_time,
+                              asiolink::IntervalTimer::ONE_SHOT);
+            TimerMgr::instance()->setup("Dhcp4CBFetchTimer");
+        }
+    }
+
+    // Finally, we can commit runtime option definitions in libdhcp++. This is
+    // exception free.
+    LibDHCP::commitRuntimeOptionDefs();
 
     // This hook point notifies hooks libraries that the configuration of the
     // DHCPv4 server has completed. It provides the hook library with the pointer
@@ -715,8 +862,10 @@ ControlledDhcpv4Srv::checkConfig(isc::data::ConstElementPtr config) {
     return (configureDhcp4Server(*srv, config, true));
 }
 
-ControlledDhcpv4Srv::ControlledDhcpv4Srv(uint16_t port /*= DHCP4_SERVER_PORT*/)
-    : Dhcpv4Srv(port), io_service_(), timer_mgr_(TimerMgr::instance()) {
+ControlledDhcpv4Srv::ControlledDhcpv4Srv(uint16_t server_port /*= DHCP4_SERVER_PORT*/,
+                                         uint16_t client_port /*= 0*/)
+    : Dhcpv4Srv(server_port, client_port), io_service_(),
+      timer_mgr_(TimerMgr::instance()) {
     if (getInstance()) {
         isc_throw(InvalidOperation,
                   "There is another Dhcpv4Srv instance already.");
@@ -733,6 +882,9 @@ ControlledDhcpv4Srv::ControlledDhcpv4Srv(uint16_t port /*= DHCP4_SERVER_PORT*/)
     // Please keep the list in alphabetic order.
     CommandMgr::instance().registerCommand("build-report",
         boost::bind(&ControlledDhcpv4Srv::commandBuildReportHandler, this, _1, _2));
+
+    CommandMgr::instance().registerCommand("config-backend-pull",
+        boost::bind(&ControlledDhcpv4Srv::commandConfigBackendPullHandler, this, _1, _2));
 
     CommandMgr::instance().registerCommand("config-get",
         boost::bind(&ControlledDhcpv4Srv::commandConfigGetHandler, this, _1, _2));
@@ -761,8 +913,14 @@ ControlledDhcpv4Srv::ControlledDhcpv4Srv(uint16_t port /*= DHCP4_SERVER_PORT*/)
     CommandMgr::instance().registerCommand("leases-reclaim",
         boost::bind(&ControlledDhcpv4Srv::commandLeasesReclaimHandler, this, _1, _2));
 
+    CommandMgr::instance().registerCommand("server-tag-get",
+        boost::bind(&ControlledDhcpv4Srv::commandServerTagGetHandler, this, _1, _2));
+
     CommandMgr::instance().registerCommand("shutdown",
         boost::bind(&ControlledDhcpv4Srv::commandShutdownHandler, this, _1, _2));
+
+    CommandMgr::instance().registerCommand("status-get",
+        boost::bind(&ControlledDhcpv4Srv::commandStatusGetHandler, this, _1, _2));
 
     CommandMgr::instance().registerCommand("version-get",
         boost::bind(&ControlledDhcpv4Srv::commandVersionGetHandler, this, _1, _2));
@@ -786,6 +944,17 @@ ControlledDhcpv4Srv::ControlledDhcpv4Srv(uint16_t port /*= DHCP4_SERVER_PORT*/)
     CommandMgr::instance().registerCommand("statistic-remove-all",
         boost::bind(&StatsMgr::statisticRemoveAllHandler, _1, _2));
 
+    CommandMgr::instance().registerCommand("statistic-sample-age-set",
+        boost::bind(&StatsMgr::statisticSetMaxSampleAgeHandler, _1, _2));
+
+    CommandMgr::instance().registerCommand("statistic-sample-age-set-all",
+        boost::bind(&StatsMgr::statisticSetMaxSampleAgeAllHandler, _1, _2));
+
+    CommandMgr::instance().registerCommand("statistic-sample-count-set",
+        boost::bind(&StatsMgr::statisticSetMaxSampleCountHandler, _1, _2));
+
+    CommandMgr::instance().registerCommand("statistic-sample-count-set-all",
+        boost::bind(&StatsMgr::statisticSetMaxSampleCountAllHandler, _1, _2));
 }
 
 void ControlledDhcpv4Srv::shutdown() {
@@ -808,15 +977,17 @@ ControlledDhcpv4Srv::~ControlledDhcpv4Srv() {
 
         // Deregister any registered commands (please keep in alphabetic order)
         CommandMgr::instance().deregisterCommand("build-report");
+        CommandMgr::instance().deregisterCommand("config-backend-pull");
         CommandMgr::instance().deregisterCommand("config-get");
         CommandMgr::instance().deregisterCommand("config-reload");
+        CommandMgr::instance().deregisterCommand("config-set");
         CommandMgr::instance().deregisterCommand("config-test");
         CommandMgr::instance().deregisterCommand("config-write");
-        CommandMgr::instance().deregisterCommand("leases-reclaim");
-        CommandMgr::instance().deregisterCommand("libreload");
-        CommandMgr::instance().deregisterCommand("config-set");
         CommandMgr::instance().deregisterCommand("dhcp-disable");
         CommandMgr::instance().deregisterCommand("dhcp-enable");
+        CommandMgr::instance().deregisterCommand("leases-reclaim");
+        CommandMgr::instance().deregisterCommand("libreload");
+        CommandMgr::instance().deregisterCommand("server-tag-get");
         CommandMgr::instance().deregisterCommand("shutdown");
         CommandMgr::instance().deregisterCommand("statistic-get");
         CommandMgr::instance().deregisterCommand("statistic-get-all");
@@ -824,6 +995,11 @@ ControlledDhcpv4Srv::~ControlledDhcpv4Srv() {
         CommandMgr::instance().deregisterCommand("statistic-remove-all");
         CommandMgr::instance().deregisterCommand("statistic-reset");
         CommandMgr::instance().deregisterCommand("statistic-reset-all");
+        CommandMgr::instance().deregisterCommand("statistic-sample-age-set");
+        CommandMgr::instance().deregisterCommand("statistic-sample-age-set-all");
+        CommandMgr::instance().deregisterCommand("statistic-sample-count-set");
+        CommandMgr::instance().deregisterCommand("statistic-sample-count-set-all");
+        CommandMgr::instance().deregisterCommand("status-get");
         CommandMgr::instance().deregisterCommand("version-get");
 
     } catch (...) {
@@ -832,8 +1008,8 @@ ControlledDhcpv4Srv::~ControlledDhcpv4Srv() {
         ;
     }
 
-    server_ = NULL; // forget this instance. Noone should call any handlers at
-                    // this stage.
+    server_ = NULL; // forget this instance. There should be no callback anymore
+                    // at this stage anyway.
 }
 
 void ControlledDhcpv4Srv::sessionReader(void) {
@@ -923,12 +1099,14 @@ ControlledDhcpv4Srv::dbLostCallback(ReconnectCtlPtr db_reconnect_ctl) {
         return (false);
     }
 
-    // If reconnect isn't enabled, log it and return false
+    // If reconnect isn't enabled or we're out of retries,
+    // log it, schedule a shutdown,  and return false
     if (!db_reconnect_ctl->retriesLeft() ||
         !db_reconnect_ctl->retryInterval()) {
         LOG_INFO(dhcp4_logger, DHCP4_DB_RECONNECT_DISABLED)
             .arg(db_reconnect_ctl->retriesLeft())
             .arg(db_reconnect_ctl->retryInterval());
+        ControlledDhcpv4Srv::processCommand("shutdown", ConstElementPtr());
         return(false);
     }
 
@@ -938,5 +1116,35 @@ ControlledDhcpv4Srv::dbLostCallback(ReconnectCtlPtr db_reconnect_ctl) {
     return(true);
 }
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+void
+ControlledDhcpv4Srv::cbFetchUpdates(const SrvConfigPtr& srv_cfg,
+                                    boost::shared_ptr<unsigned> failure_count) {
+    try {
+        // Fetch any configuration backend updates since our last fetch.
+        server_->getCBControl()->databaseConfigFetch(srv_cfg,
+                                                     CBControlDHCPv4::FetchMode::FETCH_UPDATE);
+        (*failure_count) = 0;
+
+    } catch (const std::exception& ex) {
+        LOG_ERROR(dhcp4_logger, DHCP4_CB_PERIODIC_FETCH_UPDATES_FAIL)
+            .arg(ex.what());
+
+        // We allow at most 10 consecutive failures after which we stop
+        // making further attempts to fetch the configuration updates.
+        // Let's return without re-scheduling the timer.
+        if (++(*failure_count) > 10) {
+            LOG_ERROR(dhcp4_logger,
+                      DHCP4_CB_PERIODIC_FETCH_UPDATES_RETRIES_EXHAUSTED);
+            return;
+        }
+    }
+
+    // Reschedule the timer to fetch new updates or re-try if
+    // the previous attempt resulted in an error.
+    if (TimerMgr::instance()->isTimerRegistered("Dhcp4CBFetchTimer")) {
+        TimerMgr::instance()->setup("Dhcp4CBFetchTimer");
+    }
+}
+
+}  // namespace dhcp
+}  // namespace isc

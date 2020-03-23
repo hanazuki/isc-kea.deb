@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -499,13 +499,20 @@ public:
 
     /// @brief Returns status code set by the server for the IAID.
     ///
-    /// @warning This method doesn't check if the specified index is out of
-    /// range. The caller is responsible for using a correct offset by
-    /// invoking the @c getLeaseNum function.
-    ///
-    /// @param at Index of the lease held by the client.
-    /// @return A status code for the lease at the specified index.
+    /// @param iaid for which the status is desired
+    /// @return A status code for the given iaid
     uint16_t getStatusCode(const uint32_t iaid) const;
+
+    /// @brief Returns T1 and T2 timers associated with a given iaid
+    ///
+    /// Changed to get the T1 an T2 times from acquired leases to
+    /// IA options.
+    ///
+    /// @param iaid iaid of the target IA
+    /// @param[out] t1 set to the value of the IA's T1
+    /// @param[out] t2 set to the value of the IA's T2
+    /// @return true if there is an IA option for the given iaid
+    bool getTeeTimes(const uint32_t iaid, uint32_t& t1, uint32_t& t2) const;
 
     /// @brief Returns number of acquired leases.
     size_t getLeaseNum() const {

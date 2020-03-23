@@ -1,4 +1,4 @@
-/* Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -85,6 +85,7 @@ using namespace std;
   FLUSH "flush"
   MAXSIZE "maxsize"
   MAXVER "maxver"
+  PATTERN "pattern"
 
   // Not real tokens, just a way to signal what the parser is expected to
   // parse. This define the starting point. It either can be full grammar
@@ -277,6 +278,7 @@ global_param: boot_update
             | validate_changes
             | managed_servers
             | hooks_libraries
+            | loggers
             | user_context
             | comment
             | unknown_map_entry
@@ -672,6 +674,7 @@ output_params: output
              | flush
              | maxsize
              | maxver
+             | pattern
              ;
 
 output: OUTPUT {
@@ -695,6 +698,14 @@ maxsize: MAXSIZE COLON INTEGER {
 maxver: MAXVER COLON INTEGER {
     ElementPtr maxver(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxver", maxver);
+};
+
+pattern: PATTERN {
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("pattern", sev);
+    ctx.leave();
 };
 
 %%

@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,6 +12,7 @@
 #include <dhcp/option_custom.h>
 #include <dhcp/option_int.h>
 #include <dhcp/option_string.h>
+#include <dhcp/option4_addrlst.h>
 #include <dhcp/option6_addrlst.h>
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/cfgmgr.h>
@@ -19,6 +20,8 @@
 #include <dhcpsrv/cfg_mac_source.h>
 #include <dhcpsrv/parsers/dhcp_parsers.h>
 #include <dhcpsrv/parsers/option_data_parser.h>
+#include <dhcpsrv/parsers/shared_network_parser.h>
+#include <dhcpsrv/parsers/shared_networks_list_parser.h>
 #include <dhcpsrv/tests/test_libraries.h>
 #include <dhcpsrv/testutils/config_result_check.h>
 #include <exceptions/exceptions.h>
@@ -163,7 +166,6 @@ public:
     ParseConfigTest()
         :family_(AF_INET6) {
         reset_context();
-        CfgMgr::instance().clear();
     }
 
     ~ParseConfigTest() {
@@ -177,10 +179,11 @@ public:
     /// the parsed elements.
     ///
     /// @param config_set is the set of elements to parse.
+    /// @param v6 boolean flag indicating if this is a DHCPv6 configuration.
     /// @return returns an ConstElementPtr containing the numeric result
     /// code and outcome comment.
-    isc::data::ConstElementPtr parseElementSet(isc::data::ConstElementPtr
-                                               config_set) {
+    isc::data::ConstElementPtr
+    parseElementSet(isc::data::ConstElementPtr config_set, bool v6) {
         // Answer will hold the result.
         ConstElementPtr answer;
         if (!config_set) {
@@ -213,6 +216,14 @@ public:
                     continue;
                 }
 
+                // Save global hostname-char-*.
+                if ((config_pair.first == "hostname-char-set") ||
+                    (config_pair.first == "hostname-char-replacement")) {
+                    CfgMgr::instance().getStagingCfg()->addConfiguredGlobal(config_pair.first,
+                                                                            config_pair.second);
+                    continue;
+                }
+
                 if (config_pair.first == "hooks-libraries") {
                     HooksLibrariesParser hook_parser;
                     HooksConfig&  libraries =
@@ -230,7 +241,7 @@ public:
             if (def_config != values_map.end()) {
 
                 CfgOptionDefPtr cfg_def = CfgMgr::instance().getStagingCfg()->getCfgOptionDef();
-                OptionDefListParser def_list_parser;
+                OptionDefListParser def_list_parser(family_);
                 def_list_parser.parse(cfg_def, def_config->second);
             }
 
@@ -251,7 +262,39 @@ public:
                 // Used to be done by parser commit
                 D2ClientConfigParser parser;
                 D2ClientConfigPtr cfg = parser.parse(d2_client_config->second);
+                cfg->validateContents();
                 CfgMgr::instance().setD2ClientConfig(cfg);
+            }
+
+            std::map<std::string, ConstElementPtr>::const_iterator
+                                subnets4_config = values_map.find("subnet4");
+            if (subnets4_config != values_map.end()) {
+                auto srv_config = CfgMgr::instance().getStagingCfg();
+                Subnets4ListConfigParser parser;
+                parser.parse(srv_config, subnets4_config->second);
+            }
+
+            std::map<std::string, ConstElementPtr>::const_iterator
+                                subnets6_config = values_map.find("subnet6");
+            if (subnets6_config != values_map.end()) {
+                auto srv_config = CfgMgr::instance().getStagingCfg();
+                Subnets6ListConfigParser parser;
+                parser.parse(srv_config, subnets6_config->second);
+            }
+
+            std::map<std::string, ConstElementPtr>::const_iterator
+                                networks_config = values_map.find("shared-networks");
+            if (networks_config != values_map.end()) {
+                if (v6) {
+                    auto cfg_shared_networks = CfgMgr::instance().getStagingCfg()->getCfgSharedNetworks6();
+                    SharedNetworks6ListParser parser;
+                    parser.parse(cfg_shared_networks, networks_config->second);
+
+                } else {
+                    auto cfg_shared_networks = CfgMgr::instance().getStagingCfg()->getCfgSharedNetworks4();
+                    SharedNetworks4ListParser parser;
+                    parser.parse(cfg_shared_networks, networks_config->second);
+                }
             }
 
             // Everything was fine. Configuration is successful.
@@ -354,25 +397,30 @@ public:
     /// Given a configuration string, convert it into Elements
     /// and parse them.
     /// @param config is the configuration string to parse
+    /// @param v6 boolean value indicating if this is DHCPv6 configuration.
+    /// @param set_defaults boolean value indicating if the defaults should
+    /// be derived before parsing the configuration.
     ///
     /// @return returns 0 if the configuration parsed successfully,
     /// non-zero otherwise failure.
-    int parseConfiguration(const std::string& config, bool v6 = false) {
+    int parseConfiguration(const std::string& config, bool v6 = false,
+                           bool set_defaults = true) {
         int rcode_ = 1;
         // Turn config into elements.
         // Test json just to make sure its valid.
         ElementPtr json = Element::fromJSON(config);
         EXPECT_TRUE(json);
         if (json) {
-            setAllDefaults(json, v6);
+            if (set_defaults) {
+                setAllDefaults(json, v6);
+            }
 
-            ConstElementPtr status = parseElementSet(json);
+            ConstElementPtr status = parseElementSet(json, v6);
             ConstElementPtr comment = parseAnswer(rcode_, status);
             error_text_ = comment->stringValue();
             // If error was reported, the error string should contain
             // position of the data element which caused failure.
             if (rcode_ != 0) {
-                std::cout << "Error text:" << error_text_ << std::endl;
                 EXPECT_TRUE(errorContainsPosition(status, "<string>"));
             }
         }
@@ -412,10 +460,12 @@ public:
 
     /// @brief Wipes the contents of the context to allowing another parsing
     /// during a given test if needed.
-    void reset_context(){
+    /// @param family protocol family to use during the test, defaults
+    /// to AF_INET6
+    void reset_context(uint16_t family = AF_INET6){
         // Note set context universe to V6 as it has to be something.
         CfgMgr::instance().clear();
-        family_ = AF_INET6;
+        family_ = family;
 
         // Ensure no hooks libraries are loaded.
         HooksManager::unloadLibraries();
@@ -677,6 +727,107 @@ TEST_F(ParseConfigTest, defaultSpaceOptionDefTest) {
     cfg.runCfgOptionsTest(family_, config);
 }
 
+/// @brief Check parsing of option definitions using invalid code fails.
+TEST_F(ParseConfigTest, badCodeOptionDefTest) {
+
+    {
+        SCOPED_TRACE("negative code");
+        std::string config =
+            "{ \"option-def\": [ {"
+            "      \"name\": \"negative\","
+            "      \"code\": -1,"
+            "      \"type\": \"ipv6-address\","
+            "      \"space\": \"isc\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, true);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("out of range code (v6)");
+        std::string config =
+            "{ \"option-def\": [ {"
+            "      \"name\": \"hundred-thousands\","
+            "      \"code\": 100000,"
+            "      \"type\": \"ipv6-address\","
+            "      \"space\": \"isc\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, true);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("out of range code (v4)");
+        family_ = AF_INET;     // Switch to DHCPv4.
+
+        std::string config =
+            "{ \"option-def\": [ {"
+            "      \"name\": \"thousand\","
+            "      \"code\": 1000,"
+            "      \"type\": \"ip-address\","
+            "      \"space\": \"isc\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("conflict with PAD");
+        family_ = AF_INET;     // Switch to DHCPv4.
+
+        std::string config =
+            "{ \"option-def\": [ {"
+            "      \"name\": \"zero\","
+            "      \"code\": 0,"
+            "      \"type\": \"ip-address\","
+            "      \"space\": \"dhcp4\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("conflict with END");
+        family_ = AF_INET;     // Switch to DHCPv4.
+
+        std::string config =
+            "{ \"option-def\": [ {"
+            "      \"name\": \"max\","
+            "      \"code\": 255,"
+            "      \"type\": \"ip-address\","
+            "      \"space\": \"dhcp4\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("conflict with reserved");
+
+        std::string config =
+            "{ \"option-def\": [ {"
+            "      \"name\": \"zero\","
+            "      \"code\": 0,"
+            "      \"type\": \"ipv6-address\","
+            "      \"space\": \"dhcp6\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
+}
+
 /// @brief Check parsing of option definitions using invalid space fails.
 TEST_F(ParseConfigTest, badSpaceOptionDefTest) {
 
@@ -684,7 +835,7 @@ TEST_F(ParseConfigTest, badSpaceOptionDefTest) {
     std::string config =
         "{ \"option-def\": [ {"
         "      \"name\": \"foo\","
-        "      \"code\": 100000,"
+        "      \"code\": 100,"
         "      \"type\": \"ipv6-address\","
         "      \"space\": \"-1\""
         "  } ]"
@@ -731,6 +882,84 @@ TEST_F(ParseConfigTest, basicOptionDataTest) {
 
     // Verify that the option data is correct.
     std::string val = "type=00100, len=00004: 192.0.2.0 (ipv4-address)";
+
+    EXPECT_EQ(val, opt_ptr->toText());
+
+    // Check if it can be unparsed.
+    CfgOptionsTest cfg(CfgMgr::instance().getStagingCfg());
+    cfg.runCfgOptionsTest(family_, config);
+}
+
+/// @brief Check parsing of options with code 0.
+TEST_F(ParseConfigTest, optionDataTest0) {
+
+    // Configuration string.
+    std::string config =
+        "{ \"option-def\": [ {"
+        "      \"name\": \"foo\","
+        "      \"code\": 0,"
+        "      \"type\": \"ipv4-address\","
+        "      \"space\": \"isc\""
+        " } ], "
+        " \"option-data\": [ {"
+        "    \"name\": \"foo\","
+        "    \"space\": \"isc\","
+        "    \"code\": 0,"
+        "    \"data\": \"192.0.2.0\","
+        "    \"csv-format\": true,"
+        "    \"always-send\": false"
+        " } ]"
+        "}";
+
+    // Verify that the configuration string parses.
+    int rcode = parseConfiguration(config);
+    ASSERT_EQ(0, rcode);
+
+    // Verify that the option can be retrieved.
+    OptionPtr opt_ptr = getOptionPtr("isc", 0);
+    ASSERT_TRUE(opt_ptr);
+
+    // Verify that the option data is correct.
+    std::string val = "type=00000, len=00004: 192.0.2.0 (ipv4-address)";
+
+    EXPECT_EQ(val, opt_ptr->toText());
+
+    // Check if it can be unparsed.
+    CfgOptionsTest cfg(CfgMgr::instance().getStagingCfg());
+    cfg.runCfgOptionsTest(family_, config);
+}
+
+/// @brief Check parsing of options with code 255.
+TEST_F(ParseConfigTest, optionDataTest255) {
+
+    // Configuration string.
+    std::string config =
+        "{ \"option-def\": [ {"
+        "      \"name\": \"foo\","
+        "      \"code\": 255,"
+        "      \"type\": \"ipv4-address\","
+        "      \"space\": \"isc\""
+        " } ], "
+        " \"option-data\": [ {"
+        "    \"name\": \"foo\","
+        "    \"space\": \"isc\","
+        "    \"code\": 255,"
+        "    \"data\": \"192.0.2.0\","
+        "    \"csv-format\": true,"
+        "    \"always-send\": false"
+        " } ]"
+        "}";
+
+    // Verify that the configuration string parses.
+    int rcode = parseConfiguration(config);
+    ASSERT_EQ(0, rcode);
+
+    // Verify that the option can be retrieved.
+    OptionPtr opt_ptr = getOptionPtr("isc", 255);
+    ASSERT_TRUE(opt_ptr);
+
+    // Verify that the option data is correct.
+    std::string val = "type=00255, len=00004: 192.0.2.0 (ipv4-address)";
 
     EXPECT_EQ(val, opt_ptr->toText());
 
@@ -794,6 +1023,105 @@ TEST_F(ParseConfigTest, unknownOptionDataTest) {
     // Verify that the configuration string does not parse.
     int rcode = parseConfiguration(config, true);
     ASSERT_NE(0, rcode);
+}
+
+/// @brief Check parsing of option data using invalid code fails.
+TEST_F(ParseConfigTest, badCodeOptionDataTest) {
+
+    {
+        SCOPED_TRACE("negative code");
+        std::string config =
+            "{ \"option-data\": [ {"
+            "      \"code\": -1,"
+            "      \"data\": \"01\","
+            "      \"space\": \"isc\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, true);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("out of range code (v6)");
+        std::string config =
+            "{ \"option-data\": [ {"
+            "      \"code\": 100000,"
+            "      \"data\": \"01\","
+            "      \"space\": \"isc\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, true);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("out of range code (v4)");
+        family_ = AF_INET;     // Switch to DHCPv4.
+
+        std::string config =
+            "{ \"option-data\": [ {"
+            "      \"code\": 1000,"
+            "      \"data\": \"01\","
+            "      \"space\": \"isc\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("conflict with PAD");
+        family_ = AF_INET;     // Switch to DHCPv4.
+
+        std::string config =
+            "{ \"option-data\": [ {"
+            "      \"code\": 0,"
+            "      \"data\": \"01\","
+            "      \"csv-format\": false,"
+            "      \"space\": \"dhcp4\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("conflict with END");
+        family_ = AF_INET;     // Switch to DHCPv4.
+
+        std::string config =
+            "{ \"option-data\": [ {"
+            "      \"code\": 255,"
+            "      \"data\": \"01\","
+            "      \"csv-format\": false,"
+            "      \"space\": \"dhcp4\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
+
+    {
+        SCOPED_TRACE("conflict with reserved");
+        family_ = AF_INET6;    // Switch to DHCPv6.
+
+        std::string config =
+            "{ \"option-data\": [ {"
+            "      \"code\": 0,"
+            "      \"data\": \"01\","
+            "      \"csv-format\": false,"
+            "      \"space\": \"dhcp6\""
+            "  } ]"
+            "}";
+
+        int rcode = parseConfiguration(config, false);
+        ASSERT_NE(0, rcode);
+    }
 }
 
 /// @brief Check parsing of options with invalid space fails.
@@ -1351,6 +1679,154 @@ TEST_F(ParseConfigTest, commaCSVFormatOptionData) {
     cfg.runCfgOptionsTest(family_, expected);
 }
 
+// Verifies that hex literals can support a variety of formats.
+TEST_F(ParseConfigTest, hexOptionData) {
+
+    // All of the following variants should parse correctly
+    // into the same two IPv4 addresses: 12.0.3.1 and 192.0.3.2
+    std::vector<std::string> valid_hexes = {
+        "0C000301C0000302", // even number
+        "C000301C0000302",  // odd number
+        "0C 00 03 01 C0 00 03 02", // spaces
+        "0C:00:03:01:C0:00:03:02", // colons
+        "0x0C000301C0000302",  // 0x
+        "C 0 3 1 C0 0 3 02",  // one or two digit octets
+        "0x0c000301C0000302"   // upper or lower case digits
+    };
+
+    for (auto hex_str : valid_hexes) {
+        ostringstream os;
+        os <<
+            "{ \n"
+            "  \"option-data\": [ { \n"
+            "    \"name\": \"domain-name-servers\", \n"
+            "    \"code\": 6, \n"
+            "    \"space\": \"dhcp4\", \n"
+            "    \"csv-format\": false, \n"
+            "    \"data\": \"" << hex_str << "\" \n"
+            " } ] \n"
+            "} \n";
+
+        reset_context(AF_INET);
+        int rcode = 0;
+        ASSERT_NO_THROW(rcode = parseConfiguration(os.str(), true));
+        EXPECT_EQ(0, rcode);
+
+        Option4AddrLstPtr opt = boost::dynamic_pointer_cast<Option4AddrLst>
+                                (getOptionPtr(DHCP4_OPTION_SPACE, 6));
+        ASSERT_TRUE(opt);
+        ASSERT_EQ(2, opt->getAddresses().size());
+        EXPECT_EQ("12.0.3.1", opt->getAddresses()[0].toText());
+        EXPECT_EQ("192.0.3.2", opt->getAddresses()[1].toText());
+    }
+}
+
+// Verifies that binary option data can be configured with either
+// "'strings'" or hex literals.
+TEST_F(ParseConfigTest, stringOrHexBinaryData) {
+    // Structure the defines a given test scenario
+    struct Scenario {
+        std::string description_;  // describes the scenario for logging
+        std::string str_data_;     // configured data value of the option
+        std::vector<uint8_t> exp_binary_; // expected parsed binary data
+        std::string exp_error_;    // expected error test for invalid input
+    };
+
+    // Convenience value to use for initting valid scenarios
+    std::string no_error("");
+
+    // Valid and invalid scenarios we will test.
+    // Note we are not concerned with the varitions of valid or invalid
+    // hex literals those are tested elsewhere.
+    std::vector<Scenario> scenarios = {
+        {
+            "valid hex digits",
+            "0C:00:03:01:C0:00:03:02",
+            {0x0C,0x00,0x03,0x01,0xC0,0x00,0x03,0x02},
+            no_error
+        },
+        {
+            "valid string",
+            "'abcdefghijk'",
+            {0x61,0x62,0x63,0x64,0x65,0x66,0x67,0x68,0x69,0x6A,0x6B},
+            no_error
+        },
+        {
+            "valid empty",
+            "",
+            {},
+            no_error
+        },
+        {
+            "invalid empty",
+            "''",
+            {},
+            "Configuration parsing failed: option data is not a valid string"
+            " of hexadecimal digits: '' (<string>:7:13)"
+        },
+        {
+            "missing end quote",
+            "'abcdefghijk",
+            {},
+            "Configuration parsing failed: option data is not a valid string"
+            " of hexadecimal digits: 'abcdefghijk (<string>:7:13)"
+        },
+        {
+            "missing open quote",
+            "abcdefghijk'",
+            {},
+            "Configuration parsing failed: option data is not a valid string"
+            " of hexadecimal digits: abcdefghijk' (<string>:7:13)"
+        },
+        {
+            "no quotes",
+            "abcdefghijk",
+            {},
+            "Configuration parsing failed: option data is not a valid string"
+            " of hexadecimal digits: abcdefghijk (<string>:7:13)"
+        }
+    };
+
+    // Iterate over our test scenarios
+    for (auto scenario : scenarios) {
+        SCOPED_TRACE(scenario.description_);
+        {
+            // Build the configuration text.
+            ostringstream os;
+            os <<
+                "{ \n"
+                "  \"option-data\": [ { \n"
+                "    \"name\": \"user-class\", \n"
+                "    \"code\": 77, \n"
+                "    \"space\": \"dhcp4\", \n"
+                "    \"csv-format\": false, \n"
+                "    \"data\": \"" << scenario.str_data_ << "\" \n"
+                " } ] \n"
+                "} \n";
+
+            // Attempt to parse it.
+            reset_context(AF_INET);
+            int rcode = 0;
+            ASSERT_NO_THROW(rcode = parseConfiguration(os.str(), true));
+
+            if (!scenario.exp_error_.empty()) {
+                // We expected to fail, did we?
+                ASSERT_NE(0, rcode);
+                // Did we fail for the reason we think we should?
+                EXPECT_EQ(error_text_, scenario.exp_error_);
+            } else {
+                // We expected to succeed, did we?
+                ASSERT_EQ(0, rcode);
+                OptionPtr opt = getOptionPtr(DHCP4_OPTION_SPACE, 77);
+                ASSERT_TRUE(opt);
+                // Verify the parsed data is correct.
+                EXPECT_EQ(opt->getData(), scenario.exp_binary_);
+            }
+        }
+    }
+}
+
+
 /// The next set of tests check basic operation of the HooksLibrariesParser.
 //
 // Convenience function to set a configuration of zero or more hooks
@@ -1864,13 +2340,6 @@ TEST_F(ParseConfigTest, validD2Config) {
         "     \"max-queue-size\" : 2048, "
         "     \"ncr-protocol\" : \"UDP\", "
         "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : \"when-present\", "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\", "
-        "     \"hostname-char-set\" : \"[^A-Z]\", "
-        "     \"hostname-char-replacement\" : \"*\", "
         "     \"user-context\": { \"foo\": \"bar\" } "
         "    }"
         "}";
@@ -1891,11 +2360,6 @@ TEST_F(ParseConfigTest, validD2Config) {
     EXPECT_EQ(3432, d2_client_config->getServerPort());
     EXPECT_EQ(dhcp_ddns::NCR_UDP, d2_client_config->getNcrProtocol());
     EXPECT_EQ(dhcp_ddns::FMT_JSON, d2_client_config->getNcrFormat());
-    EXPECT_TRUE(d2_client_config->getOverrideNoUpdate());
-    EXPECT_TRUE(d2_client_config->getOverrideClientUpdate());
-    EXPECT_EQ(D2ClientConfig::RCM_WHEN_PRESENT, d2_client_config->getReplaceClientNameMode());
-    EXPECT_EQ("test.prefix", d2_client_config->getGeneratedPrefix());
-    EXPECT_EQ("test.suffix.", d2_client_config->getQualifyingSuffix());
     ASSERT_TRUE(d2_client_config->getContext());
     EXPECT_EQ("{ \"foo\": \"bar\" }", d2_client_config->getContext()->str());
 
@@ -1919,13 +2383,6 @@ TEST_F(ParseConfigTest, validD2Config) {
         "     \"max-queue-size\" : 2048, "
         "     \"ncr-protocol\" : \"UDP\", "
         "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : false, "
-        "     \"override-client-update\" : false, "
-        "     \"replace-client-name\" : \"never\", "
-        "     \"generated-prefix\" : \"\", "
-        "     \"qualifying-suffix\" : \"\", "
-        "     \"hostname-char-set\" : \"[^A-Z]\", "
-        "     \"hostname-char-replacement\" : \"*\", "
         "     \"user-context\": { \"foo\": \"bar\" } "
         "    }"
         "}";
@@ -1945,11 +2402,6 @@ TEST_F(ParseConfigTest, validD2Config) {
     EXPECT_EQ(43567, d2_client_config->getServerPort());
     EXPECT_EQ(dhcp_ddns::NCR_UDP, d2_client_config->getNcrProtocol());
     EXPECT_EQ(dhcp_ddns::FMT_JSON, d2_client_config->getNcrFormat());
-    EXPECT_FALSE(d2_client_config->getOverrideNoUpdate());
-    EXPECT_FALSE(d2_client_config->getOverrideClientUpdate());
-    EXPECT_EQ(D2ClientConfig::RCM_NEVER, d2_client_config->getReplaceClientNameMode());
-    EXPECT_EQ("", d2_client_config->getGeneratedPrefix());
-    EXPECT_EQ("", d2_client_config->getQualifyingSuffix());
     ASSERT_TRUE(d2_client_config->getContext());
     EXPECT_EQ("{ \"foo\": \"bar\" }", d2_client_config->getContext()->str());
 
@@ -1994,8 +2446,7 @@ TEST_F(ParseConfigTest, parserDefaultsD2Config) {
     std::string config_str =
         "{ \"dhcp-ddns\" :"
         "    {"
-        "     \"enable-updates\" : true, "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"enable-updates\" : true "
         "    }"
         "}";
 
@@ -2019,30 +2470,12 @@ TEST_F(ParseConfigTest, parserDefaultsD2Config) {
               d2_client_config->getNcrProtocol());
     EXPECT_EQ(dhcp_ddns::stringToNcrFormat(D2ClientConfig::DFT_NCR_FORMAT),
               d2_client_config->getNcrFormat());
-    EXPECT_EQ(D2ClientConfig::DFT_OVERRIDE_NO_UPDATE,
-              d2_client_config->getOverrideNoUpdate());
-    EXPECT_EQ(D2ClientConfig::DFT_OVERRIDE_CLIENT_UPDATE,
-              d2_client_config->getOverrideClientUpdate());
-    EXPECT_EQ(D2ClientConfig::
-              stringToReplaceClientNameMode(D2ClientConfig::
-                                            DFT_REPLACE_CLIENT_NAME_MODE),
-              d2_client_config->getReplaceClientNameMode());
-    EXPECT_EQ(D2ClientConfig::DFT_GENERATED_PREFIX,
-              d2_client_config->getGeneratedPrefix());
-    EXPECT_EQ("test.suffix.",
-              d2_client_config->getQualifyingSuffix());
 }
 
 
 /// @brief Check various invalid D2 client configurations.
 TEST_F(ParseConfigTest, invalidD2Config) {
     std::string invalid_configs[] = {
-        // Must supply qualifying-suffix when updates are enabled
-        "{ \"dhcp-ddns\" :"
-        "    {"
-        "     \"enable-updates\" : true"
-        "    }"
-        "}",
         // Invalid server ip value
         "{ \"dhcp-ddns\" :"
         "    {"
@@ -2050,12 +2483,7 @@ TEST_F(ParseConfigTest, invalidD2Config) {
         "     \"server-ip\" : \"x192.0.2.0\", "
         "     \"server-port\" : 53001, "
         "     \"ncr-protocol\" : \"UDP\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : true, "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"ncr-format\" : \"JSON\" "
         "    }"
         "}",
         // Unknown protocol
@@ -2065,12 +2493,7 @@ TEST_F(ParseConfigTest, invalidD2Config) {
         "     \"server-ip\" : \"192.0.2.0\", "
         "     \"server-port\" : 53001, "
         "     \"ncr-protocol\" : \"Bogus\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : true, "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"ncr-format\" : \"JSON\" "
         "    }"
         "}",
         // Unsupported protocol
@@ -2080,12 +2503,7 @@ TEST_F(ParseConfigTest, invalidD2Config) {
         "     \"server-ip\" : \"192.0.2.0\", "
         "     \"server-port\" : 53001, "
         "     \"ncr-protocol\" : \"TCP\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : true, "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"ncr-format\" : \"JSON\" "
         "    }"
         "}",
         // Unknown format
@@ -2095,12 +2513,7 @@ TEST_F(ParseConfigTest, invalidD2Config) {
         "     \"server-ip\" : \"192.0.2.0\", "
         "     \"server-port\" : 53001, "
         "     \"ncr-protocol\" : \"UDP\", "
-        "     \"ncr-format\" : \"Bogus\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : true, "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"ncr-format\" : \"Bogus\" "
         "    }"
         "}",
         // Invalid Port
@@ -2110,12 +2523,7 @@ TEST_F(ParseConfigTest, invalidD2Config) {
         "     \"server-ip\" : \"192.0.2.0\", "
         "     \"server-port\" : \"bogus\", "
         "     \"ncr-protocol\" : \"UDP\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : true, "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"ncr-format\" : \"JSON\" "
         "    }"
         "}",
         // Mismatched server and sender IPs
@@ -2128,12 +2536,7 @@ TEST_F(ParseConfigTest, invalidD2Config) {
         "     \"sender-port\" : 3433, "
         "     \"max-queue-size\" : 2048, "
         "     \"ncr-protocol\" : \"UDP\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : true, "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"ncr-format\" : \"JSON\" "
         "    }"
         "}",
         // Identical server and sender IP/port
@@ -2146,30 +2549,7 @@ TEST_F(ParseConfigTest, invalidD2Config) {
         "     \"sender-port\" : 3433, "
         "     \"max-queue-size\" : 2048, "
         "     \"ncr-protocol\" : \"UDP\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : true, "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
-        "    }"
-        "}",
-        // Invalid replace-client-name value
-        "{ \"dhcp-ddns\" :"
-        "    {"
-        "     \"enable-updates\" : true, "
-        "     \"server-ip\" : \"3001::5\", "
-        "     \"server-port\" : 3433, "
-        "     \"sender-ip\" : \"3001::5\", "
-        "     \"sender-port\" : 3434, "
-        "     \"max-queue-size\" : 2048, "
-        "     \"ncr-protocol\" : \"UDP\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : \"BOGUS\", "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\" "
+        "     \"ncr-format\" : \"JSON\" "
         "    }"
         "}",
         // stop
@@ -2312,6 +2692,322 @@ TEST_F(ParseConfigTest, bogusRelayInfo6) {
 
     // Mandatory ip-address is missing. What a pity.
     EXPECT_THROW(parser.parse(result, json_bogus3), DhcpConfigError);
+}
+
+// This test verifies that it is possible to parse an IPv4 subnet for which
+// only mandatory parameters are specified without setting the defaults.
+TEST_F(ParseConfigTest, defaultSubnet4) {
+    std::string config =
+        "{"
+        "    \"subnet4\": [ {"
+        "        \"subnet\": \"192.0.2.0/24\","
+        "        \"id\": 123"
+        "    } ]"
+        "}";
+
+    int rcode = parseConfiguration(config, false, false);
+    ASSERT_EQ(0, rcode);
+
+    auto subnet = CfgMgr::instance().getStagingCfg()->getCfgSubnets4()->getSubnet(123);
+    ASSERT_TRUE(subnet);
+
+    EXPECT_TRUE(subnet->hasFetchGlobalsFn());
+
+    EXPECT_TRUE(subnet->getIface().unspecified());
+    EXPECT_TRUE(subnet->getIface().empty());
+
+    EXPECT_TRUE(subnet->getClientClass().unspecified());
+    EXPECT_TRUE(subnet->getClientClass().empty());
+
+    EXPECT_TRUE(subnet->getValid().unspecified());
+    EXPECT_EQ(0, subnet->getValid().get());
+
+    EXPECT_TRUE(subnet->getT1().unspecified());
+    EXPECT_EQ(0, subnet->getT1().get());
+
+    EXPECT_TRUE(subnet->getT2().unspecified());
+    EXPECT_EQ(0, subnet->getT2().get());
+
+    EXPECT_TRUE(subnet->getHostReservationMode().unspecified());
+    EXPECT_EQ(Network::HR_ALL, subnet->getHostReservationMode().get());
+
+    EXPECT_TRUE(subnet->getCalculateTeeTimes().unspecified());
+    EXPECT_FALSE(subnet->getCalculateTeeTimes().get());
+
+    EXPECT_TRUE(subnet->getT1Percent().unspecified());
+    EXPECT_EQ(0.0, subnet->getT1Percent().get());
+
+    EXPECT_TRUE(subnet->getT2Percent().unspecified());
+    EXPECT_EQ(0.0, subnet->getT2Percent().get());
+
+    EXPECT_TRUE(subnet->getMatchClientId().unspecified());
+    EXPECT_TRUE(subnet->getMatchClientId().get());
+
+    EXPECT_TRUE(subnet->getAuthoritative().unspecified());
+    EXPECT_FALSE(subnet->getAuthoritative().get());
+
+    EXPECT_TRUE(subnet->getSiaddr().unspecified());
+    EXPECT_TRUE(subnet->getSiaddr().get().isV4Zero());
+
+    EXPECT_TRUE(subnet->getSname().unspecified());
+    EXPECT_TRUE(subnet->getSname().empty());
+
+    EXPECT_TRUE(subnet->getFilename().unspecified());
+    EXPECT_TRUE(subnet->getFilename().empty());
+
+    EXPECT_FALSE(subnet->get4o6().enabled());
+
+    EXPECT_TRUE(subnet->get4o6().getIface4o6().unspecified());
+    EXPECT_TRUE(subnet->get4o6().getIface4o6().empty());
+
+    EXPECT_TRUE(subnet->get4o6().getSubnet4o6().unspecified());
+    EXPECT_TRUE(subnet->get4o6().getSubnet4o6().get().first.isV6Zero());
+    EXPECT_EQ(128, subnet->get4o6().getSubnet4o6().get().second);
+
+    EXPECT_TRUE(subnet->getDdnsSendUpdates().unspecified());
+    EXPECT_FALSE(subnet->getDdnsSendUpdates().get());
+
+    EXPECT_TRUE(subnet->getDdnsOverrideNoUpdate().unspecified());
+    EXPECT_FALSE(subnet->getDdnsOverrideNoUpdate().get());
+
+    EXPECT_TRUE(subnet->getDdnsOverrideClientUpdate().unspecified());
+    EXPECT_FALSE(subnet->getDdnsOverrideClientUpdate().get());
+
+    EXPECT_TRUE(subnet->getDdnsReplaceClientNameMode().unspecified());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, subnet->getDdnsReplaceClientNameMode().get());
+
+    EXPECT_TRUE(subnet->getDdnsGeneratedPrefix().unspecified());
+    EXPECT_TRUE(subnet->getDdnsGeneratedPrefix().empty());
+
+    EXPECT_TRUE(subnet->getDdnsQualifyingSuffix().unspecified());
+    EXPECT_TRUE(subnet->getDdnsQualifyingSuffix().empty());
+
+    EXPECT_TRUE(subnet->getHostnameCharSet().unspecified());
+    EXPECT_TRUE(subnet->getHostnameCharSet().empty());
+
+    EXPECT_TRUE(subnet->getHostnameCharReplacement().unspecified());
+    EXPECT_TRUE(subnet->getHostnameCharReplacement().empty());
+}
+
+// This test verifies that it is possible to parse an IPv6 subnet for which
+// only mandatory parameters are specified without setting the defaults.
+TEST_F(ParseConfigTest, defaultSubnet6) {
+    std::string config =
+        "{"
+        "    \"subnet6\": [ {"
+        "        \"subnet\": \"2001:db8:1::/64\","
+        "        \"id\": 123"
+        "    } ]"
+        "}";
+
+    int rcode = parseConfiguration(config, true, false);
+    ASSERT_EQ(0, rcode);
+
+    auto subnet = CfgMgr::instance().getStagingCfg()->getCfgSubnets6()->getSubnet(123);
+    ASSERT_TRUE(subnet);
+
+    EXPECT_TRUE(subnet->hasFetchGlobalsFn());
+
+    EXPECT_TRUE(subnet->getIface().unspecified());
+    EXPECT_TRUE(subnet->getIface().empty());
+
+    EXPECT_TRUE(subnet->getClientClass().unspecified());
+    EXPECT_TRUE(subnet->getClientClass().empty());
+
+    EXPECT_TRUE(subnet->getValid().unspecified());
+    EXPECT_EQ(0, subnet->getValid().get());
+
+    EXPECT_TRUE(subnet->getT1().unspecified());
+    EXPECT_EQ(0, subnet->getT1().get());
+
+    EXPECT_TRUE(subnet->getT2().unspecified());
+    EXPECT_EQ(0, subnet->getT2().get());
+
+    EXPECT_TRUE(subnet->getHostReservationMode().unspecified());
+    EXPECT_EQ(Network::HR_ALL, subnet->getHostReservationMode().get());
+
+    EXPECT_TRUE(subnet->getCalculateTeeTimes().unspecified());
+    EXPECT_FALSE(subnet->getCalculateTeeTimes().get());
+
+    EXPECT_TRUE(subnet->getT1Percent().unspecified());
+    EXPECT_EQ(0.0, subnet->getT1Percent().get());
+
+    EXPECT_TRUE(subnet->getT2Percent().unspecified());
+    EXPECT_EQ(0.0, subnet->getT2Percent().get());
+
+    EXPECT_TRUE(subnet->getPreferred().unspecified());
+    EXPECT_EQ(0, subnet->getPreferred().get());
+
+    EXPECT_TRUE(subnet->getRapidCommit().unspecified());
+    EXPECT_FALSE(subnet->getRapidCommit().get());
+
+    EXPECT_TRUE(subnet->getDdnsSendUpdates().unspecified());
+    EXPECT_FALSE(subnet->getDdnsSendUpdates().get());
+
+    EXPECT_TRUE(subnet->getDdnsOverrideNoUpdate().unspecified());
+    EXPECT_FALSE(subnet->getDdnsOverrideNoUpdate().get());
+
+    EXPECT_TRUE(subnet->getDdnsOverrideClientUpdate().unspecified());
+    EXPECT_FALSE(subnet->getDdnsOverrideClientUpdate().get());
+
+    EXPECT_TRUE(subnet->getDdnsReplaceClientNameMode().unspecified());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, subnet->getDdnsReplaceClientNameMode().get());
+
+    EXPECT_TRUE(subnet->getDdnsGeneratedPrefix().unspecified());
+    EXPECT_EQ("", subnet->getDdnsGeneratedPrefix().get());
+
+    EXPECT_TRUE(subnet->getDdnsQualifyingSuffix().unspecified());
+    EXPECT_TRUE(subnet->getDdnsQualifyingSuffix().empty());
+
+    EXPECT_TRUE(subnet->getHostnameCharSet().unspecified());
+    EXPECT_TRUE(subnet->getHostnameCharSet().empty());
+
+    EXPECT_TRUE(subnet->getHostnameCharReplacement().unspecified());
+    EXPECT_TRUE(subnet->getHostnameCharReplacement().empty());
+}
+
+// This test verifies that it is possible to parse an IPv4 shared network
+// for which only mandatory parameter is specified without setting the
+// defaults.
+TEST_F(ParseConfigTest, defaultSharedNetwork4) {
+    std::string config =
+        "{"
+        "    \"shared-networks\": [ {"
+        "        \"name\": \"frog\""
+        "    } ]"
+        "}";
+
+    int rcode = parseConfiguration(config, false, false);
+    ASSERT_EQ(0, rcode);
+
+    auto network =
+        CfgMgr::instance().getStagingCfg()->getCfgSharedNetworks4()->getByName("frog");
+    ASSERT_TRUE(network);
+
+    EXPECT_TRUE(network->hasFetchGlobalsFn());
+
+    EXPECT_TRUE(network->getIface().unspecified());
+    EXPECT_TRUE(network->getIface().empty());
+
+    EXPECT_TRUE(network->getClientClass().unspecified());
+    EXPECT_TRUE(network->getClientClass().empty());
+
+    EXPECT_TRUE(network->getValid().unspecified());
+    EXPECT_EQ(0, network->getValid().get());
+
+    EXPECT_TRUE(network->getT1().unspecified());
+    EXPECT_EQ(0, network->getT1().get());
+
+    EXPECT_TRUE(network->getT2().unspecified());
+    EXPECT_EQ(0, network->getT2().get());
+
+    EXPECT_TRUE(network->getHostReservationMode().unspecified());
+    EXPECT_EQ(Network::HR_ALL, network->getHostReservationMode().get());
+
+    EXPECT_TRUE(network->getCalculateTeeTimes().unspecified());
+    EXPECT_FALSE(network->getCalculateTeeTimes().get());
+
+    EXPECT_TRUE(network->getT1Percent().unspecified());
+    EXPECT_EQ(0.0, network->getT1Percent().get());
+
+    EXPECT_TRUE(network->getT2Percent().unspecified());
+    EXPECT_EQ(0.0, network->getT2Percent().get());
+
+    EXPECT_TRUE(network->getMatchClientId().unspecified());
+    EXPECT_TRUE(network->getMatchClientId().get());
+
+    EXPECT_TRUE(network->getAuthoritative().unspecified());
+    EXPECT_FALSE(network->getAuthoritative().get());
+
+    EXPECT_TRUE(network->getDdnsSendUpdates().unspecified());
+    EXPECT_FALSE(network->getDdnsSendUpdates().get());
+
+    EXPECT_TRUE(network->getDdnsOverrideNoUpdate().unspecified());
+    EXPECT_FALSE(network->getDdnsOverrideNoUpdate().get());
+
+    EXPECT_TRUE(network->getDdnsOverrideClientUpdate().unspecified());
+    EXPECT_FALSE(network->getDdnsOverrideClientUpdate().get());
+
+    EXPECT_TRUE(network->getDdnsReplaceClientNameMode().unspecified());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, network->getDdnsReplaceClientNameMode().get());
+
+    EXPECT_TRUE(network->getDdnsGeneratedPrefix().unspecified());
+    EXPECT_TRUE(network->getDdnsGeneratedPrefix().empty());
+
+    EXPECT_TRUE(network->getDdnsQualifyingSuffix().unspecified());
+    EXPECT_TRUE(network->getDdnsQualifyingSuffix().empty());
+}
+
+// This test verifies that it is possible to parse an IPv6 shared network
+// for which only mandatory parameter is specified without setting the
+// defaults.
+TEST_F(ParseConfigTest, defaultSharedNetwork6) {
+    std::string config =
+        "{"
+        "    \"shared-networks\": [ {"
+        "        \"name\": \"frog\""
+        "    } ]"
+        "}";
+
+    int rcode = parseConfiguration(config, true, false);
+    ASSERT_EQ(0, rcode);
+
+    auto network =
+        CfgMgr::instance().getStagingCfg()->getCfgSharedNetworks6()->getByName("frog");
+    ASSERT_TRUE(network);
+
+    EXPECT_TRUE(network->hasFetchGlobalsFn());
+
+    EXPECT_TRUE(network->getIface().unspecified());
+    EXPECT_TRUE(network->getIface().empty());
+
+    EXPECT_TRUE(network->getClientClass().unspecified());
+    EXPECT_TRUE(network->getClientClass().empty());
+
+    EXPECT_TRUE(network->getValid().unspecified());
+    EXPECT_EQ(0, network->getValid().get());
+
+    EXPECT_TRUE(network->getT1().unspecified());
+    EXPECT_EQ(0, network->getT1().get());
+
+    EXPECT_TRUE(network->getT2().unspecified());
+    EXPECT_EQ(0, network->getT2().get());
+
+    EXPECT_TRUE(network->getHostReservationMode().unspecified());
+    EXPECT_EQ(Network::HR_ALL, network->getHostReservationMode().get());
+
+    EXPECT_TRUE(network->getCalculateTeeTimes().unspecified());
+    EXPECT_FALSE(network->getCalculateTeeTimes().get());
+
+    EXPECT_TRUE(network->getT1Percent().unspecified());
+    EXPECT_EQ(0.0, network->getT1Percent().get());
+
+    EXPECT_TRUE(network->getT2Percent().unspecified());
+    EXPECT_EQ(0.0, network->getT2Percent().get());
+
+    EXPECT_TRUE(network->getPreferred().unspecified());
+    EXPECT_EQ(0, network->getPreferred().get());
+
+    EXPECT_TRUE(network->getRapidCommit().unspecified());
+    EXPECT_FALSE(network->getRapidCommit().get());
+
+    EXPECT_TRUE(network->getDdnsSendUpdates().unspecified());
+    EXPECT_FALSE(network->getDdnsSendUpdates().get());
+
+    EXPECT_TRUE(network->getDdnsOverrideNoUpdate().unspecified());
+    EXPECT_FALSE(network->getDdnsOverrideNoUpdate().get());
+
+    EXPECT_TRUE(network->getDdnsOverrideClientUpdate().unspecified());
+    EXPECT_FALSE(network->getDdnsOverrideClientUpdate().get());
+
+    EXPECT_TRUE(network->getDdnsReplaceClientNameMode().unspecified());
+    EXPECT_EQ(D2ClientConfig::RCM_NEVER, network->getDdnsReplaceClientNameMode().get());
+
+    EXPECT_TRUE(network->getDdnsGeneratedPrefix().unspecified());
+    EXPECT_TRUE(network->getDdnsGeneratedPrefix().empty());
+
+    EXPECT_TRUE(network->getDdnsQualifyingSuffix().unspecified());
+    EXPECT_TRUE(network->getDdnsQualifyingSuffix().empty());
 }
 
 // There's no test for ControlSocketParser, as it is tested in the DHCPv4 code

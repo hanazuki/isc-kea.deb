@@ -22,8 +22,7 @@ libkea_eval_la_SOURCES += parser.cc parser.h
 libkea_eval_la_SOURCES += lexer.cc
 libkea_eval_la_SOURCES += location.hh position.hh stack.hh
 libkea_eval_la_SOURCES += eval_context.cc eval_context.h eval_context_decl.h
-
-nodist_libkea_eval_la_SOURCES = eval_messages.h eval_messages.cc
+libkea_eval_la_SOURCES += eval_messages.h eval_messages.cc
 
 libkea_eval_la_CXXFLAGS = $(AM_CXXFLAGS)
 libkea_eval_la_CPPFLAGS = $(AM_CPPFLAGS)
@@ -33,36 +32,51 @@ libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/dns/libkea-dns++.la
 libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
 libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/log/libkea-log.la
-libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_eval_la_LIBADD  += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 
-libkea_eval_la_LDFLAGS  = -no-undefined -version-info 10:0:0
+libkea_eval_la_LDFLAGS  = -no-undefined -version-info 12:0:0
 libkea_eval_la_LDFLAGS += $(CRYPTO_LDFLAGS)
 
 EXTRA_DIST  = eval.dox
 EXTRA_DIST += eval_messages.mes
 EXTRA_DIST += lexer.ll parser.yy
 
+CLEANFILES = *.gcno *.gcda
+
+# To regenerate messages files, one can do:
+#
+# make messages-clean
+# make messages
+#
+# This is needed only when a .mes file is modified.
+messages-clean:
+	rm -f eval_messages.h eval_messages.cc
+
+if GENERATE_MESSAGES
+
 # Define rule to build logging source files from message file
-eval_messages.h eval_messages.cc: s-messages
+messages: eval_messages.h eval_messages.cc
+	@echo Message files regenerated
 
-s-messages: eval_messages.mes
+eval_messages.h eval_messages.cc: eval_messages.mes
 	$(top_builddir)/src/lib/log/compiler/kea-msg-compiler $(top_srcdir)/src/lib/eval/eval_messages.mes
-	touch $@
 
-# Tell Automake that the eval_messages.{cc,h} source files are created in the
-# build process, so it must create these before doing anything else. Although
-# they are a dependency of the library (so will be created from the
-# message file anyway), there is no guarantee as to exactly _when_ in the build
-# they will be created.  As the .h file is included in other sources file (so
-# must be present when they are compiled), the safest option is to create it
-# first.
-BUILT_SOURCES = eval_messages.h eval_messages.cc
+else
 
-CLEANFILES = eval_messages.h eval_messages.cc s-messages
+messages eval_messages.h eval_messages.cc:
+	@echo Messages generation disabled. Configure with --enable-generate-messages to enable it.
 
+endif
+
+# If we want to get rid of all generated messages files, we need to use
+# make maintainer-clean. The proper way to introduce custom commands for
+# that operation is to define maintainer-clean-local target. However,
+# make maintainer-clean also removes Makefile, so running configure script
+# is required.  To make it easy to rebuild messages without going through
+# reconfigure, a new target messages-clean has been added.
+#
 # If we want to get rid of all flex/bison generated files, we need to use
 # make maintainer-clean. The proper way to introduce custom commands for
 # that operation is to define maintainer-clean-local target. However,
@@ -70,6 +84,7 @@ CLEANFILES = eval_messages.h eval_messages.cc s-messages
 # is required. To make it easy to rebuild flex/bison without going through
 # reconfigure, a new target parser-clean has been added.
 maintainer-clean-local:
+	rm -f eval_messages.h eval_messages.cc
 	rm -f location.hh lexer.cc parser.cc parser.h position.hh stack.hh
 
 # To regenerate flex/bison files, one can do:
@@ -79,7 +94,8 @@ maintainer-clean-local:
 #
 # This is needed only when the lexer.ll or parser.yy files are modified.
 # Make sure you have both flex and bison installed.
-parser-clean: maintainer-clean-local
+parser-clean:
+	rm -f location.hh lexer.cc parser.cc parser.h position.hh stack.hh
 
 if GENERATE_PARSER
 
@@ -113,6 +129,7 @@ libkea_eval_include_HEADERS = \
 	eval_context.h \
 	eval_context_decl.h \
 	eval_log.h \
+	eval_messages.h \
 	evaluate.h \
 	parser.h \
 	token.h

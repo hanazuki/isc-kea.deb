@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -55,14 +55,26 @@ public:
     /// @brief Used to sort a host collection by IPv4 subnet id.
     /// @param host1 first host to be compared
     /// @param host2 second host to be compared
+    /// @result return true if host1's subnet id is smaller than host2's
+    /// subnet id
     static bool compareHostsForSort4(const ConstHostPtr& host1,
                                      const ConstHostPtr& host2);
 
     /// @brief Used to sort a host collection by IPv6 subnet id.
     /// @param host1 first host to be compared
     /// @param host2 second host to be compared
+    /// @result return true if host1's subnet id is smaller than host2's
+    /// subnet id
     static bool compareHostsForSort6(const ConstHostPtr& host1,
                                      const ConstHostPtr& host2);
+
+    /// @brief Used to sort a host collection by host identifier.
+    /// @param host1 first host to be compared
+    /// @param host2 second host to be compared
+    /// @result return true if host1's identifier is smaller than host2's
+    /// identifier
+    static bool compareHostsIdentifier(const ConstHostPtr& host1,
+                                       const ConstHostPtr& host2);
 
     /// @brief Returns number of entries in the v4 options table.
     ///
@@ -177,6 +189,76 @@ public:
     ///
     /// Uses gtest macros to report failures.
     void testMaxSubnetId6();
+
+    /// @brief Test that Verifies that IPv4 host reservations in the
+    /// same subnet can be retrieved properly.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetAll4();
+
+    /// @brief Test that Verifies that IPv6 host reservations in the
+    /// same subnet can be retrieved properly.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetAll6();
+
+    /// @brief Test that Verifies that host reservations with the same
+    /// hostname can be retrieved properly.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetAllbyHostname();
+
+    /// @brief Test that Verifies that IPv4 host reservations with the same
+    /// hostname and in the same subnet can be retrieved properly.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetAllbyHostnameSubnet4();
+
+    /// @brief Test that Verifies that IPv6 host reservations with the same
+    /// hostname and in the same subnet can be retrieved properly.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetAllbyHostnameSubnet6();
+
+    /// @brief Test that Verifies that pages of host reservations in the
+    /// same subnet can be retrieved properly.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetPage4();
+
+    /// @brief Test that Verifies that pages of host reservations in the
+    /// same subnet can be retrieved properly.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetPage6();
+
+    /// @brief Test that Verifies that pages of complex host reservations
+    /// are not truncated, i.e. the limit applies on the number of hosts
+    /// and not on the number of rows.
+    ///
+    /// Uses gtest macros to report failures.
+    /// @param id Identifier type (hwaddr or duid).
+    void testGetPageLimit4(const Host::IdentifierType& id);
+
+    /// @brief Test that Verifies that pages of complex host reservations
+    /// are not truncated, i.e. the limit applies on the number of hosts
+    /// and not on the number of rows.
+    ///
+    /// Uses gtest macros to report failures.
+    /// @param id Identifier type (hwaddr or duid).
+    void testGetPageLimit6(const Host::IdentifierType& id);
+
+    /// @brief Test that Verifies that pages of host reservations in the
+    /// same subnet can be retrieved properly even with multiple subnets.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetPage4Subnets();
+
+    /// @brief Test that Verifies that pages of host reservations in the
+    /// same subnet can be retrieved properly even with multiple subnets.
+    ///
+    /// Uses gtest macros to report failures.
+    void testGetPage6Subnets();
 
     /// @brief Test inserts several hosts with unique IPv4 address and
     ///        checks that they can be retrieved properly.

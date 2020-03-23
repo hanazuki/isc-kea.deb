@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,15 +14,17 @@
 #include <asiolink/interval_timer.h>
 #include <asiolink/io_service.h>
 #include <cc/command_interpreter.h>
-#include <util/threads/thread.h>
 #include <yang/yang_models.h>
 #include <yang/yang_revisions.h>
 #include <yang/translator_config.h>
 #include <yang/testutils/translator_test.h>
 #include <testutils/log_utils.h>
 #include <testutils/threaded_test.h>
+#include <testutils/sandbox.h>
 #include <gtest/gtest.h>
 #include <sstream>
+#include <thread>
+#include <atomic>
 
 using namespace std;
 using namespace isc;
@@ -34,7 +36,6 @@ using namespace isc::http;
 using namespace isc::test;
 using namespace isc::yang;
 using namespace isc::yang::test;
-using namespace isc::util::thread;
 #ifndef HAVE_PRE_0_7_6_SYSREPO
 using namespace sysrepo;
 #endif
@@ -45,7 +46,7 @@ namespace {
 const string TEST_SOCKET = "test-socket";
 
 /// @brief Type definition for the pointer to Thread objects.
-typedef boost::shared_ptr<Thread> ThreadPtr;
+typedef boost::shared_ptr<thread> ThreadPtr;
 
 /// @brief Test version of the NetconfAgent class.
 class NakedNetconfAgent : public NetconfAgent {
@@ -89,6 +90,8 @@ void clearYang(NakedNetconfAgentPtr agent) {
 /// @brief Test fixture class for netconf agent.
 class NetconfAgentTest : public ThreadedTest {
 public:
+    isc::test::Sandbox sandbox;
+
     /// @brief Constructor.
     NetconfAgentTest()
         : ThreadedTest(),
@@ -104,7 +107,7 @@ public:
     virtual ~NetconfAgentTest() {
         NetconfProcess::shut_down = true;
         if (thread_) {
-            thread_->wait();
+            thread_->join();
             thread_.reset();
         }
         // io_service must be stopped after the thread returns,
@@ -127,17 +130,15 @@ public:
     /// If the KEA_SOCKET_TEST_DIR environment variable is specified, the
     /// socket file is created in the location pointed to by this variable.
     /// Otherwise, it is created in the build directory.
-    static string unixSocketFilePath() {
-        ostringstream s;
+    string unixSocketFilePath() {
+        std::string socket_path;
         const char* env = getenv("KEA_SOCKET_TEST_DIR");
         if (env) {
-            s << string(env);
+            socket_path = std::string(env) + "/test-socket";
         } else {
-            s << TEST_DATA_BUILDDIR;
+            socket_path = sandbox.join("test-socket");
         }
-
-        s << "/" << TEST_SOCKET;
-        return (s.str());
+        return (socket_path);
     }
 
     /// @brief Removes unix socket descriptor.
@@ -190,7 +191,7 @@ public:
         io_service_->stop();
         io_service_.reset();
         if (thread_) {
-            thread_->wait();
+            thread_->join();
             thread_.reset();
         }
         if (agent_) {
@@ -425,10 +426,10 @@ public:
     }
 
     // To know when the callback was called.
-    static bool finished;
+    static atomic<bool> finished;
 };
 
-bool TestCallback::finished = false;
+atomic<bool> TestCallback::finished(false);
 
 /// Verifies the logChanges method handles correctly changes.
 TEST_F(NetconfAgentLogTest, logChanges) {
@@ -459,7 +460,7 @@ TEST_F(NetconfAgentLogTest, logChanges) {
     EXPECT_NO_THROW(subs->module_change_subscribe(KEA_DHCP4_SERVER.c_str(),
                                                   cb, 0, 0,
                                                   SR_SUBSCR_APPLY_ONLY));
-    thread_.reset(new Thread([this]() { io_service_->run(); }));
+    thread_.reset(new thread([this]() { io_service_->run(); }));
 
     // Change configuration (subnet #1 moved from 10.0.0.0/24 to 10.0.1/0/24).
     const YRTree tree1 = {
@@ -526,7 +527,7 @@ TEST_F(NetconfAgentLogTest, logChanges2) {
     EXPECT_NO_THROW(subs->module_change_subscribe(KEA_DHCP4_SERVER.c_str(),
                                                   cb, 0, 0,
                                                   SR_SUBSCR_APPLY_ONLY));
-    thread_.reset(new Thread([this]() { io_service_->run(); }));
+    thread_.reset(new thread([this]() { io_service_->run(); }));
 
     // Change configuration (subnet #1 moved to #10).
     string xpath = "/kea-dhcp4-server:config/subnet4[id='1']";
@@ -624,7 +625,7 @@ TEST_F(NetconfAgentTest, keaConfig) {
     CfgServersMapPair service_pair = *servers_map->begin();
 
     // Launch server.
-    thread_.reset(new Thread([this]() { fakeServer(); signalStopped(); }));
+    thread_.reset(new thread([this]() { fakeServer(); signalStopped(); }));
 
     // Wait until the server is listening.
     waitReady();
@@ -725,7 +726,7 @@ TEST_F(NetconfAgentTest, yangConfig) {
     CfgServersMapPair service_pair = *servers_map->begin();
 
     // Launch server.
-    thread_.reset(new Thread([this]() { fakeServer(); signalStopped();}));
+    thread_.reset(new thread([this]() { fakeServer(); signalStopped();}));
 
     // Wait until the server is listening.
     waitReady();
@@ -892,7 +893,7 @@ TEST_F(NetconfAgentTest, update) {
     EXPECT_EQ(2, agent_->subscriptions_.size());
 
     // Launch server.
-    thread_.reset(new Thread([this]() { fakeServer(); signalStopped(); }));
+    thread_.reset(new thread([this]() { fakeServer(); signalStopped(); }));
 
     // Wait until the server is listening.
     waitReady();
@@ -1022,7 +1023,7 @@ TEST_F(NetconfAgentTest, validate) {
     EXPECT_EQ(2, agent_->subscriptions_.size());
 
     // Launch server twice.
-    thread_.reset(new Thread([this]()
+    thread_.reset(new thread([this]()
                              {
                                  fakeServer();
                                  fakeServer();

@@ -5,7 +5,7 @@ SHTESTS += dhcp4_process_tests.sh
 
 noinst_SCRIPTS = dhcp4_process_tests.sh
 
-EXTRA_DIST  = dhcp4_process_tests.sh.in
+EXTRA_DIST  = dhcp4_process_tests.sh.in get_config_unittest.cc.skel
 
 # test using command-line arguments, so use check-local target instead of TESTS
 check-local:
@@ -85,6 +85,7 @@ dhcp4_unittests_SOURCES += dhcp4_test_utils.cc dhcp4_test_utils.h
 dhcp4_unittests_SOURCES += direct_client_unittest.cc
 dhcp4_unittests_SOURCES += ctrl_dhcp4_srv_unittest.cc
 dhcp4_unittests_SOURCES += classify_unittest.cc
+dhcp4_unittests_SOURCES += config_backend_unittest.cc
 dhcp4_unittests_SOURCES += config_parser_unittest.cc
 dhcp4_unittests_SOURCES += fqdn_unittest.cc
 dhcp4_unittests_SOURCES += marker_file.cc
@@ -103,6 +104,7 @@ dhcp4_unittests_SOURCES += simple_parser4_unittest.cc
 dhcp4_unittests_SOURCES += get_config_unittest.cc get_config_unittest.h
 dhcp4_unittests_SOURCES += shared_network_unittest.cc
 dhcp4_unittests_SOURCES += host_unittest.cc
+dhcp4_unittests_SOURCES += vendor_opts_unittest.cc
 
 nodist_dhcp4_unittests_SOURCES = marker_file.h test_libraries.h
 
@@ -120,16 +122,17 @@ endif
 dhcp4_unittests_LDFLAGS += $(GTEST_LDFLAGS)
 
 dhcp4_unittests_LDADD = $(top_builddir)/src/bin/dhcp4/libdhcp4.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la
+dhcp4_unittests_LDADD += $(top_builddir)/src/lib/process/libkea-process.la
+dhcp4_unittests_LDADD += $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/eval/libkea-eval.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/testutils/libkea-testutils.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/stats/libkea-stats.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/dhcp/tests/libdhcptest.la
+dhcp4_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
+dhcp4_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 
 if HAVE_MYSQL
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la
@@ -146,15 +149,16 @@ endif
 
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/database/testutils/libdatabasetest.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/database/libkea-database.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
+dhcp4_unittests_LDADD += $(top_builddir)/src/lib/testutils/libkea-testutils.la
+
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/cc/libkea-cc.la
+
+dhcp4_unittests_LDADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
+
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/process/libkea-process.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/database/libkea-database.la
+
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/log/libkea-log.la
-dhcp4_unittests_LDADD += $(top_builddir)/src/lib/util/threads/libkea-threads.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/util/libkea-util.la
 dhcp4_unittests_LDADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 dhcp4_unittests_LDADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS)

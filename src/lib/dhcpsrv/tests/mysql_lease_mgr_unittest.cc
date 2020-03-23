@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,6 +14,7 @@
 #include <exceptions/exceptions.h>
 #include <mysql/mysql_connection.h>
 #include <mysql/testutils/mysql_schema.h>
+#include <util/multi_threading_mgr.h>
 
 #include <gtest/gtest.h>
 
@@ -29,6 +30,7 @@ using namespace isc::db;
 using namespace isc::db::test;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
+using namespace isc::util;
 using namespace std;
 
 namespace {
@@ -43,8 +45,7 @@ class MySqlLeaseMgrTest : public GenericLeaseMgrTest {
 public:
     /// @brief Clears the database and opens connection to it.
     void initializeTest() {
-        // Ensure schema is the correct one.
-        destroyMySQLSchema();
+        // Ensure we have the proper schema with no transient data.
         createMySQLSchema();
 
         // Connect to the database
@@ -60,17 +61,18 @@ public:
         }
 
         lmptr_ = &(LeaseMgrFactory::instance());
+
+        MultiThreadingMgr::instance().setMode(false);
     }
 
     /// @brief Destroys the LM and the schema.
     void destroyTest() {
-        try {
-            lmptr_->rollback();
-        } catch (...) {
-            // Rollback may fail if backend is in read only mode. That's ok.
-        }
         LeaseMgrFactory::destroy();
+        // If data wipe enabled, delete transient data otherwise destroy the schema
         destroyMySQLSchema();
+
+        // Disable Multi-Threading.
+        MultiThreadingMgr::instance().setMode(false);
     }
 
     /// @brief Constructor
@@ -109,12 +111,14 @@ public:
 /// MySqlLeaseMgr test fixure set.  This test checks that the database can be
 /// opened: the fixtures assume that and check basic operations.
 TEST(MySqlOpenTest, OpenDatabase) {
+    // Explicitely disable Multi-Threading.
+    MultiThreadingMgr::instance().setMode(false);
+
     // Schema needs to be created for the test to work.
-    destroyMySQLSchema(true);
     createMySQLSchema(true);
 
-    // Check that lease manager open the database opens correctly and tidy up.
-    // If it fails, print the error message.
+    // Check that lease manager opens the database correctly and tidy up.  If it
+    // fails, print the error message.
     try {
         LeaseMgrFactory::create(validMySQLConnectionString());
         EXPECT_NO_THROW((void)LeaseMgrFactory::instance());
@@ -126,7 +130,7 @@ TEST(MySqlOpenTest, OpenDatabase) {
                << "*** before the MySQL tests will run correctly.\n";
     }
 
-    // Check that lease manager open the database opens correctly with a longer
+    // Check that lease manager opens the database correctly with a longer
     // timeout.  If it fails, print the error message.
     try {
         string connection_string = validMySQLConnectionString() + string(" ") +
@@ -196,6 +200,35 @@ TEST(MySqlOpenTest, OpenDatabase) {
     // Tidy up after the test
     destroyMySQLSchema(true);
     LeaseMgrFactory::destroy();
+}
+
+/// @brief Check that database can be opened with Multi-Threading
+TEST(MySqlOpenTest, OpenDatabaseMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingMgr::instance().setMode(true);
+
+    // Schema needs to be created for the test to work.
+    createMySQLSchema(true);
+
+    // Check that lease manager opens the database correctly and tidy up.  If it
+    // fails, print the error message.
+    try {
+        LeaseMgrFactory::create(validMySQLConnectionString());
+        EXPECT_NO_THROW((void)LeaseMgrFactory::instance());
+        LeaseMgrFactory::destroy();
+    } catch (const isc::Exception& ex) {
+        FAIL() << "*** ERROR: unable to open database, reason:\n"
+               << "    " << ex.what() << "\n"
+               << "*** The test environment is broken and must be fixed\n"
+               << "*** before the MySQL tests will run correctly.\n";
+    }
+
+    // Tidy up after the test
+    destroyMySQLSchema(true);
+    LeaseMgrFactory::destroy();
+
+    // Disable Multi-Threading.
+    MultiThreadingMgr::instance().setMode(false);
 }
 
 /// @brief Check the getType() method
@@ -273,9 +306,26 @@ TEST_F(MySqlLeaseMgrTest, basicLease4) {
     testBasicLease4();
 }
 
+/// @brief Basic Lease4 Checks
+TEST_F(MySqlLeaseMgrTest, basicLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testBasicLease4();
+}
+
 /// @brief Check that Lease4 code safely handles invalid dates.
 TEST_F(MySqlLeaseMgrTest, maxDate4) {
     testMaxDate4();
+}
+
+/// @brief Check that Lease4 code safely handles invalid dates.
+TEST_F(MySqlLeaseMgrTest, maxDate4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testMaxDate4();
+}
+
+/// @brief checks that infinite lifetimes do not overflow.
+TEST_F(MySqlLeaseMgrTest, infiniteLifeTime4) {
+    testInfiniteLifeTime4();
 }
 
 /// @brief Lease4 update tests
@@ -285,8 +335,35 @@ TEST_F(MySqlLeaseMgrTest, updateLease4) {
     testUpdateLease4();
 }
 
+/// @brief Lease4 update tests
+TEST_F(MySqlLeaseMgrTest, updateLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testUpdateLease4();
+}
+
+/// @brief Lease4 concurrent update tests
+///
+/// Checks that we are not able to concurrently update a lease in the database.
+TEST_F(MySqlLeaseMgrTest, concurrentUpdateLease4) {
+    testConcurrentUpdateLease4();
+}
+
+/// @brief Lease4 concurrent update tests
+///
+/// Checks that we are not able to concurrently update a lease in the database.
+TEST_F(MySqlLeaseMgrTest, concurrentUpdateLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testConcurrentUpdateLease4();
+}
+
 /// @brief Check GetLease4 methods - access by Hardware Address
 TEST_F(MySqlLeaseMgrTest, getLease4HWAddr1) {
+    testGetLease4HWAddr1();
+}
+
+/// @brief Check GetLease4 methods - access by Hardware Address
+TEST_F(MySqlLeaseMgrTest, getLease4HWAddr1MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testGetLease4HWAddr1();
 }
 
@@ -295,11 +372,23 @@ TEST_F(MySqlLeaseMgrTest, getLease4HWAddr2) {
     testGetLease4HWAddr2();
 }
 
-// @brief Get lease4 by hardware address (2)
-//
-// Check that the system can cope with getting a hardware address of
-// any size.
+/// @brief Check GetLease4 methods - access by Hardware Address
+TEST_F(MySqlLeaseMgrTest, getLease4HWAddr2MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLease4HWAddr2();
+}
+
+/// @brief Get lease4 by hardware address (2)
+///
+/// Check that the system can cope with getting a hardware address of
+/// any size.
 TEST_F(MySqlLeaseMgrTest, getLease4HWAddrSize) {
+    testGetLease4HWAddrSize();
+}
+
+/// @brief Get lease4 by hardware address (2)
+TEST_F(MySqlLeaseMgrTest, getLease4HWAddrSizeMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testGetLease4HWAddrSize();
 }
 
@@ -311,16 +400,34 @@ TEST_F(MySqlLeaseMgrTest, getLease4HwaddrSubnetId) {
     testGetLease4HWAddrSubnetId();
 }
 
-// @brief Get lease4 by hardware address and subnet ID (2)
-//
-// Check that the system can cope with getting a hardware address of
-// any size.
+/// @brief Check GetLease4 methods - access by Hardware Address & Subnet ID
+TEST_F(MySqlLeaseMgrTest, getLease4HwaddrSubnetIdMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLease4HWAddrSubnetId();
+}
+
+/// @brief Get lease4 by hardware address and subnet ID (2)
+///
+/// Check that the system can cope with getting a hardware address of
+/// any size.
 TEST_F(MySqlLeaseMgrTest, getLease4HWAddrSubnetIdSize) {
     testGetLease4HWAddrSubnetIdSize();
 }
 
-// This test was derived from memfile.
+/// @brief Get lease4 by hardware address and subnet ID (2)
+TEST_F(MySqlLeaseMgrTest, getLease4HWAddrSubnetIdSizeMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLease4HWAddrSubnetIdSize();
+}
+
+/// @brief This test was derived from memfile.
 TEST_F(MySqlLeaseMgrTest, getLease4ClientId) {
+    testGetLease4ClientId();
+}
+
+/// @brief This test was derived from memfile.
+TEST_F(MySqlLeaseMgrTest, getLease4ClientIdMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testGetLease4ClientId();
 }
 
@@ -332,10 +439,22 @@ TEST_F(MySqlLeaseMgrTest, getLease4ClientId2) {
     testGetLease4ClientId2();
 }
 
-// @brief Get Lease4 by client ID (2)
-//
-// Check that the system can cope with a client ID of any size.
+/// @brief Check GetLease4 methods - access by Client ID
+TEST_F(MySqlLeaseMgrTest, getLease4ClientId2MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLease4ClientId2();
+}
+
+/// @brief Get Lease4 by client ID (2)
+///
+/// Check that the system can cope with a client ID of any size.
 TEST_F(MySqlLeaseMgrTest, getLease4ClientIdSize) {
+    testGetLease4ClientIdSize();
+}
+
+/// @brief Get Lease4 by client ID (2)
+TEST_F(MySqlLeaseMgrTest, getLease4ClientIdSizeMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testGetLease4ClientIdSize();
 }
 
@@ -347,33 +466,97 @@ TEST_F(MySqlLeaseMgrTest, getLease4ClientIdSubnetId) {
     testGetLease4ClientIdSubnetId();
 }
 
-// This test checks that all IPv4 leases for a specified subnet id are returned.
+/// @brief Check GetLease4 methods - access by Client ID & Subnet ID
+TEST_F(MySqlLeaseMgrTest, getLease4ClientIdSubnetIdMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLease4ClientIdSubnetId();
+}
+
+/// @brief This test checks that all IPv4 leases for a specified subnet id are returned.
 TEST_F(MySqlLeaseMgrTest, getLeases4SubnetId) {
     testGetLeases4SubnetId();
 }
 
-// This test checks that all IPv4 leases are returned.
+/// @brief This test checks that all IPv4 leases for a specified subnet id are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases4SubnetIdMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases4SubnetId();
+}
+
+/// @brief This test checks that all IPv4 leases with a specified hostname are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases4Hostname) {
+    testGetLeases4Hostname();
+}
+
+/// @brief This test checks that all IPv4 leases with a specified hostname are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases4HostnameMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases4Hostname();
+}
+
+/// @brief This test checks that all IPv4 leases are returned.
 TEST_F(MySqlLeaseMgrTest, getLeases4) {
     testGetLeases4();
 }
 
-// Test that a range of IPv4 leases is returned with paging.
+/// @brief This test checks that all IPv4 leases are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases4();
+}
+
+/// @brief Test that a range of IPv4 leases is returned with paging.
 TEST_F(MySqlLeaseMgrTest, getLeases4Paged) {
     testGetLeases4Paged();
 }
 
-// This test checks that all IPv6 leases for a specified subnet id are returned.
+/// @brief Test that a range of IPv4 leases is returned with paging.
+TEST_F(MySqlLeaseMgrTest, getLeases4PagedMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases4Paged();
+}
+
+/// @brief This test checks that all IPv6 leases for a specified subnet id are returned.
 TEST_F(MySqlLeaseMgrTest, getLeases6SubnetId) {
     testGetLeases6SubnetId();
 }
 
-// This test checks that all IPv6 leases are returned.
+/// @brief This test checks that all IPv6 leases for a specified subnet id are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases6SubnetIdMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases6SubnetId();
+}
+
+/// @brief This test checks that all IPv6 leases with a specified hostname are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases6Hostname) {
+    testGetLeases6Hostname();
+}
+
+/// @brief This test checks that all IPv6 leases with a specified hostname are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases6HostnameMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases6Hostname();
+}
+
+/// @brief This test checks that all IPv6 leases are returned.
 TEST_F(MySqlLeaseMgrTest, getLeases6) {
     testGetLeases6();
 }
 
-// Test that a range of IPv6 leases is returned with paging.
+/// @brief This test checks that all IPv6 leases are returned.
+TEST_F(MySqlLeaseMgrTest, getLeases6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases6();
+}
+
+/// @brief Test that a range of IPv6 leases is returned with paging.
 TEST_F(MySqlLeaseMgrTest, getLeases6Paged) {
+    testGetLeases6Paged();
+}
+
+/// @brief Test that a range of IPv6 leases is returned with paging.
+TEST_F(MySqlLeaseMgrTest, getLeases6PagedMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testGetLeases6Paged();
 }
 
@@ -386,11 +569,23 @@ TEST_F(MySqlLeaseMgrTest, lease4NullClientId) {
     testLease4NullClientId();
 }
 
+/// @brief Basic Lease4 Checks
+TEST_F(MySqlLeaseMgrTest, lease4NullClientIdMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testLease4NullClientId();
+}
+
 /// @brief Verify that too long hostname for Lease4 is not accepted.
 ///
 /// Checks that the it is not possible to create a lease when the hostname
 /// length exceeds 255 characters.
 TEST_F(MySqlLeaseMgrTest, lease4InvalidHostname) {
+    testLease4InvalidHostname();
+}
+
+/// @brief Verify that too long hostname for Lease4 is not accepted.
+TEST_F(MySqlLeaseMgrTest, lease4InvalidHostnameMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testLease4InvalidHostname();
 }
 
@@ -405,8 +600,26 @@ TEST_F(MySqlLeaseMgrTest, getExpiredLeases4) {
     testGetExpiredLeases4();
 }
 
+/// @brief Check that the expired DHCPv4 leases can be retrieved.
+TEST_F(MySqlLeaseMgrTest, getExpiredLeases4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetExpiredLeases4();
+}
+
+/// @brief Checks that DHCPv4 leases with infinite valid lifetime
+/// will never expire.
+TEST_F(MySqlLeaseMgrTest, infiniteAreNotExpired4) {
+    testInfiniteAreNotExpired4();
+}
+
 /// @brief Check that expired reclaimed DHCPv4 leases are removed.
 TEST_F(MySqlLeaseMgrTest, deleteExpiredReclaimedLeases4) {
+    testDeleteExpiredReclaimedLeases4();
+}
+
+/// @brief Check that expired reclaimed DHCPv4 leases are removed.
+TEST_F(MySqlLeaseMgrTest, deleteExpiredReclaimedLeases4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testDeleteExpiredReclaimedLeases4();
 }
 
@@ -414,10 +627,17 @@ TEST_F(MySqlLeaseMgrTest, deleteExpiredReclaimedLeases4) {
 /// LEASE6 /////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-// Test checks whether simple add, get and delete operations are possible
-// on Lease6
+/// @brief Test checks whether simple add, get and delete operations
+/// are possible on Lease6
 TEST_F(MySqlLeaseMgrTest, testAddGetDelete6) {
-    testAddGetDelete6(false);
+    testAddGetDelete6();
+}
+
+/// @brief Test checks whether simple add, get and delete operations
+/// are possible on Lease6
+TEST_F(MySqlLeaseMgrTest, testAddGetDelete6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testAddGetDelete6();
 }
 
 /// @brief Basic Lease6 Checks
@@ -428,9 +648,26 @@ TEST_F(MySqlLeaseMgrTest, basicLease6) {
     testBasicLease6();
 }
 
+/// @brief Basic Lease6 Checks
+TEST_F(MySqlLeaseMgrTest, basicLease6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testBasicLease6();
+}
+
 /// @brief Check that Lease6 code safely handles invalid dates.
 TEST_F(MySqlLeaseMgrTest, maxDate6) {
     testMaxDate6();
+}
+
+/// @brief Check that Lease6 code safely handles invalid dates.
+TEST_F(MySqlLeaseMgrTest, maxDate6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testMaxDate6();
+}
+
+/// @brief checks that infinite lifetimes do not overflow.
+TEST_F(MySqlLeaseMgrTest, infiniteLifeTime6) {
+    testInfiniteLifeTime6();
 }
 
 /// @brief Verify that too long hostname for Lease6 is not accepted.
@@ -441,6 +678,26 @@ TEST_F(MySqlLeaseMgrTest, lease6InvalidHostname) {
     testLease6InvalidHostname();
 }
 
+/// @brief Verify that too long hostname for Lease6 is not accepted.
+TEST_F(MySqlLeaseMgrTest, lease6InvalidHostnameMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testLease6InvalidHostname();
+}
+
+/// @brief Verify that large IAID values work correctly.
+///
+/// Adds lease with a large IAID to the database and verifies it can
+/// fetched correclty.
+TEST_F(MySqlLeaseMgrTest, leases6LargeIaidCheck) {
+    testLease6LargeIaidCheck();
+}
+
+/// @brief Verify that large IAID values work correctly.
+TEST_F(MySqlLeaseMgrTest, leases6LargeIaidCheckMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testLease6LargeIaidCheck();
+}
+
 /// @brief Check GetLease6 methods - access by DUID/IAID
 ///
 /// Adds leases to the database and checks that they can be accessed via
@@ -449,8 +706,20 @@ TEST_F(MySqlLeaseMgrTest, getLeases6DuidIaid) {
     testGetLeases6DuidIaid();
 }
 
-// Check that the system can cope with a DUID of allowed size.
+/// @brief Check GetLease6 methods - access by DUID/IAID
+TEST_F(MySqlLeaseMgrTest, getLeases6DuidIaidMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLeases6DuidIaid();
+}
+
+/// @brief Check that the system can cope with a DUID of allowed size.
 TEST_F(MySqlLeaseMgrTest, getLeases6DuidSize) {
+    testGetLeases6DuidSize();
+}
+
+/// @brief Check that the system can cope with a DUID of allowed size.
+TEST_F(MySqlLeaseMgrTest, getLeases6DuidSizeMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testGetLeases6DuidSize();
 }
 
@@ -464,6 +733,12 @@ TEST_F(MySqlLeaseMgrTest, lease6LeaseTypeCheck) {
     testLease6LeaseTypeCheck();
 }
 
+/// @brief Check that getLease6 methods discriminate by lease type.
+TEST_F(MySqlLeaseMgrTest, lease6LeaseTypeCheckMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testLease6LeaseTypeCheck();
+}
+
 /// @brief Check GetLease6 methods - access by DUID/IAID/SubnetID
 ///
 /// Adds leases to the database and checks that they can be accessed via
@@ -472,16 +747,34 @@ TEST_F(MySqlLeaseMgrTest, getLease6DuidIaidSubnetId) {
     testGetLease6DuidIaidSubnetId();
 }
 
-// Test checks that getLease6() works with different DUID sizes
+/// @brief Check GetLease6 methods - access by DUID/IAID/SubnetID
+TEST_F(MySqlLeaseMgrTest, getLease6DuidIaidSubnetIdMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLease6DuidIaidSubnetId();
+}
+
+/// @brief Test checks that getLease6() works with different DUID sizes
 TEST_F(MySqlLeaseMgrTest, getLease6DuidIaidSubnetIdSize) {
     testGetLease6DuidIaidSubnetIdSize();
 }
 
-// @brief check leases could be retrieved by DUID
+/// @brief Test checks that getLease6() works with different DUID sizes
+TEST_F(MySqlLeaseMgrTest, getLease6DuidIaidSubnetIdSizeMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetLease6DuidIaidSubnetIdSize();
+}
+
+/// @brief check leases could be retrieved by DUID
 ///
 /// Create leases, add them to backend and verify if it can be queried
 /// using DUID index
 TEST_F(MySqlLeaseMgrTest, getLeases6Duid) {
+    testGetLeases6Duid();
+}
+
+/// @brief check leases could be retrieved by DUID
+TEST_F(MySqlLeaseMgrTest, getLeases6DuidMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testGetLeases6Duid();
 }
 
@@ -492,12 +785,39 @@ TEST_F(MySqlLeaseMgrTest, updateLease6) {
     testUpdateLease6();
 }
 
+/// @brief Lease6 update tests
+TEST_F(MySqlLeaseMgrTest, updateLease6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testUpdateLease6();
+}
+
+/// @brief Lease6 concurrent update tests
+///
+/// Checks that we are not able to concurrently update a lease in the database.
+TEST_F(MySqlLeaseMgrTest, concurrentUpdateLease6) {
+    testConcurrentUpdateLease6();
+}
+
+/// @brief Lease6 concurrent update tests
+///
+/// Checks that we are not able to concurrently update a lease in the database.
+TEST_F(MySqlLeaseMgrTest, concurrentUpdateLease6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testConcurrentUpdateLease6();
+}
+
 /// @brief DHCPv4 Lease recreation tests
 ///
 /// Checks that the lease can be created, deleted and recreated with
 /// different parameters. It also checks that the re-created lease is
 /// correctly stored in the lease database.
 TEST_F(MySqlLeaseMgrTest, testRecreateLease4) {
+    testRecreateLease4();
+}
+
+/// @brief DHCPv4 Lease recreation tests
+TEST_F(MySqlLeaseMgrTest, testRecreateLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testRecreateLease4();
 }
 
@@ -510,18 +830,42 @@ TEST_F(MySqlLeaseMgrTest, testRecreateLease6) {
     testRecreateLease6();
 }
 
+/// @brief DHCPv6 Lease recreation tests
+TEST_F(MySqlLeaseMgrTest, testRecreateLease6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testRecreateLease6();
+}
+
 /// @brief Checks that null DUID is not allowed.
 TEST_F(MySqlLeaseMgrTest, nullDuid) {
     testNullDuid();
 }
 
-/// @brief Tests whether memfile can store and retrieve hardware addresses
+/// @brief Checks that null DUID is not allowed.
+TEST_F(MySqlLeaseMgrTest, nullDuidMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testNullDuid();
+}
+
+/// @brief Tests whether MySQL can store and retrieve hardware addresses
 TEST_F(MySqlLeaseMgrTest, testLease6Mac) {
     testLease6MAC();
 }
 
-/// @brief Tests whether memfile can store and retrieve hardware addresses
+/// @brief Tests whether MySQL can store and retrieve hardware addresses
+TEST_F(MySqlLeaseMgrTest, testLease6MacMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testLease6MAC();
+}
+
+/// @brief Tests whether MySQL can store and retrieve hardware addresses
 TEST_F(MySqlLeaseMgrTest, testLease6HWTypeAndSource) {
+    testLease6HWTypeAndSource();
+}
+
+/// @brief Tests whether MySQL can store and retrieve hardware addresses
+TEST_F(MySqlLeaseMgrTest, testLease6HWTypeAndSourceMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testLease6HWTypeAndSource();
 }
 
@@ -536,8 +880,26 @@ TEST_F(MySqlLeaseMgrTest, getExpiredLeases6) {
     testGetExpiredLeases6();
 }
 
+/// @brief Check that the expired DHCPv6 leases can be retrieved.
+TEST_F(MySqlLeaseMgrTest, getExpiredLeases6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testGetExpiredLeases6();
+}
+
+/// @brief Checks that DHCPv6 leases with infinite valid lifetime
+/// will never expire.
+TEST_F(MySqlLeaseMgrTest, infiniteAreNotExpired6) {
+    testInfiniteAreNotExpired6();
+}
+
 /// @brief Check that expired reclaimed DHCPv6 leases are removed.
 TEST_F(MySqlLeaseMgrTest, deleteExpiredReclaimedLeases6) {
+    testDeleteExpiredReclaimedLeases6();
+}
+
+/// @brief Check that expired reclaimed DHCPv6 leases are removed.
+TEST_F(MySqlLeaseMgrTest, deleteExpiredReclaimedLeases6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testDeleteExpiredReclaimedLeases6();
 }
 
@@ -546,18 +908,42 @@ TEST_F(MySqlLeaseMgrTest, recountLeaseStats4) {
     testRecountLeaseStats4();
 }
 
+/// @brief Verifies that IPv4 lease statistics can be recalculated.
+TEST_F(MySqlLeaseMgrTest, recountLeaseStats4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testRecountLeaseStats4();
+}
+
 /// @brief Verifies that IPv6 lease statistics can be recalculated.
 TEST_F(MySqlLeaseMgrTest, recountLeaseStats6) {
     testRecountLeaseStats6();
 }
 
-// @brief Tests that leases from specific subnet can be removed.
+/// @brief Verifies that IPv6 lease statistics can be recalculated.
+TEST_F(MySqlLeaseMgrTest, recountLeaseStats6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testRecountLeaseStats6();
+}
+
+/// @brief Tests that leases from specific subnet can be removed.
 TEST_F(MySqlLeaseMgrTest, DISABLED_wipeLeases4) {
     testWipeLeases4();
 }
 
-// @brief Tests that leases from specific subnet can be removed.
+/// @brief Tests that leases from specific subnet can be removed.
+TEST_F(MySqlLeaseMgrTest, DISABLED_wipeLeases4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testWipeLeases4();
+}
+
+/// @brief Tests that leases from specific subnet can be removed.
 TEST_F(MySqlLeaseMgrTest, DISABLED_wipeLeases6) {
+    testWipeLeases6();
+}
+
+/// @brief Tests that leases from specific subnet can be removed.
+TEST_F(MySqlLeaseMgrTest, DISABLED_wipeLeases6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testWipeLeases6();
 }
 
@@ -583,23 +969,49 @@ public:
     }
 };
 
-// Verifies that db lost callback is not invoked on an open failure
+/// @brief Verifies that db lost callback is not invoked on an open failure
 TEST_F(MySQLLeaseMgrDbLostCallbackTest, testNoCallbackOnOpenFailure) {
+    MultiThreadingMgr::instance().setMode(false);
     testNoCallbackOnOpenFailure();
 }
 
-// Verifies that loss of connectivity to MySQL is handled correctly.
+/// @brief Verifies that db lost callback is not invoked on an open failure
+TEST_F(MySQLLeaseMgrDbLostCallbackTest, testNoCallbackOnOpenFailureMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testNoCallbackOnOpenFailure();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
 TEST_F(MySQLLeaseMgrDbLostCallbackTest, testDbLostCallback) {
+    MultiThreadingMgr::instance().setMode(false);
     testDbLostCallback();
 }
 
-// Tests v4 lease stats query variants.
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLLeaseMgrDbLostCallbackTest, testDbLostCallbackMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testDbLostCallback();
+}
+
+/// @brief Tests v4 lease stats query variants.
 TEST_F(MySqlLeaseMgrTest, leaseStatsQuery4) {
     testLeaseStatsQuery4();
 }
 
-// Tests v6 lease stats query variants.
+/// @brief Tests v4 lease stats query variants.
+TEST_F(MySqlLeaseMgrTest, leaseStatsQuery4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testLeaseStatsQuery4();
+}
+
+/// @brief Tests v6 lease stats query variants.
 TEST_F(MySqlLeaseMgrTest, leaseStatsQuery6) {
+    testLeaseStatsQuery6();
+}
+
+/// @brief Tests v6 lease stats query variants.
+TEST_F(MySqlLeaseMgrTest, leaseStatsQuery6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
     testLeaseStatsQuery6();
 }
 

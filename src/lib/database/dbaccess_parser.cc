@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,7 +9,6 @@
 #include <database/database_connection.h>
 #include <database/db_exceptions.h>
 #include <database/dbaccess_parser.h>
-#include <dhcpsrv/parsers/dhcp_parsers.h>
 
 #include <boost/lexical_cast.hpp>
 
@@ -55,12 +54,14 @@ DbAccessParser::parse(std::string& access_string,
     int64_t reconnect_wait_time = 0;
     int64_t request_timeout = 0;
     int64_t tcp_keepalive = 0;
+    int64_t max_row_errors = 0;
 
     // 2. Update the copy with the passed keywords.
     for (std::pair<std::string, ConstElementPtr> param : database_config->mapValue()) {
         try {
-            if ((param.first == "persist") || (param.first == "readonly") ||
-                (param.first == "tcp-nodelay")) {
+            if ((param.first == "persist") ||
+                (param.first == "tcp-nodelay") ||
+                (param.first == "readonly")) {
                 values_copy[param.first] = (param.second->boolValue() ?
                                             "true" : "false");
 
@@ -99,7 +100,21 @@ DbAccessParser::parse(std::string& access_string,
                 values_copy[param.first] =
                     boost::lexical_cast<std::string>(port);
 
+            } else if (param.first == "max-row-errors") {
+                max_row_errors = param.second->intValue();
+                values_copy[param.first] =
+                    boost::lexical_cast<std::string>(max_row_errors);
             } else {
+                // all remaining string parameters
+                // type
+                // user
+                // password
+                // host
+                // name
+                // contact-points
+                // keyspace
+                // consistency
+                // serial-consistency
                 values_copy[param.first] = param.second->stringValue();
             }
         } catch (const isc::data::TypeError& ex) {
@@ -165,14 +180,24 @@ DbAccessParser::parse(std::string& access_string,
                   << " (" << value->getPosition() << ")");
     }
 
-    // Check that the max-reconnect-retries reasonable.
+    // f. Check that the max-row-errors is within a reasonable range.
+    if ((max_row_errors < 0) ||
+        (max_row_errors > std::numeric_limits<uint32_t>::max())) {
+        ConstElementPtr value = database_config->get("max-row-errors");
+        isc_throw(DbConfigError, "max-row-errors value: " << max_row_errors
+                  << " is out of range, expected value: 0.."
+                  << std::numeric_limits<uint32_t>::max()
+                  << " (" << value->getPosition() << ")");
+    }
+
+    // Check that the max-reconnect-tries is reasonable.
     if (max_reconnect_tries < 0) {
         ConstElementPtr value = database_config->get("max-reconnect-tries");
         isc_throw(DbConfigError, "max-reconnect-tries cannot be less than zero: "
                   << " (" << value->getPosition() << ")");
     }
 
-    // Check that the reconnect-wait-time reasonable.
+    // Check that the reconnect-wait-time is reasonable.
     if ((reconnect_wait_time < 0) ||
         (reconnect_wait_time > std::numeric_limits<uint32_t>::max())) {
         ConstElementPtr value = database_config->get("reconnect-wait-time");
@@ -182,6 +207,14 @@ DbAccessParser::parse(std::string& access_string,
     }
 
     // Check that request_timeout value makes sense.
+    if ((request_timeout < 0) ||
+        (request_timeout > std::numeric_limits<uint32_t>::max())) {
+        ConstElementPtr value = database_config->get("request-timeout");
+        isc_throw(DbConfigError, "request-timeout " << request_timeout
+                  << " must be in range 0...MAX_UINT32 (4294967295) "
+                  << " (" << value->getPosition() << ")");
+    }
+
     if ((reconnect_wait_time < 0) ||
         (reconnect_wait_time > std::numeric_limits<uint32_t>::max())) {
         ConstElementPtr value = database_config->get("reconnect-wait-time");
@@ -189,10 +222,11 @@ DbAccessParser::parse(std::string& access_string,
                   << " must be in range 0...MAX_UINT32 (4294967295) "
                   << " (" << value->getPosition() << ")");
     }
+
     // Check that tcp_keepalive value makes sense.
     if ((tcp_keepalive < 0) ||
         (tcp_keepalive > std::numeric_limits<uint32_t>::max())) {
-        ConstElementPtr value = database_config->get("reconnect-wait-time");
+        ConstElementPtr value = database_config->get("tcp-keepalive");
         isc_throw(DbConfigError, "tcp-keepalive " << tcp_keepalive
                   << " must be in range 0...MAX_UINT32 (4294967295) "
                   << " (" << value->getPosition() << ")");

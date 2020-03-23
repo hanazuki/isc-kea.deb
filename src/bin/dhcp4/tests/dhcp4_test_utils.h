@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -229,6 +229,8 @@ public:
     using Dhcpv4Srv::VENDOR_CLASS_PREFIX;
     using Dhcpv4Srv::shutdown_;
     using Dhcpv4Srv::alloc_engine_;
+    using Dhcpv4Srv::server_port_;
+    using Dhcpv4Srv::client_port_;
 };
 
 // We need to pass one reference to the Dhcp4Client, which is defined in
@@ -353,9 +355,12 @@ public:
     /// present (false)
     /// @param t2_present check that t2 must be present (true) or must not be
     /// present (false)
+    /// @param expected_valid check that lease lifetime has the not-zero
+    /// expected value (zero value means that do not check).
     void checkAddressParams(const Pkt4Ptr& rsp, const Subnet4Ptr subnet,
                             bool t1_present = false,
-                            bool t2_present = false);
+                            bool t2_present = false,
+                            uint32_t expected_valid = 0);
 
     /// @brief Basic checks for generated response (message type and trans-id).
     ///
@@ -444,6 +449,18 @@ public:
     /// should be committed (if true), or not (if false).
     void configure(const std::string& config, NakedDhcpv4Srv& srv,
                    const bool commit = true);
+
+    /// @brief Configure specified DHCP server using JSON string.
+    ///
+    /// @param config String holding server configuration in JSON format.
+    /// @param srv Instance of the server to be configured.
+    /// @param commit A boolean flag indicating if the new configuration
+    /// should be committed (if true), or not (if false).
+    /// @param exp_rcode expected status code (default = 0 (success))
+    /// @return (a pair of status code and a string with result)
+    std::pair<int, std::string>
+    configureWithStatus(const std::string& config, NakedDhcpv4Srv& srv,
+                        const bool commit = true, const int exp_rcode = 0);
 
     /// @brief Pretends a packet of specified type was received.
     ///

@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -40,6 +40,7 @@
 #include <gtest/gtest.h>
 #include <functional>
 #include <sstream>
+#include <set>
 #include <string>
 #include <vector>
 
@@ -79,7 +80,7 @@ void generateTestLeases(std::vector<Lease4Ptr>& leases) {
         Lease4Ptr lease(new Lease4(IOAddress(lease_address),
                                    HWAddrPtr(new HWAddr(hwaddr, HTYPE_ETHER)),
                                    ClientIdPtr(),
-                                   60, 30, 40,
+                                   60,
                                    static_cast<time_t>(1000 + i),
                                    SubnetID(i)));
         leases.push_back(lease);
@@ -96,7 +97,7 @@ void generateTestLeases(std::vector<Lease6Ptr>& leases) {
         address_bytes[6] += i;
         Lease6Ptr lease(new Lease6(Lease::TYPE_NA,
                                    IOAddress::fromBytes(AF_INET6, &address_bytes[0]),
-                                   duid, 1, 50, 60, 30, 40, SubnetID(i)));
+                                   duid, 1, 50, 60, SubnetID(i)));
         leases.push_back(lease);
     }
 }
@@ -226,15 +227,21 @@ public:
     ///
     /// @param str1 First string which must be included in the request.
     /// @param str2 Second string which must be included in the request.
+    /// @param str3 Third string which must be included in the request.
+    /// It is optional and defaults to empty string which means "do not
+    /// match".
     ///
     /// @return Pointer to the request found, or null pointer if there is
     /// no such request.
     ConstPostHttpRequestJsonPtr
-    findRequest(const std::string& str1, const std::string& str2) {
+    findRequest(const std::string& str1, const std::string& str2,
+                const std::string& str3 = "") {
         for (auto r = requests_.begin(); r < requests_.end(); ++r) {
             std::string request_as_string = (*r)->toString();
             if (request_as_string.find(str1) != std::string::npos) {
                 if (request_as_string.find(str2) != std::string::npos) {
+                    if (str3.empty() ||
+                        (request_as_string.find(str3) != std::string::npos))
                     return (*r);
                 }
             }
@@ -335,6 +342,24 @@ private:
 
         // Remember the request received.
         requests_.push_back(request_json);
+
+        // The request must always contain non-empty Host header.
+        bool invalid_host = false;
+        try {
+            auto host_hdr = request_json->getHeader("Host");
+            if (host_hdr->getValue().empty()) {
+                invalid_host = true;
+            }
+
+        } catch (...) {
+            // Host header does not exist.
+            invalid_host = true;
+        }
+
+        // If invalid host then return Bad Request.
+        if (invalid_host) {
+            return (createStockHttpResponse(request, HttpStatusCode::BAD_REQUEST));
+        }
 
         int control_result = -1;
         ElementPtr arguments;
@@ -655,14 +680,14 @@ public:
         HWAddrPtr hwaddr(new HWAddr(std::vector<uint8_t>(6, 1), HTYPE_ETHER));
         Lease4Ptr lease4(new Lease4(IOAddress("192.1.2.3"), hwaddr,
                                     static_cast<const uint8_t*>(0), 0,
-                                    60, 30, 40, 0, 1));
+                                    60, 0, 1));
         leases4->push_back(lease4);
 
         // Create deleted leases collection and put the lease there too.
         Lease4CollectionPtr deleted_leases4(new Lease4Collection());
         Lease4Ptr deleted_lease4(new Lease4(IOAddress("192.2.3.4"), hwaddr,
                                             static_cast<const uint8_t*>(0), 0,
-                                            60, 30, 40, 0, 1));
+                                            60, 0, 1));
         deleted_leases4->push_back(deleted_lease4);
 
         // The communication state is the member of the HAServce object. We have to
@@ -742,13 +767,13 @@ public:
         Lease6CollectionPtr leases6(new Lease6Collection());
         DuidPtr duid(new DUID(std::vector<uint8_t>(8, 2)));
         Lease6Ptr lease6(new Lease6(Lease::TYPE_NA, IOAddress("2001:db8:1::cafe"), duid,
-                                    1234, 50, 60, 30, 40, 1));
+                                    1234, 50, 60, 1));
         leases6->push_back(lease6);
 
         // Create deleted leases collection and put the lease there too.
         Lease6CollectionPtr deleted_leases6(new Lease6Collection());
         Lease6Ptr deleted_lease6(new Lease6(Lease::TYPE_NA, IOAddress("2001:db8:1::efac"),
-                                            duid, 1234, 50, 60, 30, 40, 1));
+                                            duid, 1234, 50, 60, 1));
         deleted_leases6->push_back(deleted_lease6);
 
         // The communication state is the member of the HAServce object. We have to
@@ -906,7 +931,7 @@ public:
 
         // Stop the IO service. This should cause the thread to terminate.
         io_service_->stop();
-        thread->wait();
+        thread->join();
         io_service_->get_io_service().reset();
         io_service_->poll();
     }
@@ -955,7 +980,7 @@ public:
 
         // Stop the IO service. This should cause the thread to terminate.
         io_service_->stop();
-        thread->wait();
+        thread->join();
         io_service_->get_io_service().reset();
         io_service_->poll();
     }
@@ -1041,6 +1066,25 @@ TEST_F(HAServiceTest, hotStandbyScopeSelectionThisPrimary) {
     service.verboseTransition(HA_HOT_STANDBY_ST);
     service.runModel(HAService::NOP_EVT);
 
+    // Check the reported info about servers.
+    ConstElementPtr ha_servers = service.processStatusGet();
+    ASSERT_TRUE(ha_servers);
+    std::string expected = "{"
+        "    \"local\": {"
+        "        \"role\": \"primary\","
+        "        \"scopes\": [ \"server1\" ],"
+        "        \"state\": \"hot-standby\""
+        "    }, "
+        "    \"remote\": {"
+        "        \"age\": 0,"
+        "        \"in-touch\": false,"
+        "        \"role\": \"standby\","
+        "        \"last-scopes\": [ ],"
+        "        \"last-state\": \"\""
+        "    }"
+        "}";
+    EXPECT_TRUE(isEquivalent(Element::fromJSON(expected), ha_servers));
+
     // Set the test size - 65535 queries.
     const unsigned queries_num = 65535;
     for (unsigned i = 0; i < queries_num; ++i) {
@@ -1068,6 +1112,26 @@ TEST_F(HAServiceTest, hotStandbyScopeSelectionThisStandby) {
 
     // ... and HA service using this configuration.
     TestHAService service(io_service_, network_state_, config_storage);
+
+    // Check the reported info about servers.
+    ConstElementPtr ha_servers = service.processStatusGet();
+    ASSERT_TRUE(ha_servers);
+
+    std::string expected = "{"
+        "    \"local\": {"
+        "        \"role\": \"standby\","
+        "        \"scopes\": [ ],"
+        "        \"state\": \"waiting\""
+        "    }, "
+        "    \"remote\": {"
+        "        \"age\": 0,"
+        "        \"in-touch\": false,"
+        "        \"role\": \"primary\","
+        "        \"last-scopes\": [ ],"
+        "        \"last-state\": \"\""
+        "    }"
+        "}";
+    EXPECT_TRUE(isEquivalent(Element::fromJSON(expected), ha_servers));
 
     // Set the test size - 65535 queries.
     const unsigned queries_num = 65535;
@@ -1314,31 +1378,23 @@ TEST_F(HAServiceTest, sendSuccessfulUpdates6) {
     // to be successful.
     EXPECT_TRUE(unpark_called);
 
-    // The server 2 should have received two commands.
-    EXPECT_EQ(2, factory2_->getResponseCreator()->getReceivedRequests().size());
+    // The server 2 should have received one command.
+    EXPECT_EQ(1, factory2_->getResponseCreator()->getReceivedRequests().size());
 
-    // Check that the server 2 has received lease6-update command.
-    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
+    // Check that the server 2 has received lease6-bulk-apply command.
+    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
+                                                                        "2001:db8:1::efac");
     EXPECT_TRUE(update_request2);
 
-    // Check that the server 2 has received lease6-del command.
-    auto delete_request2 = factory2_->getResponseCreator()->findRequest("lease6-del",
-                                                                        "2001:db8:1::efac");
-    EXPECT_TRUE(delete_request2);
-
     // Lease updates should be successfully sent to server3.
-    EXPECT_EQ(2, factory3_->getResponseCreator()->getReceivedRequests().size());
+    EXPECT_EQ(1, factory3_->getResponseCreator()->getReceivedRequests().size());
 
-    // Check that the server 3 has received lease6-update command.
-    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
-    EXPECT_TRUE(update_request3);
-
-    // Check that the server 3 has received lease6-del command.
-    auto delete_request3 = factory3_->getResponseCreator()->findRequest("lease6-del",
+    // Check that the server 3 has received lease6-bulk-apply command.
+    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
                                                                         "2001:db8:1::efac");
-    EXPECT_TRUE(delete_request3);
+    EXPECT_TRUE(update_request3);
 }
 
 // Test scenario when lease updates are sent successfully to the backup server
@@ -1361,28 +1417,20 @@ TEST_F(HAServiceTest, sendUpdatesPartnerDown6) {
     // to be successful.
     EXPECT_TRUE(unpark_called);
 
-    // Server 2 should not receive lease6-update.
-    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
+    // Server 2 should not receive lease6-bulk-apply.
+    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
+                                                                        "2001:db8:1::efac");
     EXPECT_FALSE(update_request2);
 
-    // Server 2 should not receive lease6-del.
-    auto delete_request2 = factory2_->getResponseCreator()->findRequest("lease6-del",
-                                                                        "2001:db8:1::efac");
-    EXPECT_FALSE(delete_request2);
-
     // Lease updates should be successfully sent to server3.
-    EXPECT_EQ(2, factory3_->getResponseCreator()->getReceivedRequests().size());
+    EXPECT_EQ(1, factory3_->getResponseCreator()->getReceivedRequests().size());
 
-    // Check that the server 3 has received lease6-update command.
-    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
-    EXPECT_TRUE(update_request3);
-
-    // Check that the server 3 has received lease6-del command.
-    auto delete_request3 = factory3_->getResponseCreator()->findRequest("lease6-del",
+    // Check that the server 3 has received lease6-bulk-apply command.
+    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
                                                                         "2001:db8:1::efac");
-    EXPECT_TRUE(delete_request3);
+    EXPECT_TRUE(update_request3);
 }
 
 // Test scenario when one of the servers to which updates are sent is offline.
@@ -1398,28 +1446,20 @@ TEST_F(HAServiceTest, sendUpdatesActiveServerOffline6) {
             " is dropped";
     }, false, 2);
 
-    // Server 2 should not receive lease6-update.
-    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
+    // Server 2 should not receive lease6-bulk-apply.
+    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
+                                                                        "2001:db8:1::efac");
     EXPECT_FALSE(update_request2);
 
-    // Server 2 should not receive lease6-del.
-    auto delete_request2 = factory2_->getResponseCreator()->findRequest("lease6-del",
-                                                                        "2001:db8:1::efac");
-    EXPECT_FALSE(delete_request2);
-
     // Lease updates should be successfully sent to server3.
-    EXPECT_EQ(2, factory3_->getResponseCreator()->getReceivedRequests().size());
+    EXPECT_EQ(1, factory3_->getResponseCreator()->getReceivedRequests().size());
 
-    // Check that the server 3 has received lease6-update command.
-    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
-    EXPECT_TRUE(update_request3);
-
-    // Check that the server 3 has received lease6-del command.
-    auto delete_request3 = factory3_->getResponseCreator()->findRequest("lease6-del",
+    // Check that the server 3 has received lease6-bulk-apply command.
+    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
                                                                         "2001:db8:1::efac");
-    EXPECT_TRUE(delete_request3);
+    EXPECT_TRUE(update_request3);
 }
 
 // Test scenario when one of the servers to which updates are sent is offline.
@@ -1437,28 +1477,20 @@ TEST_F(HAServiceTest, sendUpdatesBackupServerOffline6) {
 
     EXPECT_TRUE(unpark_called);
 
-    // The server 2 should have received two commands.
-    EXPECT_EQ(2, factory2_->getResponseCreator()->getReceivedRequests().size());
+    // The server 2 should have received one command.
+    EXPECT_EQ(1, factory2_->getResponseCreator()->getReceivedRequests().size());
 
-    // Check that the server 2 has received lease6-update command.
-    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
+    // Check that the server 2 has received lease6-bulk-apply command.
+    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
+                                                                        "2001:db8:1::efac");
     EXPECT_TRUE(update_request2);
 
-    // Check that the server 2 has received lease6-del command.
-    auto delete_request2 = factory2_->getResponseCreator()->findRequest("lease6-del",
+    // Server 3 should not receive lease6-bulk-apply.
+    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
                                                                         "2001:db8:1::efac");
-    EXPECT_TRUE(delete_request2);
-
-    // Server 3 should not receive lease6-update.
-    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
     EXPECT_FALSE(update_request3);
-
-    // Server 3 should not receive lease6-del.
-    auto delete_request3 = factory3_->getResponseCreator()->findRequest("lease6-del",
-                                                                        "2001:db8:1::efac");
-    EXPECT_FALSE(delete_request3);
 }
 
 // Test scenario when one of the servers to which a lease update is sent
@@ -1480,30 +1512,94 @@ TEST_F(HAServiceTest, sendUpdatesControlResultError6) {
     }, false, 2);
 
     // The updates should be sent to server 2 and this server should return error code.
-    EXPECT_EQ(2, factory2_->getResponseCreator()->getReceivedRequests().size());
+    EXPECT_EQ(1, factory2_->getResponseCreator()->getReceivedRequests().size());
 
-    // Server 2 should receive lease6-update.
-    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
+    // Server 2 should receive lease6-bulk-apply.
+    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
+                                                                        "2001:db8:1::efac");
     EXPECT_TRUE(update_request2);
 
-    // Server 2 should receive lease6-del.
-    auto delete_request2 = factory2_->getResponseCreator()->findRequest("lease6-del",
+    // Lease updates should be successfully sent to server3.
+    EXPECT_EQ(1, factory3_->getResponseCreator()->getReceivedRequests().size());
+
+    // Check that the server 3 has received lease6-bulk-apply command.
+    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
                                                                         "2001:db8:1::efac");
-    EXPECT_TRUE(delete_request2);
+    EXPECT_TRUE(update_request3);
+}
+
+// This test verifies that the server accepts the response to the lease6-bulk-apply
+// command including failed-deleted-leases and failed-leases parameters.
+TEST_F(HAServiceTest, sendUpdatesFailedLeases6) {
+    // Create a dummy lease which failed to be deleted.
+    auto failed_deleted_lease = Element::createMap();
+    failed_deleted_lease->set("type", Element::create("IA_NA"));
+    failed_deleted_lease->set("ip-address", Element::create("2001:db8:1::1"));
+    failed_deleted_lease->set("subnet-id", Element::create(1));
+    failed_deleted_lease->set("result", Element::create(CONTROL_RESULT_EMPTY));
+    failed_deleted_lease->set("error-message", Element::create("no lease found"));
+
+    // Crate a dummy lease which failed to be created.
+    auto failed_lease = Element::createMap();
+    failed_lease->set("type", Element::create("IA_PD"));
+    failed_lease->set("ip-address", Element::create("2001:db8:1::"));
+    failed_lease->set("subnet-id", Element::create(2));
+    failed_lease->set("result", Element::create(CONTROL_RESULT_ERROR));
+    failed_lease->set("error-message", Element::create("failed to create lease"));
+
+    // Create the "failed-deleted-leases" list.
+    auto failed_deleted_leases = Element::createList();
+    failed_deleted_leases->add(failed_deleted_lease);
+
+    // Create the "failed-leases" list.
+    auto failed_leases = Element::createList();
+    failed_leases->add(failed_lease);
+
+    // Add both lists to the arguments.
+    ElementPtr arguments = Element::createMap();
+    arguments->set("failed-deleted-leases", failed_deleted_leases);
+    arguments->set("failed-leases", failed_leases);
+
+    // Configure the server to return this response.
+    factory2_->getResponseCreator()->setArguments("lease6-bulk-apply",
+                                                  arguments);
+
+    // Start HTTP servers.
+    ASSERT_NO_THROW({
+        listener_->start();
+        listener2_->start();
+        listener3_->start();
+    });
+
+    // This flag will be set to true if unpark is called.
+    bool unpark_called = false;
+    testSendLeaseUpdates6([&unpark_called] {
+        unpark_called = true;
+    }, true, 2);
+
+    // Expecting that the packet was unparked because lease updates are expected
+    // to be successful.
+    EXPECT_TRUE(unpark_called);
+
+    // The server 2 should have received one command.
+    EXPECT_EQ(1, factory2_->getResponseCreator()->getReceivedRequests().size());
+
+    // Check that the server 2 has received lease6-bulk-apply command.
+    auto update_request2 = factory2_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
+                                                                        "2001:db8:1::efac");
+    EXPECT_TRUE(update_request2);
 
     // Lease updates should be successfully sent to server3.
-    EXPECT_EQ(2, factory3_->getResponseCreator()->getReceivedRequests().size());
+    EXPECT_EQ(1, factory3_->getResponseCreator()->getReceivedRequests().size());
 
-    // Check that the server 3 has received lease6-update command.
-    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-update",
-                                                                        "2001:db8:1::cafe");
-    EXPECT_TRUE(update_request3);
-
-    // Check that the server 3 has received lease6-del command.
-    auto delete_request3 = factory3_->getResponseCreator()->findRequest("lease6-del",
+    // Check that the server 3 has received lease6-bulk-apply command.
+    auto update_request3 = factory3_->getResponseCreator()->findRequest("lease6-bulk-apply",
+                                                                        "2001:db8:1::cafe",
                                                                         "2001:db8:1::efac");
-    EXPECT_TRUE(delete_request3);
+    EXPECT_TRUE(update_request3);
 }
 
 // This test verifies that the heartbeat command is processed successfully.
@@ -1543,7 +1639,8 @@ TEST_F(HAServiceTest, processHeartbeat) {
     HAConfigParser parser;
     ASSERT_NO_THROW(parser.parse(config_storage, Element::fromJSON(config_text)));
 
-    HAService service(io_service_,  network_state_, config_storage);
+    TestHAService service(io_service_,  network_state_, config_storage);
+    service.query_filter_.serveDefaultScopes();
 
     // Process heartbeat command.
     ConstElementPtr rsp;
@@ -1565,6 +1662,15 @@ TEST_F(HAServiceTest, processHeartbeat) {
     ConstElementPtr date_time = args->get("date-time");
     ASSERT_TRUE(date_time);
     EXPECT_EQ(Element::string, date_time->getType());
+
+    auto scopes_list = args->get("scopes");
+    ASSERT_TRUE(scopes_list);
+    EXPECT_EQ(Element::list, scopes_list->getType());
+    ASSERT_EQ(1, scopes_list->size());
+    auto scope = scopes_list->get(0);
+    ASSERT_TRUE(scope);
+    EXPECT_EQ(Element::string, scope->getType());
+    EXPECT_EQ("server1", scope->stringValue());
 
     // The response should contain the timestamp in the format specified
     // in RFC1123. We use the HttpDateTime method to parse this timestamp.
@@ -2464,6 +2570,332 @@ TEST_F(HAServiceTest, processContinue) {
     EXPECT_FALSE(rsp->get("arguments"));
 }
 
+// This test verifies that the ha-maintenance-notify command is processed
+// successfully and transitions the state machine to the in-maintenance state
+// and that it is possible to revert to the previous state.
+// It also verifies that this command fails to transition the state machine
+// for some selected states for which it is unsupported.
+TEST_F(HAServiceTest, processMaintenanceNotify) {
+    HAConfigPtr config_storage = createValidConfiguration();
+
+    std::set<int> valid_states = {
+        HA_WAITING_ST,
+        HA_READY_ST,
+        HA_SYNCING_ST,
+        HA_PARTNER_DOWN_ST,
+        HA_LOAD_BALANCING_ST,
+        HA_HOT_STANDBY_ST,
+    };
+
+    TestHAService service(io_service_, network_state_, config_storage);
+
+    // Test transition from the states for which it is allowed.
+    for (auto state : valid_states) {
+        EXPECT_NO_THROW(service.transition(state, HAService::NOP_EVT));
+
+        // Process ha-maintenance-notify command that should transition the
+        // state machine to the in-maintenance state.
+        ConstElementPtr rsp;
+        ASSERT_NO_THROW(rsp = service.processMaintenanceNotify(false));
+
+        // The server should have responded.
+        ASSERT_TRUE(rsp);
+        checkAnswer(rsp, CONTROL_RESULT_SUCCESS, "Server is in-maintenance state.");
+
+        // The state machine should have been transitioned to the in-maintenance state.
+        EXPECT_EQ(HA_IN_MAINTENANCE_ST, service.getCurrState());
+
+        // Try to cancel the maintenance.
+        ASSERT_NO_THROW(rsp = service.processMaintenanceNotify(true));
+
+        // The server should have responded.
+        ASSERT_TRUE(rsp);
+        checkAnswer(rsp, CONTROL_RESULT_SUCCESS, "Server maintenance canceled.");
+
+        // The state machine should have been transitioned to the state it was in
+        // prior to transitioning to the in-maintenance state.
+        EXPECT_EQ(state, service.getCurrState());
+    }
+
+    std::set<int> invalid_states = {
+        HA_TERMINATED_ST,
+        HA_BACKUP_ST,
+        HA_PARTNER_IN_MAINTENANCE_ST
+    };
+
+    // Make sure that the transition from the other states is not allowed.
+    for (auto state : invalid_states) {
+        EXPECT_NO_THROW(service.transition(state, HAService::NOP_EVT));
+        EXPECT_NO_THROW(service.runModel(HAService::NOP_EVT));
+
+        ConstElementPtr rsp;
+        ASSERT_NO_THROW(rsp = service.processMaintenanceNotify(false));
+
+        ASSERT_TRUE(rsp);
+        checkAnswer(rsp, TestHAService::HA_CONTROL_RESULT_MAINTENANCE_NOT_ALLOWED,
+                    "Unable to transition the server from the "
+                    + stateToString(state) + " to in-maintenance state.");
+    }
+}
+
+// This test verifies the case when the server receiving the ha-maintenance-start
+// command successfully transitions to the partner-in-maintenance state and its
+// partner transitions to the in-maintenance state.
+TEST_F(HAServiceTest, processMaintenanceStartSuccess) {
+    // Create HA configuration for 3 servers. This server is
+    // server 1.
+    HAConfigPtr config_storage = createValidConfiguration();
+
+    // Start the servers.
+    ASSERT_NO_THROW({
+        listener_->start();
+        listener2_->start();
+    });
+
+    HAService service(io_service_, network_state_, config_storage);
+
+    // The tested function is synchronous, so we need to run server side IO service
+    // in background to not block the main thread.
+    auto thread = runIOServiceInThread();
+
+    // Process ha-maintenance-start command.
+    ConstElementPtr rsp;
+    ASSERT_NO_THROW(rsp = service.processMaintenanceStart());
+
+    // Stop the IO service. This should cause the thread to terminate.
+    io_service_->stop();
+    thread->join();
+    io_service_->get_io_service().reset();
+    io_service_->poll();
+
+    // The partner of our server is online and should have responded with
+    // the success status. Therefore, this server should have transitioned
+    // to the partner-in-maintenance state.
+    ASSERT_TRUE(rsp);
+    checkAnswer(rsp, CONTROL_RESULT_SUCCESS, "Server is now in the partner-in-maintenance state"
+                " and its partner is in-maintenance state. The partner can be now safely"
+                " shut down.");
+
+    EXPECT_EQ(HA_PARTNER_IN_MAINTENANCE_ST, service.getCurrState());
+}
+
+// This test verifies the case that the server transitions to the partner-down
+// state after receiving the ha-maintenance-start command. This is the case
+// when the communication with the partner server fails while this command
+// is received. It is assumed that the partner server is already terminated
+// for maintenance.
+TEST_F(HAServiceTest, processMaintenanceStartPartnerDown) {
+    // Create HA configuration for 3 servers. This server is
+    // server 1.
+    HAConfigPtr config_storage = createValidConfiguration();
+
+    // Start the server, but don't start the partner. This simulates
+    // the case that the partner is already down for maintenance.
+    ASSERT_NO_THROW({
+        listener_->start();
+    });
+
+    HAService service(io_service_, network_state_, config_storage);
+
+    // The tested function is synchronous, so we need to run server side IO service
+    // in background to not block the main thread.
+    auto thread = runIOServiceInThread();
+
+    // Process ha-maintenance-start command.
+    ConstElementPtr rsp;
+    ASSERT_NO_THROW(rsp = service.processMaintenanceStart());
+
+    // Stop the IO service. This should cause the thread to terminate.
+    io_service_->stop();
+    thread->join();
+    io_service_->get_io_service().reset();
+    io_service_->poll();
+
+    // The partner of our server is online and should have responded with
+    // the success status. Therefore, this server should have transitioned
+    // to the partner-in-maintenance state.
+    ASSERT_TRUE(rsp);
+    checkAnswer(rsp, CONTROL_RESULT_SUCCESS,
+                "Server is now in the partner-down state as its"
+                " partner appears to be offline for maintenance.");
+
+    EXPECT_EQ(HA_PARTNER_DOWN_ST, service.getCurrState());
+}
+
+// This test verifies the case when the server is receiving
+// ha-maintenance-start command and tries to notify the partner
+// which returns an error.
+TEST_F(HAServiceTest, processMaintenanceStartPartnerError) {
+    // Create HA configuration for 3 servers. This server is
+    // server 1.
+    HAConfigPtr config_storage = createValidConfiguration();
+
+    // Simulate an error returned by the partner.
+    factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_ERROR);
+
+    // Start the servers.
+    ASSERT_NO_THROW({
+        listener_->start();
+        listener2_->start();
+    });
+
+    HAService service(io_service_, network_state_, config_storage);
+
+    // The tested function is synchronous, so we need to run server side IO service
+    // in background to not block the main thread.
+    auto thread = runIOServiceInThread();
+
+    // Process ha-maintenance-start command.
+    ConstElementPtr rsp;
+    ASSERT_NO_THROW(rsp = service.processMaintenanceStart());
+
+    // Stop the IO service. This should cause the thread to terminate.
+    io_service_->stop();
+    thread->join();
+    io_service_->get_io_service().reset();
+    io_service_->poll();
+
+    ASSERT_TRUE(rsp);
+    checkAnswer(rsp, CONTROL_RESULT_SUCCESS,
+                "Server is now in the partner-down state as its"
+                " partner appears to be offline for maintenance.");
+
+    EXPECT_EQ(HA_PARTNER_DOWN_ST, service.getCurrState());
+}
+
+// This test verifies the case when the server is receiving
+// ha-maintenance-start command and tries to notify the partner
+// which returns a special result indicating that it can't enter
+// the in-maintenance state.
+TEST_F(HAServiceTest, processMaintenanceStartNotAllowed) {
+    // Create HA configuration for 3 servers. This server is
+    // server 1.
+    HAConfigPtr config_storage = createValidConfiguration();
+
+    // Simulate an error returned by the partner.
+    factory2_->getResponseCreator()->
+        setControlResult(TestHAService::HA_CONTROL_RESULT_MAINTENANCE_NOT_ALLOWED);
+
+    // Start the servers.
+    ASSERT_NO_THROW({
+        listener_->start();
+        listener2_->start();
+    });
+
+    HAService service(io_service_, network_state_, config_storage);
+
+    // The tested function is synchronous, so we need to run server side IO service
+    // in background to not block the main thread.
+    auto thread = runIOServiceInThread();
+
+    // Process ha-maintenance-start command.
+    ConstElementPtr rsp;
+    ASSERT_NO_THROW(rsp = service.processMaintenanceStart());
+
+    // Stop the IO service. This should cause the thread to terminate.
+    io_service_->stop();
+    thread->join();
+    io_service_->get_io_service().reset();
+    io_service_->poll();
+
+    ASSERT_TRUE(rsp);
+    checkAnswer(rsp, CONTROL_RESULT_ERROR,
+                "Unable to transition to the partner-in-maintenance state."
+                " The partner server responded with the following message"
+                " to the ha-maintenance-notify commmand: response returned,"
+                " error code 1001.");
+
+    // The partner's state precludes entering the in-maintenance state. Thus, this
+    // server must not change its state either.
+    EXPECT_EQ(HA_WAITING_ST, service.getCurrState());
+}
+
+// This test verifies the case when the server receiving the ha-maintenance-cancel
+// command successfully transitions out of the partner-in-maintenance state.
+TEST_F(HAServiceTest, processMaintenanceCancelSuccess) {
+    // Create HA configuration for 3 servers. This server is
+    // server 1.
+    HAConfigPtr config_storage = createValidConfiguration();
+
+    // Start the servers.
+    ASSERT_NO_THROW({
+        listener_->start();
+        listener2_->start();
+    });
+
+    TestHAService service(io_service_, network_state_, config_storage);
+
+    ASSERT_NO_THROW(service.verboseTransition(HA_PARTNER_IN_MAINTENANCE_ST));
+
+    // The tested function is synchronous, so we need to run server side IO service
+    // in background to not block the main thread.
+    auto thread = runIOServiceInThread();
+
+    // Process ha-maintenance-cancel command.
+    ConstElementPtr rsp;
+    ASSERT_NO_THROW(rsp = service.processMaintenanceCancel());
+
+    // Stop the IO service. This should cause the thread to terminate.
+    io_service_->stop();
+    thread->join();
+    io_service_->get_io_service().reset();
+    io_service_->poll();
+
+    // The partner of our server is online and should have responded with
+    // the success status. Therefore, this server should have transitioned
+    // to the partner-in-maintenance state.
+    ASSERT_TRUE(rsp);
+    checkAnswer(rsp, CONTROL_RESULT_SUCCESS, "Server maintenance successfully canceled.");
+
+    EXPECT_EQ(HA_WAITING_ST, service.getCurrState());
+}
+
+// This test verifies that the maintenance is not canceled in case the
+// partner returns an error.
+TEST_F(HAServiceTest, processMaintenanceCancelPartnerError) {
+    // Create HA configuration for 3 servers. This server is
+    // server 1.
+    HAConfigPtr config_storage = createValidConfiguration();
+
+    // Simulate an error returned by the partner.
+    factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_ERROR);
+
+    // Start the servers.
+    ASSERT_NO_THROW({
+        listener_->start();
+        listener2_->start();
+    });
+
+    TestHAService service(io_service_, network_state_, config_storage);
+
+    ASSERT_NO_THROW(service.verboseTransition(HA_PARTNER_IN_MAINTENANCE_ST));
+
+    // The tested function is synchronous, so we need to run server side IO service
+    // in background to not block the main thread.
+    auto thread = runIOServiceInThread();
+
+    // Process ha-maintenance-cancel command.
+    ConstElementPtr rsp;
+    ASSERT_NO_THROW(rsp = service.processMaintenanceCancel());
+
+    // Stop the IO service. This should cause the thread to terminate.
+    io_service_->stop();
+    thread->join();
+    io_service_->get_io_service().reset();
+    io_service_->poll();
+
+    // The partner should have responded with an error.
+    ASSERT_TRUE(rsp);
+    checkAnswer(rsp, CONTROL_RESULT_ERROR,
+                "Unable to cancel maintenance. The partner server responded"
+                " with the following message to the ha-maintenance-notify"
+                " commmand: response returned, error code 1.");
+
+    // The state of this server should not change.
+    EXPECT_EQ(HA_PARTNER_IN_MAINTENANCE_ST, service.getCurrState());
+}
+
+
 /// @brief HA partner to the server under test.
 ///
 /// This is a wrapper class around @c HttpListener which simulates a
@@ -2491,7 +2923,7 @@ public:
               const TestHttpResponseCreatorFactoryPtr& factory,
               const std::string& initial_state = "waiting")
         : listener_(listener), factory_(factory), running_(false),
-          static_date_time_() {
+          static_date_time_(), static_scopes_() {
         transition(initial_state);
     }
 
@@ -2508,6 +2940,13 @@ public:
     /// @param static_date_time fixed date-time value.
     void setDateTime(const std::string& static_date_time) {
         static_date_time_ = static_date_time;
+    }
+
+    /// @brief Sets static scopes to be used in responses.
+    ///
+    /// @param scopes Fixed scopes set.
+    void setScopes(const std::set<std::string>& scopes) {
+        static_scopes_ = scopes;
     }
 
     /// @brief Enable response to commands required for leases synchronization.
@@ -2559,6 +2998,13 @@ public:
         if (!static_date_time_.empty()) {
             response_arguments->set("date-time", Element::create(static_date_time_));
         }
+        if (!static_scopes_.empty()) {
+            auto json_scopes = Element::createList();
+            for (auto scope : static_scopes_) {
+                json_scopes->add(Element::create(scope));
+            }
+            response_arguments->set("scopes", json_scopes);
+        }
         factory_->getResponseCreator()->setArguments(response_arguments);
     }
 
@@ -2578,6 +3024,9 @@ private:
 
     /// @brief Static date-time value to be returned.
     std::string static_date_time_;
+
+    /// @brief Static scopes to be reported.
+    std::set<std::string> static_scopes_;
 };
 
 /// @brief Shared pointer to a partner.
@@ -2735,8 +3184,11 @@ public:
 
         // If the partner is unavailable we also have to verify the case when
         // we detect that the partner is considered offline (after running the
-        // whole failure detection algorithm).
-        if (partner_state.state_ == HA_UNAVAILABLE_ST) {
+        // whole failure detection algorithm). The server in the in-maintenance
+        // state is excluded from this because it must not transition out of this
+        // state until an administrator makes some action.
+        if ((my_state.state_ != HA_IN_MAINTENANCE_ST) &&
+            (partner_state.state_ == HA_UNAVAILABLE_ST)) {
             // Transition this server back to the initial state.
             service_->transition(my_state.state_, HAService::NOP_EVT);
             // Simulate lack of communication between the servers.
@@ -2841,8 +3293,9 @@ public:
     /// state.
     /// @param dhcp_enabled Indicates whether DHCP service is expected to be enabled
     /// or disabled in the given state.
+    /// @param event Event to be passed to the tested handler.
     void expectScopes(const MyState& my_state, const std::vector<std::string>& scopes,
-                      const bool dhcp_enabled) {
+                      const bool dhcp_enabled, const int event = TestHAService::NOP_EVT) {
 
         // If expecting no scopes, let's enable some scope to make sure that the
         // code changes this setting.
@@ -2865,6 +3318,7 @@ public:
         }
 
         // Transition to the desired state.
+        service_->postNextEvent(event);
         service_->verboseTransition(my_state.state_);
         // Run the handler.
         service_->runModel(TestHAService::NOP_EVT);
@@ -2956,7 +3410,9 @@ TEST_F(HAServiceStateMachineTest, waitingParterDownLoadBalancingPartnerDown) {
     EXPECT_EQ(HA_PARTNER_DOWN_ST, service_->getCurrState());
 
     // Partner shows up and (eventually) transitions to READY state.
-    HAPartner partner(listener2_, factory2_, "ready");
+    HAPartner partner(listener2_, factory2_);
+    partner.setScopes({ "server1", "server2" });
+    partner.transition("ready");
     partner.startup();
 
     // PARTNER DOWN state: receive a response from the partner indicating that
@@ -2967,6 +3423,42 @@ TEST_F(HAServiceStateMachineTest, waitingParterDownLoadBalancingPartnerDown) {
     ASSERT_TRUE(isDoingHeartbeat());
     ASSERT_FALSE(isCommunicationInterrupted());
     ASSERT_FALSE(isFailureDetected());
+
+    // Check the reported info about servers.
+    ConstElementPtr ha_servers = service_->processStatusGet();
+    ASSERT_TRUE(ha_servers);
+
+    // Hard to know what is the age of the remote data. Therefore, let's simply
+    // grab it from the response.
+    ASSERT_EQ(Element::map, ha_servers->getType());
+    auto remote = ha_servers->get("remote");
+    ASSERT_TRUE(remote);
+    EXPECT_EQ(Element::map, remote->getType());
+    auto age = remote->get("age");
+    ASSERT_TRUE(age);
+    EXPECT_EQ(Element::integer, age->getType());
+    auto age_value = age->intValue();
+    EXPECT_GE(age_value, 0);
+
+    // Now append it to the whole structure for comparison.
+    std::ostringstream s;
+    s << age_value;
+
+    std::string expected = "{"
+        "    \"local\": {"
+        "        \"role\": \"primary\","
+        "        \"scopes\": [ \"server1\", \"server2\" ], "
+        "        \"state\": \"load-balancing\""
+        "    }, "
+        "    \"remote\": {"
+        "        \"age\": " + s.str() + ","
+        "        \"in-touch\": true,"
+        "        \"role\": \"secondary\","
+        "        \"last-scopes\": [ \"server1\", \"server2\" ],"
+        "        \"last-state\": \"ready\""
+        "    }"
+        "}";
+    EXPECT_TRUE(isEquivalent(Element::fromJSON(expected), ha_servers));
 
     // Crash the partner and see whether our server can return to the partner
     // down state.
@@ -3346,8 +3838,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingPrimary) {
         testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_LOAD_BALANCING_ST));
 
+        testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_LOAD_BALANCING_ST));
@@ -3365,6 +3863,38 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingPrimary) {
                        FinalState(HA_LOAD_BALANCING_ST));
     }
 
+    // in-maintenance state transitions
+    {
+        SCOPED_TRACE("in-maintenance state transitions");
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_LOAD_BALANCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_READY_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_SYNCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_TERMINATED_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_WAITING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_UNAVAILABLE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+    }
+
     // PARTNER DOWN state transitions
     {
         SCOPED_TRACE("PARTNER DOWN state transitions");
@@ -3372,7 +3902,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingPrimary) {
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_WAITING_ST));
 
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_DOWN_ST));
+
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_WAITING_ST));
 
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_READY_ST),
@@ -3391,6 +3927,38 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingPrimary) {
                        FinalState(HA_PARTNER_DOWN_ST));
     }
 
+    // PARTNER in-maintenance state transitions
+    {
+        SCOPED_TRACE("PARTNER in-maintenance state transitions");
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_LOAD_BALANCING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_READY_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_SYNCING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_TERMINATED_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_WAITING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_UNAVAILABLE_ST),
+                       FinalState(HA_PARTNER_DOWN_ST));
+    }
+
     // READY state transitions
     {
         SCOPED_TRACE("READY state transitions");
@@ -3398,8 +3966,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingPrimary) {
         testTransition(MyState(HA_READY_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_LOAD_BALANCING_ST));
 
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_READY_ST));
+
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_READY_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_LOAD_BALANCING_ST));
@@ -3424,7 +3998,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingPrimary) {
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_SYNCING_ST));
 
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_SYNCING_ST));
+
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_SYNCING_ST));
+
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_SYNCING_ST));
 
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_READY_ST),
@@ -3497,8 +4077,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingSecondary) {
         testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_LOAD_BALANCING_ST));
 
+        testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_LOAD_BALANCING_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_LOAD_BALANCING_ST));
@@ -3516,6 +4102,38 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingSecondary) {
                          FinalState(HA_LOAD_BALANCING_ST));
     }
 
+    // in-maintenance state transitions
+    {
+        SCOPED_TRACE("in-maintenance state transitions");
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_LOAD_BALANCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_READY_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_SYNCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_TERMINATED_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_WAITING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_UNAVAILABLE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+    }
+
     // PARTNER DOWN state transitions
     {
         SCOPED_TRACE("PARTNER DOWN state transitions");
@@ -3523,7 +4141,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingSecondary) {
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_WAITING_ST));
 
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_DOWN_ST));
+
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_WAITING_ST));
 
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_READY_ST),
@@ -3542,6 +4166,38 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingSecondary) {
                        FinalState(HA_PARTNER_DOWN_ST));
     }
 
+    // PARTNER in-maintenance state transitions
+    {
+        SCOPED_TRACE("PARTNER in-maintenance state transitions");
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_LOAD_BALANCING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_READY_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_SYNCING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_TERMINATED_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_WAITING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_UNAVAILABLE_ST),
+                       FinalState(HA_PARTNER_DOWN_ST));
+    }
+
     // READY state transitions
     {
         SCOPED_TRACE("READY state transitions");
@@ -3549,8 +4205,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingSecondary) {
         testTransition(MyState(HA_READY_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_LOAD_BALANCING_ST));
 
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_READY_ST));
+
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_READY_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_READY_ST));
@@ -3575,7 +4237,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsLoadBalancingSecondary) {
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_LOAD_BALANCING_ST),
                        FinalState(HA_SYNCING_ST));
 
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_SYNCING_ST));
+
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_SYNCING_ST));
+
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_SYNCING_ST));
 
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_READY_ST),
@@ -3836,10 +4504,12 @@ TEST_F(HAServiceStateMachineTest, scopesServingLoadBalancing) {
     expectScopes(MyState(HA_LOAD_BALANCING_ST), { "server1" }, true);
     expectScopes(MyState(HA_TERMINATED_ST), { "server1" }, true);
 
-    // PARTNER DOWN: serving both scopes.
+    // PARTNER DOWN and PARTNER IN MAINTENANCE: serving both scopes.
     expectScopes(MyState(HA_PARTNER_DOWN_ST), { "server1", "server2" }, true);
+    expectScopes(MyState(HA_PARTNER_IN_MAINTENANCE_ST), { "server1", "server2" }, true);
 
-    // READY & WAITING: serving no scopes.
+    // IN MAINTENANCE, READY & WAITING: serving no scopes.
+    expectScopes(MyState(HA_IN_MAINTENANCE_ST), { }, false);
     expectScopes(MyState(HA_READY_ST), { }, false);
     expectScopes(MyState(HA_WAITING_ST), { }, false);
 }
@@ -3855,11 +4525,18 @@ TEST_F(HAServiceStateMachineTest, scopesServingLoadBalancingNoFailover) {
     expectScopes(MyState(HA_LOAD_BALANCING_ST), { "server1" }, true);
     expectScopes(MyState(HA_TERMINATED_ST), { "server1" }, true);
 
-    // PARTNER DOWN: still serving my own scope because auto-failover
-    // is disabled.
+    // PARTNER DOWN: still serving my own scope because auto-failover is disabled.
     expectScopes(MyState(HA_PARTNER_DOWN_ST), { "server1" }, true);
 
-    // READY & WAITING: serving no scopes.
+    // PARTNER IN MAINTENANCE: always serving all scopes.
+    expectScopes(MyState(HA_PARTNER_IN_MAINTENANCE_ST), { "server1", "server2" }, true);
+
+    // Same for the partner-down case during maintenance.
+    expectScopes(MyState(HA_PARTNER_DOWN_ST), { "server1", "server2" }, true,
+                 HAService::HA_MAINTENANCE_START_EVT);
+
+    // IN MAINTENANCE, READY & WAITING: serving no scopes.
+    expectScopes(MyState(HA_IN_MAINTENANCE_ST), { }, false);
     expectScopes(MyState(HA_READY_ST), { }, false);
     expectScopes(MyState(HA_WAITING_ST), { }, false);
 }
@@ -3873,7 +4550,9 @@ TEST_F(HAServiceStateMachineTest, shouldSendLeaseUpdatesLoadBalancing) {
     HAConfig::PeerConfigPtr peer_config = valid_config->getFailoverPeerConfig();
 
     EXPECT_TRUE(expectLeaseUpdates(MyState(HA_LOAD_BALANCING_ST), peer_config));
+    EXPECT_FALSE(expectLeaseUpdates(MyState(HA_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_PARTNER_DOWN_ST), peer_config));
+    EXPECT_TRUE(expectLeaseUpdates(MyState(HA_PARTNER_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_READY_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_SYNCING_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_TERMINATED_ST), peer_config));
@@ -3891,7 +4570,9 @@ TEST_F(HAServiceStateMachineTest, shouldSendLeaseUpdatesDisabledLoadBalancing) {
     HAConfig::PeerConfigPtr peer_config = valid_config->getFailoverPeerConfig();
 
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_LOAD_BALANCING_ST), peer_config));
+    EXPECT_FALSE(expectLeaseUpdates(MyState(HA_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_PARTNER_DOWN_ST), peer_config));
+    EXPECT_FALSE(expectLeaseUpdates(MyState(HA_PARTNER_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_READY_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_SYNCING_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_TERMINATED_ST), peer_config));
@@ -3905,7 +4586,9 @@ TEST_F(HAServiceStateMachineTest, heartbeatLoadBalancing) {
     startService(valid_config);
 
     EXPECT_TRUE(expectHeartbeat(MyState(HA_LOAD_BALANCING_ST)));
+    EXPECT_TRUE(expectHeartbeat(MyState(HA_IN_MAINTENANCE_ST)));
     EXPECT_TRUE(expectHeartbeat(MyState(HA_PARTNER_DOWN_ST)));
+    EXPECT_TRUE(expectHeartbeat(MyState(HA_PARTNER_IN_MAINTENANCE_ST)));
     EXPECT_TRUE(expectHeartbeat(MyState(HA_READY_ST)));
     EXPECT_FALSE(expectHeartbeat(MyState(HA_TERMINATED_ST)));
     EXPECT_TRUE(expectHeartbeat(MyState(HA_WAITING_ST)));
@@ -3934,8 +4617,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyPrimary) {
         testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_HOT_STANDBY_ST));
 
+        testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_HOT_STANDBY_ST));
@@ -3953,6 +4642,38 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyPrimary) {
                        FinalState(HA_HOT_STANDBY_ST));
     }
 
+    // in-maintenance state transitions
+    {
+        SCOPED_TRACE("in-maintenance state transitions");
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_LOAD_BALANCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_READY_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_SYNCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_TERMINATED_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_WAITING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_UNAVAILABLE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+    }
+
     // PARTNER DOWN state transitions
     {
         SCOPED_TRACE("PARTNER DOWN state transitions");
@@ -3960,7 +4681,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyPrimary) {
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_WAITING_ST));
 
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_DOWN_ST));
+
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_WAITING_ST));
 
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_READY_ST),
@@ -3979,6 +4706,38 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyPrimary) {
                        FinalState(HA_PARTNER_DOWN_ST));
     }
 
+    // PARTNER in-maintenance state transitions
+    {
+        SCOPED_TRACE("PARTNER in-maintenance state transitions");
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_LOAD_BALANCING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_READY_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_SYNCING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_TERMINATED_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_WAITING_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_PARTNER_IN_MAINTENANCE_ST), PartnerState(HA_UNAVAILABLE_ST),
+                       FinalState(HA_PARTNER_DOWN_ST));
+    }
+
     // READY state transitions
     {
         SCOPED_TRACE("READY state transitions");
@@ -3986,8 +4745,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyPrimary) {
         testTransition(MyState(HA_READY_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_HOT_STANDBY_ST));
 
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_READY_ST));
+
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_READY_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_HOT_STANDBY_ST));
@@ -4012,7 +4777,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyPrimary) {
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_SYNCING_ST));
 
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_SYNCING_ST));
+
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_SYNCING_ST));
+
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_SYNCING_ST));
 
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_READY_ST),
@@ -4100,8 +4871,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyStandby) {
         testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_HOT_STANDBY_ST));
 
+        testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_HOT_STANDBY_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_HOT_STANDBY_ST));
@@ -4119,6 +4896,38 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyStandby) {
                        FinalState(HA_HOT_STANDBY_ST));
     }
 
+    // in-maintenance state transitions
+    {
+        SCOPED_TRACE("in-maintenance state transitions");
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_LOAD_BALANCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_READY_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_SYNCING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_TERMINATED_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_WAITING_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+
+        testTransition(MyState(HA_IN_MAINTENANCE_ST), PartnerState(HA_UNAVAILABLE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
+    }
+
     // PARTNER DOWN state transitions
     {
         SCOPED_TRACE("PARTNER DOWN state transitions");
@@ -4126,7 +4935,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyStandby) {
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_WAITING_ST));
 
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_DOWN_ST));
+
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_WAITING_ST));
+
+        testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_WAITING_ST));
 
         testTransition(MyState(HA_PARTNER_DOWN_ST), PartnerState(HA_READY_ST),
@@ -4145,6 +4960,7 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyStandby) {
                        FinalState(HA_PARTNER_DOWN_ST));
     }
 
+
     // READY state transitions
     {
         SCOPED_TRACE("READY state transitions");
@@ -4152,8 +4968,14 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyStandby) {
         testTransition(MyState(HA_READY_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_HOT_STANDBY_ST));
 
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_PARTNER_IN_MAINTENANCE_ST));
+
         testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_DOWN_ST),
                        FinalState(HA_READY_ST));
+
+        testTransition(MyState(HA_READY_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
+                       FinalState(HA_IN_MAINTENANCE_ST));
 
         testTransition(MyState(HA_READY_ST), PartnerState(HA_READY_ST),
                        FinalState(HA_READY_ST));
@@ -4178,7 +5000,13 @@ TEST_F(HAServiceStateMachineTest, stateTransitionsHotStandbyStandby) {
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_HOT_STANDBY_ST),
                        FinalState(HA_SYNCING_ST));
 
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_IN_MAINTENANCE_ST),
+                       FinalState(HA_SYNCING_ST));
+
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_DOWN_ST),
+                       FinalState(HA_SYNCING_ST));
+
+        testTransition(MyState(HA_WAITING_ST), PartnerState(HA_PARTNER_IN_MAINTENANCE_ST),
                        FinalState(HA_SYNCING_ST));
 
         testTransition(MyState(HA_WAITING_ST), PartnerState(HA_READY_ST),
@@ -4262,10 +5090,12 @@ TEST_F(HAServiceStateMachineTest, scopesServingHotStandbyPrimary) {
     expectScopes(MyState(HA_HOT_STANDBY_ST), { "server1" }, true);
     expectScopes(MyState(HA_TERMINATED_ST), { "server1" }, true);
 
-    // PARTNER DOWN: still serving my own scope.
+    // PARTNER DOWN and PARTNER IN MAINTENANCE: still serving my own scope.
     expectScopes(MyState(HA_PARTNER_DOWN_ST), { "server1" }, true);
+    expectScopes(MyState(HA_PARTNER_IN_MAINTENANCE_ST), { "server1" }, true);
 
-    // READY & WAITING: serving no scopes.
+    // IN MAINTENANCE, READY & WAITING: serving no scopes.
+    expectScopes(MyState(HA_IN_MAINTENANCE_ST), { }, false);
     expectScopes(MyState(HA_READY_ST), { }, false);
     expectScopes(MyState(HA_WAITING_ST), { }, false);
 }
@@ -4287,10 +5117,12 @@ TEST_F(HAServiceStateMachineTest, scopesServingHotStandbyPrimaryNoFailover) {
     expectScopes(MyState(HA_HOT_STANDBY_ST), { "server1" }, true);
     expectScopes(MyState(HA_TERMINATED_ST), { "server1" }, true);
 
-    // PARTNER DOWN: still serving my own scope.
+    // PARTNER IN MAINTENANCE & PARTNER DOWN: still serving my own scope.
     expectScopes(MyState(HA_PARTNER_DOWN_ST), { "server1" }, true);
+    expectScopes(MyState(HA_PARTNER_IN_MAINTENANCE_ST), { "server1" }, true);
 
-    // READY & WAITING: serving no scopes.
+    // IN MAINTENANCE, READY & WAITING: serving no scopes.
+    expectScopes(MyState(HA_IN_MAINTENANCE_ST), { }, false);
     expectScopes(MyState(HA_READY_ST), { }, false);
     expectScopes(MyState(HA_WAITING_ST), { }, false);
 }
@@ -4310,7 +5142,9 @@ TEST_F(HAServiceStateMachineTest, shouldSendLeaseUpdatesHotStandbyPrimary) {
     HAConfig::PeerConfigPtr peer_config = valid_config->getFailoverPeerConfig();
 
     EXPECT_TRUE(expectLeaseUpdates(MyState(HA_HOT_STANDBY_ST), peer_config));
+    EXPECT_FALSE(expectLeaseUpdates(MyState(HA_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_PARTNER_DOWN_ST), peer_config));
+    EXPECT_TRUE(expectLeaseUpdates(MyState(HA_PARTNER_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_READY_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_SYNCING_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_TERMINATED_ST), peer_config));
@@ -4319,7 +5153,7 @@ TEST_F(HAServiceStateMachineTest, shouldSendLeaseUpdatesHotStandbyPrimary) {
 
 // This test verifies if the server would send heartbeat to the partner
 // while being in various states. The HA configuration is hot standby.
-TEST_F(HAServiceStateMachineTest, heartbeatHotstandby) {
+TEST_F(HAServiceStateMachineTest, heartbeatHotStandby) {
     HAConfigPtr valid_config = createValidConfiguration();
 
     // Turn it into hot-standby configuration.
@@ -4329,7 +5163,9 @@ TEST_F(HAServiceStateMachineTest, heartbeatHotstandby) {
     startService(valid_config);
 
     EXPECT_TRUE(expectHeartbeat(MyState(HA_HOT_STANDBY_ST)));
+    EXPECT_TRUE(expectHeartbeat(MyState(HA_IN_MAINTENANCE_ST)));
     EXPECT_TRUE(expectHeartbeat(MyState(HA_PARTNER_DOWN_ST)));
+    EXPECT_TRUE(expectHeartbeat(MyState(HA_PARTNER_IN_MAINTENANCE_ST)));
     EXPECT_TRUE(expectHeartbeat(MyState(HA_READY_ST)));
     EXPECT_FALSE(expectHeartbeat(MyState(HA_TERMINATED_ST)));
     EXPECT_TRUE(expectHeartbeat(MyState(HA_WAITING_ST)));
@@ -4356,10 +5192,12 @@ TEST_F(HAServiceStateMachineTest, scopesServingHotStandbyStandby) {
     // TERMINATED: serving no scopes because the primary is active.
     expectScopes(MyState(HA_TERMINATED_ST), { }, true);
 
-    // PARTNER DOWN: serving server1's scope.
+    // PARTNER IN MAINTENANCE & PARTNER DOWN: serving server1's scope.
     expectScopes(MyState(HA_PARTNER_DOWN_ST), { "server1" }, true);
+    expectScopes(MyState(HA_PARTNER_IN_MAINTENANCE_ST), { "server1" }, true);
 
-    // READY & WAITING: serving no scopes.
+    // IN MAINTENANCE, READY & WAITING: serving no scopes.
+    expectScopes(MyState(HA_IN_MAINTENANCE_ST), { }, false);
     expectScopes(MyState(HA_READY_ST), { }, false);
     expectScopes(MyState(HA_WAITING_ST), { }, false);
 }
@@ -4387,11 +5225,18 @@ TEST_F(HAServiceStateMachineTest, scopesServingHotStandbyStandbyNoFailover) {
     // TERMINATED: serving no scopes because the primary is active.
     expectScopes(MyState(HA_TERMINATED_ST), { }, true);
 
-    // PARTNER DOWN: still serving no scopes because auto-failover is
-    // set to false.
+    // PARTNER DOWN: still serving no scopes because auto-failover is set to false.
     expectScopes(MyState(HA_PARTNER_DOWN_ST), { }, true);
 
-    // READY & WAITING: serving no scopes.
+    // PARTNER IN MAINTENANCE: serving partner's scopes.
+    expectScopes(MyState(HA_PARTNER_IN_MAINTENANCE_ST), { "server1" }, true);
+
+    // Same for the partner-down case during maintenance.
+    expectScopes(MyState(HA_PARTNER_DOWN_ST), { "server1" }, true,
+                 HAService::HA_MAINTENANCE_START_EVT);
+
+    // IN MAINTENANCE, READY & WAITING: serving no scopes.
+    expectScopes(MyState(HA_IN_MAINTENANCE_ST), { }, false);
     expectScopes(MyState(HA_READY_ST), { }, false);
     expectScopes(MyState(HA_WAITING_ST), { }, false);
 }
@@ -4412,7 +5257,9 @@ TEST_F(HAServiceStateMachineTest, shouldSendLeaseUpdatesHotStandbyStandby) {
     HAConfig::PeerConfigPtr peer_config = valid_config->getFailoverPeerConfig();
 
     EXPECT_TRUE(expectLeaseUpdates(MyState(HA_HOT_STANDBY_ST), peer_config));
+    EXPECT_FALSE(expectLeaseUpdates(MyState(HA_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_PARTNER_DOWN_ST), peer_config));
+    EXPECT_TRUE(expectLeaseUpdates(MyState(HA_PARTNER_IN_MAINTENANCE_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_READY_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_SYNCING_ST), peer_config));
     EXPECT_FALSE(expectLeaseUpdates(MyState(HA_TERMINATED_ST), peer_config));

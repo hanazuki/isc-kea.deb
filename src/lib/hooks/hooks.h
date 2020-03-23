@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,18 +12,21 @@
 
 namespace {
 
-// Version 8 of the hooks framework, set for Kea 1.5.0 beta2
-const int KEA_HOOKS_VERSION = 8;
+// Version 15 of the hooks framework, set for Kea 1.7.5
+const int KEA_HOOKS_VERSION = 15;
 
 // Names of the framework functions.
 const char* const LOAD_FUNCTION_NAME = "load";
 const char* const UNLOAD_FUNCTION_NAME = "unload";
 const char* const VERSION_FUNCTION_NAME = "version";
+const char* const MULTI_THREADING_COMPATIBLE_FUNCTION_NAME =
+    "multi_threading_compatible";
 
 // Typedefs for pointers to the framework functions.
 typedef int (*version_function_ptr)();
 typedef int (*load_function_ptr)(isc::hooks::LibraryHandle&);
 typedef int (*unload_function_ptr)();
+typedef int (*multi_threading_compatible_function_ptr)();
 
 } // Anonymous namespace
 

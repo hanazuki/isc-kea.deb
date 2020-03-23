@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2017 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -49,9 +49,9 @@ constexpr uint32_t CQL_DRIVER_VERSION_MAJOR = CASS_VERSION_MAJOR;
 constexpr uint32_t CQL_DRIVER_VERSION_MINOR = CASS_VERSION_MINOR;
 /// @}
 
-/// Define CQL schema version: 3.0
+/// Define CQL schema version: 5.0
 /// @{
-constexpr uint32_t CQL_SCHEMA_VERSION_MAJOR = 3u;
+constexpr uint32_t CQL_SCHEMA_VERSION_MAJOR = 5u;
 constexpr uint32_t CQL_SCHEMA_VERSION_MINOR = 0u;
 /// @}
 
@@ -127,6 +127,19 @@ public:
     /// @brief Destructor
     virtual ~CqlConnection();
 
+    /// @brief Get the schema version.
+    ///
+    /// @param parameters A data structure relating keywords and values
+    ///        concerned with the database.
+    ///
+    /// @return Version number as a pair of unsigned integers.  "first" is the
+    ///         major version number, "second" the minor number.
+    ///
+    /// @throw isc::db::DbOperationError An operation on the open database has
+    ///        failed.
+    static std::pair<uint32_t, uint32_t>
+    getVersion(const ParameterMap& parameters);
+
     /// @brief Prepare statements
     ///
     /// Creates the prepared statements for all of the CQL statements used
@@ -147,9 +160,11 @@ public:
     /// values specified in parentheses):
     /// - keyspace: name of the database to which to connect (keatest)
     /// - contact-points: IP addresses of the nodes to connect to (127.0.0.1)
+    /// - consistency: consistency level (quorum)
+    /// - serial-consistency: serial consistency level (serial)
     /// - port: The TCP port to use (9042)
     /// - user - credentials to use when connecting (no username)
-    /// - password - credentails to use when connecting (no password)
+    /// - password - credentials to use when connecting (no password)
     /// - reconnect-wait-time 2000
     /// - connect-timeout 5000
     /// - request-timeout 12000
@@ -160,7 +175,9 @@ public:
     void openDatabase();
 
     /// @brief Set consistency
-    void setConsistency(bool force, CassConsistency consistency);
+    void setConsistency(bool force,
+                        CassConsistency consistency,
+                        CassConsistency serial_consistency);
 
     /// @brief Start transaction
     void startTransaction();
@@ -170,6 +187,9 @@ public:
 
     /// @brief Rollback Transactions
     virtual void rollback();
+
+    /// @brief parse Consistency value
+    static CassConsistency parseConsistency(std::string value);
 
     /// @brief Check for errors
     ///
@@ -198,6 +218,9 @@ public:
 
     /// @brief CQL consistency
     CassConsistency consistency_;
+
+    /// @brief CQL serial consistency
+    CassConsistency serial_consistency_;
 
     // @brief Schema meta information, used for UDTs
     const CassSchemaMeta* schema_meta_;

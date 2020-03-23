@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <dhcp/libdhcp++.h>
 #include <process/d_log.h>
 #include <process/d_cfg_mgr.h>
+#include <process/daemon.h>
 #include <util/encode/hex.h>
 #include <util/strutil.h>
 
@@ -74,11 +75,15 @@ DCfgMgrBase::simpleParseConfig(isc::data::ConstElementPtr config_set,
     // so as we can rollback changes when an error occurs.
     ConfigPtr original_context = context_;
     resetContext();
+    bool rollback = false;
 
     // Answer will hold the result returned to the caller.
     ConstElementPtr answer;
 
     try {
+        // Logging is common so factor it.
+        Daemon::configureLogger(config_set, context_);
+
         // Let's call the actual implementation
         answer = parse(config_set, check_only);
 
@@ -88,12 +93,17 @@ DCfgMgrBase::simpleParseConfig(isc::data::ConstElementPtr config_set,
 
         // Everything was fine. Configuration set processed successfully.
         if (!check_only) {
-            if (post_config_cb) {
-                post_config_cb();
-            }
-
             if (code == 0) {
+                // Call the callback only when parsing was successful.
+                if (post_config_cb) {
+                    post_config_cb();
+                }
                 LOG_INFO(dctl_logger, DCTL_CONFIG_COMPLETE).arg(getConfigSummary(0));
+                // Set the last commit timestamp.
+                auto now = boost::posix_time::second_clock::universal_time();
+                context_->setLastCommitTime(now);
+            } else {
+                rollback = true;
             }
 
             // Use the answer provided.
@@ -107,15 +117,17 @@ DCfgMgrBase::simpleParseConfig(isc::data::ConstElementPtr config_set,
     } catch (const std::exception& ex) {
         LOG_ERROR(dctl_logger, DCTL_PARSER_FAIL).arg(ex.what());
         answer = isc::config::createAnswer(1, ex.what());
-
-        // An error occurred, so make sure that we restore original context.
-        context_ = original_context;
-        return (answer);
+        rollback = true;
     }
 
     if (check_only) {
         // If this is a configuration check only, then don't actually apply
         // the configuration and reverse to the previous one.
+        context_ = original_context;
+    }
+
+    if (rollback) {
+        // An error occurred, so make sure that we restore original context.
         context_ = original_context;
     }
 

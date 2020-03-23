@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2017 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -55,9 +55,8 @@ class CqlLeaseMgrTest : public GenericLeaseMgrTest {
 public:
     /// @brief Clears the database and opens connection to it.
     void initializeTest() {
-        // Ensure schema is the correct one.
-        destroyCqlSchema(false, true);
-        createCqlSchema(false, true);
+        // Ensure we have the proper schema with no transient data.
+        createCqlSchema();
 
         // Connect to the database
         try {
@@ -82,7 +81,8 @@ public:
             // Rollback may fail if backend is in read only mode. That's ok.
         }
         LeaseMgrFactory::destroy();
-        destroyCqlSchema(false, true);
+        // If data wipe enabled, delete transient data otherwise destroy the schema
+        destroyCqlSchema();
     }
 
     /// @brief Constructor
@@ -223,7 +223,7 @@ public:
     }
 
     // This is the CQL implementation for
-    // GenericLeaseMgrTest::testGetExpiredLeases4().
+    // GenericLeaseMgrTest::testGetExpiredLeases6().
     // The GenericLeaseMgrTest implementation checks for the order of expired
     // leases to be from the most expired to the least expired. Cassandra
     // doesn't support ORDER BY without imposing a EQ / IN restriction on the
@@ -285,8 +285,7 @@ public:
         }
 
         // Retrieve expired leases again. The limit of 0 means return all
-        // expired
-        // leases.
+        // expired leases.
         ASSERT_NO_THROW(lmptr_->getExpiredLeases6(expired_leases, 0));
 
         // The same leases should be returned.
@@ -337,15 +336,13 @@ public:
 /// only if the database can be opened.  Note that this is not part of the
 /// CqlLeaseMgr test fixure set.  This test checks that the database can be
 /// opened: the fixtures assume that and check basic operations.
-
 TEST(CqlOpenTest, OpenDatabase) {
 
     // Schema needs to be created for the test to work.
-    destroyCqlSchema(false, true);
-    createCqlSchema(false, true);
+    createCqlSchema();
 
-    // Check that lease manager open the database opens correctly and tidy up.
-    // If it fails, print the error message.
+    // Check that lease manager opens the database correctly and tidy up.  If it
+    // fails, print the error message.
     try {
         LeaseMgrFactory::create(validCqlConnectionString());
         EXPECT_NO_THROW((void)LeaseMgrFactory::instance());
@@ -357,13 +354,13 @@ TEST(CqlOpenTest, OpenDatabase) {
                << "*** before the CQL tests will run correctly.\n";
     }
 
-    // Check that lease manager open the database opens correctly with a longer
+    // Check that lease manager opens the database correctly with a longer
     // timeout.  If it fails, print the error message.
     try {
         // CQL specifies the timeout values in ms, not seconds. Therefore
         // we need to add extra 000 to the "connect-timeout=10" string.
         string connection_string = validCqlConnectionString() + string(" ") +
-            string(VALID_TIMEOUT) + "000";
+                                   string(VALID_TIMEOUT) + "000";
         LeaseMgrFactory::create(connection_string);
         EXPECT_NO_THROW((void) LeaseMgrFactory::instance());
         LeaseMgrFactory::destroy();
@@ -445,7 +442,8 @@ TEST(CqlOpenTest, OpenDatabase) {
         CQL_VALID_TYPE, NULL, VALID_HOST, INVALID_USER, VALID_PASSWORD)));
 
     // Tidy up after the test
-    destroyCqlSchema(false, true);
+    destroyCqlSchema();
+    LeaseMgrFactory::destroy();
 }
 
 /// @brief Check the getType() method
@@ -505,9 +503,9 @@ TEST_F(CqlLeaseMgrTest, basicLease4) {
     testBasicLease4();
 }
 
-/// @brief Check that Lease4 code safely handles invalid dates.
-TEST_F(CqlLeaseMgrTest, maxDate4) {
-    testMaxDate4();
+/// @brief checks that infinite lifetimes do not overflow.
+TEST_F(CqlLeaseMgrTest, infiniteLifeTime4) {
+    testInfiniteLifeTime4();
 }
 
 /// @brief Lease4 update tests
@@ -515,6 +513,13 @@ TEST_F(CqlLeaseMgrTest, maxDate4) {
 /// Checks that we are able to update a lease in the database.
 TEST_F(CqlLeaseMgrTest, updateLease4) {
     testUpdateLease4();
+}
+
+/// @brief Lease4 concurrent update tests
+///
+/// Checks that we are not able to concurrently update a lease in the database.
+TEST_F(CqlLeaseMgrTest, concurrentUpdateLease4) {
+    testConcurrentUpdateLease4();
 }
 
 /// @brief Check GetLease4 methods - access by Hardware Address
@@ -527,10 +532,10 @@ TEST_F(CqlLeaseMgrTest, getLease4HWAddr2) {
     testGetLease4HWAddr2();
 }
 
-// @brief Get lease4 by hardware address (2)
-//
-// Check that the system can cope with getting a hardware address of
-// any size.
+/// @brief Get lease4 by hardware address (2)
+///
+/// Check that the system can cope with getting a hardware address of
+/// any size.
 TEST_F(CqlLeaseMgrTest, getLease4HWAddrSize) {
     testGetLease4HWAddrSize();
 }
@@ -543,15 +548,15 @@ TEST_F(CqlLeaseMgrTest, getLease4HwaddrSubnetId) {
     testGetLease4HWAddrSubnetId();
 }
 
-// @brief Get lease4 by hardware address and subnet ID (2)
-//
-// Check that the system can cope with getting a hardware address of
-// any size.
+/// @brief Get lease4 by hardware address and subnet ID (2)
+///
+/// Check that the system can cope with getting a hardware address of
+/// any size.
 TEST_F(CqlLeaseMgrTest, getLease4HWAddrSubnetIdSize) {
     testGetLease4HWAddrSubnetIdSize();
 }
 
-// This test was derived from memfile.
+/// @brief This test was derived from memfile.
 TEST_F(CqlLeaseMgrTest, getLease4ClientId) {
     testGetLease4ClientId();
 }
@@ -564,9 +569,9 @@ TEST_F(CqlLeaseMgrTest, getLease4ClientId2) {
     testGetLease4ClientId2();
 }
 
-// @brief Get Lease4 by client ID (2)
-//
-// Check that the system can cope with a client ID of any size.
+/// @brief Get Lease4 by client ID (2)
+///
+/// Check that the system can cope with a client ID of any size.
 TEST_F(CqlLeaseMgrTest, getLease4ClientIdSize) {
     testGetLease4ClientIdSize();
 }
@@ -579,19 +584,51 @@ TEST_F(CqlLeaseMgrTest, getLease4ClientIdSubnetId) {
     testGetLease4ClientIdSubnetId();
 }
 
-// This test checks that all IPv4 leases for a specified subnet id are returned.
+
+/// @brief This test checks that all IPv4 leases for a specified subnet id are returned.
 TEST_F(CqlLeaseMgrTest, getLeases4SubnetId) {
     testGetLeases4SubnetId();
 }
 
-// This test checks that all IPv4 leases are returned.
+
+/// @brief This test checks that all IPv4 leases with a specified hostname are returned.
+TEST_F(CqlLeaseMgrTest, getLeases4Hostname) {
+    testGetLeases4Hostname();
+}
+
+
+/// @brief This test checks that all IPv4 leases are returned.
 TEST_F(CqlLeaseMgrTest, getLeases4) {
     testGetLeases4();
 }
 
-// Test that a range of IPv4 leases is returned with paging.
+/// @brief Test that a range of IPv4 leases is returned with paging.
 TEST_F(CqlLeaseMgrTest, getLeases4Paged) {
     testGetLeases4Paged();
+}
+
+/// @brief This test checks that all IPv6 leases for a specified subnet id are returned.
+/// @todo: uncomment this once getLeases6SubnetId is implemented
+/// for Cassandra (see #1086)
+TEST_F(CqlLeaseMgrTest, DISABLED_getLeases6SubnetId) {
+    testGetLeases6SubnetId();
+}
+
+/// @brief This test checks that all IPv6 leases with a specified hostname are returned.
+TEST_F(CqlLeaseMgrTest, getLeases6Hostname) {
+    testGetLeases6Hostname();
+}
+
+/// @brief This test checks that all IPv6 leases are returned.
+/// @todo: uncomment this once getLeases6 is implemented
+/// for Cassandra (see #1086)
+TEST_F(CqlLeaseMgrTest, DISABLED_getLeases6) {
+    testGetLeases6();
+}
+
+/// @brief Test that a range of IPv6 leases is returned with paging.
+TEST_F(CqlLeaseMgrTest, getLeases6Paged) {
+    testGetLeases6Paged();
 }
 
 /// @brief Basic Lease4 Checks
@@ -622,6 +659,12 @@ TEST_F(CqlLeaseMgrTest, getExpiredLeases4) {
     testCqlGetExpiredLeases4();
 }
 
+/// @brief Checks that DHCPv4 leases with infinite valid lifetime
+/// will never expire.
+TEST_F(CqlLeaseMgrTest, infiniteAreNotExpired4) {
+    testInfiniteAreNotExpired4();
+}
+
 /// @brief Check that expired reclaimed DHCPv4 leases are removed.
 TEST_F(CqlLeaseMgrTest, deleteExpiredReclaimedLeases4) {
     testDeleteExpiredReclaimedLeases4();
@@ -631,10 +674,10 @@ TEST_F(CqlLeaseMgrTest, deleteExpiredReclaimedLeases4) {
 /// LEASE6 /////////////////////////////////////////////////////////////////////
 ////////////////////////////////////////////////////////////////////////////////
 
-// Test checks whether simple add, get and delete operations are possible
-// on Lease6
+/// @brief Test checks whether simple add, get and delete operations
+/// are possible on Lease6
 TEST_F(CqlLeaseMgrTest, testAddGetDelete6) {
-    testAddGetDelete6(false);
+    testAddGetDelete6();
 }
 
 /// @brief Basic Lease6 Checks
@@ -645,9 +688,9 @@ TEST_F(CqlLeaseMgrTest, basicLease6) {
     testBasicLease6();
 }
 
-/// @brief Check that Lease6 code safely handles invalid dates.
-TEST_F(CqlLeaseMgrTest, maxDate6) {
-    testMaxDate6();
+/// @brief checks that infinite lifetimes do not overflow.
+TEST_F(CqlLeaseMgrTest, infiniteLifeTime6) {
+    testInfiniteLifeTime6();
 }
 
 /// @brief Verify that too long hostname for Lease6 is not accepted.
@@ -658,6 +701,14 @@ TEST_F(CqlLeaseMgrTest, lease6InvalidHostname) {
     testLease6InvalidHostname();
 }
 
+/// @brief Verify that large IAID values work correctly.
+///
+/// Adds lease with a large IAID to the database and verifies it can
+/// fetched correclty.
+TEST_F(CqlLeaseMgrTest, leases6LargeIaidCheck) {
+    testLease6LargeIaidCheck();
+}
+
 /// @brief Check GetLease6 methods - access by DUID/IAID
 ///
 /// Adds leases to the database and checks that they can be accessed via
@@ -666,7 +717,7 @@ TEST_F(CqlLeaseMgrTest, getLeases6DuidIaid) {
     testGetLeases6DuidIaid();
 }
 
-// Check that the system can cope with a DUID of allowed size.
+/// @brief Check that the system can cope with a DUID of allowed size.
 TEST_F(CqlLeaseMgrTest, getLeases6DuidSize) {
     testGetLeases6DuidSize();
 }
@@ -681,14 +732,6 @@ TEST_F(CqlLeaseMgrTest, lease6LeaseTypeCheck) {
     testLease6LeaseTypeCheck();
 }
 
-/// @brief Verifies the getLeases6(DUID) method
-///
-/// Adds 3 lease and verifies fetch by DUID.
-/// Verifies retrival of non existant DUID fails
-TEST_F(CqlLeaseMgrTest, getLeases6Duid) {
-   testGetLeases6Duid(); 
-}
-
 /// @brief Check GetLease6 methods - access by DUID/IAID/SubnetID
 ///
 /// Adds leases to the database and checks that they can be accessed via
@@ -697,14 +740,18 @@ TEST_F(CqlLeaseMgrTest, getLease6DuidIaidSubnetId) {
     testGetLease6DuidIaidSubnetId();
 }
 
-// Test checks that getLease6() works with different DUID sizes
+
+/// @brief Test checks that getLease6() works with different DUID sizes
 TEST_F(CqlLeaseMgrTest, getLease6DuidIaidSubnetIdSize) {
     testGetLease6DuidIaidSubnetIdSize();
 }
 
-// Test that a range of IPv6 leases is returned with paging.
-TEST_F(CqlLeaseMgrTest, getLeases6Paged) {
-    testGetLeases6Paged();
+/// @brief check leases could be retrieved by DUID
+///
+/// Create leases, add them to backend and verify if it can be queried
+/// using DUID index
+TEST_F(CqlLeaseMgrTest, getLeases6Duid) {
+    testGetLeases6Duid();
 }
 
 /// @brief Lease6 update tests
@@ -712,6 +759,13 @@ TEST_F(CqlLeaseMgrTest, getLeases6Paged) {
 /// Checks that we are able to update a lease in the database.
 TEST_F(CqlLeaseMgrTest, updateLease6) {
     testUpdateLease6();
+}
+
+/// @brief Lease6 concurrent update tests
+///
+/// Checks that we are not able to concurrently update a lease in the database.
+TEST_F(CqlLeaseMgrTest, concurrentUpdateLease6) {
+    testConcurrentUpdateLease6();
 }
 
 /// @brief DHCPv4 Lease recreation tests
@@ -737,12 +791,12 @@ TEST_F(CqlLeaseMgrTest, nullDuid) {
     testNullDuid();
 }
 
-/// @brief Tests whether memfile can store and retrieve hardware addresses
+/// @brief Tests whether CQL can store and retrieve hardware addresses
 TEST_F(CqlLeaseMgrTest, testLease6Mac) {
     testLease6MAC();
 }
 
-/// @brief Tests whether memfile can store and retrieve hardware addresses
+/// @brief Tests whether CQL can store and retrieve hardware addresses
 TEST_F(CqlLeaseMgrTest, testLease6HWTypeAndSource) {
     testLease6HWTypeAndSource();
 }
@@ -756,6 +810,12 @@ TEST_F(CqlLeaseMgrTest, testLease6HWTypeAndSource) {
 /// which is marked as 'reclaimed' is not returned.
 TEST_F(CqlLeaseMgrTest, getExpiredLeases6) {
     testCqlGetExpiredLeases6();
+}
+
+/// @brief Checks that DHCPv6 leases with infinite valid lifetime
+/// will never expire.
+TEST_F(CqlLeaseMgrTest, infiniteAreNotExpired6) {
+    testInfiniteAreNotExpired6();
 }
 
 /// @brief Check that expired reclaimed DHCPv6 leases are removed.
@@ -773,26 +833,27 @@ TEST_F(CqlLeaseMgrTest, recountLeaseStats6) {
     testRecountLeaseStats6();
 }
 
-// @brief Tests that leases from specific subnet can be removed.
+/// @brief Tests that leases from specific subnet can be removed.
 /// @todo: uncomment this once lease wipe is implemented
 /// for Cassandra (see #5485)
 TEST_F(CqlLeaseMgrTest, DISABLED_wipeLeases4) {
     testWipeLeases4();
 }
 
-// @brief Tests that leases from specific subnet can be removed.
+/// @brief Tests that leases from specific subnet can be removed.
 /// @todo: uncomment this once lease wipe is implemented
 /// for Cassandra (see #5485)
 TEST_F(CqlLeaseMgrTest, DISABLED_wipeLeases6) {
     testWipeLeases6();
 }
 
-// Tests v4 lease stats query variants.
+/// @brief Tests v4 lease stats query variants.
 TEST_F(CqlLeaseMgrTest, leaseStatsQuery4) {
     testLeaseStatsQuery4();
 }
 
-// Tests v6 lease stats query variants.
+
+/// @brief Tests v6 lease stats query variants.
 TEST_F(CqlLeaseMgrTest, leaseStatsQuery6) {
     testLeaseStatsQuery6();
 }

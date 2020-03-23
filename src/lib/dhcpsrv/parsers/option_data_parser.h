@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,7 +12,7 @@
 #include <dhcp/option_definition.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/cfg_option_def.h>
-#include <util/optional_value.h>
+#include <util/optional.h>
 #include <cstdint>
 #include <string>
 #include <utility>
@@ -64,6 +64,7 @@ public:
     ///         space
     std::pair<OptionDescriptor, std::string>
     parse(isc::data::ConstElementPtr single_option);
+
 private:
 
     /// @brief Finds an option definition within an option space
@@ -91,6 +92,21 @@ private:
     /// options storage. If the option data parsed by \ref build function
     /// are invalid or insufficient this function emits an exception.
     ///
+    /// If the option data is given as a string containing a hexadecimal
+    /// literal, then it is converted into binary format.  These literals
+    /// may contain upper and lower case digits.  They may be octets
+    /// delimited by colons or spaces (octets may be 1 or 2 digits)
+    /// If not delimited octets then they must be a continous string of
+    /// digits with or without a "0x" prefix.  Examples:
+    ///
+    /// -# ab:cd:ef   - colon delimited
+    /// -# ab cd ef   - space delimited
+    /// -# 0xabcdef   - 0x prefixed (no delimiters)
+    /// -# abcdef     - no prefix or delimeters
+    ///
+    /// A leading zero is assumed for odd number of digits
+    /// in an octet or continuous string.
+    ///
     /// @param option_data An element holding data for a single option being
     /// created.
     ///
@@ -107,7 +123,7 @@ private:
     ///
     /// @return Option code, possibly unspecified.
     /// @throw DhcpConfigError if option code is invalid.
-    util::OptionalValue<uint32_t>
+    util::Optional<uint32_t>
     extractCode(data::ConstElementPtr parent) const;
 
     /// @brief Retrieves parsed option name as an optional value.
@@ -116,13 +132,13 @@ private:
     ///
     /// @return Option name, possibly unspecified.
     /// @throw DhcpConfigError if option name is invalid.
-    util::OptionalValue<std::string>
+    util::Optional<std::string>
     extractName(data::ConstElementPtr parent) const;
 
     /// @brief Retrieves csv-format parameter as an optional value.
     ///
     /// @return Value of the csv-format parameter, possibly unspecified.
-    util::OptionalValue<bool> extractCSVFormat(data::ConstElementPtr parent) const;
+    util::Optional<bool> extractCSVFormat(data::ConstElementPtr parent) const;
 
     /// @brief Retrieves option data as a string.
     ///
@@ -145,7 +161,7 @@ private:
     /// @brief Retrieves persistent/always-send parameter as an optional value.
     ///
     /// @return Value of the persistent parameter, possibly unspecified.
-    util::OptionalValue<bool> extractPersistent(data::ConstElementPtr parent) const;
+    util::Optional<bool> extractPersistent(data::ConstElementPtr parent) const;
 
     /// @brief Address family: @c AF_INET or @c AF_INET6.
     uint16_t address_family_;

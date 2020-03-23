@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,8 +16,6 @@
 #include <dhcp/option_int.h>
 #include <dhcp/option_int_array.h>
 #include <dhcp/option_string.h>
-#include <dhcp/option_vendor.h>
-#include <dhcp/option_vendor_class.h>
 #include <dhcp/iface_mgr.h>
 #include <dhcp6/json_config_parser.h>
 #include <dhcp/dhcp6.h>
@@ -552,6 +550,236 @@ TEST_F(Dhcpv6SrvTest, pdSolicitBasic) {
     checkClientId(reply, clientid);
 }
 
+// This test verifies that ADVERTISE returns default lifetimes when
+// the client does not add an IAADDR sub option.
+TEST_F(Dhcpv6SrvTest, defaultLifetimeSolicit) {
+    NakedDhcpv6Srv srv(0);
+
+    subnet_->setPreferred(Triplet<uint32_t>(2000, 3000, 4000));
+    subnet_->setValid(Triplet<uint32_t>(3000, 4000, 5000));
+
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
+    OptionPtr clientid = generateClientId();
+    sol->addOption(clientid);
+
+    // Add no IAADDR sub option.
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processSolicit(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+    // check that IA_NA was returned and that there's an address included
+    boost::shared_ptr<Option6IAAddr> addr = checkIA_NA(reply, 234, subnet_->getT1(),
+                                                subnet_->getT2());
+    ASSERT_TRUE(addr);
+
+    // Check that the assigned address is indeed from the configured pool
+    checkIAAddr(addr, addr->getAddress(), Lease::TYPE_NA,
+                subnet_->getPreferred(), subnet_->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
+// This test verifies that ADVERTISE returns default lifetimes when
+// the client adds an IAPREFIX sub option with zero lifetime hints.
+TEST_F(Dhcpv6SrvTest, hintZeroLifetimeSolicit) {
+    NakedDhcpv6Srv srv(0);
+
+    subnet_->setPreferred(Triplet<uint32_t>(2000, 3000, 4000));
+    subnet_->setValid(Triplet<uint32_t>(3000, 4000, 5000));
+
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    OptionPtr iapd = generateIA(D6O_IA_PD, 234, 1500, 3000);
+    sol->addOption(iapd);
+    OptionPtr clientid = generateClientId();
+    sol->addOption(clientid);
+
+    // Add an IAPREFIX sub option with zero preferred and valid lifetimes.
+    OptionPtr subopt(new Option6IAPrefix(D6O_IAPREFIX,
+                                         IOAddress("::"),
+                                         0, 0, 0));
+    iapd->addOption(subopt);
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processSolicit(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+    // check that IA_PD was returned and that there's an address included
+    boost::shared_ptr<Option6IAPrefix> prefix = checkIA_PD(reply, 234,
+                                                           subnet_->getT1(),
+                                                           subnet_->getT2());
+    ASSERT_TRUE(prefix);
+
+    // Check that the assigned prefix is indeed from the configured pool
+    checkIAAddr(prefix, prefix->getAddress(), Lease::TYPE_PD,
+                subnet_->getPreferred(), subnet_->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
+// This test verifies that ADVERTISE returns specified lifetimes when
+// the client adds an IAADDR sub option with in-bound lifetime hints.
+TEST_F(Dhcpv6SrvTest, hintLifetimeSolicit) {
+    NakedDhcpv6Srv srv(0);
+
+    subnet_->setPreferred(Triplet<uint32_t>(2000, 3000, 4000));
+    subnet_->setValid(Triplet<uint32_t>(3000, 4000, 5000));
+
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    OptionPtr iana = generateIA(D6O_IA_NA, 234, 1500, 3000);
+    sol->addOption(iana);
+    OptionPtr clientid = generateClientId();
+    sol->addOption(clientid);
+
+    // Add an IAADDR sub option.
+    uint32_t hint_pref = 3001;
+    uint32_t hint_valid = 3999;
+    OptionPtr subopt(new Option6IAAddr(D6O_IAADDR, IOAddress("::"),
+                                       hint_pref, hint_valid));
+    iana->addOption(subopt);
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processSolicit(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+    // check that IA_NA was returned and that there's an address included
+    boost::shared_ptr<Option6IAAddr> addr = checkIA_NA(reply, 234, subnet_->getT1(),
+                                                subnet_->getT2());
+    ASSERT_TRUE(addr);
+
+    // Check that the assigned address is indeed from the configured pool
+    checkIAAddr(addr, addr->getAddress(), Lease::TYPE_NA,
+                hint_pref, hint_valid);
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
+// This test verifies that ADVERTISE returns min lifetimes when
+// the client adds an IAPREFIX sub option with too small lifetime hints.
+TEST_F(Dhcpv6SrvTest, minLifetimeSolicit) {
+    NakedDhcpv6Srv srv(0);
+
+    subnet_->setPreferred(Triplet<uint32_t>(2000, 3000, 4000));
+    subnet_->setValid(Triplet<uint32_t>(3000, 4000, 5000));
+
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    OptionPtr iapd = generateIA(D6O_IA_PD, 234, 1500, 3000);
+    sol->addOption(iapd);
+    OptionPtr clientid = generateClientId();
+    sol->addOption(clientid);
+
+    // Add an IAPREFIX sub option with too small hints so min values will
+    // be returned in the ADVERTISE.
+    OptionPtr subopt(new Option6IAPrefix(D6O_IAPREFIX,  IOAddress("::"), 0,
+                                         1000, 2000));
+    iapd->addOption(subopt);
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processSolicit(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+    // check that IA_PD was returned and that there's an address included
+    boost::shared_ptr<Option6IAPrefix> prefix = checkIA_PD(reply, 234,
+                                                           subnet_->getT1(),
+                                                           subnet_->getT2());
+    ASSERT_TRUE(prefix);
+
+    // Check that the assigned prefix is indeed from the configured pool
+    checkIAAddr(prefix, prefix->getAddress(), Lease::TYPE_PD,
+                subnet_->getPreferred().getMin(),
+                subnet_->getValid().getMin());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
+// This test verifies that ADVERTISE returns max lifetimes when
+// the client adds an IAADDR sub option with too large lifetime hints.
+TEST_F(Dhcpv6SrvTest, maxLifetimeSolicit) {
+    NakedDhcpv6Srv srv(0);
+
+    subnet_->setPreferred(Triplet<uint32_t>(2000, 3000, 4000));
+    subnet_->setValid(Triplet<uint32_t>(3000, 4000, 5000));
+
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    OptionPtr iana = generateIA(D6O_IA_NA, 234, 1500, 3000);
+    sol->addOption(iana);
+    OptionPtr clientid = generateClientId();
+    sol->addOption(clientid);
+
+    // Add an IAADDR sub option with too large hints so max values will
+    // be returned in the ADVERTISE.
+    OptionPtr subopt(new Option6IAAddr(D6O_IAADDR, IOAddress("::"),
+                                       5000, 6000));
+    iana->addOption(subopt);
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processSolicit(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+    // check that IA_NA was returned and that there's an address included
+    boost::shared_ptr<Option6IAAddr> addr = checkIA_NA(reply, 234, subnet_->getT1(),
+                                                subnet_->getT2());
+    ASSERT_TRUE(addr);
+
+    // Check that the assigned address is indeed from the configured pool
+    checkIAAddr(addr, addr->getAddress(), Lease::TYPE_NA,
+                subnet_->getPreferred().getMax(),
+                subnet_->getValid().getMax());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
 // This test verifies that incoming SOLICIT can be handled properly, that an
 // ADVERTISE is generated, that the response has an address and that address
 // really belongs to the configured pool.
@@ -818,7 +1046,9 @@ TEST_F(Dhcpv6SrvTest, RequestBasic) {
     // check that the lease is really in the database
     Lease6Ptr l = checkLease(duid_, reply->getOption(D6O_IA_NA), addr);
     EXPECT_TRUE(l);
-    LeaseMgrFactory::instance().deleteLease(addr->getAddress());
+    Lease6Ptr lease(new Lease6());
+    lease->addr_ = addr->getAddress();
+    LeaseMgrFactory::instance().deleteLease(lease);
 }
 
 // This test verifies that incoming REQUEST can be handled properly, that a
@@ -884,7 +1114,9 @@ TEST_F(Dhcpv6SrvTest, pdRequestBasic) {
     // check that the lease is really in the database
     Lease6Ptr l = checkPdLease(duid_, reply->getOption(D6O_IA_PD), prf);
     EXPECT_TRUE(l);
-    EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(prf->getAddress()));
+    Lease6Ptr lease(new Lease6());
+    lease->addr_ = prf->getAddress();
+    EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 }
 
 // This test checks that the server is offering different addresses to different
@@ -1036,6 +1268,86 @@ TEST_F(Dhcpv6SrvTest, RenewSomeoneElesesLease) {
     testRenewSomeoneElsesLease(Lease::TYPE_NA, IOAddress("2001:db8::1"));
 }
 
+// This test verifies that a renewal returns default lifetimes when
+// the client adds an IAPREFIX sub option with zero lifetime hints.
+TEST_F(Dhcpv6SrvTest, defaultLifetimeRenew) {
+    // Defaults are 3000 and 4000.
+    testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
+                   "2001:db8:1:1::cafe:babe", 128,
+                   true, false, 0, 0, 3000, 4000);
+}
+
+// This test verifies that a renewal returns specified lifetimes when
+// the client adds an IAPREFIX sub option with in-bound lifetime hints.
+TEST_F(Dhcpv6SrvTest, hintLifetimeRenew) {
+    testRenewBasic(Lease::TYPE_PD, "2001:db8:1:2::",
+                   "2001:db8:1:2::", pd_pool_->getLength(),
+                   true, false, 2999, 4001, 2999, 4001);
+}
+
+// This test verifies that a renewal returns min lifetimes when
+// the client adds an IAADDR sub option with too small lifetime hints.
+TEST_F(Dhcpv6SrvTest, minLifetimeRenew) {
+    // Min values are 2000 and 3000.
+    testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
+                   "2001:db8:1:1::cafe:babe", 128,
+                   true, false, 1000, 2000, 2000, 3000);
+}
+
+// This test verifies that a renewal returns max ifetimes when
+// the client adds an IAPREFIX sub option with too large lifetime hints.
+TEST_F(Dhcpv6SrvTest, maxLifetimeRenew) {
+    // Max  values are 4000 and 5000.
+    testRenewBasic(Lease::TYPE_PD, "2001:db8:1:2::",
+                   "2001:db8:1:2::", pd_pool_->getLength(),
+                   true, false, 5000, 6000, 4000, 5000);
+}
+
+// This test is a mixed of FqdnDhcpv6SrvTest.processRequestReuseExpiredLease
+// and testRenewBasic. The idea is to force the reuse of an expired lease
+// so the allocation engine reuseExpiredLease routine is called instead
+// of the two other routines computing lease lifetimes createLease6
+// and extendLease6.
+TEST_F(Dhcpv6SrvTest, reuseExpiredBasic) {
+    testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
+                   "2001:db8:1:1::cafe:babe", 128, true, true);
+}
+
+// This test verifies that an expired reuse returns default lifetimes when
+// the client adds an IAADDR sub option with zero lifetime hints.
+TEST_F(Dhcpv6SrvTest, defaultLifetimeReuseExpired) {
+    // Defaults are 3000 and 4000.
+    testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
+                   "2001:db8:1:1::cafe:babe", 128,
+                   true, true, 0, 0, 3000, 4000);
+}
+
+// This test verifies that an expired reuse returns specified lifetimes when
+// the client adds an IAADDR sub option with in-bound lifetime hints.
+TEST_F(Dhcpv6SrvTest, hintLifetimeReuseExpired) {
+    testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
+                   "2001:db8:1:1::cafe:babe", 128,
+                   true, true, 2999, 4001, 2999, 4001);
+}
+
+// This test verifies that an expired reuse returns min lifetimes when
+// the client adds an IAADDR sub option with too small lifetime hints.
+TEST_F(Dhcpv6SrvTest, minLifetimeReuseExpired) {
+    // Min values are 2000 and 3000.
+    testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
+                   "2001:db8:1:1::cafe:babe", 128,
+                   true, true, 1000, 2000, 2000, 3000);
+}
+
+// This test verifies that an expired reuse returns max lifetimes when
+// the client adds an IAADDR sub option with too large lifetime hints.
+TEST_F(Dhcpv6SrvTest, maxLifetimeReuseExpired) {
+    // Max  values are 4000 and 5000.
+    testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
+                   "2001:db8:1:1::cafe:babe", 128,
+                   true, true, 5000, 6000, 4000, 5000);
+}
+
 // This test verifies that incoming (positive) RELEASE with address can be
 // handled properly, that a REPLY is generated, that the response has status
 // code and that the lease is indeed removed from the database.
@@ -1168,54 +1480,75 @@ TEST_F(Dhcpv6SrvTest, sanityCheck) {
                  RFCViolation);
 }
 
-// This test verifies if the sanityCheck() really checks options content,
-// especially truncated client-id.
-TEST_F(Dhcpv6SrvTest, truncatedClientId) {
+// This test verifies that sanity checking against valid and invalid
+// client ids
+TEST_F(Dhcpv6SrvTest, sanityCheckClientId) {
     NakedDhcpv6Srv srv(0);
 
     Pkt6Ptr pkt = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
 
     // Case 1: completely empty (size 0)
-    pkt->addOption(generateClientId(0));
+    pkt->addOption(generateBinaryOption(D6O_CLIENTID, 0));
     EXPECT_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::MANDATORY, Dhcpv6Srv::FORBIDDEN),
                  RFCViolation);
 
     // Case 2: too short (at the very least 3 bytes are needed)
     pkt->delOption(D6O_CLIENTID);
-    pkt->addOption(generateClientId(2));
+    pkt->addOption(generateBinaryOption(D6O_CLIENTID, 2));
     EXPECT_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::MANDATORY, Dhcpv6Srv::FORBIDDEN),
                  RFCViolation);
 
     // Case 3: the shortest DUID possible (3 bytes) is ok:
     pkt->delOption(D6O_CLIENTID);
-    pkt->addOption(generateClientId(3));
+    pkt->addOption(generateBinaryOption(D6O_CLIENTID, 3));
     EXPECT_NO_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::MANDATORY, Dhcpv6Srv::FORBIDDEN));
+
+    // Case 4: longest possible is 128, should be ok
+    pkt->delOption(D6O_CLIENTID);
+    pkt->addOption(generateBinaryOption(D6O_CLIENTID, DUID::MAX_DUID_LEN));
+    EXPECT_NO_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::MANDATORY, Dhcpv6Srv::FORBIDDEN));
+
+    // Case 5: too long
+    pkt->delOption(D6O_CLIENTID);
+    pkt->addOption(generateBinaryOption(D6O_CLIENTID, DUID::MAX_DUID_LEN + 1));
+    EXPECT_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::MANDATORY, Dhcpv6Srv::FORBIDDEN),
+                 RFCViolation);
 }
 
-// This test verifies if the sanityCheck() really checks options content,
-// especially truncated server-id.
-TEST_F(Dhcpv6SrvTest, truncatedServerId) {
+// This test verifies that sanity checking against valid and invalid
+// server ids
+TEST_F(Dhcpv6SrvTest, sanityCheckServerId) {
     NakedDhcpv6Srv srv(0);
 
     Pkt6Ptr pkt = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
 
     // Case 1: completely empty (size 0)
-    pkt->addOption(generateServerId(0));
+    pkt->addOption(generateBinaryOption(D6O_SERVERID, 0));
     EXPECT_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::FORBIDDEN, Dhcpv6Srv::MANDATORY),
                  RFCViolation);
 
     // Case 2: too short (at the very least 3 bytes are needed)
     pkt->delOption(D6O_SERVERID);
-    pkt->addOption(generateServerId(2));
+    pkt->addOption(generateBinaryOption(D6O_SERVERID, 2));
     EXPECT_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::FORBIDDEN, Dhcpv6Srv::MANDATORY),
                  RFCViolation);
 
     // Case 3: the shortest DUID possible (3 bytes) is ok:
     pkt->delOption(D6O_SERVERID);
-    pkt->addOption(generateServerId(3));
+    pkt->addOption(generateBinaryOption(D6O_SERVERID, 3));
     EXPECT_NO_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::FORBIDDEN, Dhcpv6Srv::MANDATORY));
-}
 
+    // Case 4: longest possible is 128, should be ok
+    pkt->delOption(D6O_SERVERID);
+    pkt->addOption(generateBinaryOption(D6O_SERVERID, DUID::MAX_DUID_LEN));
+    EXPECT_NO_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::FORBIDDEN, Dhcpv6Srv::MANDATORY));
+
+    // Case 5: too long
+    pkt->delOption(D6O_SERVERID);
+    pkt->addOption(generateBinaryOption(D6O_SERVERID, DUID::MAX_DUID_LEN + 1));
+    EXPECT_THROW(srv.sanityCheck(pkt, Dhcpv6Srv::FORBIDDEN, Dhcpv6Srv::MANDATORY),
+                 RFCViolation);
+}
 
 // Check that the server is testing if server identifier received in the
 // query, matches server identifier used by the server.
@@ -1610,6 +1943,65 @@ TEST_F(Dhcpv6SrvTest, selectSubnetRelayInterfaceId) {
 }
 
 // Checks if server responses are sent to the proper port.
+TEST_F(Dhcpv6SrvTest, portsClientPort) {
+
+    NakedDhcpv6Srv srv(0);
+
+    // Enforce a specific client port value.
+    EXPECT_EQ(0, srv.client_port_);
+    srv.client_port_ = 1234;
+
+    // Let's create a simple SOLICIT
+    Pkt6Ptr sol = PktCaptures::captureSimpleSolicit();
+
+    // Simulate that we have received that traffic
+    srv.fakeReceive(sol);
+
+    // Server will now process to run its normal loop, but instead of calling
+    // IfaceMgr::receive6(), it will read all packets from the list set by
+    // fakeReceive()
+    srv.run();
+
+    // Get Advertise...
+    ASSERT_FALSE(srv.fake_sent_.empty());
+    Pkt6Ptr adv = srv.fake_sent_.front();
+    ASSERT_TRUE(adv);
+
+    // This is sent back to client directly, should be port 546
+    EXPECT_EQ(srv.client_port_, adv->getRemotePort());
+}
+
+// Checks if server responses are sent to the proper port.
+TEST_F(Dhcpv6SrvTest, portsServerPort) {
+
+    // Create the test server in test mode.
+    NakedDhcpv6Srv srv(0);
+
+    // Enforce a specific server port value.
+    EXPECT_EQ(0, srv.server_port_);
+    srv.server_port_ = 1234;
+
+    // Let's create a simple SOLICIT
+    Pkt6Ptr sol = PktCaptures::captureSimpleSolicit();
+
+    // Simulate that we have received that traffic
+    srv.fakeReceive(sol);
+
+    // Server will now process to run its normal loop, but instead of calling
+    // IfaceMgr::receive6(), it will read all packets from the list set by
+    // fakeReceive()
+    srv.run();
+
+    // Get Advertise...
+    ASSERT_FALSE(srv.fake_sent_.empty());
+    Pkt6Ptr adv = srv.fake_sent_.front();
+    ASSERT_TRUE(adv);
+
+    // Verify the local port: it must be the server port.
+    EXPECT_EQ(srv.server_port_, adv->getLocalPort());
+}
+
+// Checks if server responses are sent to the proper port.
 TEST_F(Dhcpv6SrvTest, portsDirectTraffic) {
 
     NakedDhcpv6Srv srv(0);
@@ -1829,311 +2221,6 @@ TEST_F(Dhcpv6SrvTest, docsisTraffic) {
     ASSERT_TRUE(adv);
 }
 
-// Checks if server is able to handle a relayed traffic from DOCSIS3.0 modems
-TEST_F(Dhcpv6SrvTest, docsisVendorOptionsParse) {
-
-    // Let's get a traffic capture from DOCSIS3.0 modem
-    Pkt6Ptr sol = PktCaptures::captureDocsisRelayedSolicit();
-    EXPECT_NO_THROW(sol->unpack());
-
-    // Check if the packet contain
-    OptionPtr opt = sol->getOption(D6O_VENDOR_OPTS);
-    ASSERT_TRUE(opt);
-
-    boost::shared_ptr<OptionVendor> vendor = boost::dynamic_pointer_cast<OptionVendor>(opt);
-    ASSERT_TRUE(vendor);
-
-    EXPECT_TRUE(vendor->getOption(DOCSIS3_V6_ORO));
-    EXPECT_TRUE(vendor->getOption(36));
-    EXPECT_TRUE(vendor->getOption(35));
-    EXPECT_TRUE(vendor->getOption(DOCSIS3_V6_DEVICE_TYPE));
-    EXPECT_TRUE(vendor->getOption(3));
-    EXPECT_TRUE(vendor->getOption(4));
-    EXPECT_TRUE(vendor->getOption(5));
-    EXPECT_TRUE(vendor->getOption(6));
-    EXPECT_TRUE(vendor->getOption(7));
-    EXPECT_TRUE(vendor->getOption(8));
-    EXPECT_TRUE(vendor->getOption(9));
-    EXPECT_TRUE(vendor->getOption(DOCSIS3_V6_VENDOR_NAME));
-    EXPECT_TRUE(vendor->getOption(15));
-
-    EXPECT_FALSE(vendor->getOption(20));
-    EXPECT_FALSE(vendor->getOption(11));
-    EXPECT_FALSE(vendor->getOption(17));
-}
-
-// Checks if server is able to parse incoming docsis option and extract suboption 1 (docsis ORO)
-TEST_F(Dhcpv6SrvTest, docsisVendorORO) {
-
-    NakedDhcpv6Srv srv(0);
-
-    // Let's get a traffic capture from DOCSIS3.0 modem
-    Pkt6Ptr sol = PktCaptures::captureDocsisRelayedSolicit();
-    ASSERT_NO_THROW(sol->unpack());
-
-    // Check if the packet contains vendor options option
-    OptionPtr opt = sol->getOption(D6O_VENDOR_OPTS);
-    ASSERT_TRUE(opt);
-
-    boost::shared_ptr<OptionVendor> vendor = boost::dynamic_pointer_cast<OptionVendor>(opt);
-    ASSERT_TRUE(vendor);
-
-    opt = vendor->getOption(DOCSIS3_V6_ORO);
-    ASSERT_TRUE(opt);
-
-    OptionUint16ArrayPtr oro = boost::dynamic_pointer_cast<OptionUint16Array>(opt);
-    EXPECT_TRUE(oro);
-}
-
-// This test checks if Option Request Option (ORO) in docsis (vendor-id=4491)
-// vendor options is parsed correctly and the requested options are actually assigned.
-TEST_F(Dhcpv6SrvTest, vendorOptionsORO) {
-
-    IfaceMgrTestConfig test_config(true);
-
-    string config = "{ \"interfaces-config\": {"
-        "  \"interfaces\": [ \"*\" ]"
-        "},"
-        "\"preferred-lifetime\": 3000,"
-        "\"rebind-timer\": 2000, "
-        "\"renew-timer\": 1000, "
-        "    \"option-def\": [ {"
-        "        \"name\": \"config-file\","
-        "        \"code\": 33,"
-        "        \"type\": \"string\","
-        "        \"space\": \"vendor-4491\""
-        "     } ],"
-        "    \"option-data\": [ {"
-        "          \"name\": \"config-file\","
-        "          \"space\": \"vendor-4491\","
-        "          \"data\": \"normal_erouter_v6.cm\""
-        "        }],"
-        "\"subnet6\": [ { "
-        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
-        "    \"subnet\": \"2001:db8:1::/48\", "
-        "    \"renew-timer\": 1000, "
-        "    \"rebind-timer\": 1000, "
-        "    \"preferred-lifetime\": 3000,"
-        "    \"valid-lifetime\": 4000,"
-        "    \"interface-id\": \"\","
-        "    \"interface\": \"eth0\""
-        " } ],"
-        "\"valid-lifetime\": 4000 }";
-
-    ASSERT_NO_THROW(configure(config));
-
-    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
-    sol->setRemoteAddr(IOAddress("fe80::abcd"));
-    sol->setIface("eth0");
-    sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
-    OptionPtr clientid = generateClientId();
-    sol->addOption(clientid);
-
-    // Pass it to the server and get an advertise
-    AllocEngine::ClientContext6 ctx;
-    bool drop = false;
-    srv_.initContext(sol, ctx, drop);
-    ASSERT_FALSE(drop);
-    Pkt6Ptr adv = srv_.processSolicit(ctx);
-
-    // check if we get response at all
-    ASSERT_TRUE(adv);
-
-    // We did not include any vendor opts in SOLICIT, so there should be none
-    // in ADVERTISE.
-    ASSERT_FALSE(adv->getOption(D6O_VENDOR_OPTS));
-
-    // Let's add a vendor-option (vendor-id=4491) with a single sub-option.
-    // That suboption has code 1 and is a docsis ORO option.
-    boost::shared_ptr<OptionUint16Array> vendor_oro(new OptionUint16Array(Option::V6,
-                                                                          DOCSIS3_V6_ORO));
-    vendor_oro->addValue(DOCSIS3_V6_CONFIG_FILE); // Request option 33
-    OptionPtr vendor(new OptionVendor(Option::V6, 4491));
-    vendor->addOption(vendor_oro);
-    sol->addOption(vendor);
-
-    // Need to process SOLICIT again after requesting new option.
-    AllocEngine::ClientContext6 ctx2;
-    srv_.initContext(sol, ctx2, drop);
-    ASSERT_FALSE(drop);
-    adv = srv_.processSolicit(ctx2);
-    ASSERT_TRUE(adv);
-
-    // Check if there is vendor option response
-    OptionPtr tmp = adv->getOption(D6O_VENDOR_OPTS);
-    ASSERT_TRUE(tmp);
-
-    // The response should be OptionVendor object
-    boost::shared_ptr<OptionVendor> vendor_resp =
-        boost::dynamic_pointer_cast<OptionVendor>(tmp);
-    ASSERT_TRUE(vendor_resp);
-
-    OptionPtr docsis33 = vendor_resp->getOption(33);
-    ASSERT_TRUE(docsis33);
-
-    OptionStringPtr config_file = boost::dynamic_pointer_cast<OptionString>(docsis33);
-    ASSERT_TRUE(config_file);
-    EXPECT_EQ("normal_erouter_v6.cm", config_file->getValue());
-}
-
-// This test checks if Option Request Option (ORO) in docsis (vendor-id=4491)
-// vendor options is parsed correctly and the persistent options are actually assigned.
-TEST_F(Dhcpv6SrvTest, vendorPersistentOptions) {
-
-    IfaceMgrTestConfig test_config(true);
-
-    string config = "{ \"interfaces-config\": {"
-        "  \"interfaces\": [ \"*\" ]"
-        "},"
-        "\"preferred-lifetime\": 3000,"
-        "\"rebind-timer\": 2000, "
-        "\"renew-timer\": 1000, "
-        "    \"option-def\": [ {"
-        "        \"name\": \"config-file\","
-        "        \"code\": 33,"
-        "        \"type\": \"string\","
-        "        \"space\": \"vendor-4491\""
-        "     } ],"
-        "    \"option-data\": [ {"
-        "          \"name\": \"config-file\","
-        "          \"space\": \"vendor-4491\","
-        "          \"data\": \"normal_erouter_v6.cm\","
-        "          \"always-send\": true"
-        "        }],"
-        "\"subnet6\": [ { "
-        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
-        "    \"subnet\": \"2001:db8:1::/48\", "
-        "    \"renew-timer\": 1000, "
-        "    \"rebind-timer\": 1000, "
-        "    \"preferred-lifetime\": 3000,"
-        "    \"valid-lifetime\": 4000,"
-        "    \"interface-id\": \"\","
-        "    \"interface\": \"eth0\""
-        " } ],"
-        "\"valid-lifetime\": 4000 }";
-
-    ASSERT_NO_THROW(configure(config));
-
-    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
-    sol->setRemoteAddr(IOAddress("fe80::abcd"));
-    sol->setIface("eth0");
-    sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
-    OptionPtr clientid = generateClientId();
-    sol->addOption(clientid);
-
-    // Let's add a vendor-option (vendor-id=4491).
-    OptionPtr vendor(new OptionVendor(Option::V6, 4491));
-    sol->addOption(vendor);
-
-    // Pass it to the server and get an advertise
-    AllocEngine::ClientContext6 ctx;
-    bool drop = false;
-    srv_.initContext(sol, ctx, drop);
-    ASSERT_FALSE(drop);
-    Pkt6Ptr adv = srv_.processSolicit(ctx);
-
-    // check if we get response at all
-    ASSERT_TRUE(adv);
-
-    // Check if there is vendor option response
-    OptionPtr tmp = adv->getOption(D6O_VENDOR_OPTS);
-    ASSERT_TRUE(tmp);
-
-    // The response should be OptionVendor object
-    boost::shared_ptr<OptionVendor> vendor_resp =
-        boost::dynamic_pointer_cast<OptionVendor>(tmp);
-    ASSERT_TRUE(vendor_resp);
-
-    OptionPtr docsis33 = vendor_resp->getOption(33);
-    ASSERT_TRUE(docsis33);
-
-    OptionStringPtr config_file = boost::dynamic_pointer_cast<OptionString>(docsis33);
-    ASSERT_TRUE(config_file);
-    EXPECT_EQ("normal_erouter_v6.cm", config_file->getValue());
-}
-
-// Test checks whether it is possible to use option definitions defined in
-// src/lib/dhcp/docsis3_option_defs.h.
-TEST_F(Dhcpv6SrvTest, vendorOptionsDocsisDefinitions) {
-    ConstElementPtr x;
-    string config_prefix = "{ \"interfaces-config\": {"
-        "  \"interfaces\": [ ]"
-        "},"
-        "\"preferred-lifetime\": 3000,"
-        "\"rebind-timer\": 2000, "
-        "\"renew-timer\": 1000, "
-        "    \"option-data\": [ {"
-        "          \"name\": \"config-file\","
-        "          \"space\": \"vendor-4491\","
-        "          \"code\": ";
-    string config_postfix = ","
-        "          \"data\": \"normal_erouter_v6.cm\","
-        "          \"csv-format\": true"
-        "        }],"
-        "\"subnet6\": [ { "
-        "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
-        "    \"subnet\": \"2001:db8:1::/48\", "
-        "    \"renew-timer\": 1000, "
-        "    \"rebind-timer\": 1000, "
-        "    \"preferred-lifetime\": 3000,"
-        "    \"valid-lifetime\": 4000,"
-        "    \"interface-id\": \"\","
-        "    \"interface\": \"\""
-        " } ],"
-        "\"valid-lifetime\": 4000 }";
-
-    // There is docsis3 (vendor-id=4491) vendor option 33, which is a
-    // config-file. Its format is a single string.
-    string config_valid = config_prefix + "33" + config_postfix;
-
-    // There is no option 99 defined in vendor-id=4491. As there is no
-    // definition, the config should fail.
-    string config_bogus = config_prefix + "99" + config_postfix;
-
-    ConstElementPtr json_bogus;
-    ASSERT_NO_THROW(json_bogus = parseDHCP6(config_bogus));
-    ConstElementPtr json_valid;
-    ASSERT_NO_THROW(json_valid = parseDHCP6(config_valid));
-
-    NakedDhcpv6Srv srv(0);
-
-    // This should fail (missing option definition)
-    EXPECT_NO_THROW(x = configureDhcp6Server(srv, json_bogus));
-    ASSERT_TRUE(x);
-    comment_ = isc::config::parseAnswer(rcode_, x);
-    ASSERT_EQ(1, rcode_);
-
-    // This should work (option definition present)
-    EXPECT_NO_THROW(x = configureDhcp6Server(srv, json_valid));
-    ASSERT_TRUE(x);
-    comment_ = isc::config::parseAnswer(rcode_, x);
-    ASSERT_EQ(0, rcode_);
-}
-
-// This test checks that the server will handle a Solicit with the Vendor Class
-// having a length of 4 (enterprise-id only).
-TEST_F(Dhcpv6SrvTest, cableLabsShortVendorClass) {
-    NakedDhcpv6Srv srv(0);
-
-    // Create a simple Solicit with the 4-byte long vendor class option.
-    Pkt6Ptr sol = PktCaptures::captureCableLabsShortVendorClass();
-
-    // Simulate that we have received that traffic
-    srv.fakeReceive(sol);
-
-    // Server will now process to run its normal loop, but instead of calling
-    // IfaceMgr::receive6(), it will read all packets from the list set by
-    // fakeReceive()
-    srv.run();
-
-    // Get Advertise...
-    ASSERT_FALSE(srv.fake_sent_.empty());
-    Pkt6Ptr adv = srv.fake_sent_.front();
-    ASSERT_TRUE(adv);
-
-    // This is sent back to client, so port is 546
-    EXPECT_EQ(DHCP6_CLIENT_PORT, adv->getRemotePort());
-}
 
 // Checks if relay IP address specified in the relay-info structure in
 // subnet6 is being used properly.
@@ -2536,13 +2623,16 @@ TEST_F(Dhcpv6SrvTest, receiveParseFailedStat) {
     // And pretend it's packet is only 3 bytes long.
     pkt->data_.resize(3);
 
-    // Check that those statistics are not set before the test
+    // Check that the tested statistics is initially set to 0
     ObservationPtr pkt6_rcvd = mgr.getObservation("pkt6-received");
     ObservationPtr parse_fail = mgr.getObservation("pkt6-parse-failed");
     ObservationPtr recv_drop = mgr.getObservation("pkt6-receive-drop");
-    EXPECT_FALSE(pkt6_rcvd);
-    EXPECT_FALSE(parse_fail);
-    EXPECT_FALSE(recv_drop);
+    ASSERT_TRUE(pkt6_rcvd);
+    ASSERT_TRUE(parse_fail);
+    ASSERT_TRUE(recv_drop);
+    EXPECT_EQ(0, pkt6_rcvd->getInteger().first);
+    EXPECT_EQ(0, parse_fail->getInteger().first);
+    EXPECT_EQ(0, recv_drop->getInteger().first);
 
     // Simulate that we have received that traffic
     srv.fakeReceive(pkt);
@@ -2730,6 +2820,158 @@ TEST_F(Dhcpv6SrvTest, truncatedVIVSO) {
     ASSERT_TRUE(adv);
 }
 
+// Check that T1 and T2 values are set correctly.
+TEST_F(Dhcpv6SrvTest, calculateTeeTimers) {
+    NakedDhcpv6Srv srv(0);
+
+    // Struct for describing an individual timer test scenario
+    struct TimerTest {
+        // logged test description
+        std::string description_;
+        // configured value for subnet's T1
+        Triplet<uint32_t> cfg_t1_;
+        // configured value for subnet's T1
+        Triplet<uint32_t> cfg_t2_;
+        // whether or not calculation is enabled
+        bool calculate_tee_times;
+        // configured value for sunbet's t1_percent.
+        double t1_percent_;
+        // configured value for sunbet's t2_percent.
+        double t2_percent_;
+        // expected value for T1 in server response.
+        // A value of 0 means server should not have sent T1.
+        uint32_t t1_exp_value_;
+        // expected value for T2 in server response.
+        // A value of 0 means server should not have sent T2.
+        uint32_t t2_exp_value_;
+    };
+
+    // Handy constants
+    Triplet<uint32_t> unspecified;
+    Triplet<uint32_t> preferred_lft(1000);
+    bool calculate_enabled = true;
+
+    // Test scenarios
+    std::vector<TimerTest> tests = {
+    // Tests with calculation disabled
+    {
+        "T1 and T2 calculated",
+        unspecified, unspecified,
+        calculate_enabled,
+        0.4, 0.8,
+        400, 800
+    },
+    {
+        "preferred < T1 specified < T2 specified",
+        preferred_lft + 1,  preferred_lft + 2,
+        calculate_enabled,
+        0.4, 0.8,
+        preferred_lft + 1, preferred_lft + 2
+    },
+    {
+        "T1 should be calculated, T2 specified",
+        unspecified, preferred_lft - 1,
+        calculate_enabled,
+        0.4, 0.8,
+        400, preferred_lft - 1
+    },
+    {
+        "T1 specified, T2 should be calculated",
+        299, unspecified,
+        calculate_enabled,
+        0.4, 0.8,
+        299, 800
+    },
+    {
+        "T1 specified insane (> T2), T2 should be calculated",
+        preferred_lft - 1, unspecified,
+        calculate_enabled,
+        0.4, 0.8,
+        0, 800
+    },
+    // Tests with calculation disabled
+    {
+        "T1 and T2 unspecified, (no calculation)",
+        unspecified, unspecified,
+        !calculate_enabled,
+        0.4, 0.8,
+        0, 0
+    },
+    {
+        // cannot set T1 > 0 when T2 is 0
+        "T1 specified, T2 unspecified (no calculation)",
+        preferred_lft - 1, unspecified,
+        !calculate_enabled,
+        0.4, 0.8,
+        //preferred_lft - 1, 0
+        0, 0
+    },
+    {
+        "both T1 and T2 specified sane (no calculation)",
+        preferred_lft - 2, preferred_lft - 1,
+        !calculate_enabled,
+        0.4, 0.8,
+        preferred_lft - 2, preferred_lft - 1
+    },
+    {
+        "both T1 and T2 specified equal to preferred",
+        preferred_lft, preferred_lft,
+        !calculate_enabled,
+        0.4, 0.8,
+        // T1 must be less than T2
+        0, preferred_lft
+    },
+    {
+        "T1 specified insane (> lease T2), T2 specified (no calculation)",
+        preferred_lft - 1, preferred_lft - 2,
+        !calculate_enabled,
+        0.4, 0.8,
+        0, preferred_lft - 2
+    },
+    {
+        "T1 specified insane (> lease time), T2 not specified (no calculation)",
+        preferred_lft + 1, unspecified,
+        !calculate_enabled,
+        0.4, 0.8,
+        0, 0
+    }
+    };
+
+    // Calculation is enabled for all the scenarios.
+    subnet_->setPreferred(preferred_lft);
+
+    // Create a discover packet to use
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
+    OptionPtr clientid = generateClientId();
+    sol->addOption(clientid);
+    sol->setIface("eth0");
+
+    // Iterate over the test scenarios.
+    for (auto test = tests.begin(); test != tests.end(); ++test) {
+        {
+            SCOPED_TRACE((*test).description_);
+            // Configure sunbet for the scenario
+            subnet_->setT1((*test).cfg_t1_);
+            subnet_->setT2((*test).cfg_t2_);
+            subnet_->setCalculateTeeTimes((*test).calculate_tee_times);
+            subnet_->setT1Percent((*test).t1_percent_);
+            subnet_->setT2Percent((*test).t2_percent_);
+            AllocEngine::ClientContext6 ctx;
+            bool drop = false;
+            srv.initContext(sol, ctx, drop);
+            ASSERT_FALSE(drop);
+            Pkt6Ptr reply = srv.processSolicit(ctx);
+
+            // check if we get response at all
+            checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+            // check that IA_NA was returned and T1 and T2 are correct.
+            checkIA_NA(reply, 234, (*test).t1_exp_value_, (*test).t2_exp_value_);
+        }
+    }
+}
 
 /// @todo: Add more negative tests for processX(), e.g. extend sanityCheck() test
 /// to call processX() methods.
@@ -2737,4 +2979,4 @@ TEST_F(Dhcpv6SrvTest, truncatedVIVSO) {
 /// @todo: Implement proper tests for MySQL lease/host database,
 ///        see ticket #4214.
 
-}   // end of anonymous namespace
+}  // namespace

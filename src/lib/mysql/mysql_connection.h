@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -108,8 +108,6 @@ public:
         if (mysql_ != NULL) {
             mysql_close(mysql_);
         }
-        // The library itself shouldn't be needed anymore
-        mysql_library_end();
     }
 
     /// @brief Conversion Operator
@@ -121,7 +119,9 @@ public:
     }
 
 private:
-    MYSQL* mysql_;      ///< Initialization context
+    static bool atexit_; ///< Flag to call atexit once.
+
+    MYSQL* mysql_;       ///< Initialization context
 };
 
 /// @brief Forward declaration to @ref MySqlConnection.
@@ -203,6 +203,19 @@ public:
 
     /// @brief Destructor
     virtual ~MySqlConnection();
+
+    /// @brief Get the schema version.
+    ///
+    /// @param parameters A data structure relating keywords and values
+    ///        concerned with the database.
+    ///
+    /// @return Version number as a pair of unsigned integers.  "first" is the
+    ///         major version number, "second" the minor number.
+    ///
+    /// @throw isc::db::DbOperationError An operation on the open database has
+    ///        failed.
+    static std::pair<uint32_t, uint32_t>
+    getVersion(const ParameterMap& parameters);
 
     /// @brief Prepare Single Statement
     ///
@@ -353,7 +366,8 @@ public:
         int status = 0;
         if (!in_bind_vec.empty()) {
             // Bind parameters to the prepared statement.
-            status = mysql_stmt_bind_param(statements_[index], &in_bind_vec[0]);
+            status = mysql_stmt_bind_param(statements_[index],
+                                           in_bind_vec.empty() ? 0 : &in_bind_vec[0]);
             checkError(status, index, "unable to bind parameters for select");
         }
 
@@ -426,7 +440,8 @@ public:
         }
 
         // Bind the parameters to the statement
-        int status = mysql_stmt_bind_param(statements_[index], &in_bind_vec[0]);
+        int status = mysql_stmt_bind_param(statements_[index],
+                                           in_bind_vec.empty() ? 0 : &in_bind_vec[0]);
         checkError(status, index, "unable to bind parameters");
 
         // Execute the statement
@@ -436,7 +451,11 @@ public:
             // Failure: check for the special case of duplicate entry.
             if (mysql_errno(mysql_) == ER_DUP_ENTRY) {
                 isc_throw(DuplicateEntry, "Database duplicate entry error");
-        }
+            }
+            // Failure: check for the special case of WHERE returning NULL.
+            if (mysql_errno(mysql_) == ER_BAD_NULL_ERROR) {
+                isc_throw(NullKeyError, "Database bad NULL error");
+            }
             checkError(status, index, "unable to execute");
         }
     }
@@ -464,13 +483,28 @@ public:
         }
 
         // Bind the parameters to the statement
-        int status = mysql_stmt_bind_param(statements_[index], &in_bind_vec[0]);
+        int status = mysql_stmt_bind_param(statements_[index],
+                                           in_bind_vec.empty() ? 0 : &in_bind_vec[0]);
         checkError(status, index, "unable to bind parameters");
 
         // Execute the statement
         status = mysql_stmt_execute(statements_[index]);
 
         if (status != 0) {
+            // Failure: check for the special case of duplicate entry.
+            if ((mysql_errno(mysql_) == ER_DUP_ENTRY)
+#ifdef ER_FOREIGN_DUPLICATE_KEY
+                || (mysql_errno(mysql_) == ER_FOREIGN_DUPLICATE_KEY)
+#endif
+#ifdef ER_FOREIGN_DUPLICATE_KEY_WITH_CHILD_INFO
+                || (mysql_errno(mysql_) == ER_FOREIGN_DUPLICATE_KEY_WITH_CHILD_INFO)
+#endif
+#ifdef ER_FOREIGN_DUPLICATE_KEY_WITHOUT_CHILD_INFO
+                || (mysql_errno(mysql_) == ER_FOREIGN_DUPLICATE_KEY_WITHOUT_CHILD_INFO)
+#endif
+                ) {
+                isc_throw(DuplicateEntry, "Database duplicate entry error");
+            }
             checkError(status, index, "unable to execute");
         }
 
@@ -509,8 +543,8 @@ public:
     /// If the error is deemed unrecoverable, such as a loss of connectivity
     /// with the server, the function will call invokeDbLostCallback(). If the
     /// invocation returns false then either there is no callback registered
-    /// or the callback has elected not to attempt to reconnect, and exit(-1)
-    /// is called;
+    /// or the callback has elected not to attempt to reconnect, and a
+    /// DbUnrecoverableError is thrown.
     ///
     /// If the invocation returns true, this indicates the calling layer will
     /// attempt recovery, and the function throws a DbOperationError to allow
@@ -547,9 +581,10 @@ public:
                     .arg(mysql_errno(mysql_));
 
                 // If there's no lost db callback or it returns false,
-                // then we're not attempting to recover so we're done
+                // then we're not attempting to recover so we're done.
                 if (!invokeDbLostCallback()) {
-                    exit (-1);
+                    isc_throw(db::DbUnrecoverableError,
+                              "database connectivity cannot be recovered");
                 }
 
                 // We still need to throw so caller can error out of the current

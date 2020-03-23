@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -72,7 +72,11 @@ protected:
 // The list of types we want to test.
 typedef testing::Types<generic::TXT, generic::SPF> Implementations;
 
+#ifdef TYPED_TEST_SUITE
+TYPED_TEST_SUITE(Rdata_TXT_LIKE_Test, Implementations);
+#else
 TYPED_TEST_CASE(Rdata_TXT_LIKE_Test, Implementations);
+#endif
 
 TYPED_TEST(Rdata_TXT_LIKE_Test, createFromText) {
     // Below we check the behavior for the "from text" constructors, both
@@ -353,7 +357,7 @@ TYPED_TEST(Rdata_TXT_LIKE_Test, assignment) {
     EXPECT_EQ(0, rdata4.compare(rdata1));
 
     // Self assignment
-    rdata2 = rdata2;
+    rdata2 = *&rdata2;
     EXPECT_EQ(0, rdata2.compare(rdata1));
 }
 

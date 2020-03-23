@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -135,7 +135,7 @@ TEST(ParserTest, keywordNetconf) {
         "            \"validate-changes\": false,"
         "            \"control-socket\": {"
         "                \"socket-type\": \"unix\","
-        "                \"socket-name\": \"/path/to/the/unix/socket-v4\""
+        "                \"socket-name\": \"/tmp/kea4-ctrl-socket\""
         "            }"
         "        },"
         "        \"dhcp6\": {"
@@ -200,7 +200,7 @@ TEST(ParserTest, keywordSubNetconf) {
         "            \"validate-changes\": false,"
         "            \"control-socket\": {"
         "                \"socket-type\": \"unix\","
-        "                \"socket-name\": \"/path/to/the/unix/socket-v4\""
+        "                \"socket-name\": \"/tmp/kea4-ctrl-socket\""
         "            }"
         "        },"
         "        \"dhcp6\": {"

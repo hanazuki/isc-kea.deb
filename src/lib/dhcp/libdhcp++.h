@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 
 #include <dhcp/option_definition.h>
 #include <dhcp/option_space_container.h>
+#include <dhcp/option_space.h>
 #include <dhcp/pkt4.h>
 #include <dhcp/pkt6.h>
 #include <util/buffer.h>
@@ -26,7 +27,7 @@ class LibDHCP {
 public:
 
     /// Map of factory functions.
-    typedef std::map<unsigned short, Option::Factory*>  FactoryMap;
+    typedef std::map<unsigned short, Option::Factory*> FactoryMap;
 
     /// @brief Returns collection of option definitions.
     ///
@@ -36,7 +37,7 @@ public:
     /// @param space Option space.
     ///
     /// @return Pointer to a collection of option definitions.
-    static const OptionDefContainerPtr& getOptionDefs(const std::string& space);
+    static const OptionDefContainerPtr getOptionDefs(const std::string& space);
 
     /// @brief Return the first option definition matching a
     /// particular option code.
@@ -110,8 +111,7 @@ public:
     /// @param space Option space name.
     ///
     /// @return Pointer to the container holding option definitions or NULL.
-    static OptionDefContainerPtr
-    getRuntimeOptionDefs(const std::string& space);
+    static OptionDefContainerPtr getRuntimeOptionDefs(const std::string& space);
 
     /// @brief Returns last resort option definition by space and option code.
     ///
@@ -137,8 +137,7 @@ public:
     /// @param space Option space name.
     ///
     /// @return Pointer to the container holding option definitions or NULL.
-    static OptionDefContainerPtr
-    getLastResortOptionDefs(const std::string& space);
+    static OptionDefContainerPtr getLastResortOptionDefs(const std::string& space);
 
     /// @brief Checks if an option unpacking has to be deferred.
     ///
@@ -178,13 +177,22 @@ public:
     /// may be different reasons (option too large, option malformed,
     /// too many options etc.)
     ///
-    /// This is v4 specific version, which stores Relay Agent Information
-    /// option and END options last.
+    /// This is v4 specific version, which stores DHCP message type first,
+    /// and the Relay Agent Information option and END options last. This
+    /// function is initially called to pack the options for a packet in
+    /// @ref Pkt4::pack(). That call leads to it being called recursively in
+    /// @ref Option::packOptions(). Thus the logic used to output the
+    /// message type should only be executed by the top-most. This is governed
+    /// by the paramater top, below.
     ///
     /// @param buf output buffer (assembled options will be stored here)
     /// @param options collection of options to store to
+    /// @param top indicates if this is the first call to pack the options.
+    /// When true logic to emit the message type first is executed. It
+    /// defaults to false.
     static void packOptions4(isc::util::OutputBuffer& buf,
-                             const isc::dhcp::OptionCollection& options);
+                             const isc::dhcp::OptionCollection& options,
+                             bool top = false);
 
     /// @brief Stores DHCPv6 options in a buffer.
     ///
@@ -251,6 +259,8 @@ public:
     ///        put here.
     /// @param deferred Reference to an option code list. Options which
     ///        processing is deferred will be put here.
+    /// @param flexible_pad_end Parse options 0 and 255 as PAD and END
+    ///        when they are not defined in the option space.
     /// @return offset to the first byte after the last successfully
     /// parsed option or the offset of the DHO_END option type.
     ///
@@ -258,7 +268,8 @@ public:
     static size_t unpackOptions4(const OptionBuffer& buf,
                                  const std::string& option_space,
                                  isc::dhcp::OptionCollection& options,
-                                 std::list<uint16_t>& deferred);
+                                 std::list<uint16_t>& deferred,
+                                 bool flexible_pad_end = false);
 
     /// Registers factory method that produces options of specific option types.
     ///
@@ -272,21 +283,15 @@ public:
                                       uint16_t type,
                                       Option::Factory * factory);
 
-    /// @brief Returns v4 option definitions for a given vendor
+    /// @brief Returns option definitions for given universe and vendor
     ///
+    /// @param u option universe
     /// @param vendor_id enterprise-id of a given vendor
+    ///
     /// @return a container for a given vendor (or NULL if no option
     ///         definitions are defined)
-    static const OptionDefContainerPtr&
-    getVendorOption4Defs(const uint32_t vendor_id);
-
-    /// @brief Returns v6 option definitions for a given vendor
-    ///
-    /// @param vendor_id enterprise-id of a given vendor
-    /// @return a container for a given vendor (or NULL if no option
-    ///         definitions are defined)
-    static const OptionDefContainerPtr&
-    getVendorOption6Defs(const uint32_t vendor_id);
+    static const OptionDefContainerPtr getVendorOptionDefs(Option::Universe u,
+                                                           const uint32_t vendor_id);
 
     /// @brief Parses provided buffer as DHCPv6 vendor options and creates
     ///        Option objects.
@@ -363,36 +368,17 @@ public:
 
 private:
 
-    /// Initialize standard DHCPv4 option definitions.
+    /// Initialize DHCP option definitions.
     ///
-    /// The method creates option definitions for all DHCPv4 options.
-    /// Currently this function is not implemented.
+    /// The method creates option definitions for all DHCP options.
     ///
     /// @throw std::bad alloc if system went out of memory.
     /// @throw MalformedOptionDefinition if any of the definitions
     /// are incorrect. This is programming error.
-    static void initStdOptionDefs4();
+    static bool initOptionDefs();
 
-    /// Initialize standard DHCPv6 option definitions.
-    ///
-    /// The method creates option definitions for all DHCPv6 options.
-    ///
-    /// @throw std::bad_alloc if system went out of memory.
-    /// @throw MalformedOptionDefinition if any of the definitions
-    /// is incorrect. This is a programming error.
-    static void initStdOptionDefs6();
-
-    /// Initialize last resort DHCPv4 option definitions.
-    static void initLastResortOptionDefs();
-
-    /// Initialize DOCSIS DHCPv4 option definitions.
-    static void initVendorOptsDocsis4();
-
-    /// Initialize DOCSIS DHCPv6 option definitions.
-    static void initVendorOptsDocsis6();
-
-    /// Initialize private DHCPv6 option definitions.
-    static void initVendorOptsIsc6();
+    /// flag which indicates initialization state
+    static bool initialized_;
 
     /// pointers to factories that produce DHCPv6 options
     static FactoryMap v4factories_;
@@ -400,23 +386,8 @@ private:
     /// pointers to factories that produce DHCPv6 options
     static FactoryMap v6factories_;
 
-    /// Container with DHCPv4 option definitions.
-    static OptionDefContainerPtr v4option_defs_;
-
-    /// Container with DHCPv6 option definitions.
-    static OptionDefContainerPtr v6option_defs_;
-
     /// Container that holds option definitions for various option spaces.
     static OptionDefContainers option_defs_;
-
-    /// Container for v4 vendor option definitions
-    static VendorOptionDefContainers vendor4_defs_;
-
-    /// Container for v6 vendor option definitions
-    static VendorOptionDefContainers vendor6_defs_;
-
-    /// Container with DHCPv4 last resort option definitions.
-    static OptionDefContainerPtr lastresort_defs_;
 
     /// Container for additional option definitions created in runtime.
     static util::StagedValue<OptionDefSpaceContainer> runtime_option_defs_;

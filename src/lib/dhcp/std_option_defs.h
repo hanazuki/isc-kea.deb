@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,22 @@
 #include <dhcp/dhcp4.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/option_space.h>
+
+/// @brief global std option spaces
+#define DHCP4_OPTION_SPACE               "dhcp4"
+#define DHCP6_OPTION_SPACE               "dhcp6"
+#define ISC_V6_OPTION_SPACE              "4o6"
+#define MAPE_V6_OPTION_SPACE             "s46-cont-mape-options"
+#define MAPT_V6_OPTION_SPACE             "s46-cont-mapt-options"
+#define LW_V6_OPTION_SPACE               "s46-cont-lw-options"
+#define V4V6_RULE_OPTION_SPACE           "s46-rule-options"
+#define V4V6_BIND_OPTION_SPACE           "s46-v4v6bind-options"
+#define LAST_RESORT_V4_OPTION_SPACE      "last-resort-v4"
+
+/// @brief encapsulated option spaces
+#define DHCP_AGENT_OPTION_SPACE          "dhcp-agent-options-space"
+#define VENDOR_OPTION_SPACE              "vendor-opts-space"
+#define VENDOR_ENCAPSULATED_OPTION_SPACE "vendor-encapsulated-options-space"
 
 // NOTE:
 // When adding a new space, make sure you also update
@@ -208,7 +224,7 @@ const OptionDefParams STANDARD_V4_OPTION_DEFINITIONS[] = {
       RECORD_DEF(SERVICE_SCOPE_RECORDS), "" },
     { "fqdn", DHO_FQDN, OPT_RECORD_TYPE, false, RECORD_DEF(FQDN_RECORDS), "" },
     { "dhcp-agent-options", DHO_DHCP_AGENT_OPTIONS,
-      OPT_EMPTY_TYPE, false, NO_RECORD_DEF, "dhcp-agent-options-space" },
+      OPT_EMPTY_TYPE, false, NO_RECORD_DEF, DHCP_AGENT_OPTION_SPACE },
     { "nds-servers", DHO_NDS_SERVERS, OPT_IPV4_ADDRESS_TYPE, true, NO_RECORD_DEF, "" },
     { "nds-tree-name", DHO_NDS_TREE_NAME, OPT_STRING_TYPE, false, NO_RECORD_DEF, "" },
     { "nds-context", DHO_NDS_CONTEXT, OPT_STRING_TYPE, false, NO_RECORD_DEF, "" },
@@ -272,16 +288,19 @@ const OptionDefParams STANDARD_V4_OPTION_DEFINITIONS[] = {
 
 /// Number of option definitions defined.
 const int STANDARD_V4_OPTION_DEFINITIONS_SIZE =
-    sizeof(STANDARD_V4_OPTION_DEFINITIONS) / sizeof(STANDARD_V4_OPTION_DEFINITIONS[0]);
+    sizeof(STANDARD_V4_OPTION_DEFINITIONS) /
+    sizeof(STANDARD_V4_OPTION_DEFINITIONS[0]);
 
 /// Last resort definitions (only option 43 for now, these definitions
 /// are applied in deferred unpacking when none is found).
 const OptionDefParams LAST_RESORT_V4_OPTION_DEFINITIONS[] = {
     { "vendor-encapsulated-options", DHO_VENDOR_ENCAPSULATED_OPTIONS,
-      OPT_EMPTY_TYPE, false, NO_RECORD_DEF, "vendor-encapsulated-options-space" }
+      OPT_EMPTY_TYPE, false, NO_RECORD_DEF, VENDOR_ENCAPSULATED_OPTION_SPACE }
 };
 
-const int LAST_RESORT_V4_OPTION_DEFINITIONS_SIZE = 1;
+const int LAST_RESORT_V4_OPTION_DEFINITIONS_SIZE =
+    sizeof(LAST_RESORT_V4_OPTION_DEFINITIONS) /
+    sizeof(LAST_RESORT_V4_OPTION_DEFINITIONS[0]);
 
 /// Start Definition of DHCPv6 options
 
@@ -364,7 +383,7 @@ const OptionDefParams STANDARD_V6_OPTION_DEFINITIONS[] = {
     { "vendor-class", D6O_VENDOR_CLASS, OPT_RECORD_TYPE, false,
       RECORD_DEF(VENDOR_CLASS_RECORDS), "" },
     { "vendor-opts", D6O_VENDOR_OPTS, OPT_UINT32_TYPE, false,
-      NO_RECORD_DEF, "vendor-opts-space" },
+      NO_RECORD_DEF, VENDOR_OPTION_SPACE },
     { "interface-id", D6O_INTERFACE_ID, OPT_BINARY_TYPE, false, NO_RECORD_DEF, "" },
     { "reconf-msg", D6O_RECONF_MSG, OPT_UINT8_TYPE, false, NO_RECORD_DEF, "" },
     { "reconf-accept", D6O_RECONF_ACCEPT, OPT_EMPTY_TYPE, false,
@@ -425,7 +444,7 @@ const OptionDefParams STANDARD_V6_OPTION_DEFINITIONS[] = {
     { "v6-access-domain", D6O_V6_ACCESS_DOMAIN, OPT_FQDN_TYPE, false,
       NO_RECORD_DEF, "" },
     { "sip-ua-cs-list", D6O_SIP_UA_CS_LIST, OPT_FQDN_TYPE, true,
-      NO_RECORD_DEF, "" },      
+      NO_RECORD_DEF, "" },
     { "bootfile-url", D6O_BOOTFILE_URL, OPT_STRING_TYPE, false, NO_RECORD_DEF, "" },
     { "bootfile-param", D6O_BOOTFILE_PARAM, OPT_TUPLE_TYPE, true, NO_RECORD_DEF, "" },
     { "client-arch-type", D6O_CLIENT_ARCH_TYPE, OPT_UINT16_TYPE, true, NO_RECORD_DEF, "" },
@@ -450,14 +469,6 @@ const OptionDefParams STANDARD_V6_OPTION_DEFINITIONS[] = {
       NO_RECORD_DEF, "" },
     { "relay-source-port", D6O_RELAY_SOURCE_PORT, OPT_UINT16_TYPE, false, NO_RECORD_DEF, "" },
     { "ipv6-address-andsf", D6O_IPV6_ADDRESS_ANDSF, OPT_IPV6_ADDRESS_TYPE, true,
-      NO_RECORD_DEF, "" },
-    { "public-key", D6O_PUBLIC_KEY, OPT_BINARY_TYPE, false,
-      NO_RECORD_DEF, "" },
-    { "certificate", D6O_CERTIFICATE, OPT_BINARY_TYPE, false,
-      NO_RECORD_DEF, "" },
-    { "signature", D6O_SIGNATURE, OPT_RECORD_TYPE, false,
-      RECORD_DEF(SIGNATURE_RECORDS), "" },
-    { "timestamp", D6O_TIMESTAMP, OPT_BINARY_TYPE, false,
       NO_RECORD_DEF, "" },
     { "s46-cont-mape", D6O_S46_CONT_MAPE, OPT_EMPTY_TYPE, false, NO_RECORD_DEF,
         MAPE_V6_OPTION_SPACE },
@@ -552,9 +563,9 @@ const int V4V6_BIND_OPTION_DEFINITIONS_SIZE =
     sizeof(V4V6_BIND_OPTION_DEFINITIONS) /
     sizeof(V4V6_BIND_OPTION_DEFINITIONS[0]);
 
-} // unnamed namespace
+}  // namespace
 
-} // namespace dhcp
-} // namespace isc
+}  // namespace dhcp
+}  // namespace isc
 
 #endif // STD_OPTION_DEFS_H

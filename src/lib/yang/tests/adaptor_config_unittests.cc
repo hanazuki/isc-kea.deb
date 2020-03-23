@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -62,15 +62,18 @@ void testFile(const std::string& fname, bool v6, ElementPtr& result) {
 
 TEST_F(AdaptorConfigTest, loadExamples4) {
     vector<string> configs = { "advanced.json",
-                               "all-keys.json",
+                               "all-keys-netconf.json",
                                "backends.json",
                                "cassandra.json",
                                "classify.json",
                                "classify2.json",
                                "comments.json",
+                               "config-backend.json",
                                "dhcpv4-over-dhcpv6.json",
                                "global-reservations.json",
+                               "ha-load-balancing-primary.json",
                                "hooks.json",
+                               "hooks-radius.json",
                                "leases-expiration.json",
                                "multiple-options.json",
                                "mysql-reservations.json",
@@ -92,15 +95,17 @@ TEST_F(AdaptorConfigTest, loadExamples4) {
 
 TEST_F(AdaptorConfigTest, loadExamples6) {
     vector<string> configs = { "advanced.json",
-                               "all-keys.json",
+                               "all-keys-netconf.json",
                                "backends.json",
                                "cassandra.json",
                                "classify.json",
                                "classify2.json",
                                "comments.json",
+                               "config-backend.json",
                                "dhcpv4-over-dhcpv6.json",
                                "duid.json",
                                "global-reservations.json",
+                               "ha-hot-standby.json",
                                "hooks.json",
                                "iPXE.json",
                                "leases-expiration.json",
@@ -113,6 +118,7 @@ TEST_F(AdaptorConfigTest, loadExamples6) {
                                "simple.json",
                                "softwire46.json",
                                "stateless.json",
+                               "tee-times.json",
                                "with-ddns.json" };
     ElementPtr x;
 

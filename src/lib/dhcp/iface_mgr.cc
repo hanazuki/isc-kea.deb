@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,7 +42,6 @@
 using namespace std;
 using namespace isc::asiolink;
 using namespace isc::util;
-using namespace isc::util::thread;
 using namespace isc::util::io;
 using namespace isc::util::io::internal;
 
@@ -213,7 +212,7 @@ void Iface::addUnicast(const isc::asiolink::IOAddress& addr) {
                       << " already defined on the " << name_ << " interface.");
         }
     }
-    unicasts_.push_back(OptionalValue<IOAddress>(addr, true));
+    unicasts_.push_back(Optional<IOAddress>(addr));
 }
 
 bool
@@ -244,7 +243,7 @@ Iface::hasAddress(const isc::asiolink::IOAddress& address) const {
 
 void
 Iface::addAddress(const isc::asiolink::IOAddress& addr) {
-    addrs_.push_back(Address(addr, OptionalValueState(true)));
+    addrs_.push_back(Address(addr));
 }
 
 void
@@ -252,7 +251,7 @@ Iface::setActive(const IOAddress& address, const bool active) {
     for (AddressCollection::iterator addr_it = addrs_.begin();
          addr_it != addrs_.end(); ++addr_it) {
         if (address == addr_it->get()) {
-            addr_it->specify(OptionalValueState(active));
+            addr_it->unspecified(!active);
             return;
         }
     }
@@ -264,7 +263,7 @@ void
 Iface::setActive(const bool active) {
     for (AddressCollection::iterator addr_it = addrs_.begin();
          addr_it != addrs_.end(); ++addr_it) {
-        addr_it->specify(OptionalValueState(active));
+        addr_it->unspecified(!active);
     }
 }
 
@@ -272,7 +271,7 @@ unsigned int
 Iface::countActive4() const {
     uint16_t count = 0;
     BOOST_FOREACH(Address addr, addrs_) {
-        if (addr.get().isV4() && addr.isSpecified()) {
+        if (!addr.unspecified() && addr.get().isV4()) {
             ++count;
         }
     }
@@ -344,6 +343,23 @@ IfaceMgr::deleteExternalSocket(int socketfd) {
             return;
         }
     }
+}
+
+int
+IfaceMgr::purgeBadSockets() {
+    std::vector<int> bad_fds;
+    for (SocketCallbackInfo s : callbacks_) {
+        errno = 0;
+        if (fcntl(s.socket_, F_GETFD) < 0 && (errno == EBADF)) {
+            bad_fds.push_back(s.socket_);
+        }
+    }
+
+    for (auto bad_fd : bad_fds) {
+        deleteExternalSocket(bad_fd);
+    }
+
+    return (bad_fds.size());
 }
 
 void
@@ -526,7 +542,7 @@ IfaceMgr::openSockets4(const uint16_t port, const bool use_bcast,
 
         BOOST_FOREACH(Iface::Address addr, iface->getAddresses()) {
             // Skip non-IPv4 addresses and those that weren't selected..
-            if (!addr.get().isV4() || !addr.isSpecified()) {
+            if (addr.unspecified() || !addr.get().isV4()) {
                 continue;
             }
 
@@ -958,7 +974,8 @@ IfaceMgr::send(const Pkt6Ptr& pkt) {
     }
 
     // Assuming that packet filter is not NULL, because its modifier checks it.
-    return (packet_filter6_->send(*iface, getSocket(*pkt), pkt));
+    // The packet filter returns an int but in fact it either returns 0 or throws.
+    return (packet_filter6_->send(*iface, getSocket(*pkt), pkt) == 0);
 }
 
 bool
@@ -971,7 +988,8 @@ IfaceMgr::send(const Pkt4Ptr& pkt) {
     }
 
     // Assuming that packet filter is not NULL, because its modifier checks it.
-    return (packet_filter_->send(*iface, getSocket(*pkt).sockfd_, pkt));
+    // The packet filter returns an int but in fact it either returns 0 or throws.
+    return (packet_filter_->send(*iface, getSocket(*pkt).sockfd_, pkt) == 0);
 }
 
 Pkt4Ptr IfaceMgr::receive4(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */) {
@@ -1040,6 +1058,11 @@ Pkt4Ptr IfaceMgr::receive4Indirect(uint32_t timeout_sec, uint32_t timeout_usec /
         // signal or for some other reason.
         if (errno == EINTR) {
             isc_throw(SignalInterruptOnSelect, strerror(errno));
+        } else if (errno == EBADF) {
+            int cnt = purgeBadSockets();
+            isc_throw(SocketReadError,
+                      "SELECT interrupted by one invalid sockets, purged "
+                       << cnt << " socket descriptors");
         } else {
             isc_throw(SocketReadError, strerror(errno));
         }
@@ -1066,7 +1089,7 @@ Pkt4Ptr IfaceMgr::receive4Indirect(uint32_t timeout_sec, uint32_t timeout_usec /
             // layer access without integrating any specific features
             // in IfaceMgr
             if (s.callback_) {
-                s.callback_();
+                s.callback_(s.socket_);
             }
 
             return (Pkt4Ptr());
@@ -1139,6 +1162,11 @@ Pkt4Ptr IfaceMgr::receive4Direct(uint32_t timeout_sec, uint32_t timeout_usec /* 
         // signal or for some other reason.
         if (errno == EINTR) {
             isc_throw(SignalInterruptOnSelect, strerror(errno));
+        } else if (errno == EBADF) {
+            int cnt = purgeBadSockets();
+            isc_throw(SocketReadError,
+                      "SELECT interrupted by one invalid sockets, purged "
+                       << cnt << " socket descriptors");
         } else {
             isc_throw(SocketReadError, strerror(errno));
         }
@@ -1156,7 +1184,7 @@ Pkt4Ptr IfaceMgr::receive4Direct(uint32_t timeout_sec, uint32_t timeout_usec /* 
         // layer access without integrating any specific features
         // in IfaceMgr
         if (s.callback_) {
-            s.callback_();
+            s.callback_(s.socket_);
         }
 
         return (Pkt4Ptr());
@@ -1263,6 +1291,11 @@ IfaceMgr::receive6Direct(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */ )
         // signal or for some other reason.
         if (errno == EINTR) {
             isc_throw(SignalInterruptOnSelect, strerror(errno));
+        } else if (errno == EBADF) {
+            int cnt = purgeBadSockets();
+            isc_throw(SocketReadError,
+                      "SELECT interrupted by one invalid sockets, purged "
+                       << cnt << " socket descriptors");
         } else {
             isc_throw(SocketReadError, strerror(errno));
         }
@@ -1280,7 +1313,7 @@ IfaceMgr::receive6Direct(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */ )
         // layer access without integrating any specific features
         // in IfaceMgr
         if (s.callback_) {
-            s.callback_();
+            s.callback_(s.socket_);
         }
 
         return (Pkt6Ptr());
@@ -1366,6 +1399,11 @@ IfaceMgr::receive6Indirect(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */
         // signal or for some other reason.
         if (errno == EINTR) {
             isc_throw(SignalInterruptOnSelect, strerror(errno));
+        } else if (errno == EBADF) {
+            int cnt = purgeBadSockets();
+            isc_throw(SocketReadError,
+                      "SELECT interrupted by one invalid sockets, purged "
+                       << cnt << " socket descriptors");
         } else {
             isc_throw(SocketReadError, strerror(errno));
         }
@@ -1392,7 +1430,7 @@ IfaceMgr::receive6Indirect(uint32_t timeout_sec, uint32_t timeout_usec /* = 0 */
             // layer access without integrating any specific features
             // in IfaceMgr
             if (s.callback_) {
-                s.callback_();
+                s.callback_(s.socket_);
             }
 
             return (Pkt6Ptr());

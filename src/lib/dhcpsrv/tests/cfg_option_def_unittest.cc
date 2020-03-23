@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -50,8 +50,8 @@ TEST(CfgOptionDefTest, equal) {
 }
 
 // This test verifies that multiple option definitions can be added
-// under different option spaces.
-TEST(CfgOptionDefTest, getAll) {
+// under different option spaces and then removed.
+TEST(CfgOptionDefTest, getAllThenDelete) {
     CfgOptionDef cfg;
 
     // Create a set of option definitions with codes between 100 and 109.
@@ -61,6 +61,10 @@ TEST(CfgOptionDefTest, getAll) {
         option_name << "option-" << code;
         OptionDefinitionPtr def(new OptionDefinition(option_name.str(), code,
                                                      "uint16"));
+        // We're setting id of 123 for all option definitions in this
+        // code range.
+        def->setId(123);
+
         // Add option definition to "isc" option space.
         // Option codes are not duplicated so expect no error
         // when adding them.
@@ -74,6 +78,10 @@ TEST(CfgOptionDefTest, getAll) {
         option_name << "option-" << code;
         OptionDefinitionPtr def(new OptionDefinition(option_name.str(), code,
                                                      "uint16"));
+        // We're setting id of 234 for all option definitions in this
+        // code range.
+        def->setId(234);
+
         ASSERT_NO_THROW(cfg.add(def, "abcde"));
     }
 
@@ -112,6 +120,32 @@ TEST(CfgOptionDefTest, getAll) {
     OptionDefContainerPtr option_defs3 = cfg.getAll("non-existing");
     ASSERT_TRUE(option_defs3);
     EXPECT_TRUE(option_defs3->empty());
+
+    // Check that we can delete option definitions by id.
+    uint64_t num_deleted = 0;
+    ASSERT_NO_THROW(num_deleted = cfg.del(123));
+    EXPECT_EQ(10, num_deleted);
+
+    option_defs1 = cfg.getAll("isc");
+    ASSERT_TRUE(option_defs1);
+    ASSERT_EQ(0, option_defs1->size());
+
+    option_defs2 = cfg.getAll("abcde");
+    ASSERT_TRUE(option_defs2);
+    ASSERT_EQ(10, option_defs2->size());
+
+    // Second attempt to delete the same option definitions should
+    // result in 0 deletions.
+    ASSERT_NO_THROW(num_deleted = cfg.del(123));
+    EXPECT_EQ(0, num_deleted);
+
+    // Delete all other option definitions.
+    ASSERT_NO_THROW(num_deleted = cfg.del(234));
+    EXPECT_EQ(10, num_deleted);
+
+    option_defs2 = cfg.getAll("abcde");
+    ASSERT_TRUE(option_defs2);
+    ASSERT_EQ(0, option_defs2->size());
 }
 
 // This test verifies that single option definition is correctly
@@ -211,6 +245,14 @@ TEST(CfgOptionDefTest, overrideStdOptionDef) {
     def.reset(new OptionDefinition("routers", DHO_ROUTERS, "uint32"));
     EXPECT_THROW(cfg.add(def, DHCP4_OPTION_SPACE), isc::BadValue);
 
+    // Check code duplicate (same code, different name).
+    def.reset(new OptionDefinition("routers-bis", DHO_ROUTERS, "uint32"));
+    EXPECT_THROW(cfg.add(def, DHCP4_OPTION_SPACE), isc::BadValue);
+
+    // Check name duplicate (different code, same name).
+    def.reset(new OptionDefinition("routers", 170, "uint32"));
+    EXPECT_THROW(cfg.add(def, DHCP4_OPTION_SPACE), isc::BadValue);
+
     /// There is no definition for unassigned option 170.
     def.reset(new OptionDefinition("unassigned-option-170", 170, "string"));
     EXPECT_NO_THROW(cfg.add(def, DHCP4_OPTION_SPACE));
@@ -250,7 +292,7 @@ TEST(CfgOptionDefTest, unparse) {
     CfgOptionDef cfg;
 
     // Add some options.
-    cfg.add(OptionDefinitionPtr(new 
+    cfg.add(OptionDefinitionPtr(new
         OptionDefinition("option-foo", 5, "uint16")), "isc");
     cfg.add(OptionDefinitionPtr(new
         OptionDefinition("option-bar", 5, "uint16", true)), "dns");
@@ -262,7 +304,7 @@ TEST(CfgOptionDefTest, unparse) {
     rec->addRecordField("uint16");
     rec->addRecordField("uint16");
     cfg.add(rec, "dns");
-    
+
     // Unparse
     std::string expected = "[\n"
         "{\n"
@@ -302,5 +344,51 @@ TEST(CfgOptionDefTest, unparse) {
         "}]\n";
     isc::test::runToElementTest<CfgOptionDef>(expected, cfg);
 }
+
+// This test verifies that configured option definitions can be merged
+// correctly.
+TEST(CfgOptionDefTest, merge) {
+    CfgOptionDef to;         // Configuration we are merging to.
+
+    // Add some options to the "to" config.
+    to.add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint16"))), "isc");
+    to.add((OptionDefinitionPtr(new OptionDefinition("two", 2, "uint16"))), "isc");
+    to.add((OptionDefinitionPtr(new OptionDefinition("three", 3, "uint16"))), "fluff");
+    to.add((OptionDefinitionPtr(new OptionDefinition("four", 4, "uint16"))), "fluff");
+
+    // Clone the "to" config and use that for merging.
+    CfgOptionDef to_clone;
+    to.copyTo(to_clone);
+
+    // Ensure they are equal before we do anything.
+    ASSERT_TRUE(to.equals(to_clone));
+
+    // Merge from an empty config.
+    CfgOptionDef empty_from;
+    ASSERT_NO_THROW(to_clone.merge(empty_from));
+
+    // Should have the same content as before.
+    ASSERT_TRUE(to.equals(to_clone));
+
+    // Construct a non-empty "from" config.
+    // Options "two" and "three" will be updated definitions and "five" will be new.
+    CfgOptionDef from;
+    from.add((OptionDefinitionPtr(new OptionDefinition("two", 22, "uint16"))), "isc");
+    from.add((OptionDefinitionPtr(new OptionDefinition("three", 3, "string"))), "fluff");
+    from.add((OptionDefinitionPtr(new OptionDefinition("five", 5, "uint16"))), "fluff");
+
+    // Now let's clone "from" config and use that manually construct the expected config.
+    CfgOptionDef expected;
+    from.copyTo(expected);
+    expected.add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint16"))), "isc");
+    expected.add((OptionDefinitionPtr(new OptionDefinition("four", 4, "uint16"))), "fluff");
+
+    // Do the merge.
+    ASSERT_NO_THROW(to_clone.merge(from));
+
+    // Verify we have the expected content.
+    ASSERT_TRUE(expected.equals(to_clone));
+}
+
 
 }

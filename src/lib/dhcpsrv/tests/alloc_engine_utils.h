@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -178,7 +178,7 @@ public:
         EXPECT_EQ(lease->subnet_id_, subnet_->getID());
 
         if (expected_in_subnet) {
-            EXPECT_TRUE(subnet_->inRange(lease->addr_)) 
+            EXPECT_TRUE(subnet_->inRange(lease->addr_))
                 << " address: " << lease->addr_.toText();
         } else {
             EXPECT_FALSE(subnet_->inRange(lease->addr_))
@@ -194,10 +194,18 @@ public:
         // that it have proper parameters
         EXPECT_EQ(exp_type, lease->type_);
         EXPECT_EQ(iaid_, lease->iaid_);
-        EXPECT_EQ(subnet_->getValid(), lease->valid_lft_);
-        EXPECT_EQ(subnet_->getPreferred(), lease->preferred_lft_);
-        EXPECT_EQ(subnet_->getT1(), lease->t1_);
-        EXPECT_EQ(subnet_->getT2(), lease->t2_);
+        if (subnet_->getValid().getMin() == subnet_->getValid().getMax()) {
+            EXPECT_EQ(subnet_->getValid(), lease->valid_lft_);
+        } else {
+            EXPECT_LE(subnet_->getValid().getMin(), lease->valid_lft_);
+            EXPECT_GE(subnet_->getValid().getMax(), lease->valid_lft_);
+        }
+        if (subnet_->getPreferred().getMin() == subnet_->getPreferred().getMax()) {
+            EXPECT_EQ(subnet_->getPreferred(), lease->preferred_lft_);
+        } else {
+            EXPECT_LE(subnet_->getPreferred().getMin(), lease->preferred_lft_);
+            EXPECT_GE(subnet_->getPreferred().getMax(), lease->preferred_lft_);
+        }
         EXPECT_EQ(exp_pd_len, lease->prefixlen_);
         EXPECT_EQ(fqdn_fwd_, lease->fqdn_fwd_);
         EXPECT_EQ(fqdn_rev_, lease->fqdn_rev_);
@@ -260,6 +268,22 @@ public:
     Lease6Ptr simpleAlloc6Test(const Pool6Ptr& pool,
                                const asiolink::IOAddress& hint,
                                bool fake, bool in_pool = true);
+
+    /// @brief Checks if the simple allocation can succeed with lifetimes.
+    ///
+    /// The type of lease is determined by pool type (pool->getType())
+    ///
+    /// @param pool pool from which the lease will be allocated from
+    /// @param hint address to be used as a hint
+    /// @param preferred preferred lifetime to be used as a hint
+    /// @param valid valid lifetime to be used as a hint
+    /// @param exp_preferred expected lease preferred lifetime
+    /// @param exp_valid expected lease valid lifetime
+    /// @return allocated lease (or NULL)
+    Lease6Ptr simpleAlloc6Test(const Pool6Ptr& pool,
+                               const asiolink::IOAddress& hint,
+                               uint32_t preferred, uint32_t valid,
+                               uint32_t exp_preferred, uint32_t exp_valid);
 
     /// @brief Checks if the simple allocation can succeed for custom DUID.
     ///
@@ -415,6 +439,35 @@ public:
                       HWAddrPtr& hwaddr, const asiolink::IOAddress& addr,
                       uint8_t prefix_len);
 
+    /// @brief Utility function that decrements cltt of a persisted lease
+    ///
+    /// This function is used to simulate the passage of time by decrementing
+    /// the lease's cltt, currently by 1.  It fetches the desired lease from the
+    /// lease manager, decrements the cltt, then updates the lease in the lease
+    /// manager.  Next, it refetches the lease and verifies the update took place.
+    ///
+    /// @param[in][out] lease pointer reference to the lease to modify.  Upon
+    /// return it will point to the newly updated lease.
+    void
+    rollbackPersistedCltt(Lease6Ptr& lease) {
+        ASSERT_TRUE(lease) << "rollbackPersistedCltt lease is empty";
+
+        // Fetch it, so we can update it.
+        Lease6Ptr from_mgr = LeaseMgrFactory::instance().getLease6(lease->type_,
+                                                                   lease->addr_);
+        ASSERT_TRUE(from_mgr) << "rollbackPersistedCltt: lease not found?";
+
+        // Decrement cltt then update it in the manager.
+        --from_mgr->cltt_;
+        ASSERT_NO_THROW(LeaseMgrFactory::instance().updateLease6(from_mgr));
+
+        // Fetch it fresh.
+        lease = LeaseMgrFactory::instance().getLease6(lease->type_, lease->addr_);
+
+        // Make sure it stuck.
+        ASSERT_EQ(lease->cltt_, from_mgr->cltt_);
+    }
+
     virtual ~AllocEngine6Test() {
         factory_.destroy();
     }
@@ -461,9 +514,12 @@ public:
         EXPECT_TRUE(subnet_->inPool(Lease::TYPE_V4, lease->addr_));
 
         // Check that it has proper parameters
-        EXPECT_EQ(subnet_->getValid(), lease->valid_lft_);
-        EXPECT_EQ(subnet_->getT1(), lease->t1_);
-        EXPECT_EQ(subnet_->getT2(), lease->t2_);
+        if (subnet_->getValid().getMin() == subnet_->getValid().getMax()) {
+            EXPECT_EQ(subnet_->getValid(), lease->valid_lft_);
+        } else {
+            EXPECT_LE(subnet_->getValid().getMin(), lease->valid_lft_);
+            EXPECT_GE(subnet_->getValid().getMax(), lease->valid_lft_);
+        }
         if (lease->client_id_ && !clientid_) {
             ADD_FAILURE() << "Lease4 has a client-id, while it should have none.";
         } else

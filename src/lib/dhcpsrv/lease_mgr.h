@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -344,6 +344,13 @@ public:
     /// @return Lease collection (may be empty if no IPv4 lease found).
     virtual Lease4Collection getLeases4(SubnetID subnet_id) const = 0;
 
+    /// @brief Returns all IPv4 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv4 lease found).
+    virtual Lease4Collection getLeases4(const std::string& hostname) const = 0;
+
     /// @brief Returns all IPv4 leases.
     ///
     /// @return Lease collection (may be empty if no IPv4 lease found).
@@ -452,6 +459,13 @@ public:
     /// @return Lease collection (may be empty if no IPv6 lease found).
     virtual Lease6Collection getLeases6(SubnetID subnet_id) const = 0;
 
+    /// @brief Returns all IPv6 leases for the particular hostname.
+    ///
+    /// @param hostname hostname in lower case.
+    ///
+    /// @return Lease collection (may be empty if no IPv6 lease found).
+    virtual Lease6Collection getLeases6(const std::string& hostname) const = 0;
+
     /// @brief Returns all IPv6 leases.
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
@@ -459,9 +473,9 @@ public:
 
     /// @brief Returns collection of leases for matching DUID
     ///
-    /// @return Lease collection 
+    /// @return Lease collection
     /// (may be empty if no IPv6 lease found for the DUID).
-    virtual Lease6Collection getLeases6(const DUID& duid) const = 0; 
+    virtual Lease6Collection getLeases6(const DUID& duid) const = 0;
 
     /// @brief Returns range of IPv6 leases using paging.
     ///
@@ -529,16 +543,25 @@ public:
     /// @param lease6 The lease to be updated.
     virtual void updateLease6(const Lease6Ptr& lease6) = 0;
 
-    /// @brief Deletes a lease.
+    /// @brief Deletes an IPv4 lease.
     ///
-    /// @param addr Address of the lease to be deleted. This can be an IPv4
-    ///             address or an IPv6 address.
+    /// @param lease IPv4 lease to be deleted.
     ///
-    /// @return true if deletion was successful, false if no such lease exists
+    /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @throw isc::dhcp::DbOperationError An operation on the open database has
+    ///        failed.
+    virtual bool deleteLease(const Lease4Ptr& lease) = 0;
+
+    /// @brief Deletes an IPv6 lease.
+    ///
+    /// @param lease IPv6 lease to be deleted.
+    ///
+    /// @return true if deletion was successful, false if no such lease exists.
     ///
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
-    virtual bool deleteLease(const isc::asiolink::IOAddress& addr) = 0;
+    virtual bool deleteLease(const Lease6Ptr& lease) = 0;
 
     /// @brief Deletes all expired and reclaimed DHCPv4 leases.
     ///

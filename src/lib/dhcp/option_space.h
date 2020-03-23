@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,19 +7,13 @@
 #ifndef OPTION_SPACE_H
 #define OPTION_SPACE_H
 
+#include <dhcp/std_option_defs.h>
 #include <exceptions/exceptions.h>
+
 #include <boost/shared_ptr.hpp>
 #include <map>
 #include <stdint.h>
 #include <string>
-
-#define DHCP4_OPTION_SPACE      "dhcp4"
-#define DHCP6_OPTION_SPACE      "dhcp6"
-#define MAPE_V6_OPTION_SPACE    "s46-cont-mape-options"
-#define MAPT_V6_OPTION_SPACE    "s46-cont-mapt-options"
-#define LW_V6_OPTION_SPACE      "s46-cont-lw-options"
-#define V4V6_RULE_OPTION_SPACE  "s46-rule-options"
-#define V4V6_BIND_OPTION_SPACE  "s46-v4v6bind-options"
 
 namespace isc {
 namespace dhcp {
@@ -183,7 +177,7 @@ private:
     uint32_t enterprise_number_; ///< IANA assigned enterprise number.
 };
 
-} // namespace isc::dhcp
-} // namespace isc
+}  // namespace dhcp
+}  // namespace isc
 
 #endif // OPTION_SPACE_H

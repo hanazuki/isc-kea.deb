@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2017 Deutsche Telekom AG.
 //
 // Author: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -18,17 +18,17 @@
 #include <config.h>
 
 #include <asiolink/io_address.h>
+#include <dhcpsrv/tests/test_utils.h>
 #include <exceptions/exceptions.h>
-#include <cql/cql_connection.h>
-#include <cql/testutils/cql_schema.h>
 #include <dhcpsrv/host.h>
-#include <dhcpsrv/host_mgr.h>
-#include <dhcpsrv/host_data_source_factory.h>
-#include <dhcpsrv/cql_lease_mgr.h>
 #include <dhcpsrv/cql_host_data_source.h>
 #include <dhcpsrv/testutils/generic_host_data_source_unittest.h>
 #include <dhcpsrv/testutils/host_data_source_utils.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/host_mgr.h>
+#include <dhcpsrv/host_data_source_factory.h>
+#include <cql/cql_connection.h>
+#include <cql/cql_exchange.h>
+#include <cql/testutils/cql_schema.h>
 
 #include <gtest/gtest.h>
 
@@ -53,9 +53,8 @@ class CqlHostDataSourceTest : public GenericHostDataSourceTest {
 public:
     /// @brief Clears the database and opens connection to it.
     void initializeTest() {
-        // Ensure schema is the correct one.
-        destroyCqlSchema(false, true);
-        createCqlSchema(false, true);
+        // Ensure we have the proper schema with no transient data.
+        createCqlSchema();
 
         // Connect to the database
         try {
@@ -83,7 +82,8 @@ public:
         }
         HostMgr::delAllBackends();
         hdsptr_.reset();
-        destroyCqlSchema(false, true);
+        // If data wipe enabled, delete transient data otherwise destroy the schema
+        destroyCqlSchema();
     }
 
     /// @brief Constructor
@@ -187,12 +187,11 @@ public:
 
 TEST(CqlHostDataSource, OpenDatabase) {
 
-    // Schema needs to be created for the test to work.
-    destroyCqlSchema(false, true);
-    createCqlSchema(false, true);
+    // Ensure we have the proper schema with no transient data.
+    createCqlSchema();
 
-    // Check that host manager open the database opens correctly and tidy up.
-    //  If it fails, print the error message.
+    // Check that host manager opens the database correctly and tidy up.  If it
+    // fails, print the error message.
     try {
         HostMgr::create();
         EXPECT_NO_THROW(HostMgr::addBackend(validCqlConnectionString()));
@@ -204,13 +203,13 @@ TEST(CqlHostDataSource, OpenDatabase) {
                << "*** before the CQL tests will run correctly.\n";
     }
 
-    // Check that host manager open the database opens correctly with a longer
+    // Check that host manager opens the database correctly with a longer
     // timeout.  If it fails, print the error message.
     try {
         // CQL specifies the timeout values in ms, not seconds. Therefore
         // we need to add extra 000 to the "connect-timeout=10" string.
         string connection_string = validCqlConnectionString() + string(" ") +
-            string(VALID_TIMEOUT) + string("000");
+                                   string(VALID_TIMEOUT) + string("000");
         HostMgr::create();
         EXPECT_NO_THROW(HostMgr::addBackend(connection_string));
         HostMgr::delBackend("cql");
@@ -222,7 +221,7 @@ TEST(CqlHostDataSource, OpenDatabase) {
     }
 
     // Check that attempting to get an instance of the host data source when
-    // none is set throws an exception.
+    // none is set returns empty pointer.
     EXPECT_FALSE(HostMgr::instance().getHostDataSource());
 
     // Check that wrong specification of backend throws an exception.
@@ -259,7 +258,7 @@ TEST(CqlHostDataSource, OpenDatabase) {
                     NULL, VALID_HOST, INVALID_USER, VALID_PASSWORD)));
 
     // Tidy up after the test
-    destroyCqlSchema(false, true);
+    destroyCqlSchema();
 }
 
 /// @brief Check conversion functions
@@ -297,6 +296,93 @@ TEST_F(CqlHostDataSourceTest, DISABLED_testReadOnlyDatabase) {
 // address. Host uses hw address as identifier.
 TEST_F(CqlHostDataSourceTest, basic4HWAddr) {
     testBasic4(Host::IDENT_HWADDR);
+}
+
+// Verifies that IPv4 host reservation with options can have a the global
+// subnet id value
+TEST_F(CqlHostDataSourceTest, globalSubnetId4) {
+    testGlobalSubnetId4();
+}
+
+// Verifies that IPv6 host reservation with options can have a the global
+// subnet id value
+TEST_F(CqlHostDataSourceTest, globalSubnetId6) {
+    testGlobalSubnetId6();
+}
+
+// Verifies that IPv4 host reservation with options can have a max value
+// for  dhcp4_subnet id
+TEST_F(CqlHostDataSourceTest, maxSubnetId4) {
+    testMaxSubnetId4();
+}
+
+// Verifies that IPv6 host reservation with options can have a max value
+// for  dhcp6_subnet id
+TEST_F(CqlHostDataSourceTest, maxSubnetId6) {
+    testMaxSubnetId6();
+}
+
+// Verifies that IPv4 host reservations in the same subnet can be retrieved
+TEST_F(CqlHostDataSourceTest, getAll4BySubnet) {
+    testGetAll4();
+}
+
+// Verifies that IPv6 host reservations in the same subnet can be retrieved
+TEST_F(CqlHostDataSourceTest, getAll6BySubnet) {
+    testGetAll6();
+}
+
+// Verifies that host reservations with the same hostname can be retrieved
+TEST_F(CqlHostDataSourceTest, getAllbyHostname) {
+    testGetAllbyHostname();
+}
+
+// Verifies that IPv4 host reservations with the same hostname and in
+// the same subnet can be retrieved
+TEST_F(CqlHostDataSourceTest, getAllbyHostnameSubnet4) {
+    testGetAllbyHostnameSubnet4();
+}
+
+// Verifies that IPv6 host reservations with the same hostname and in
+// the same subnet can be retrieved
+TEST_F(CqlHostDataSourceTest, getAllbyHostnameSubnet6) {
+    testGetAllbyHostnameSubnet6();
+}
+
+// Verifies that IPv4 host reservations in the same subnet can be retrieved
+// by pages.
+TEST_F(CqlHostDataSourceTest, getPage4) {
+    testGetPage4();
+}
+
+// Verifies that IPv6 host reservations in the same subnet can be retrieved
+// by pages.
+TEST_F(CqlHostDataSourceTest, getPage6) {
+    testGetPage6();
+}
+
+// Verifies that IPv4 host reservations in the same subnet can be retrieved
+// by pages without truncation from the limit.
+TEST_F(CqlHostDataSourceTest, getPageLimit4) {
+    testGetPageLimit4(Host::IDENT_DUID);
+}
+
+// Verifies that IPv6 host reservations in the same subnet can be retrieved
+// by pages without truncation from the limit.
+TEST_F(CqlHostDataSourceTest, getPageLimit6) {
+    testGetPageLimit6(Host::IDENT_HWADDR);
+}
+
+// Verifies that IPv4 host reservations in the same subnet can be retrieved
+// by pages even with multiple subnets.
+TEST_F(CqlHostDataSourceTest, getPage4Subnets) {
+    testGetPage4Subnets();
+}
+
+// Verifies that IPv6 host reservations in the same subnet can be retrieved
+// by pages even with multiple subnets.
+TEST_F(CqlHostDataSourceTest, getPage6Subnets) {
+    testGetPage6Subnets();
 }
 
 // Test verifies if a host reservation can be added and later retrieved by IPv4
@@ -580,15 +666,15 @@ TEST_F(CqlHostDataSourceTest, testAddRollback) {
     params["name"] = "keatest";
     params["user"] = "keatest";
     params["password"] = "keatest";
-    CqlConnection connection(params);
-    ASSERT_NO_THROW(connection.openDatabase());
+    CqlConnection conn(params);
+    ASSERT_NO_THROW(conn.openDatabase());
 
-    // Drop every table so we make sure host_reservations doesn't exist anymore.
+    // Drop every table so we make sure hosts doesn't exist anymore.
     destroyCqlSchema(false, true);
 
     // Create a host with a reservation.
     HostPtr host = HostDataSourceUtils::initializeHost6("2001:db8:1::1",
-                                        Host::IDENT_HWADDR, false, "key##1");
+                                        Host::IDENT_HWADDR, false, "randomKey");
     // Let's assign some DHCPv4 subnet to the host, because we will use the
     // DHCPv4 subnet to try to retrieve the host after failed insertion.
     host->setIPv4SubnetID(SubnetID(4));
@@ -664,31 +750,5 @@ TEST_F(CqlHostDataSourceTest, testMultipleHostsNoAddress4) {
 TEST_F(CqlHostDataSourceTest, testMultipleHosts6) {
     testMultipleHosts6();
 }
-
-// Verifies that IPv4 host reservation with options can have a the global
-// subnet id value
-TEST_F(CqlHostDataSourceTest, globalSubnetId4) {
-    testGlobalSubnetId4();
-}
-
-// Verifies that IPv6 host reservation with options can have a the global
-// subnet id value
-TEST_F(CqlHostDataSourceTest, globalSubnetId6) {
-    testGlobalSubnetId6();
-}
-
-// Verifies that IPv4 host reservation with options can have a max value
-// for  dhcp4_subnet id
-TEST_F(CqlHostDataSourceTest, maxSubnetId4) {
-    testMaxSubnetId4();
-}
-
-// Verifies that IPv6 host reservation with options can have a max value
-// for  dhcp6_subnet id
-TEST_F(CqlHostDataSourceTest, maxSubnetId6) {
-    testMaxSubnetId6();
-}
-
-
 
 }  // namespace

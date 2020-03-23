@@ -1,5 +1,5 @@
 #!/bin/sh
-# Copyright (C) 2014-2016 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,12 +19,15 @@
 prefix=/usr/local
 sysconfdir=${prefix}/etc
 localstatedir=${prefix}/var
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
 
 echo "Replacing \@prefix\@ with ${prefix}"
+echo "Replacing \@libdir\@ with ${libdir}"
 echo "Replacing \@sysconfdir\@ with ${sysconfdir}"
 echo "Replacing \@localstatedir\@ with ${localstatedir}"
 
 echo "Input file: $1"
 echo "Output file: $2"
 
-sed -e "s+\@localstatedir\@+${localstatedir}+g; s+\@prefix\@+${prefix}+g; s+\@sysconfdir\@+${sysconfdir}+g" $1 > $2
+sed -e "s+\@libdir\@+${libdir}+g; s+\@localstatedir\@+${localstatedir}+g; s+\@prefix\@+${prefix}+g; s+\@sysconfdir\@+${sysconfdir}+g" $1 > $2

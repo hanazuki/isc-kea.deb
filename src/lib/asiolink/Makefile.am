@@ -3,7 +3,7 @@ SUBDIRS = . testutils tests
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib
 AM_CPPFLAGS += $(BOOST_INCLUDES)
 
-AM_CXXFLAGS = $(KEA_CXXFLAGS)
+AM_CXXFLAGS = $(KEA_CXXFLAGS) -Wno-non-virtual-dtor
 
 CLEANFILES = *.gcno *.gcda
 
@@ -15,7 +15,7 @@ CLEANFILES = *.gcno *.gcda
 
 lib_LTLIBRARIES = libkea-asiolink.la
 
-libkea_asiolink_la_LDFLAGS = -no-undefined -version-info 7:0:0
+libkea_asiolink_la_LDFLAGS = -no-undefined -version-info 7:4:1
 
 libkea_asiolink_la_SOURCES  = asiolink.h
 libkea_asiolink_la_SOURCES += asio_wrapper.h

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -34,7 +34,8 @@ D2CfgContext::D2CfgContext()
     : d2_params_(new D2Params()),
       forward_mgr_(new DdnsDomainListMgr("forward-ddns")),
       reverse_mgr_(new DdnsDomainListMgr("reverse-ddns")),
-      keys_(new TSIGKeyInfoMap()) {
+      keys_(new TSIGKeyInfoMap()),
+      control_socket_(ConstElementPtr()) {
 }
 
 D2CfgContext::D2CfgContext(const D2CfgContext& rhs) : ConfigBase(rhs) {
@@ -50,6 +51,8 @@ D2CfgContext::D2CfgContext(const D2CfgContext& rhs) : ConfigBase(rhs) {
     }
 
     keys_ = rhs.keys_;
+
+    control_socket_ = rhs.control_socket_;
 }
 
 D2CfgContext::~D2CfgContext() {
@@ -57,7 +60,7 @@ D2CfgContext::~D2CfgContext() {
 
 ElementPtr
 D2CfgContext::toElement() const {
-    ElementPtr d2 = Element::createMap();
+    ElementPtr d2 = ConfigBase::toElement();
     // Set user-context
     contextToElement(d2);
     // Set ip-address
@@ -94,6 +97,10 @@ D2CfgContext::toElement() const {
         tsig_keys->add(key->second->toElement());
     }
     d2->set("tsig-keys", tsig_keys);
+    // Set control-socket (skip if null as empty is not legal)
+    if (!isNull(control_socket_)) {
+        d2->set("control-socket", UserContext::toElement(control_socket_));
+    }
     // Set DhcpDdns
     ElementPtr result = Element::createMap();
     result->set("DhcpDdns", d2);
@@ -236,6 +243,11 @@ D2CfgMgr::reverseV6Address(const isc::asiolink::IOAddress& ioaddr) {
 const D2ParamsPtr&
 D2CfgMgr::getD2Params() {
     return (getD2CfgContext()->getD2Params());
+}
+
+const isc::data::ConstElementPtr
+D2CfgMgr::getControlSocketInfo() {
+    return (getD2CfgContext()->getControlSocketInfo());
 }
 
 std::string

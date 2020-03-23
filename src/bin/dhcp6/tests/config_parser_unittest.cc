@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -25,6 +25,7 @@
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/subnet_selector.h>
 #include <dhcpsrv/testutils/config_result_check.h>
+#include <dhcpsrv/testutils/test_config_backend_dhcp6.h>
 #include <hooks/hooks_manager.h>
 #include <process/config_ctl_info.h>
 
@@ -242,6 +243,7 @@ const char* PARSER_CONFIGS[] = {
     "    \"rebind-timer\": 2000, \n"
     "    \"renew-timer\": 1000, \n"
     "    \"config-control\": { \n"
+    "       \"config-fetch-wait-time\": 10, \n"
     "       \"config-databases\": [ { \n"
     "               \"type\": \"mysql\", \n"
     "               \"name\": \"keatest1\", \n"
@@ -406,6 +408,19 @@ public:
         }
     }
 
+    // Checks if the result of DHCP server configuration has
+    // expected code (0 for success, other for failures) and
+    // the text part. Also stores result in rcode_ and comment_.
+    void checkResult(ConstElementPtr status, int expected_code,
+                     string expected_txt) {
+        ASSERT_TRUE(status);
+        comment_ = parseAnswer(rcode_, status);
+        EXPECT_EQ(expected_code, rcode_) << "error text:" << comment_->stringValue();
+        ASSERT_TRUE(comment_);
+        ASSERT_EQ(Element::string, comment_->getType());
+        EXPECT_EQ(expected_txt, comment_->stringValue());
+    }
+
     /// @brief Convenience method for running configuration
     ///
     /// This method does not throw, but signals errors using gtest macros.
@@ -448,10 +463,20 @@ public:
     /// @param t2 expected rebind-timer value
     /// @param preferred expected preferred-lifetime value
     /// @param valid expected valid-lifetime value
+    /// @param min_preferred expected min-preferred-lifetime value
+    ///        (0 (default) means same as preferred)
+    /// @param max_preferred expected max-preferred-lifetime value
+    ///        (0 (default) means same as preferred)
+    /// @param min_valid expected min-valid-lifetime value
+    ///        (0 (default) means same as valid)
+    /// @param max_valid expected max-valid-lifetime value
+    ///        (0 (default) means same as valid)
     /// @return the subnet that was examined
     Subnet6Ptr
     checkSubnet(const Subnet6Collection& col, std::string subnet,
-                uint32_t t1, uint32_t t2, uint32_t pref, uint32_t valid) {
+                uint32_t t1, uint32_t t2, uint32_t pref, uint32_t valid,
+                uint32_t min_pref = 0, uint32_t max_pref = 0,
+                uint32_t min_valid = 0, uint32_t max_valid = 0) {
         const auto& index = col.get<SubnetPrefixIndexTag>();
         auto subnet_it = index.find(subnet);
         if (subnet_it == index.cend()) {
@@ -464,6 +489,10 @@ public:
         EXPECT_EQ(t2, s->getT2());
         EXPECT_EQ(pref, s->getPreferred());
         EXPECT_EQ(valid, s->getValid());
+        EXPECT_EQ(min_pref ? min_pref : pref, s->getPreferred().getMin());
+        EXPECT_EQ(max_pref ? max_pref : pref, s->getPreferred().getMax());
+        EXPECT_EQ(min_valid ? min_valid : valid, s->getValid().getMin());
+        EXPECT_EQ(max_valid ? max_valid : valid, s->getValid().getMax());
 
         return (s);
     }
@@ -938,6 +967,22 @@ public:
         EXPECT_TRUE(pool);
     }
 
+    /// @brief Tests if the current config has a given global parameter value
+    /// @param name name of the global parameter expected to exist
+    /// @param value expected value of the global parameter
+    template <typename ValueType>
+    void checkGlobal(const std::string name, ValueType value) {
+        ConstElementPtr param;
+        ConstElementPtr exp_value;
+        param = CfgMgr::instance().getStagingCfg()->getConfiguredGlobal(name);
+        ASSERT_TRUE(param) << "global: " << name << ", expected but not found";
+        ASSERT_NO_THROW(exp_value = Element::create(value));
+        EXPECT_TRUE(param->equals(*exp_value)) << "global: " << name
+                                               << isc::data::prettyPrint(param)
+                                               << " does not match expected: "
+                                               << isc::data::prettyPrint(exp_value);
+    }
+
     int rcode_; ///< Return code (see @ref isc::config::parseAnswer)
     ControlledDhcpv6Srv srv_; ///< Instance of the ControlledDhcp6Srv used during tests
     ConstElementPtr comment_; ///< Comment (see @ref isc::config::parseAnswer)
@@ -978,6 +1023,166 @@ TEST_F(Dhcp6ParserTest, emptyInterfaceConfig) {
     checkResult(status, 0);
 }
 
+/// Check that valid-lifetime must be between min-valid-lifetime and
+/// max-valid-lifetime when a bound is specified, *AND* a subnet is
+/// specified (boundary check is done when lifetimes are applied).
+TEST_F(Dhcp6ParserTest, outBoundValidLifetime) {
+
+    string too_small =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"valid-lifetime\": 1000, \"min-valid-lifetime\": 2000 }";
+
+    ConstElementPtr json;
+    ASSERT_NO_THROW(json = parseDHCP6(too_small));
+
+    ConstElementPtr status;
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    string expected = "subnet configuration failed: "
+        "the value of min-valid-lifetime (2000) is not "
+        "less than (default) valid-lifetime (1000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string too_large =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"valid-lifetime\": 2000, \"max-valid-lifetime\": 1000 }";
+
+    ASSERT_NO_THROW(json = parseDHCP6(too_large));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of (default) valid-lifetime (2000) is not "
+        "less than max-valid-lifetime (1000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string before =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"valid-lifetime\": 1000, \"min-valid-lifetime\": 2000, "
+        "\"max-valid-lifetime\": 4000 }";
+
+    ASSERT_NO_THROW(json = parseDHCP6(before));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of (default) valid-lifetime (1000) is not "
+        "between min-valid-lifetime (2000) and max-valid-lifetime (4000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string after =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"valid-lifetime\": 5000, \"min-valid-lifetime\": 1000, "
+        "\"max-valid-lifetime\": 4000 }";
+
+    ASSERT_NO_THROW(json = parseDHCP6(after));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of (default) valid-lifetime (5000) is not "
+        "between min-valid-lifetime (1000) and max-valid-lifetime (4000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string crossed =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"valid-lifetime\": 1500, \"min-valid-lifetime\": 2000, "
+        "\"max-valid-lifetime\": 1000 }";
+    ASSERT_NO_THROW(json = parseDHCP6(crossed));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of min-valid-lifetime (2000) is not "
+        "less than max-valid-lifetime (1000)";
+    checkResult(status, 1, expected);
+}
+
+/// Check that preferred-lifetime must be between min-preferred-lifetime and
+/// max-preferred-lifetime when a bound is specified, *AND* a subnet is
+/// specified (boundary check is done when lifetimes are applied).
+TEST_F(Dhcp6ParserTest, outBoundPreferredLifetime) {
+
+    string too_small =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"preferred-lifetime\": 1000, \"min-preferred-lifetime\": 2000 }";
+
+    ConstElementPtr json;
+    ASSERT_NO_THROW(json = parseDHCP6(too_small));
+
+    ConstElementPtr status;
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    string expected = "subnet configuration failed: "
+        "the value of min-preferred-lifetime (2000) is not "
+        "less than (default) preferred-lifetime (1000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string too_large =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"preferred-lifetime\": 2000, \"max-preferred-lifetime\": 1000 }";
+
+    ASSERT_NO_THROW(json = parseDHCP6(too_large));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of (default) preferred-lifetime (2000) is not "
+        "less than max-preferred-lifetime (1000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string before =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"preferred-lifetime\": 1000, \"min-preferred-lifetime\": 2000, "
+        "\"max-preferred-lifetime\": 4000 }";
+
+    ASSERT_NO_THROW(json = parseDHCP6(before));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of (default) preferred-lifetime (1000) is not between "
+        "min-preferred-lifetime (2000) and max-preferred-lifetime (4000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string after =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"preferred-lifetime\": 5000, \"min-preferred-lifetime\": 1000, "
+        "\"max-preferred-lifetime\": 4000 }";
+
+    ASSERT_NO_THROW(json = parseDHCP6(after));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of (default) preferred-lifetime (5000) is not between "
+        "min-preferred-lifetime (1000) and max-preferred-lifetime (4000)";
+    checkResult(status, 1, expected);
+    resetConfiguration();
+
+    string crossed =  "{ " + genIfaceConfig() + "," +
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8::/64\" } ],"
+        "    \"subnet\": \"2001:db8::/32\" } ],"
+        "\"preferred-lifetime\": 1500, \"min-preferred-lifetime\": 2000, "
+        "\"max-preferred-lifetime\": 1000 }";
+    ASSERT_NO_THROW(json = parseDHCP6(crossed));
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, json));
+    expected = "subnet configuration failed: "
+        "the value of min-preferred-lifetime (2000) is not "
+        "less than max-preferred-lifetime (1000)";
+    checkResult(status, 1, expected);
+}
+
 /// The goal of this test is to verify if configuration without any
 /// subnets defined can be accepted.
 TEST_F(Dhcp6ParserTest, emptySubnet) {
@@ -1007,12 +1212,16 @@ TEST_F(Dhcp6ParserTest, subnetGlobalDefaults) {
 
     string config = "{ " + genIfaceConfig() + ","
         "\"preferred-lifetime\": 3000,"
+        "\"min-preferred-lifetime\": 2000,"
+        "\"max-preferred-lifetime\": 4000,"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ { "
         "    \"pools\": [ { \"pool\": \"2001:db8:1::1 - 2001:db8:1::ffff\" } ],"
         "    \"subnet\": \"2001:db8:1::/64\" } ],"
-        "\"valid-lifetime\": 4000 }";
+        "\"valid-lifetime\": 4000,"
+        "\"min-valid-lifetime\": 3000,"
+        "\"max-valid-lifetime\": 5000 }";
 
     ConstElementPtr json;
     ASSERT_NO_THROW(json = parseDHCP6(config));
@@ -1032,7 +1241,11 @@ TEST_F(Dhcp6ParserTest, subnetGlobalDefaults) {
     EXPECT_EQ(1000, subnet->getT1());
     EXPECT_EQ(2000, subnet->getT2());
     EXPECT_EQ(3000, subnet->getPreferred());
+    EXPECT_EQ(2000, subnet->getPreferred().getMin());
+    EXPECT_EQ(4000, subnet->getPreferred().getMax());
     EXPECT_EQ(4000, subnet->getValid());
+    EXPECT_EQ(3000, subnet->getValid().getMin());
+    EXPECT_EQ(5000, subnet->getValid().getMax());
 
     // Check that subnet-id is 1
     EXPECT_EQ(1, subnet->getID());
@@ -1334,6 +1547,8 @@ TEST_F(Dhcp6ParserTest, subnetLocal) {
 
     string config = "{ " + genIfaceConfig() + ","
         "\"preferred-lifetime\": 3000,"
+        "\"min-preferred-lifetime\": 2000,"
+        "\"max-preferred-lifetime\": 4000,"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
         "\"subnet6\": [ { "
@@ -1341,9 +1556,15 @@ TEST_F(Dhcp6ParserTest, subnetLocal) {
         "    \"renew-timer\": 1, "
         "    \"rebind-timer\": 2, "
         "    \"preferred-lifetime\": 3,"
+        "    \"min-preferred-lifetime\": 2,"
+        "    \"max-preferred-lifetime\": 4,"
         "    \"valid-lifetime\": 4,"
+        "    \"min-valid-lifetime\": 3,"
+        "    \"max-valid-lifetime\": 5,"
         "    \"subnet\": \"2001:db8:1::/64\" } ],"
-        "\"valid-lifetime\": 4000 }";
+        "\"valid-lifetime\": 4000,"
+        "\"min-valid-lifetime\": 3000,"
+        "\"max-valid-lifetime\": 5000 }";
 
     ConstElementPtr json;
     ASSERT_NO_THROW(json = parseDHCP6(config));
@@ -1361,7 +1582,11 @@ TEST_F(Dhcp6ParserTest, subnetLocal) {
     EXPECT_EQ(1, subnet->getT1());
     EXPECT_EQ(2, subnet->getT2());
     EXPECT_EQ(3, subnet->getPreferred());
+    EXPECT_EQ(2, subnet->getPreferred().getMin());
+    EXPECT_EQ(4, subnet->getPreferred().getMax());
     EXPECT_EQ(4, subnet->getValid());
+    EXPECT_EQ(3, subnet->getValid().getMin());
+    EXPECT_EQ(5, subnet->getValid().getMax());
 }
 
 // This test checks if it is possible to define a subnet with an
@@ -1396,7 +1621,7 @@ TEST_F(Dhcp6ParserTest, subnetInterface) {
     Subnet6Ptr subnet = CfgMgr::instance().getStagingCfg()->getCfgSubnets6()->
         selectSubnet(IOAddress("2001:db8:1::5"), classify_);
     ASSERT_TRUE(subnet);
-    EXPECT_EQ(valid_iface_, subnet->getIface());
+    EXPECT_EQ(valid_iface_, subnet->getIface().get());
 }
 
 // This test checks if invalid interface name will be rejected in
@@ -3559,55 +3784,62 @@ TEST_F(Dhcp6ParserTest, optionCodeZero) {
     testInvalidOptionParam("0", "code");
 }
 
-// Verify that option data which contains non hexadecimal characters
-// is rejected by the configuration.
-TEST_F(Dhcp6ParserTest, optionDataInvalidChar) {
-    // Option code 0 is reserved and should not be accepted
-    // by configuration parser.
-    testInvalidOptionParam("01020R", "data");
+// Verify that invalid hex literals for option data are detected.
+TEST_F(Dhcp6ParserTest, optionDataInvalidHexLiterals) {
+    testInvalidOptionParam("01020R", "data");   // non hex digit
+    testInvalidOptionParam("0x01:02", "data");  // 0x prefix with colon separator
+    testInvalidOptionParam("0x01 02", "data");  // 0x prefix with space separator
+    testInvalidOptionParam("0X0102", "data");   // 0X upper case X in prefix
+    testInvalidOptionParam("01.02", "data");    // invalid separator
 }
 
-// Verify that option data containing '0x' prefix is rejected
-// by the configuration.
-TEST_F(Dhcp6ParserTest, optionDataUnexpectedPrefix) {
-    // Option code 0 is reserved and should not be accepted
-    // by configuration parser.
-    testInvalidOptionParam("0x0102", "data");
-}
+// Verify the valid forms hex literals in option data are supported.
+TEST_F(Dhcp6ParserTest, optionDataValidHexLiterals) {
 
-// Verify that either lower or upper case characters are allowed
-// to specify the option data.
-TEST_F(Dhcp6ParserTest, optionDataLowerCase) {
-    ConstElementPtr x;
-    std::string config = createConfigWithOption("0a0b0C0D", "data");
-    ConstElementPtr json = parseDHCP6(config);
-
-    EXPECT_NO_THROW(x = configureDhcp6Server(srv_, json));
-    checkResult(x, 0);
-
-    Subnet6Ptr subnet = CfgMgr::instance().getStagingCfg()->getCfgSubnets6()->
-        selectSubnet(IOAddress("2001:db8:1::5"), classify_);
-    ASSERT_TRUE(subnet);
-    OptionContainerPtr options = subnet->getCfgOption()->getAll(DHCP6_OPTION_SPACE);
-    ASSERT_EQ(1, options->size());
-
-    // Get the search index. Index #1 is to search using option code.
-    const OptionContainerTypeIndex& idx = options->get<1>();
-
-    // Get the options for specified index. Expecting one option to be
-    // returned but in theory we may have multiple options with the same
-    // code so we get the range.
-    std::pair<OptionContainerTypeIndex::const_iterator,
-              OptionContainerTypeIndex::const_iterator> range =
-        idx.equal_range(D6O_SUBSCRIBER_ID);
-    // Expect single option with the code equal to 38.
-    ASSERT_EQ(1, std::distance(range.first, range.second));
-    const uint8_t subid_expected[] = {
-        0x0A, 0x0B, 0x0C, 0x0D
+    std::vector<std::string> valid_hexes =
+    {
+        "0a0b0C0D",     // upper and lower case
+        "0A:0B:0C:0D",  // colon seperator
+        "0A 0B 0C 0D",  // space seperator
+        "A0B0C0D",      // odd number of digits
+        "0xA0B0C0D"     // 0x prefix
     };
-    // Check if option is valid in terms of code and carried data.
-    testOption(*range.first, D6O_SUBSCRIBER_ID, subid_expected,
-               sizeof(subid_expected));
+
+    for (auto valid_hex : valid_hexes) {
+        ConstElementPtr x;
+        std::string config = createConfigWithOption(valid_hex, "data");
+        ConstElementPtr json;
+        ASSERT_NO_THROW(json = parseDHCP6(config));
+
+        EXPECT_NO_THROW(x = configureDhcp6Server(srv_, json));
+        checkResult(x, 0);
+
+        Subnet6Ptr subnet = CfgMgr::instance().getStagingCfg()->getCfgSubnets6()->
+                            selectSubnet(IOAddress("2001:db8:1::5"), classify_);
+        ASSERT_TRUE(subnet);
+        OptionContainerPtr options = subnet->getCfgOption()->getAll(DHCP6_OPTION_SPACE);
+        ASSERT_EQ(1, options->size());
+
+        // Get the search index. Index #1 is to search using option code.
+        const OptionContainerTypeIndex& idx = options->get<1>();
+
+        // Get the options for specified index. Expecting one option to be
+        // returned but in theory we may have multiple options with the same
+        // code so we get the range.
+        std::pair<OptionContainerTypeIndex::const_iterator,
+                   OptionContainerTypeIndex::const_iterator> range =
+                 idx.equal_range(D6O_SUBSCRIBER_ID);
+
+        // Expect single option with the code equal to 38.
+        ASSERT_EQ(1, std::distance(range.first, range.second));
+        const uint8_t subid_expected[] = { 0x0A, 0x0B, 0x0C, 0x0D };
+
+        // Check if option is valid in terms of code and carried data.
+        testOption(*range.first, D6O_SUBSCRIBER_ID, subid_expected, sizeof(subid_expected));
+
+        // Clear configuration for the next pass.
+        resetConfiguration();
+    }
 }
 
 // Verify that specific option object is returned for standard
@@ -4549,9 +4781,8 @@ TEST_F(Dhcp6ParserTest, classifyPdPools) {
     EXPECT_TRUE (pools.at(3)->clientSupported(classes));
 }
 
-// This test checks the ability of the server to parse a configuration
-// containing a full, valid dhcp-ddns (D2ClientConfig) entry.
-TEST_F(Dhcp6ParserTest, d2ClientConfig) {
+// This test verifies that valid d2CliengConfig works correctly.
+TEST_F(Dhcp6ParserTest, d2ClientConfigValid) {
     // Verify that the D2 configuration can be fetched and is set to disabled.
     D2ClientConfigPtr d2_client_config = CfgMgr::instance().getD2ClientConfig();
     EXPECT_FALSE(d2_client_config->getEnableUpdates());
@@ -4575,14 +4806,7 @@ TEST_F(Dhcp6ParserTest, d2ClientConfig) {
         "     \"sender-port\" : 778, "
         "     \"max-queue-size\" : 2048, "
         "     \"ncr-protocol\" : \"UDP\", "
-        "     \"ncr-format\" : \"JSON\", "
-        "     \"override-no-update\" : true, "
-        "     \"override-client-update\" : true, "
-        "     \"replace-client-name\" : \"when-present\", "
-        "     \"generated-prefix\" : \"test.prefix\", "
-        "     \"qualifying-suffix\" : \"test.suffix.\", "
-        "     \"hostname-char-set\" : \"[^A-Za-z0-9_-]\", "
-        "     \"hostname-char-replacement\" : \"x\" }, "
+        "     \"ncr-format\" : \"JSON\"}, "
         "\"valid-lifetime\": 4000 }";
 
     // Convert the JSON string to configuration elements.
@@ -4613,13 +4837,179 @@ TEST_F(Dhcp6ParserTest, d2ClientConfig) {
     EXPECT_EQ(2048, d2_client_config->getMaxQueueSize());
     EXPECT_EQ(dhcp_ddns::NCR_UDP, d2_client_config->getNcrProtocol());
     EXPECT_EQ(dhcp_ddns::FMT_JSON, d2_client_config->getNcrFormat());
-    EXPECT_TRUE(d2_client_config->getOverrideNoUpdate());
-    EXPECT_TRUE(d2_client_config->getOverrideClientUpdate());
-    EXPECT_EQ(D2ClientConfig::RCM_WHEN_PRESENT, d2_client_config->getReplaceClientNameMode());
-    EXPECT_EQ("test.prefix", d2_client_config->getGeneratedPrefix());
-    EXPECT_EQ("test.suffix.", d2_client_config->getQualifyingSuffix());
-    EXPECT_EQ("[^A-Za-z0-9_-]", d2_client_config->getHostnameCharSet());
-    EXPECT_EQ("x", d2_client_config->getHostnameCharReplacement());
+
+    // ddns-send-updates should be global default
+    checkGlobal("ddns-send-updates", true);
+
+    // The following, deprecated dhcp-ddns parameters,
+    // should all have global default values.
+    checkGlobal("ddns-override-no-update", false);
+    checkGlobal("ddns-override-client-update", false);
+    checkGlobal("ddns-replace-client-name", "never");
+    checkGlobal("ddns-generated-prefix", "myhost");
+    checkGlobal("ddns-qualifying-suffix", "");
+}
+
+// This test verifies that valid but deprecated dhcp-ddns parameters
+// get moved to the global scope when they do not already exist there.
+TEST_F(Dhcp6ParserTest, d2ClientConfigMoveToGlobal) {
+    // Verify that the D2 configuration can be fetched and is set to disabled.
+    D2ClientConfigPtr d2_client_config = CfgMgr::instance().getD2ClientConfig();
+    EXPECT_FALSE(d2_client_config->getEnableUpdates());
+
+    // Verify that the convenience method agrees.
+    ASSERT_FALSE(CfgMgr::instance().ddnsEnabled());
+
+    string config_str = "{ " + genIfaceConfig() + ","
+        "\"preferred-lifetime\": 3000,"
+        "\"valid-lifetime\": 4000,"
+        "\"rebind-timer\": 2000, "
+        "\"renew-timer\": 1000, "
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::/80\" } ],"
+        "    \"subnet\": \"2001:db8:1::/64\" } ], "
+        " \"dhcp-ddns\" : {"
+        "     \"enable-updates\" : true, "
+        "     \"server-ip\" : \"3001::1\", "
+        "     \"server-port\" : 777, "
+        "     \"sender-ip\" : \"3001::2\", "
+        "     \"sender-port\" : 778, "
+        "     \"max-queue-size\" : 2048, "
+        "     \"ncr-protocol\" : \"UDP\", "
+        "     \"ncr-format\" : \"JSON\", "
+        "     \"override-no-update\" : true, "
+        "     \"override-client-update\" : true, "
+        "     \"replace-client-name\" : \"when-present\", "
+        "     \"generated-prefix\" : \"test.prefix\", "
+        "     \"qualifying-suffix\" : \"test.suffix.\", "
+        "     \"hostname-char-set\" : \"[^A-Z]\", "
+        "     \"hostname-char-replacement\" : \"x\"}, "
+        "\"valid-lifetime\": 4000 }";
+
+    // Convert the JSON string to configuration elements.
+    ConstElementPtr config;
+    ASSERT_NO_THROW(config = parseDHCP6(config_str));
+    extractConfig(config_str);
+
+    // Pass the configuration in for parsing.
+    ConstElementPtr status;
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, config));
+
+    // check if returned status is OK
+    checkResult(status, 0);
+
+    // Verify that DHCP-DDNS updating is enabled.
+    EXPECT_TRUE(CfgMgr::instance().ddnsEnabled());
+
+    // Verify that the D2 configuration can be retrieved.
+    d2_client_config = CfgMgr::instance().getD2ClientConfig();
+    ASSERT_TRUE(d2_client_config);
+
+    // Verify that the configuration values are correct.
+    EXPECT_TRUE(d2_client_config->getEnableUpdates());
+    EXPECT_EQ("3001::1", d2_client_config->getServerIp().toText());
+    EXPECT_EQ(777, d2_client_config->getServerPort());
+    EXPECT_EQ("3001::2", d2_client_config->getSenderIp().toText());
+    EXPECT_EQ(778, d2_client_config->getSenderPort());
+    EXPECT_EQ(2048, d2_client_config->getMaxQueueSize());
+    EXPECT_EQ(dhcp_ddns::NCR_UDP, d2_client_config->getNcrProtocol());
+    EXPECT_EQ(dhcp_ddns::FMT_JSON, d2_client_config->getNcrFormat());
+
+    // ddns-send-updates should be global default
+    checkGlobal("ddns-send-updates", true);
+
+    // The following should all have been moved from dhcp-ddns.
+    checkGlobal("ddns-override-no-update", true);
+    checkGlobal("ddns-override-client-update", true);
+    checkGlobal("ddns-replace-client-name", "when-present");
+    checkGlobal("ddns-generated-prefix", "test.prefix");
+    checkGlobal("ddns-qualifying-suffix", "test.suffix.");
+    checkGlobal("hostname-char-set", "[^A-Z]");
+    checkGlobal("hostname-char-replacement", "x");
+}
+
+// This test verifies that explicit global values override deprecated
+// dhcp-ddns parameters (i.e. global scope wins)
+TEST_F(Dhcp6ParserTest, d2ClientConfigBoth) {
+    // Verify that the D2 configuration can be fetched and is set to disabled.
+    D2ClientConfigPtr d2_client_config = CfgMgr::instance().getD2ClientConfig();
+    EXPECT_FALSE(d2_client_config->getEnableUpdates());
+
+    // Verify that the convenience method agrees.
+    ASSERT_FALSE(CfgMgr::instance().ddnsEnabled());
+
+    string config_str = "{ " + genIfaceConfig() + ","
+        "\"preferred-lifetime\": 3000,"
+        "\"valid-lifetime\": 4000,"
+        "\"rebind-timer\": 2000, "
+        "\"renew-timer\": 1000, "
+        "\"subnet6\": [ { "
+        "    \"pools\": [ { \"pool\": \"2001:db8:1::/80\" } ],"
+        "    \"subnet\": \"2001:db8:1::/64\" } ], "
+        " \"dhcp-ddns\" : {"
+        "     \"enable-updates\" : true, "
+        "     \"server-ip\" : \"3001::1\", "
+        "     \"server-port\" : 777, "
+        "     \"sender-ip\" : \"3001::2\", "
+        "     \"sender-port\" : 778, "
+        "     \"max-queue-size\" : 2048, "
+        "     \"ncr-protocol\" : \"UDP\", "
+        "     \"ncr-format\" : \"JSON\", "
+        "     \"override-no-update\" : false, "
+        "     \"override-client-update\" : false, "
+        "     \"replace-client-name\" : \"when-present\", "
+        "     \"generated-prefix\" : \"d2.prefix\", "
+        "     \"qualifying-suffix\" : \"d2.suffix.\", "
+        "     \"hostname-char-set\" : \"[^0-9]\", "
+        "     \"hostname-char-replacement\" : \"z\" }, "
+        " \"ddns-send-updates\" : false, "
+        " \"ddns-override-no-update\" : true, "
+        " \"ddns-override-client-update\" : true, "
+        " \"ddns-replace-client-name\" : \"always\", "
+        " \"ddns-generated-prefix\" : \"global.prefix\", "
+        " \"ddns-qualifying-suffix\" : \"global.suffix.\", "
+        " \"hostname-char-set\" : \"[^A-Z]\", "
+        " \"hostname-char-replacement\" : \"x\", "
+        "\"valid-lifetime\": 4000 }";
+
+    // Convert the JSON string to configuration elements.
+    ConstElementPtr config;
+    ASSERT_NO_THROW(config = parseDHCP6(config_str));
+    extractConfig(config_str);
+
+    // Pass the configuration in for parsing.
+    ConstElementPtr status;
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, config));
+
+    // check if returned status is OK
+    checkResult(status, 0);
+
+    // Verify that DHCP-DDNS updating is enabled.
+    EXPECT_TRUE(CfgMgr::instance().ddnsEnabled());
+
+    // Verify that the D2 configuration can be retrieved.
+    d2_client_config = CfgMgr::instance().getD2ClientConfig();
+    ASSERT_TRUE(d2_client_config);
+
+    // Verify that the configuration values are correct.
+    EXPECT_TRUE(d2_client_config->getEnableUpdates());
+    EXPECT_EQ("3001::1", d2_client_config->getServerIp().toText());
+    EXPECT_EQ(777, d2_client_config->getServerPort());
+    EXPECT_EQ("3001::2", d2_client_config->getSenderIp().toText());
+    EXPECT_EQ(778, d2_client_config->getSenderPort());
+    EXPECT_EQ(2048, d2_client_config->getMaxQueueSize());
+    EXPECT_EQ(dhcp_ddns::NCR_UDP, d2_client_config->getNcrProtocol());
+    EXPECT_EQ(dhcp_ddns::FMT_JSON, d2_client_config->getNcrFormat());
+
+    // Verify all global values won.
+    checkGlobal("ddns-send-updates", false);
+    checkGlobal("ddns-override-no-update", true);
+    checkGlobal("ddns-override-client-update", true);
+    checkGlobal("ddns-replace-client-name", "always");
+    checkGlobal("ddns-generated-prefix", "global.prefix");
+    checkGlobal("ddns-qualifying-suffix", "global.suffix.");
+    checkGlobal("hostname-char-set", "[^A-Z]");
+    checkGlobal("hostname-char-replacement", "x");
 }
 
 // This test checks the ability of the server to handle a configuration
@@ -5451,6 +5841,74 @@ TEST_F(Dhcp6ParserTest, rsooBogusName) {
     EXPECT_TRUE(errorContainsPosition(status, "<string>"));
 }
 
+/// Check that not existent data directory returns an error.
+TEST_F(Dhcp6ParserTest, notExistDataDir) {
+
+    string config_txt = "{\n"
+        "\"data-directory\": \"/does-not-exist--\"\n"
+        "}";
+    ConstElementPtr config;
+    ASSERT_NO_THROW(config = parseDHCP6(config_txt));
+
+    ConstElementPtr status;
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, config));
+
+    // returned value should be 1 (error)
+    int rcode;
+    ConstElementPtr comment = parseAnswer(rcode, status);
+    EXPECT_EQ(1, rcode);
+    string text;
+    ASSERT_NO_THROW(text = comment->stringValue());
+    EXPECT_EQ("Bad directory '/does-not-exist--': No such file or directory",
+              text);
+}
+
+/// Check that not a directory data directory returns an error.
+TEST_F(Dhcp6ParserTest, notDirDataDir) {
+
+    string config_txt = "{\n"
+        "\"data-directory\": \"/dev/null\"\n"
+        "}";
+    ConstElementPtr config;
+    ASSERT_NO_THROW(config = parseDHCP6(config_txt));
+
+    ConstElementPtr status;
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, config));
+
+    // returned value should be 1 (error)
+    int rcode;
+    ConstElementPtr comment = parseAnswer(rcode, status);
+    EXPECT_EQ(1, rcode);
+    string text;
+    ASSERT_NO_THROW(text = comment->stringValue());
+    EXPECT_EQ("'/dev/null' is not a directory", text);
+}
+
+/// Check that a valid data directory is accepted.
+TEST_F(Dhcp6ParserTest, testDataDir) {
+
+    EXPECT_TRUE(CfgMgr::instance().getDataDir().unspecified());
+    string original_datadir(CfgMgr::instance().getDataDir());
+    string datadir(TEST_DATA_BUILDDIR);
+    string config_txt = "{\n"
+        "\"data-directory\": \"" + datadir + "\"\n"
+        "}";
+    ConstElementPtr config;
+    ASSERT_NO_THROW(config = parseDHCP6(config_txt));
+    // Do not export it as it will keep the current TEST_DATA_BUILDDIR...
+
+    ConstElementPtr status;
+    EXPECT_NO_THROW(status = configureDhcp6Server(srv_, config));
+
+    // returned value should be 0 (success);
+    checkResult(status, 0);
+
+    // The value of data-directory was updated.
+    EXPECT_FALSE(CfgMgr::instance().getDataDir().unspecified());
+    EXPECT_EQ(datadir, string(CfgMgr::instance().getDataDir()));
+    EXPECT_NE(original_datadir, string(CfgMgr::instance().getDataDir()));
+}
+
 /// Check that the decline-probation-period value has a default value if not
 /// specified explicitly.
 TEST_F(Dhcp6ParserTest, declineTimerDefault) {
@@ -6029,7 +6487,7 @@ TEST_F(Dhcp6ParserTest, sharedNetworks1subnet) {
     const Subnet6Collection * subs = net->getAllSubnets();
     ASSERT_TRUE(subs);
     EXPECT_EQ(1, subs->size());
-    checkSubnet(*subs, "2001:db8::/48", 900, 1800, 3600, 7200);
+    checkSubnet(*subs, "2001:db8::/48", 0, 0, 3600, 7200);
 
     // Now make sure the subnet was added to global list of subnets.
     CfgSubnets6Ptr subnets6 = CfgMgr::instance().getStagingCfg()->getCfgSubnets6();
@@ -6037,7 +6495,7 @@ TEST_F(Dhcp6ParserTest, sharedNetworks1subnet) {
 
     subs = subnets6->getAll();
     ASSERT_TRUE(subs);
-    checkSubnet(*subs, "2001:db8::/48", 900, 1800, 3600, 7200);
+    checkSubnet(*subs, "2001:db8::/48", 0, 0, 3600, 7200);
 }
 
 // Test verifies that a proper shared-network (three subnets) is
@@ -6053,7 +6511,11 @@ TEST_F(Dhcp6ParserTest, sharedNetworks3subnets) {
         "\"renew-timer\": 1000, \n"
         "\"rebind-timer\": 2000, \n"
         "\"preferred-lifetime\": 3000, \n"
+        "\"min-preferred-lifetime\": 2000, \n"
+        "\"max-preferred-lifetime\": 4000, \n"
         "\"valid-lifetime\": 4000, \n"
+        "\"min-valid-lifetime\": 3000, \n"
+        "\"max-valid-lifetime\": 5000, \n"
         "\"shared-networks\": [ {\n"
         "    \"name\": \"foo\"\n,"
         "    \"subnet6\": [\n"
@@ -6067,7 +6529,11 @@ TEST_F(Dhcp6ParserTest, sharedNetworks3subnets) {
         "        \"renew-timer\": 2,\n"
         "        \"rebind-timer\": 22,\n"
         "        \"preferred-lifetime\": 222,\n"
-        "        \"valid-lifetime\": 2222\n"
+        "        \"min-preferred-lifetime\": 111,\n"
+        "        \"max-preferred-lifetime\": 333,\n"
+        "        \"valid-lifetime\": 2222,\n"
+        "        \"min-valid-lifetime\": 1111,\n"
+        "        \"max-valid-lifetime\": 3333\n"
         "    },\n"
         "    { \n"
         "        \"subnet\": \"2001:db3::/48\",\n"
@@ -6097,9 +6563,15 @@ TEST_F(Dhcp6ParserTest, sharedNetworks3subnets) {
     const Subnet6Collection * subs = net->getAllSubnets();
     ASSERT_TRUE(subs);
     EXPECT_EQ(3, subs->size());
-    checkSubnet(*subs, "2001:db1::/48", 1000, 2000, 3000, 4000);
-    checkSubnet(*subs, "2001:db2::/48", 2, 22, 222, 2222);
-    checkSubnet(*subs, "2001:db3::/48", 1000, 2000, 3000, 4000);
+    checkSubnet(*subs, "2001:db1::/48",
+                1000, 2000, 3000, 4000,
+                2000, 4000, 3000, 5000);
+    checkSubnet(*subs, "2001:db2::/48",
+                2, 22, 222, 2222,
+                111, 333, 1111, 3333);
+    checkSubnet(*subs, "2001:db3::/48",
+                1000, 2000, 3000, 4000,
+                2000, 4000, 3000, 5000);
 
     // Now make sure the subnet was added to global list of subnets.
     CfgSubnets6Ptr subnets6 = CfgMgr::instance().getStagingCfg()->getCfgSubnets6();
@@ -6107,9 +6579,15 @@ TEST_F(Dhcp6ParserTest, sharedNetworks3subnets) {
 
     subs = subnets6->getAll();
     ASSERT_TRUE(subs);
-    checkSubnet(*subs, "2001:db1::/48", 1000, 2000, 3000, 4000);
-    checkSubnet(*subs, "2001:db2::/48", 2, 22, 222, 2222);
-    checkSubnet(*subs, "2001:db3::/48", 1000, 2000, 3000, 4000);
+    checkSubnet(*subs, "2001:db1::/48",
+                1000, 2000, 3000, 4000,
+                2000, 4000, 3000, 5000);
+    checkSubnet(*subs, "2001:db2::/48",
+                2, 22, 222, 2222,
+                111, 333, 1111, 3333);
+    checkSubnet(*subs, "2001:db3::/48",
+                1000, 2000, 3000, 4000,
+                2000, 4000, 3000, 5000);
 }
 
 // This test checks if parameters are derived properly:
@@ -6136,13 +6614,21 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDerive) {
         "\"renew-timer\": 1, \n"
         "\"rebind-timer\": 2, \n"
         "\"preferred-lifetime\": 3,\n"
+        "\"min-preferred-lifetime\": 2,\n"
+        "\"max-preferred-lifetime\": 4,\n"
         "\"valid-lifetime\": 4, \n"
+        "\"min-valid-lifetime\": 3, \n"
+        "\"max-valid-lifetime\": 5, \n"
         "\"shared-networks\": [ {\n"
         "    \"name\": \"foo\"\n,"
         "    \"renew-timer\": 10,\n"
         "    \"rebind-timer\": 20, \n"
         "    \"preferred-lifetime\": 30,\n"
+        "    \"min-preferred-lifetime\": 20,\n"
+        "    \"max-preferred-lifetime\": 40,\n"
         "    \"valid-lifetime\": 40, \n"
+        "    \"min-valid-lifetime\": 30, \n"
+        "    \"max-valid-lifetime\": 50, \n"
         "    \"interface-id\": \"oneone\",\n"
         "    \"relay\": {\n"
         "        \"ip-address\": \"1111::1\"\n"
@@ -6160,10 +6646,14 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDerive) {
         "        \"renew-timer\": 100\n,"
         "        \"rebind-timer\": 200, \n"
         "        \"preferred-lifetime\": 300,\n"
+        "        \"min-preferred-lifetime\": 200,\n"
+        "        \"max-preferred-lifetime\": 400,\n"
         "        \"relay\": {\n"
         "            \"ip-address\": \"2222::2\"\n"
         "        },\n"
         "        \"valid-lifetime\": 400, \n"
+        "        \"min-valid-lifetime\": 300, \n"
+        "        \"max-valid-lifetime\": 500, \n"
         "        \"interface-id\": \"twotwo\",\n"
         "        \"rapid-commit\": true,\n"
         "        \"reservation-mode\": \"out-of-pool\"\n"
@@ -6205,7 +6695,8 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDerive) {
     // derived from shared-network level. Other parameters a derived
     // from global scope to shared-network level and later again to
     // subnet6 level.
-    Subnet6Ptr s = checkSubnet(*subs, "2001:db1::/48", 10, 20, 30, 40);
+    Subnet6Ptr s = checkSubnet(*subs, "2001:db1::/48",
+                               10, 20, 30, 40, 20, 40, 30, 50);
     ASSERT_TRUE(s);
     ASSERT_TRUE(s->getInterfaceId());
     EXPECT_TRUE(iface_id1.equals(s->getInterfaceId()));
@@ -6217,7 +6708,8 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDerive) {
     // was specified explicitly. Other parameters a derived
     // from global scope to shared-network level and later again to
     // subnet6 level.
-    s = checkSubnet(*subs, "2001:db2::/48", 100, 200, 300, 400);
+    s = checkSubnet(*subs, "2001:db2::/48",
+                    100, 200, 300, 400, 200, 400, 300, 500);
     ASSERT_TRUE(s->getInterfaceId());
     EXPECT_TRUE(iface_id2.equals(s->getInterfaceId()));
     EXPECT_TRUE(s->hasRelayAddress(IOAddress("2222::2")));
@@ -6233,7 +6725,7 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDerive) {
     EXPECT_EQ(1, subs->size());
 
     // This subnet should derive its renew-timer from global scope.
-    s = checkSubnet(*subs, "2001:db3::/48", 1, 2, 3, 4);
+    s = checkSubnet(*subs, "2001:db3::/48", 1, 2, 3, 4, 2, 4, 3, 5);
     EXPECT_FALSE(s->getInterfaceId());
     EXPECT_FALSE(s->hasRelays());
     EXPECT_FALSE(s->getRapidCommit());
@@ -6255,6 +6747,7 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDeriveInterfaces) {
         "\"shared-networks\": [ {\n"
         "    \"name\": \"foo\"\n,"
         "    \"interface\": \"eth0\",\n"
+        "    \"rebind-timer\": 10, \n"
         "    \"subnet6\": [\n"
         "    { \n"
         "        \"subnet\": \"2001:db1::/48\",\n"
@@ -6262,6 +6755,7 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDeriveInterfaces) {
         "    },\n"
         "    { \n"
         "        \"subnet\": \"2001:db2::/48\",\n"
+        "        \"rebind-timer\": 100, \n"
         "        \"pools\": [ { \"pool\": \"2001:db2::/64\" } ],\n"
         "        \"interface\": \"eth0\"\n"
         "    }\n"
@@ -6298,20 +6792,20 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDeriveInterfaces) {
     ASSERT_TRUE(subs);
     EXPECT_EQ(2, subs->size());
 
-    // For the first subnet, the renew-timer should be 10, because it was
+    // For the first subnet, the rebind-timer should be 10, because it was
     // derived from shared-network level. Other parameters a derived
     // from global scope to shared-network level and later again to
     // subnet6 level.
-    Subnet6Ptr s = checkSubnet(*subs, "2001:db1::/48", 900, 1800, 3600, 7200);
+    Subnet6Ptr s = checkSubnet(*subs, "2001:db1::/48", 0, 10, 3600, 7200);
     ASSERT_TRUE(s);
-    EXPECT_EQ("eth0", s->getIface());
+    EXPECT_EQ("eth0", s->getIface().get());
 
-    // For the second subnet, the renew-timer should be 100, because it
+    // For the second subnet, the rebind-timer should be 100, because it
     // was specified explicitly. Other parameters a derived
     // from global scope to shared-network level and later again to
     // subnet6 level.
-    checkSubnet(*subs, "2001:db2::/48", 900, 1800, 3600, 7200);
-    EXPECT_EQ("eth0", s->getIface());
+    checkSubnet(*subs, "2001:db2::/48", 0, 100, 3600, 7200);
+    EXPECT_EQ("eth0", s->getIface().get());
 
     // Ok, now check the second shared subnet.
     net = nets->at(1);
@@ -6321,9 +6815,9 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDeriveInterfaces) {
     ASSERT_TRUE(subs);
     EXPECT_EQ(1, subs->size());
 
-    // This subnet should derive its renew-timer from global scope.
-    s = checkSubnet(*subs, "2001:db3::/48", 900, 1800, 3600, 7200);
-    EXPECT_EQ("", s->getIface());
+    // This subnet should derive its rebind-timer from global scope.
+    s = checkSubnet(*subs, "2001:db3::/48", 0, 0, 3600, 7200);
+    EXPECT_EQ("", s->getIface().get());
 }
 
 
@@ -6403,7 +6897,7 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDeriveClientClass) {
     // Let's check the first one.
     SharedNetwork6Ptr net = nets->at(0);
     ASSERT_TRUE(net);
-    EXPECT_EQ("alpha", net->getClientClass());
+    EXPECT_EQ("alpha", net->getClientClass().get());
 
     const Subnet6Collection * subs = net->getAllSubnets();
     ASSERT_TRUE(subs);
@@ -6411,15 +6905,15 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDeriveClientClass) {
 
     // For the first subnet, the client-class should be inherited from
     // shared-network level.
-    Subnet6Ptr s = checkSubnet(*subs, "2001:db1::/48", 900, 1800, 3600, 7200);
+    Subnet6Ptr s = checkSubnet(*subs, "2001:db1::/48", 0, 0, 3600, 7200);
     ASSERT_TRUE(s);
-    EXPECT_EQ("alpha", s->getClientClass());
+    EXPECT_EQ("alpha", s->getClientClass().get());
 
     // For the second subnet, the values are overridden on subnet level.
     // The value should not be inherited.
-    s = checkSubnet(*subs, "2001:db2::/48", 900, 1800, 3600, 7200);
+    s = checkSubnet(*subs, "2001:db2::/48", 0, 0, 3600, 7200);
     ASSERT_TRUE(s);
-    EXPECT_EQ("beta", s->getClientClass()); // beta defined on subnet level
+    EXPECT_EQ("beta", s->getClientClass().get()); // beta defined on subnet level
 
     // Ok, now check the second shared network. It doesn't have
     // anything defined on shared-network or subnet level, so
@@ -6432,7 +6926,7 @@ TEST_F(Dhcp6ParserTest, sharedNetworksDeriveClientClass) {
     EXPECT_EQ(1, subs->size());
 
     // This subnet should derive its renew-timer from global scope.
-    s = checkSubnet(*subs, "2001:db3::/48", 900, 1800, 3600, 7200);
+    s = checkSubnet(*subs, "2001:db3::/48", 0, 0, 3600, 7200);
     EXPECT_TRUE(s->getClientClass().empty());
 }
 
@@ -6922,7 +7416,12 @@ TEST_F(Dhcp6ParserTest, globalReservations) {
 // This test verifies that configuration control info gets populated.
 TEST_F(Dhcp6ParserTest, configControlInfo) {
     string config = PARSER_CONFIGS[8];
-    extractConfig(config);
+
+    // Should be able to register a backend factory for "mysql".
+    ASSERT_TRUE(TestConfigBackendDHCPv6::
+                registerBackendType(ConfigBackendDHCPv6Mgr::instance(),
+                                    "mysql"));
+
     configure(config, CONTROL_RESULT_SUCCESS, "");
 
     // Make sure the config control info is there.
@@ -6941,6 +7440,10 @@ TEST_F(Dhcp6ParserTest, configControlInfo) {
               dblist.front().getAccessString());
     EXPECT_EQ("name=keatest2 password=keatest type=mysql user=keatest",
               dblist.back().getAccessString());
+
+    // Verify that the config-fetch-wait-time is correct.
+    EXPECT_FALSE(info->getConfigFetchWaitTime().unspecified());
+    EXPECT_EQ(10, info->getConfigFetchWaitTime().get());
 }
 
 // Check whether it is possible to configure server-tag
@@ -6975,7 +7478,7 @@ TEST_F(Dhcp6ParserTest, serverTag) {
 
     // Configuration with the tag should have the tag value.
     configure(config_tag, CONTROL_RESULT_SUCCESS, "");
-    EXPECT_EQ("boo", CfgMgr::instance().getStagingCfg()->getServerTag());
+    EXPECT_EQ("boo", CfgMgr::instance().getStagingCfg()->getServerTag().get());
 
     // Make sure a invalid server-tag fails to parse.
     ASSERT_THROW(parseDHCP6(bad_tag), std::exception);
@@ -7096,14 +7599,16 @@ TEST_F(Dhcp6ParserTest, dhcpQueueControlInvalid) {
         "{ \n"
         "   \"enable-type\": \"some-type\" \n"
         "} \n",
-        "<string>:2.2-21: 'enable-queue' is required: (<string>:2:24)"
+        "missing parameter 'enable-queue' (<string>:2:2) "
+        "[dhcp-queue-control map between <string>:2:24 and <string>:4:1]"
         },
         {
         "enable-queue not boolean",
         "{ \n"
         "   \"enable-queue\": \"always\" \n"
         "} \n",
-        "<string>:2.2-21: 'enable-queue' must be boolean: (<string>:2:24)"
+        "<string>:3.20-27: syntax error, unexpected constant string, "
+        "expecting boolean"
         },
         {
         "queue type not a string",
@@ -7111,7 +7616,8 @@ TEST_F(Dhcp6ParserTest, dhcpQueueControlInvalid) {
         "   \"enable-queue\": true, \n"
         "   \"queue-type\": 7777 \n"
         "} \n",
-        "<string>:2.2-21: 'queue-type' must be a string: (<string>:2:24)"
+        "<string>:4.18-21: syntax error, unexpected integer, "
+        "expecting constant string"
         }
     };
 
