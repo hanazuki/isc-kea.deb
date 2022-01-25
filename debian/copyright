@@ -12,15 +12,9 @@ Copyright: 2016-2018, Adam Majer <adamm@zombino.com>
 License: MPL-2.0
 
 Files: src/bin/admin/tests/dhcpdb_create_1.0.cql
-       src/lib/dhcpsrv/benchmarks/
-       src/lib/dhcpsrv/cql_connection.cc
-       src/lib/dhcpsrv/cql_connection.h
-  src/lib/dhcpsrv/cql_exchange.cc
-  src/lib/dhcpsrv/cql_exchange.h
   src/lib/dhcpsrv/cql_host_data_source.h
   src/lib/dhcpsrv/cql_lease_mgr.cc
   src/lib/dhcpsrv/cql_lease_mgr.h
-  src/lib/dhcpsrv/sql_common.h
   src/lib/dhcpsrv/cql_host_data_source.cc
   src/lib/dhcpsrv/tests/cql_host_data_source_unittest.cc
   src/lib/dhcpsrv/tests/cql_lease_mgr_unittest.cc
@@ -32,28 +26,18 @@ License: Apache-2.0
 Files: src/bin/agent/agent_parser.cc
   src/bin/agent/agent_parser.h
   src/bin/agent/location.hh
-  src/bin/agent/position.hh
-  src/bin/agent/stack.hh
   src/bin/d2/d2_parser.cc
   src/bin/d2/d2_parser.h
   src/bin/d2/location.hh
-  src/bin/d2/position.hh
-  src/bin/d2/stack.hh
   src/bin/dhcp4/dhcp4_parser.cc
   src/bin/dhcp4/dhcp4_parser.h
   src/bin/dhcp4/location.hh
-  src/bin/dhcp4/position.hh
-  src/bin/dhcp4/stack.hh
   src/bin/dhcp6/dhcp6_parser.cc
   src/bin/dhcp6/dhcp6_parser.h
   src/bin/dhcp6/location.hh
-  src/bin/dhcp6/position.hh
-  src/bin/dhcp6/stack.hh
   src/lib/eval/location.hh
   src/lib/eval/parser.cc
   src/lib/eval/parser.h
-  src/lib/eval/position.hh
-  src/lib/eval/stack.hh
 Copyright: 2002-2015, Free Software Foundation, Inc.
 License: GPL-3+-with-bison-exception
 
