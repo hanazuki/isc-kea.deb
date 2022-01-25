@@ -1,3 +1,4 @@
 0001-support_kfreebsd
 0002-kea_admin_fix
 0004-Put-KEA_LOCKFILE_DIR-to-runstatedir.patch
+0007-keyctrl-colored-ddns-status.patch
