@@ -8,6 +8,7 @@ Files: debian/*
 Copyright: 2016-2018, Adam Majer <adamm@zombino.com>
 	   2017-2018, Jason Guy (jason.e.guy@gmail.com)
 	   2018-2019, Internet Systems Consortium, Inc.
+	   2022, Canonical Ltd.
 License: MPL-2.0
 
 Files: src/bin/admin/tests/dhcpdb_create_1.0.cql
