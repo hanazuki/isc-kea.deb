@@ -1,4 +1,3 @@
 0001-support_kfreebsd
 0002-kea_admin_fix
-0003-Use-runstatedir-for-pid-file-location.patch
 0004-Put-KEA_LOCKFILE_DIR-to-runstatedir.patch
