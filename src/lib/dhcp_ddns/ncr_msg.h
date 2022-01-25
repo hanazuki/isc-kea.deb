@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -253,12 +253,15 @@ public:
     /// expires.
     /// @param lease_length the amount of time in seconds for which the
     /// lease is valid (TTL).
+    /// @param conflict_resolution indicates whether or not conflict resolution
+    /// (per RFC 4703) is enabled.
     NameChangeRequest(const NameChangeType change_type,
                       const bool forward_change, const bool reverse_change,
                       const std::string& fqdn, const std::string& ip_address,
                       const D2Dhcid& dhcid,
                       const uint64_t lease_expires_on,
-                      const uint32_t lease_length);
+                      const uint32_t lease_length,
+                      const bool conflict_resolution = true);
 
     /// @brief Static method for creating a NameChangeRequest from a
     /// buffer containing a marshalled request in a given format.
@@ -287,7 +290,7 @@ public:
     /// @brief Instance method for marshalling the contents of the request
     /// into the given buffer in the given format.
     ///
-    /// Whe the format is:
+    /// When the format is:
     ///
     /// JSON: Upon completion, the buffer will contain a two byte unsigned
     /// integer which specifies the length of the JSON text; followed by the
@@ -321,19 +324,20 @@ public:
     ///      "ip-address" : "<address>",
     ///      "dhcid" : "<hex_string>",
     ///      "lease-expires-on" : "<yyyymmddHHMMSS>",
-    ///      "lease-length" : <secs>
+    ///      "lease-length" : <secs>,
+    ///      "use-conflict-resolution": <boolean>
     ///     }
     /// @endcode
     ///
     /// - change-type - indicates whether this request is to add or update
     ///   DNS entries or to remove them.  The value is an integer and is
     ///   0 for add/update and 1 for remove.
-    /// - forward-change - indicates whether the the forward (name to
+    /// - forward-change - indicates whether the forward (name to
     ///   address) DNS zone should be updated.  The value is a string
     ///   representing a boolean.  It is "true" if the zone should be updated
     ///   and "false" if not. (Unlike the keyword, the boolean value is
     ///   case-insensitive.)
-    /// - reverse-change - indicates whether the the reverse (address to
+    /// - reverse-change - indicates whether the reverse (address to
     ///   name) DNS zone should be updated.  The value is a string
     ///   representing a boolean.  It is "true" if the zone should be updated
     ///   and "false" if not. (Unlike the keyword, the boolean value is
@@ -357,6 +361,8 @@ public:
     ///     - SS - seconds of the minute (0-59)
     /// - lease-length - the length of the lease in seconds.  This is an
     ///   integer and may range between 1 and 4294967295 (2^32 - 1) inclusive.
+    /// - use-conflict-resolution - when true, follow RFC 4703 which uses
+    ///   DHCID records to prohibit multiple clients from updating an FQDN
     ///
     /// Examples:
     ///
@@ -371,7 +377,8 @@ public:
     ///     "ip-address" : "192.168.2.1" ,
     ///     "dhcid" : "010203040A7F8E3D" ,
     ///     "lease-expires-on" : "20130121132405",
-    ///     "lease-length" : 1300
+    ///     "lease-length" : 1300,
+    ///     "use-conflict-resolution": true
     ///  }
     /// @endcode
     ///
@@ -386,7 +393,8 @@ public:
     ///     "ip-address" : "2001::db8:1::2",
     ///     "dhcid" : "010203040A7F8E3D" , "
     ///     "lease-expires-on" : "20130121132405",
-    ///     "lease-length" : 27400
+    ///     "lease-length" : 27400,
+    ///     "use-conflict-resolution": true
     ///   }
     /// @endcode
     ///
@@ -583,7 +591,7 @@ public:
     /// primary purpose of this function is to provide a consistent way to identify
     /// requests for logging purposes.
     ///
-    /// @return a string with the the request's request ID (currently DHCID)
+    /// @return a string with the request's request ID (currently DHCID)
     std::string getRequestId() const {
         return (dhcid_.toStr());
     }
@@ -648,6 +656,28 @@ public:
     /// @throw NcrMessageError if the element is not a string
     /// Element
     void setLeaseLength(isc::data::ConstElementPtr element);
+
+    /// @brief Checks if conflict resolution is enabled
+    ///
+    /// @return a true if the conflict resolution is enabled.
+    bool useConflictResolution() const {
+        return (conflict_resolution_);
+    }
+
+    /// @brief Sets the conflict resolution flag to the given value.
+    ///
+    /// @param value contains the new value to assign to the conflict
+    /// resolution flag
+    void setConflictResolution(const bool value);
+
+    /// @brief Sets the conflict resolution flag to the value of the given Element.
+    ///
+    /// @param element is a boolean Element containing the conflict resolution flag
+    /// value.
+    ///
+    /// @throw NcrMessageError if the element is not a boolean
+    /// Element
+    void setConflictResolution(isc::data::ConstElementPtr element);
 
     /// @brief Fetches the request status.
     ///
@@ -716,6 +746,9 @@ private:
 
     /// @brief The amount of time in seconds for which the lease is valid (TTL).
     uint32_t lease_length_;
+
+    /// @brief Indicates if conflict resolution is enabled.
+    bool conflict_resolution_;
 
     /// @brief The processing status of the request.  Used internally.
     NameChangeStatus status_;

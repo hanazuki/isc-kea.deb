@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -856,7 +856,7 @@ TEST_F(Pkt4Test, hwaddr) {
     EXPECT_TRUE(hwaddr == pkt->getHWAddr());
 }
 
-// This test verifies that the packet remte and local HW address can
+// This test verifies that the packet remote and local HW address can
 // be set and returned.
 TEST_F(Pkt4Test, hwaddrSrcRemote) {
     scoped_ptr<Pkt4> pkt(new Pkt4(DHCPOFFER, 1234));
@@ -1120,6 +1120,38 @@ TEST_F(Pkt4Test, getName) {
             EXPECT_STREQ("DHCPINFORM", Pkt4::getName(type));
             break;
 
+        case DHCPLEASEQUERY:
+            EXPECT_STREQ("DHCPLEASEQUERY", Pkt4::getName(type));
+            break;
+
+        case DHCPLEASEUNASSIGNED:
+            EXPECT_STREQ("DHCPLEASEUNASSIGNED", Pkt4::getName(type));
+            break;
+
+        case DHCPLEASEUNKNOWN:
+            EXPECT_STREQ("DHCPLEASEUNKNOWN", Pkt4::getName(type));
+            break;
+
+        case DHCPLEASEACTIVE:
+            EXPECT_STREQ("DHCPLEASEACTIVE", Pkt4::getName(type));
+            break;
+
+        case DHCPBULKLEASEQUERY:
+            EXPECT_STREQ("DHCPBULKLEASEQUERY", Pkt4::getName(type));
+            break;
+
+        case DHCPLEASEQUERYDONE:
+            EXPECT_STREQ("DHCPLEASEQUERYDONE", Pkt4::getName(type));
+            break;
+
+        case DHCPLEASEQUERYSTATUS:
+            EXPECT_STREQ("DHCPLEASEQUERYSTATUS", Pkt4::getName(type));
+            break;
+
+        case DHCPTLS:
+            EXPECT_STREQ("DHCPTLS", Pkt4::getName(type));
+            break;
+
         default:
             EXPECT_STREQ("UNKNOWN", Pkt4::getName(type));
         }
@@ -1280,7 +1312,7 @@ TEST_F(Pkt4Test, nullTerminatedOptions) {
         pkt->pack()
     );
 
-    // Create a vector of our expectd packed option data.
+    // Create a vector of our expected packed option data.
     vector<uint8_t> packed_opts =
         {
           DHO_HOST_NAME, 3, 't', 'w', 'o',

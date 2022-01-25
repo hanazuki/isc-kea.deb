@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,7 +32,7 @@ namespace yang {
 /// {
 ///    "output": <output, e.g. log file name>,
 ///    "maxver": <maximum file version>,
-///    "maxsize": <maxium file size>,
+///    "maxsize": <maximum file size>,
 ///    "flush": <flush flag>,
 ///    "pattern": <custom layout>
 /// }
@@ -99,11 +99,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorLogger(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorLogger(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorLogger();
@@ -169,7 +165,7 @@ protected:
 /// @brief A translator class for converting a logger list between
 /// YANG and JSON.
 ///
-/// Currently supports all kea servers and agents. Speficic to Kea.
+/// Currently supports all kea servers and agents. Specific to Kea.
 class TranslatorLoggers : virtual public TranslatorLogger {
 public:
 
@@ -177,11 +173,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorLoggers(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorLoggers(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorLoggers();
@@ -217,7 +209,7 @@ protected:
                        isc::data::ConstElementPtr elem);
 };
 
-}; // end of namespace isc::yang
-}; // end of namespace isc
+}  // namespace yang
+}  // namespace isc
 
 #endif // ISC_TRANSLATOR_LOGGER_H

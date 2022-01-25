@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -30,7 +30,6 @@ public:
     Dhcp6ParseError(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) { };
 };
-
 
 /// @brief Evaluation context, an interface to the expression evaluation.
 class Parser6Context
@@ -93,10 +92,6 @@ public:
 
         /// This will parse the input as config-control.
         PARSER_CONFIG_CONTROL,
-
-        /// This will parse the content of Logging.
-        PARSER_LOGGING
-
     } ParserType;
 
     /// @brief Default constructor.
@@ -157,10 +152,16 @@ public:
 
     /// @brief Error handler
     ///
+    /// @note The optional position for an error in a string begins by 1
+    /// so the caller should add 1 to the position of the C++ string.
+    ///
     /// @param loc location within the parsed file when experienced a problem.
     /// @param what string explaining the nature of the error.
+    /// @param pos optional position for in string errors.
     /// @throw Dhcp6ParseError
-    void error(const isc::dhcp::location& loc, const std::string& what);
+    void error(const isc::dhcp::location& loc,
+               const std::string& what,
+               size_t pos = 0);
 
     /// @brief Error handler
     ///
@@ -196,27 +197,33 @@ public:
     ///
     /// @param name name of the parameter expected to be present
     /// @param open_loc location of the opening curly bracket
-    /// @param close_loc ocation of the closing curly bracket
+    /// @param close_loc location of the closing curly bracket
     /// @throw Dhcp6ParseError
     void require(const std::string& name,
                  isc::data::Element::Position open_loc,
                  isc::data::Element::Position close_loc);
+
+    /// @brief Check if a parameter is already present
+    ///
+    /// Check if a parameter is already present in the map at the top
+    /// of the stack and raise an error when it is.
+    ///
+    /// @param name name of the parameter to check
+    /// @param loc location of the current parameter
+    /// @throw Dhcp6ParseError
+    void unique(const std::string& name,
+                isc::data::Element::Position loc);
 
     /// @brief Defines syntactic contexts for lexical tie-ins
     typedef enum {
         ///< This one is used in pure JSON mode.
         NO_KEYWORD,
 
-        ///< Used while parsing top level (that contains Dhcp6, Logging and others)
+        ///< Used while parsing top level (that contains Dhcp6)
         CONFIG,
 
         ///< Used while parsing content of Dhcp6.
         DHCP6,
-
-        // not yet Dhcp4, DhcpDdns,
-
-        ///< Used while parsing content of Logging
-        LOGGING,
 
         /// Used while parsing Dhcp6/interfaces structures.
         INTERFACES_CONFIG,
@@ -232,6 +239,9 @@ public:
 
         /// Used while parsing Dhcp6/*-database/type.
         DATABASE_TYPE,
+
+        /// Used while parsing Dhcp6/*-database/on-fail.
+        DATABASE_ON_FAIL,
 
         /// Used while parsing Dhcp6/mac-sources structures.
         MAC_SOURCES,
@@ -274,8 +284,11 @@ public:
         /// Used while parsing Dhcp6/control-socket structures.
         CONTROL_SOCKET,
 
-        /// Used while parsing Dhcp4/dhcp-queue-control structures.
+        /// Used while parsing Dhcp6/dhcp-queue-control structures.
         DHCP_QUEUE_CONTROL,
+
+        /// Used while parsing Dhcp6/multi-threading structures.
+        DHCP_MULTI_THREADING,
 
         /// Used while parsing Dhcp6/subnet6/pools structures.
         POOLS,
@@ -307,11 +320,14 @@ public:
         /// Used while parsing Dhcp6/dhcp-ddns/replace-client-name.
         REPLACE_CLIENT_NAME,
 
-        /// Used while parsing Dhcp4/config-control
+        /// Used while parsing Dhcp6/config-control
         CONFIG_CONTROL,
 
         /// Used while parsing config-control/config-databases
-        CONFIG_DATABASE
+        CONFIG_DATABASE,
+
+        /// Used while parsing compatibility parameters
+        COMPATIBILITY,
 
     } ParserContext;
 

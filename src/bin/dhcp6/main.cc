@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -45,11 +45,14 @@ const char* const DHCP6_NAME = "kea-dhcp6";
 /// Note: This function never returns. It terminates the process.
 void
 usage() {
-    cerr << "Kea DHCPv6 server, version " << VERSION << endl;
+    cerr << "Kea DHCPv6 server, "
+         << "version " << VERSION
+         << " (" << PACKAGE_VERSION_TYPE << ")"
+         << endl;
     cerr << endl;
     cerr << "Usage: " << DHCP6_NAME
          << " -[v|V|W] [-d] [-{c|t} cfgfile] [-p number] [-P number]" << endl;
-    cerr << "  -v: print version number and exit." << endl;
+    cerr << "  -v: print version number and exit" << endl;
     cerr << "  -V: print extended version and exit" << endl;
     cerr << "  -W: display the configuration report and exit" << endl;
     cerr << "  -d: debug mode with extra verbosity (former -v)" << endl;
@@ -59,8 +62,6 @@ usage() {
          << "(useful for testing only)" << endl;
     cerr << "  -P number: specify non-standard client port number 1-65535 "
          << "(useful for testing only)" << endl;
-    cerr << "  -N number: specify thread count 0-65535 "
-         << "(0 means multi-threading disabled)" << endl;
     exit(EXIT_FAILURE);
 }
 }  // namespace
@@ -72,15 +73,13 @@ main(int argc, char* argv[]) {
     int server_port_number = DHCP6_SERVER_PORT;
     // Not zero values are useful for testing only.
     int client_port_number = 0;
-    // Number of threads. 0 means multi-threading disabled
-    int thread_count = 0;
     bool verbose_mode = false; // Should server be verbose?
     bool check_mode = false;   // Check syntax
 
     // The standard config file
     std::string config_file("");
 
-    while ((ch = getopt(argc, argv, "dvVWc:p:P:N:t:")) != -1) {
+    while ((ch = getopt(argc, argv, "dvVWc:p:P:t:")) != -1) {
         switch (ch) {
         case 'd':
             verbose_mode = true;
@@ -132,21 +131,6 @@ main(int argc, char* argv[]) {
             if (client_port_number <= 0 || client_port_number > 65535) {
                 cerr << "Failed to parse client port number: [" << optarg
                      << "], 1-65535 allowed." << endl;
-                usage();
-            }
-            break;
-
-        case 'N': // number of threads
-            try {
-                thread_count = boost::lexical_cast<int>(optarg);
-            } catch (const boost::bad_lexical_cast &) {
-                cerr << "Failed to parse thread count number: [" << optarg
-                     << "], 0-65535 allowed." << endl;
-                usage();
-            }
-            if (thread_count < 0 || thread_count > 65535) {
-                cerr << "Failed to parse thread count number: [" << optarg
-                     << "], 0-65535 allowed." << endl;
                 usage();
             }
             break;
@@ -232,7 +216,13 @@ main(int argc, char* argv[]) {
             .arg(client_port_number)
             .arg(verbose_mode ? "yes" : "no");
 
-        LOG_INFO(dhcp6_logger, DHCP6_STARTING).arg(VERSION);
+        LOG_INFO(dhcp6_logger, DHCP6_STARTING)
+            .arg(VERSION)
+            .arg(PACKAGE_VERSION_TYPE);
+
+        if (string(PACKAGE_VERSION_TYPE) == "development") {
+            LOG_WARN(dhcp6_logger, DHCP6_DEVELOPMENT_VERSION);
+        }
 
         // Create the server instance.
         ControlledDhcpv6Srv server(server_port_number, client_port_number);
@@ -257,8 +247,8 @@ main(int argc, char* argv[]) {
                 LOG_ERROR(dhcp6_logger, DHCP6_INIT_FAIL).arg(ex.what());
             } catch (...) {
                 // The exception thrown during the initialization could
-                // originate from logger subsystem. Therefore LOG_ERROR() may
-                // fail as well.
+                // originate from logger subsystem. Therefore LOG_ERROR()
+                // may fail as well.
                 cerr << "Failed to initialize server: " << ex.what() << endl;
             }
 
@@ -269,7 +259,7 @@ main(int argc, char* argv[]) {
         LOG_INFO(dhcp6_logger, DHCP6_STARTED).arg(VERSION);
 
         // And run the main loop of the server.
-        server.run();
+        ret = server.run();
 
         LOG_INFO(dhcp6_logger, DHCP6_SHUTDOWN);
 
@@ -290,7 +280,7 @@ main(int argc, char* argv[]) {
         ret = EXIT_FAILURE;
     } catch (const std::exception& ex) {
         // First, we print the error on stderr (that should always work)
-        cerr << DHCP6_NAME << "Fatal error during start up: " << ex.what()
+        cerr << DHCP6_NAME << ": Fatal error during start up: " << ex.what()
              << endl;
 
         // Let's also try to log it using logging system, but we're not
@@ -301,6 +291,10 @@ main(int argc, char* argv[]) {
         } catch (...) {
             // Already logged so ignore
         }
+        ret = EXIT_FAILURE;
+    } catch (...) {
+        cerr << DHCP6_NAME << ": Fatal error during start up"
+             << endl;
         ret = EXIT_FAILURE;
     }
 

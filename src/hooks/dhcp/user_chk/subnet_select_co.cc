@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,6 +42,12 @@ extern "C" {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int subnet4_select(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP ||
+        status == CalloutHandle::NEXT_STEP_SKIP) {
+        return (0);
+    }
+
     if (!user_registry) {
         LOG_ERROR(user_chk_logger, USER_CHK_SUBNET4_SELECT_REGISTRY_NULL);
         return (1);
@@ -67,7 +73,7 @@ int subnet4_select(CalloutHandle& handle) {
             // User is not in the registry, so assign them to the last subnet
             // in the collection.  By convention we are assuming this is the
             // restricted subnet.
-            Subnet4Ptr subnet = subnets->back();
+            Subnet4Ptr subnet = *subnets->rbegin();
             handle.setArgument("subnet4", subnet);
         }
     } catch (const std::exception& ex) {
@@ -96,6 +102,12 @@ int subnet4_select(CalloutHandle& handle) {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int subnet6_select(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP ||
+        status == CalloutHandle::NEXT_STEP_SKIP) {
+        return (0);
+    }
+
     if (!user_registry) {
         LOG_ERROR(user_chk_logger, USER_CHK_SUBNET6_SELECT_REGISTRY_NULL);
         return (1);
@@ -121,7 +133,7 @@ int subnet6_select(CalloutHandle& handle) {
             // User is not in the registry, so assign them to the last subnet
             // in the collection.  By convention we are assuming this is the
             // restricted subnet.
-            Subnet6Ptr subnet = subnets->back();
+            Subnet6Ptr subnet = *subnets->rbegin();
             handle.setArgument("subnet6", subnet);
         }
     } catch (const std::exception& ex) {

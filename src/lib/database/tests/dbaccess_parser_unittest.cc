@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -663,6 +663,7 @@ TEST_F(DbAccessParserTest, getDbAccessString) {
     const char* config[] = {"type",     "mysql",
                             "host",     "",
                             "name",     "keatest",
+                            "password", "password with spaces",
                             NULL};
 
     string json_config = toJson(config);
@@ -678,7 +679,7 @@ TEST_F(DbAccessParserTest, getDbAccessString) {
     // String should be either "type=mysql name=keatest" or
     // "name=keatest type=mysql". The "host" entry is null, so should not be
     // output.
-    EXPECT_EQ(dbaccess, "name=keatest type=mysql");
+    EXPECT_EQ(dbaccess, "name=keatest password='password with spaces' type=mysql");
 }
 
 // Check that the configuration is accepted for the valid value

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,7 +11,8 @@
 #include <dhcpsrv/shared_network.h>
 #include <dhcpsrv/host_mgr.h>
 #include <dhcpsrv/tests/alloc_engine_utils.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
+#include <testutils/gtest_utils.h>
 #include <hooks/hooks_manager.h>
 #include <hooks/callout_handle.h>
 #include <stats/stats_mgr.h>
@@ -19,6 +20,7 @@
 using namespace std;
 using namespace isc::hooks;
 using namespace isc::asiolink;
+using namespace isc::data;
 using namespace isc::stats;
 
 namespace isc {
@@ -69,6 +71,11 @@ TEST_F(AllocEngine4Test, simpleAlloc4) {
     // Assigned addresses should be zero.
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
 
+    // Get the cumulative count of assigned addresses.
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
+
     AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, IOAddress("0.0.0.0"),
                                     false, true, "somehost.example.com.", false);
     ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
@@ -92,6 +99,11 @@ TEST_F(AllocEngine4Test, simpleAlloc4) {
 
     // Assigned addresses should have incremented.
     EXPECT_TRUE(testStatistics("assigned-addresses", 1, subnet_->getID()));
+    cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    glbl_cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
 
     // Second allocation starts here.
     uint8_t hwaddr2_data[] = { 0, 0xfe, 0xfe, 0xfe, 0xfe, 0xfe};
@@ -128,6 +140,11 @@ TEST_F(AllocEngine4Test, simpleAlloc4) {
 
     // Assigned addresses should have incremented.
     EXPECT_TRUE(testStatistics("assigned-addresses", 2, subnet_->getID()));
+    cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    glbl_cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
 }
 
 // This test checks that simple allocation uses the default valid lifetime.
@@ -175,7 +192,7 @@ TEST_F(AllocEngine4Test, hintAlloc4) {
     subnet_->setValid(Triplet<uint32_t>(1, 3, 5));
     ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
 
-    // Speficy the valid lifetime we want.
+    // Specify the valid lifetime we want.
     OptionUint32Ptr opt(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME, 4));
     ctx.query_->addOption(opt);
 
@@ -212,7 +229,7 @@ TEST_F(AllocEngine4Test, minAlloc4) {
     subnet_->setValid(Triplet<uint32_t>(2, 3, 5));
     ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
 
-    // Speficy the valid lifetime we want, as it is lower than the min value
+    // Specify the valid lifetime we want, as it is lower than the min value
     // we'll get this min value instead.
     OptionUint32Ptr opt(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME, 1));
     ctx.query_->addOption(opt);
@@ -250,7 +267,7 @@ TEST_F(AllocEngine4Test, maxAlloc4) {
     subnet_->setValid(Triplet<uint32_t>(1, 3, 5));
     ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
 
-    // Speficy the valid lifetime we want, as it is greater than the max value
+    // Specify the valid lifetime we want, as it is greater than the max value
     // we'll get this max value instead.
     OptionUint32Ptr opt(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME, 6));
     ctx.query_->addOption(opt);
@@ -329,6 +346,11 @@ TEST_F(AllocEngine4Test, fakeAlloc4) {
     // Assigned addresses should be zero.
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
 
+    // Get the cumulative count of assigned addresses.
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
+
     AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_,
                                     IOAddress("0.0.0.0"), false, true,
                                     "host.example.com.", true);
@@ -351,6 +373,9 @@ TEST_F(AllocEngine4Test, fakeAlloc4) {
 
     // Assigned addresses should still be zero.
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
+    EXPECT_EQ(cumulative,
+              getStatistics("cumulative-assigned-addresses", subnet_->getID()));
+    EXPECT_EQ(glbl_cumulative, getStatistics("cumulative-assigned-addresses"));
 }
 
 
@@ -527,6 +552,9 @@ TEST_F(AllocEngine4Test, simpleRenew4) {
     ASSERT_TRUE(engine);
 
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
 
     AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, IOAddress("0.0.0.0"),
                                     false, true, "somehost.example.com.", false);
@@ -543,6 +571,11 @@ TEST_F(AllocEngine4Test, simpleRenew4) {
 
     // We should have incremented assigned-addresses
     EXPECT_TRUE(testStatistics("assigned-addresses", 1, subnet_->getID()));
+    cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    glbl_cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
 
     // Do it again, this should amount to the renew of an existing lease
     Lease4Ptr lease2 = engine->allocateLease4(ctx);
@@ -556,6 +589,9 @@ TEST_F(AllocEngine4Test, simpleRenew4) {
 
     // Should NOT have bumped assigned-addresses
     EXPECT_TRUE(testStatistics("assigned-addresses", 1, subnet_->getID()));
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
 }
 
 // This test checks simple renewal uses the default valid lifetime.
@@ -608,7 +644,7 @@ TEST_F(AllocEngine4Test, hintRenew4) {
     subnet_->setValid(Triplet<uint32_t>(1, 3, 5));
     ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
 
-    // Speficy the valid lifetime we want.
+    // Specify the valid lifetime we want.
     OptionUint32Ptr opt(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME, 4));
     ctx.query_->addOption(opt);
 
@@ -650,7 +686,7 @@ TEST_F(AllocEngine4Test, minRenew4) {
     subnet_->setValid(Triplet<uint32_t>(2, 3, 5));
     ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
 
-    // Speficy the valid lifetime we want, as it is lower than the min value
+    // Specify the valid lifetime we want, as it is lower than the min value
     // we'll get this min value instead.
     OptionUint32Ptr opt(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME, 1));
     ctx.query_->addOption(opt);
@@ -693,7 +729,7 @@ TEST_F(AllocEngine4Test, maxRenew4) {
     subnet_->setValid(Triplet<uint32_t>(1, 3, 5));
     ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
 
-    // Speficy the valid lifetime we want, as it is greater than the max value
+    // Specify the valid lifetime we want, as it is greater than the max value
     // we'll get this max value instead.
     OptionUint32Ptr opt(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME, 6));
     ctx.query_->addOption(opt);
@@ -1017,7 +1053,7 @@ public:
         return (lease);
     }
 
-    /// Covenience pointers to configuration elements. These are initialized
+    /// Convenience pointers to configuration elements. These are initialized
     /// in the constructor and are used throughout the tests.
     AllocEngine engine_;
     Subnet4Ptr subnet1_;
@@ -1048,7 +1084,7 @@ TEST_F(SharedNetworkAlloc4Test, discoverSharedNetworkSimple) {
     ASSERT_TRUE(lease);
     EXPECT_EQ("192.0.2.17", lease->addr_.toText());
 
-    // Make sure the lease is not in the the lease mgr (this is only
+    // Make sure the lease is not in the lease mgr (this is only
     // discover).
     ASSERT_FALSE(LeaseMgrFactory::instance().getLease4(lease->addr_));
 }
@@ -1353,7 +1389,7 @@ TEST_F(SharedNetworkAlloc4Test, requestSharedNetworkSimple) {
     ASSERT_TRUE(lease);
     EXPECT_EQ("192.0.2.17", lease->addr_.toText());
 
-    // Make sure the lease is in the the lease mgr.
+    // Make sure the lease is in the lease mgr.
     ASSERT_TRUE(LeaseMgrFactory::instance().getLease4(lease->addr_));
 }
 
@@ -1423,7 +1459,7 @@ TEST_F(SharedNetworkAlloc4Test, requestSharedNetworkClassification) {
     EXPECT_TRUE(subnet1_->inPool(Lease::TYPE_V4, lease->addr_));
 
     // Remove the lease so as we can start over.
-    LeaseMgrFactory::instance().deleteLease(lease);
+    ASSERT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 
     // Apply restrictions on the subnet1. This should be only assigned
     // to clients belonging to cable-modem class.
@@ -1439,7 +1475,7 @@ TEST_F(SharedNetworkAlloc4Test, requestSharedNetworkClassification) {
     EXPECT_TRUE(subnet2_->inPool(Lease::TYPE_V4, lease->addr_));
 
     // Remove the lease so as we can start over.
-    LeaseMgrFactory::instance().deleteLease(lease);
+    ASSERT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 
     // Assign cable-modem class and try again. This time, we should
     // offer an address from the subnet1.
@@ -1476,7 +1512,7 @@ TEST_F(SharedNetworkAlloc4Test, requestSharedNetworkPoolClassification) {
     EXPECT_TRUE(subnet1_->inPool(Lease::TYPE_V4, lease->addr_));
 
     // Remove the lease so as we can start over.
-    LeaseMgrFactory::instance().deleteLease(lease);
+    ASSERT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 
     // Apply restrictions on the pool1. This should be only assigned
     // to clients belonging to cable-modem class.
@@ -1492,7 +1528,7 @@ TEST_F(SharedNetworkAlloc4Test, requestSharedNetworkPoolClassification) {
     EXPECT_TRUE(subnet2_->inPool(Lease::TYPE_V4, lease->addr_));
 
     // Remove the lease so as we can start over.
-    LeaseMgrFactory::instance().deleteLease(lease);
+    ASSERT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 
     // Assign cable-modem class and try again. This time, we should
     // offer an address from the pool1.
@@ -1687,6 +1723,9 @@ TEST_F(AllocEngine4Test, requestReuseExpiredLease4) {
     IOAddress addr("192.0.2.105");
 
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
     EXPECT_TRUE(testStatistics("reclaimed-leases", 0));
     EXPECT_TRUE(testStatistics("reclaimed-leases", 0, subnet_->getID()));
 
@@ -1734,6 +1773,11 @@ TEST_F(AllocEngine4Test, requestReuseExpiredLease4) {
     // added the lease directly, assigned-leases never bumped to one, so when we
     // reclaim it gets decremented to -1, then on assignment back to 0.
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
+    cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    glbl_cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
     EXPECT_TRUE(testStatistics("reclaimed-leases", 1));
     EXPECT_TRUE(testStatistics("reclaimed-leases", 1, subnet_->getID()));
 }
@@ -1793,6 +1837,9 @@ TEST_F(AllocEngine4Test, discoverReuseDeclinedLease4Stats) {
     subnet_->addPool(pool_);
     cfg_mgr.getStagingCfg()->getCfgSubnets4()->add(subnet_);
     cfg_mgr.commit(); // so we will recalc stats
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
 
     // Now create a declined lease, decline it and rewind its cltt, so it
     // is expired.
@@ -1805,6 +1852,9 @@ TEST_F(AllocEngine4Test, discoverReuseDeclinedLease4Stats) {
 
     // Check that the stats declined stats were not modified
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
+    EXPECT_EQ(cumulative,
+              getStatistics("cumulative-assigned-addresses", subnet_->getID()));
+    EXPECT_EQ(glbl_cumulative, getStatistics("cumulative-assigned-addresses"));
     EXPECT_TRUE(testStatistics("declined-addresses", 0));
     EXPECT_TRUE(testStatistics("reclaimed-declined-addresses", 0));
     EXPECT_TRUE(testStatistics("declined-addresses", 0, subnet_->getID()));
@@ -1864,6 +1914,9 @@ TEST_F(AllocEngine4Test, requestReuseDeclinedLease4Stats) {
     subnet_->addPool(pool_);
     cfg_mgr.getStagingCfg()->getCfgSubnets4()->add(subnet_);
     cfg_mgr.commit();
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
 
     // Now create a declined lease, decline it and rewind its cltt, so it
     // is expired.
@@ -1880,6 +1933,11 @@ TEST_F(AllocEngine4Test, requestReuseDeclinedLease4Stats) {
     // when it is reused.  Declined address stats will be -1 since
     // lease was created as declined which does not increment the stat.
     EXPECT_TRUE(testStatistics("assigned-addresses", 0, subnet_->getID()));
+    cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    glbl_cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
     EXPECT_TRUE(testStatistics("declined-addresses", -1));
     EXPECT_TRUE(testStatistics("reclaimed-declined-addresses", 1));
     EXPECT_TRUE(testStatistics("declined-addresses", -1, subnet_->getID()));
@@ -2841,13 +2899,14 @@ TEST_F(AllocEngine4Test, findReservation) {
     EXPECT_TRUE(ctx.currentHost());
     EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
 
-    // It shouldn't be returned when HR_DISABLED mode is enabled.
-    subnet_->setHostReservationMode(Network::HR_DISABLED);
+    // It shouldn't be returned when reservations-in-subnet is disabled.
+    subnet_->setReservationsInSubnet(false);
     ASSERT_NO_THROW(engine.findReservation(ctx));
     EXPECT_FALSE(ctx.currentHost());
 
-    // Check the out of the pool reservation mode.
-    subnet_->setHostReservationMode(Network::HR_OUT_OF_POOL);
+    // Check the reservations-in-subnet and reservations-out-of-pool flags.
+    subnet_->setReservationsInSubnet(true);
+    subnet_->setReservationsOutOfPool(true);
     ASSERT_NO_THROW(engine.findReservation(ctx));
     EXPECT_TRUE(ctx.currentHost());
     EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
@@ -2899,6 +2958,9 @@ TEST_F(AllocEngine4Test, simpleAlloc4Stats) {
     string name = StatsMgr::generateName("subnet", subnet_->getID(),
                                          "assigned-addresses");
     StatsMgr::instance().addValue(name, static_cast<int64_t>(100));
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
 
     Lease4Ptr lease = engine->allocateLease4(ctx);
     // The new lease has been allocated, so the old lease should not exist.
@@ -2911,6 +2973,11 @@ TEST_F(AllocEngine4Test, simpleAlloc4Stats) {
     ObservationPtr stat = StatsMgr::instance().getObservation(name);
     ASSERT_TRUE(stat);
     EXPECT_EQ(101, stat->getInteger().first);
+    cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    glbl_cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
 }
 
 // This test checks if the fake allocation (for DHCPDISCOVER) can succeed
@@ -2930,6 +2997,9 @@ TEST_F(AllocEngine4Test, fakeAlloc4Stat) {
     string name = StatsMgr::generateName("subnet", subnet_->getID(),
                                          "assigned-addresses");
     StatsMgr::instance().addValue(name, static_cast<int64_t>(100));
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
 
     Lease4Ptr lease = engine->allocateLease4(ctx);
 
@@ -2944,6 +3014,9 @@ TEST_F(AllocEngine4Test, fakeAlloc4Stat) {
     ObservationPtr stat = StatsMgr::instance().getObservation(name);
     ASSERT_TRUE(stat);
     EXPECT_EQ(100, stat->getInteger().first);
+    EXPECT_EQ(cumulative,
+              getStatistics("cumulative-assigned-addresses", subnet_->getID()));
+    EXPECT_EQ(glbl_cumulative, getStatistics("cumulative-assigned-addresses"));
 }
 
 // This test checks that the allocated-addresses statistic is decreased when
@@ -2972,6 +3045,9 @@ TEST_F(AllocEngine4Test, reservedAddressExistingLeaseStat) {
     string name = StatsMgr::generateName("subnet", subnet_->getID(),
                                          "assigned-addresses");
     StatsMgr::instance().addValue(name, static_cast<int64_t>(100));
+    int64_t cumulative = getStatistics("cumulative-assigned-addresses",
+                                       subnet_->getID());
+    int64_t glbl_cumulative = getStatistics("cumulative-assigned-addresses");
 
     // Request allocation of the reserved address.
     AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_,
@@ -2990,6 +3066,11 @@ TEST_F(AllocEngine4Test, reservedAddressExistingLeaseStat) {
     ObservationPtr stat = StatsMgr::instance().getObservation(name);
     ASSERT_TRUE(stat);
     EXPECT_EQ(100, stat->getInteger().first);
+    cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses",
+                               cumulative, subnet_->getID()));
+    glbl_cumulative += 1;
+    EXPECT_TRUE(testStatistics("cumulative-assigned-addresses", glbl_cumulative));
 
     // Lets' double check that the actual allocation took place.
     EXPECT_FALSE(ctx.fake_allocation_);
@@ -3012,7 +3093,7 @@ TEST_F(AllocEngine4Test, globalReservationReservedAddressDiscover) {
 
     AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
 
-    subnet_->setHostReservationMode(Network::HR_GLOBAL);
+    subnet_->setReservationsGlobal(true);
 
     // Query allocation engine for the lease to be assigned to this
     // client without specifying the address to be assigned.
@@ -3029,7 +3110,7 @@ TEST_F(AllocEngine4Test, globalReservationReservedAddressDiscover) {
     EXPECT_EQ(ctx.currentHost()->getHostname(), host->getHostname());
     EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
 
-    // We should allocate the reserverd address.
+    // We should allocate the reserved address.
     Lease4Ptr lease = engine.allocateLease4(ctx);
     ASSERT_TRUE(lease);
     EXPECT_EQ("192.0.77.123", lease->addr_.toText());
@@ -3060,7 +3141,7 @@ TEST_F(AllocEngine4Test, globalReservationReservedAddressRequest) {
 
     AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
 
-    subnet_->setHostReservationMode(Network::HR_GLOBAL);
+    subnet_->setReservationsGlobal(true);
 
     // Query allocation engine for the lease to be assigned to this
     // client without specifying the address to be assigned.
@@ -3077,7 +3158,7 @@ TEST_F(AllocEngine4Test, globalReservationReservedAddressRequest) {
     EXPECT_EQ(ctx.currentHost()->getHostname(), host->getHostname());
     EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
 
-    // We should allocate the reserverd address.
+    // We should allocate the reserved address.
     Lease4Ptr lease = engine.allocateLease4(ctx);
     ASSERT_TRUE(lease);
     EXPECT_EQ("192.0.77.123", lease->addr_.toText());
@@ -3112,7 +3193,7 @@ TEST_F(AllocEngine4Test, globalReservationDynamicDiscover) {
 
     AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
 
-    subnet_->setHostReservationMode(Network::HR_GLOBAL);
+    subnet_->setReservationsGlobal(true);
 
     // Query allocation engine for the lease to be assigned to this
     // client without specifying the address to be assigned.
@@ -3161,7 +3242,7 @@ TEST_F(AllocEngine4Test, globalReservationDynamicRequest) {
 
     AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
 
-    subnet_->setHostReservationMode(Network::HR_GLOBAL);
+    subnet_->setReservationsGlobal(true);
 
     // Query allocation engine for the lease to be assigned to this
     // client without specifying the address to be assigned.
@@ -3193,6 +3274,1145 @@ TEST_F(AllocEngine4Test, globalReservationDynamicRequest) {
     // Client had no lease in the database, so the old lease returned should
     // be NULL.
     EXPECT_FALSE(ctx.old_lease_);
+}
+
+// This test checks the behavior of the allocation engine in the following
+// scenario:
+// - Client has no lease in the database.
+// - Client has a subnet reservation.
+// - Client sends DISCOVER
+// - Client is allocated the reserved address.
+// - Lease is not added to the lease database
+TEST_F(AllocEngine4Test, mixedReservationReservedAddressDiscover) {
+    // Create reservation for the client.
+    HostPtr host(new Host(&hwaddr_->hwaddr_[0], hwaddr_->hwaddr_.size(),
+                          Host::IDENT_HWADDR, subnet_->getID(),
+                          SUBNET_ID_UNUSED, IOAddress("192.0.2.123"),
+                          "foo.example.org"));
+    CfgMgr::instance().getStagingCfg()->getCfgHosts()->add(host);
+    CfgMgr::instance().commit();
+
+    AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+    subnet_->setReservationsGlobal(true);
+    subnet_->setReservationsInSubnet(true);
+
+    // Query allocation engine for the lease to be assigned to this
+    // client without specifying the address to be assigned.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_,
+                                    IOAddress("0.0.0.0"), false, false,
+                                    "", true);
+    ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+
+    // Look up the host.
+    AllocEngine::findReservation(ctx);
+
+    // We should have the correct current host
+    EXPECT_TRUE(ctx.currentHost());
+    EXPECT_EQ(ctx.currentHost()->getHostname(), host->getHostname());
+    EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
+
+    // We should allocate the reserved address.
+    Lease4Ptr lease = engine.allocateLease4(ctx);
+    ASSERT_TRUE(lease);
+    EXPECT_EQ("192.0.2.123", lease->addr_.toText());
+
+    // This is a "fake" allocation so the returned lease should not be committed
+    // to the lease database.
+    EXPECT_FALSE(LeaseMgrFactory::instance().getLease4(lease->addr_));
+
+    // Client had no lease in the database, so the old lease returned should
+    // be NULL.
+    EXPECT_FALSE(ctx.old_lease_);
+}
+
+// This test checks the behavior of the allocation engine in the following
+// scenario:
+// - Client has no lease in the database.
+// - Client has a subnet reservation.
+// - Client sends REQUEST
+// - Client is allocated the reserved address.
+// - Lease is added to the lease database
+TEST_F(AllocEngine4Test, mixedReservationReservedAddressRequest) {
+    // Create reservation for the client.
+    HostPtr host(new Host(&hwaddr_->hwaddr_[0], hwaddr_->hwaddr_.size(),
+                          Host::IDENT_HWADDR, subnet_->getID(),
+                          SUBNET_ID_UNUSED, IOAddress("192.0.2.123"),
+                          "foo.example.org"));
+    CfgMgr::instance().getStagingCfg()->getCfgHosts()->add(host);
+    CfgMgr::instance().commit();
+
+    AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+    subnet_->setReservationsGlobal(true);
+    subnet_->setReservationsInSubnet(true);
+
+    // Query allocation engine for the lease to be assigned to this
+    // client without specifying the address to be assigned.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_,
+                                    IOAddress("0.0.0.0"), false, false,
+                                    "", false);
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+
+    // Look up the host.
+    AllocEngine::findReservation(ctx);
+
+    // We should have the correct current host
+    EXPECT_TRUE(ctx.currentHost());
+    EXPECT_EQ(ctx.currentHost()->getHostname(), host->getHostname());
+    EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
+
+    // We should allocate the reserved address.
+    Lease4Ptr lease = engine.allocateLease4(ctx);
+    ASSERT_TRUE(lease);
+    EXPECT_EQ("192.0.2.123", lease->addr_.toText());
+
+    // Check that the lease is indeed in LeaseMgr
+    Lease4Ptr from_mgr = LeaseMgrFactory::instance().getLease4(lease->addr_);
+    ASSERT_TRUE(from_mgr);
+
+    // Now check that the lease in LeaseMgr has the same parameters
+    detailCompareLease(lease, from_mgr);
+
+    // Client had no lease in the database, so the old lease returned should
+    // be NULL.
+    EXPECT_FALSE(ctx.old_lease_);
+}
+
+// This test checks the behavior of the allocation engine in the following
+// scenario:
+// - Client has no lease in the database.
+// - Client has a global and a subnet reservation.
+// - Client sends DISCOVER
+// - Client is allocated the reserved address.
+// - Lease is not added to the lease database
+TEST_F(AllocEngine4Test, bothReservationReservedAddressDiscover) {
+    // Create reservations for the client.
+    HostPtr ghost(new Host(&hwaddr_->hwaddr_[0], hwaddr_->hwaddr_.size(),
+                           Host::IDENT_HWADDR, SUBNET_ID_GLOBAL,
+                           SUBNET_ID_UNUSED, IOAddress("192.0.77.123")));
+    CfgMgr::instance().getStagingCfg()->getCfgHosts()->add(ghost);
+    HostPtr host(new Host(&hwaddr_->hwaddr_[0], hwaddr_->hwaddr_.size(),
+                          Host::IDENT_HWADDR, subnet_->getID(),
+                          SUBNET_ID_UNUSED, IOAddress("192.0.2.123"),
+                          "foo.example.org"));
+    CfgMgr::instance().getStagingCfg()->getCfgHosts()->add(host);
+    CfgMgr::instance().commit();
+
+    AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+    subnet_->setReservationsGlobal(true);
+    subnet_->setReservationsInSubnet(true);
+
+    // Query allocation engine for the lease to be assigned to this
+    // client without specifying the address to be assigned.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_,
+                                    IOAddress("0.0.0.0"), false, false,
+                                    "", true);
+    ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+
+    // Look up the host.
+    AllocEngine::findReservation(ctx);
+
+    // We should have the correct current host
+    EXPECT_TRUE(ctx.currentHost());
+    EXPECT_EQ(ctx.currentHost()->getHostname(), host->getHostname());
+    EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
+
+    // We should allocate the reserved address.
+    Lease4Ptr lease = engine.allocateLease4(ctx);
+    ASSERT_TRUE(lease);
+    EXPECT_EQ("192.0.2.123", lease->addr_.toText());
+
+    // This is a "fake" allocation so the returned lease should not be committed
+    // to the lease database.
+    EXPECT_FALSE(LeaseMgrFactory::instance().getLease4(lease->addr_));
+
+    // Client had no lease in the database, so the old lease returned should
+    // be NULL.
+    EXPECT_FALSE(ctx.old_lease_);
+}
+
+// This test checks the behavior of the allocation engine in the following
+// scenario:
+// - Client has no lease in the database.
+// - Client has a global and a subnet reservation.
+// - Client sends REQUEST
+// - Client is allocated the reserved address.
+// - Lease is added to the lease database
+TEST_F(AllocEngine4Test, bothReservationReservedAddressRequest) {
+    // Create reservations for the client.
+    HostPtr ghost(new Host(&hwaddr_->hwaddr_[0], hwaddr_->hwaddr_.size(),
+                           Host::IDENT_HWADDR, SUBNET_ID_GLOBAL,
+                           SUBNET_ID_UNUSED, IOAddress("192.0.77.123")));
+    CfgMgr::instance().getStagingCfg()->getCfgHosts()->add(ghost);
+    HostPtr host(new Host(&hwaddr_->hwaddr_[0], hwaddr_->hwaddr_.size(),
+                          Host::IDENT_HWADDR, subnet_->getID(),
+                          SUBNET_ID_UNUSED, IOAddress("192.0.2.123"),
+                          "foo.example.org"));
+    CfgMgr::instance().getStagingCfg()->getCfgHosts()->add(host);
+    CfgMgr::instance().commit();
+
+    AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+    subnet_->setReservationsGlobal(true);
+    subnet_->setReservationsInSubnet(true);
+
+    // Query allocation engine for the lease to be assigned to this
+    // client without specifying the address to be assigned.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_,
+                                    IOAddress("0.0.0.0"), false, false,
+                                    "", false);
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+
+    // Look up the host.
+    AllocEngine::findReservation(ctx);
+
+    // We should have the correct current host
+    EXPECT_TRUE(ctx.currentHost());
+    EXPECT_EQ(ctx.currentHost()->getHostname(), host->getHostname());
+    EXPECT_EQ(ctx.currentHost()->getIPv4Reservation(), host->getIPv4Reservation());
+
+    // We should allocate the reserved address.
+    Lease4Ptr lease = engine.allocateLease4(ctx);
+    ASSERT_TRUE(lease);
+    EXPECT_EQ("192.0.2.123", lease->addr_.toText());
+
+    // Check that the lease is indeed in LeaseMgr
+    Lease4Ptr from_mgr = LeaseMgrFactory::instance().getLease4(lease->addr_);
+    ASSERT_TRUE(from_mgr);
+
+    // Now check that the lease in LeaseMgr has the same parameters
+    detailCompareLease(lease, from_mgr);
+
+    // Client had no lease in the database, so the old lease returned should
+    // be NULL.
+    EXPECT_FALSE(ctx.old_lease_);
+}
+
+
+// Exercises AllocEnginer4Test::updateExtendedInfo4() through various
+// permutations of client packet content.
+TEST_F(AllocEngine4Test, updateExtendedInfo4) {
+
+    // Structure that defines a test scenario.
+    struct Scenario {
+        std::string description_;       // test description
+        std::string orig_context_json_; // user context the lease begins with
+        std::string rai_data_;          // RAI option the client packet contains
+        std::string exp_context_json_;  // expected user context on the lease
+        bool exp_ret;                   // expected returned value
+    };
+
+    // Test scenarios.
+    std::vector<Scenario> scenarios {
+    {
+        "no context, no rai",
+        "",
+        "",
+        "",
+        false
+    },
+    {
+        "some original context, no rai",
+        "{\"foo\": 123}",
+        "",
+        "{\"foo\": 123}",
+        false
+    },
+    {
+        "no original context, rai",
+        "",
+        "0x52050104aabbccdd",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104AABBCCDD\" } }",
+        true
+    },
+    {
+        "some original context, rai",
+        "{\"foo\": 123}",
+        "0x52050104aabbccdd",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104AABBCCDD\" }, \"foo\": 123 }",
+        true
+    },
+    {
+        "original rai context, no rai",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104AABBCCDD\" } }",
+        "",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104AABBCCDD\" } }",
+        false
+    },
+    {
+        "original rai context, different rai",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104AABBCCDD\" } }",
+        "0x52050104ddeeffaa",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104DDEEFFAA\" } }",
+        true
+    }};
+
+    // Create the allocation engine, context and lease.
+    NakedAllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+
+
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_,
+                                    IOAddress::IPV4_ZERO_ADDRESS(),
+                                    false, false, "", true);
+
+    // All scenarios require storage to be enabled.
+    ctx.subnet_->setStoreExtendedInfo(true);
+
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+    Lease4Ptr lease = engine.allocateLease4(ctx);
+    ASSERT_TRUE(lease);
+    EXPECT_EQ("192.0.2.100", lease->addr_.toText());
+
+    // Verify that the lease begins with no user context.
+    ConstElementPtr user_context = lease->getContext();
+    ASSERT_FALSE(user_context);
+
+    // Iterate over the test scenarios.
+    ElementPtr orig_context;
+    ElementPtr exp_context;
+    for (auto scenario : scenarios) {
+        SCOPED_TRACE(scenario.description_);
+
+        // Create the original user context from JSON.
+        if (scenario.orig_context_json_.empty()) {
+            orig_context.reset();
+        } else {
+            ASSERT_NO_THROW(orig_context = Element::fromJSON(scenario.orig_context_json_))
+                            << "invalid orig_context_json_, test is broken";
+        }
+
+        // Create the expected user context from JSON.
+        if (scenario.exp_context_json_.empty()) {
+            exp_context.reset();
+        } else {
+            ASSERT_NO_THROW(exp_context = Element::fromJSON(scenario.exp_context_json_))
+                            << "invalid exp_context_json_, test is broken";
+        }
+
+        // Initialize lease's user context.
+        lease->setContext(orig_context);
+        if (!orig_context) {
+            ASSERT_FALSE(lease->getContext());
+        }
+        else {
+            ASSERT_TRUE(lease->getContext());
+            ASSERT_TRUE(orig_context->equals(*(lease->getContext())));
+        }
+
+        // Create the client packet and the add RAI option (if one).
+        ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+        if (!scenario.rai_data_.empty()) {
+            std::vector<uint8_t> opt_data;
+            ASSERT_NO_THROW(util::str::decodeFormattedHexString(scenario.rai_data_, opt_data))
+                            << "scenario.rai_data_ is invalid, test is broken";
+            OptionPtr rai;
+            ASSERT_NO_THROW(rai.reset(new Option(Option::V4, 0x52, opt_data)))
+                            << "could not create rai option, test is broken";
+
+            ctx.query_->addOption(rai);
+        }
+
+        // Call AllocEngine::updateLease4ExtendeInfo().
+        bool ret = false;
+        ASSERT_NO_THROW_LOG(ret = engine.callUpdateLease4ExtendedInfo(lease, ctx));
+        ASSERT_EQ(scenario.exp_ret, ret);
+
+        // Verify the lease has the expected user context content.
+        if (!exp_context) {
+            ASSERT_FALSE(lease->getContext());
+        }
+        else {
+            ASSERT_TRUE(lease->getContext());
+            ASSERT_TRUE(exp_context->equals(*(lease->getContext())))
+                << "expected: " << *(exp_context) << std::endl
+                << "  actual: " << *(lease->getContext()) << std::endl;
+        }
+    }
+}
+
+// Verifies that the extended data (e.g. RAI option for now) is
+// added to a V4 lease when leases are created and/or renewed,
+// when store-extended-info is true.
+TEST_F(AllocEngine4Test, storeExtendedInfoEnabled4) {
+
+    // Structure that defines a test scenario.
+    struct Scenario {
+        std::string description_;       // test description
+        std::vector<uint8_t> mac_;      // MAC address
+        std::string rai_data_;          // RAI option the client packet contains
+        std::string exp_context_json_;  // expected user context on the lease
+        std::string exp_address_;        // expected lease address
+    };
+
+    std::vector<uint8_t> mac1 = { 0, 0xfe, 0xfe, 0xfe, 0xfe, 0x01};
+    std::string mac1_addr = "192.0.2.100";
+
+    std::vector<uint8_t> mac2 = { 0, 0xfe, 0xfe, 0xfe, 0xfe, 0x02};
+    std::string mac2_addr = "192.0.2.101";
+
+    // Test scenarios.
+    std::vector<Scenario> scenarios {
+    {
+        "create client one without rai",
+        mac1,
+        "",
+        "",
+        mac1_addr
+    },
+    {
+        "renew client one without rai",
+        {},
+        "",
+        "",
+        mac1_addr
+    },
+    {
+        "create client two with rai",
+        mac2,
+        "0x52050104a1b1c1d1",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104A1B1C1D1\" } }",
+        mac2_addr
+    },
+    {
+        "renew client two without rai",
+        {},
+        "",
+        "{ \"ISC\": { \"relay-agent-info\": \"0x52050104A1B1C1D1\" } }",
+        mac2_addr
+    }};
+
+    // Create the allocation engine, context and lease.
+    NakedAllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+    // All of the scenarios require storage to be enabled.
+    subnet_->setStoreExtendedInfo(true);
+
+    AllocEngine::ClientContext4 ctx(subnet_, ClientIdPtr(), hwaddr_,
+                                    IOAddress::IPV4_ZERO_ADDRESS(),
+                                    false, false, "", false);
+
+    // Iterate over the test scenarios.
+    Lease4Ptr lease;
+    for (auto scenario : scenarios) {
+        SCOPED_TRACE(scenario.description_);
+
+        ElementPtr exp_context;
+        // Create the expected user context from JSON.
+        if (!scenario.exp_context_json_.empty()) {
+            ASSERT_NO_THROW(exp_context = Element::fromJSON(scenario.exp_context_json_))
+                            << "invalid exp_context_json_, test is broken";
+        }
+
+        // If we have a MAC address this scenario is for a new client.
+        if (!scenario.mac_.empty()) {
+            std::cout << "setting mac address" << std::endl;
+            ASSERT_NO_THROW(ctx.hwaddr_.reset(new HWAddr(scenario.mac_, HTYPE_ETHER)))
+                            << "invalid MAC address, test is broken";
+        }
+
+        // Create the client packet and the add RAI option (if one).
+        ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+        if (!scenario.rai_data_.empty()) {
+            std::vector<uint8_t> opt_data;
+            ASSERT_NO_THROW(util::str::decodeFormattedHexString(scenario.rai_data_, opt_data))
+                            << "scenario.rai_data_ is invalid, test is broken";
+            OptionPtr rai;
+            ASSERT_NO_THROW(rai.reset(new Option(Option::V4, 0x52, opt_data)))
+                            << "could not create rai option, test is broken";
+
+            ctx.query_->addOption(rai);
+        }
+
+        // Create or renew the lease.
+        Lease4Ptr lease = engine.allocateLease4(ctx);
+        ASSERT_TRUE(lease);
+        EXPECT_EQ(scenario.exp_address_, lease->addr_.toText());
+
+        // Verify the lease has the expected user context content.
+        if (!exp_context) {
+            ASSERT_FALSE(lease->getContext());
+        }
+        else {
+            ASSERT_TRUE(lease->getContext());
+            ASSERT_TRUE(exp_context->equals(*(lease->getContext())))
+                << "expected: " << *(exp_context) << std::endl
+                << "  actual: " << *(lease->getContext()) << std::endl;
+        }
+    }
+}
+
+// Verifies that the extended data (e.g. RAI option for now) is
+// not added to a V4 lease when leases are created and/or renewed,
+// when store-extended-info is false.
+TEST_F(AllocEngine4Test, storeExtendedInfoDisabled4) {
+
+    // Structure that defines a test scenario.
+    struct Scenario {
+        std::string description_;       // test description
+        std::vector<uint8_t> mac_;      // MAC address
+        std::string rai_data_;          // RAI option the client packet contains
+        std::string exp_address_;       // expected lease address
+    };
+
+    std::vector<uint8_t> mac1 = { 0, 0xfe, 0xfe, 0xfe, 0xfe, 0x01};
+    std::string mac1_addr = "192.0.2.100";
+
+    std::vector<uint8_t> mac2 = { 0, 0xfe, 0xfe, 0xfe, 0xfe, 0x02};
+    std::string mac2_addr = "192.0.2.101";
+
+    // Test scenarios.
+    std::vector<Scenario> scenarios {
+    {
+        "create client one without rai",
+        mac1,
+        "",
+        mac1_addr
+    },
+    {
+        "renew client one without rai",
+        {},
+        "",
+        mac1_addr
+    },
+    {
+        "create client two with rai",
+        mac2,
+        "0x52050104a1b1c1d1",
+        mac2_addr
+    },
+    {
+        "renew client two with rai",
+        {},
+        "0x52050104a1b1c1d1",
+        mac2_addr
+    }};
+
+    // Create the allocation engine, context and lease.
+    NakedAllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+    // All of the scenarios require storage to be disabled.
+    subnet_->setStoreExtendedInfo(false);
+
+    AllocEngine::ClientContext4 ctx(subnet_, ClientIdPtr(), hwaddr_,
+                                    IOAddress::IPV4_ZERO_ADDRESS(),
+                                    false, false, "", false);
+
+    Lease4Ptr lease;
+
+    // Iterate over the test scenarios.
+    for (auto scenario : scenarios) {
+        SCOPED_TRACE(scenario.description_);
+
+        // If we have a MAC address this scenario is for a new client.
+        if (!scenario.mac_.empty()) {
+            std::cout << "setting mac address" << std::endl;
+            ASSERT_NO_THROW(ctx.hwaddr_.reset(new HWAddr(scenario.mac_, HTYPE_ETHER)))
+                            << "invalid MAC address, test is broken";
+        }
+
+        // Create the client packet and the add RAI option (if one).
+        ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+        if (!scenario.rai_data_.empty()) {
+            std::vector<uint8_t> opt_data;
+            ASSERT_NO_THROW(util::str::decodeFormattedHexString(scenario.rai_data_, opt_data))
+                            << "scenario.rai_data_ is invalid, test is broken";
+            OptionPtr rai;
+            ASSERT_NO_THROW(rai.reset(new Option(Option::V4, 0x52, opt_data)))
+                            << "could not create rai option, test is broken";
+
+            ctx.query_->addOption(rai);
+        }
+
+        // Create or renew the lease.
+        Lease4Ptr lease = engine.allocateLease4(ctx);
+        ASSERT_TRUE(lease);
+        EXPECT_EQ(scenario.exp_address_, lease->addr_.toText());
+
+        // Verify the lease does not have user context content.
+        ASSERT_FALSE(lease->getContext());
+    }
+}
+
+// This test checks if a lease can be reused in DHCPDISCOVER (fake allocation)
+// using cache threshold.
+TEST_F(AllocEngine4Test, discoverCacheThreshold4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the threshold to 25%.
+    subnet_->setCacheThreshold(.25);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
+
+    // Create a context for fake allocation.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "", true);
+
+    ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was reused.
+    time_t age = lease->cltt_ - now;
+    EXPECT_GE(age, 100);
+    EXPECT_LE(age, 110);
+    EXPECT_EQ(valid - age, lease->reuseable_valid_lft_);
+
+    // Check other lease parameters.
+    EXPECT_EQ(lease->subnet_id_, subnet_->getID());
+    ASSERT_TRUE(lease->client_id_);
+    EXPECT_TRUE(*lease->client_id_ == *clientid_);
+    ASSERT_TRUE(lease->hwaddr_);
+    EXPECT_TRUE(*lease->hwaddr_ == *hwaddr_);
+}
+
+// This test checks if a lease can be reused in DHCPREQUEST (real allocation)
+// using cache threshold.
+TEST_F(AllocEngine4Test, requestCacheThreshold4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the threshold to 25%.
+    subnet_->setCacheThreshold(.25);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+    // Copy the lease, so as it can be compared with.
+    Lease4Ptr original_lease(new Lease4(*lease));
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
+
+    // Create a context for real allocation.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "", false);
+
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was reused.
+    time_t age = lease->cltt_ - now;
+    EXPECT_GE(age, 100);
+    EXPECT_LE(age, 110);
+    EXPECT_EQ(valid - age, lease->reuseable_valid_lft_);
+
+    // Check other lease parameters.
+    EXPECT_EQ(lease->subnet_id_, subnet_->getID());
+    ASSERT_TRUE(lease->client_id_);
+    EXPECT_TRUE(*lease->client_id_ == *clientid_);
+    ASSERT_TRUE(lease->hwaddr_);
+    EXPECT_TRUE(*lease->hwaddr_ == *hwaddr_);
+
+    // Check the lease was not updated in the database.
+    Lease4Ptr from_mgr = LeaseMgrFactory::instance().getLease4(addr);
+    ASSERT_TRUE(from_mgr);
+
+    detailCompareLease(original_lease, from_mgr);
+}
+
+/// We proved that there is no different from the "cache" feature between
+/// discovers and request at the exception of the lease database update.
+
+// This test checks if a lease can be reused in DHCPDISCOVER (fake allocation)
+// using cache max age.
+TEST_F(AllocEngine4Test, discoverCacheMaxAge4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the max age to 200.
+    subnet_->setCacheMaxAge(200);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
+
+    // Create a context for fake allocation.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "", true);
+
+    ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was reused.
+    time_t age = lease->cltt_ - now;
+    EXPECT_GE(age, 100);
+    EXPECT_LE(age, 110);
+    EXPECT_EQ(valid - age, lease->reuseable_valid_lft_);
+
+    // Check other lease parameters.
+    EXPECT_EQ(lease->subnet_id_, subnet_->getID());
+    ASSERT_TRUE(lease->client_id_);
+    EXPECT_TRUE(*lease->client_id_ == *clientid_);
+    ASSERT_TRUE(lease->hwaddr_);
+    EXPECT_TRUE(*lease->hwaddr_ == *hwaddr_);
+}
+
+// This test checks if a lease can be reused in DHCPREQUEST (real allocation)
+// using both cache threshold and max age.
+TEST_F(AllocEngine4Test, requestCacheBoth4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the threshold to 25%.
+    subnet_->setCacheThreshold(.25);
+
+    // Set the max age to 200.
+    subnet_->setCacheMaxAge(200);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+    // Copy the lease, so as it can be compared with.
+    Lease4Ptr original_lease(new Lease4(*lease));
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
+
+    // Create a context for real allocation.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "", false);
+
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was reused.
+    time_t age = lease->cltt_ - now;
+    EXPECT_GE(age, 100);
+    EXPECT_LE(age, 110);
+    EXPECT_EQ(valid - age, lease->reuseable_valid_lft_);
+
+    // Check other lease parameters.
+    EXPECT_EQ(lease->subnet_id_, subnet_->getID());
+    ASSERT_TRUE(lease->client_id_);
+    EXPECT_TRUE(*lease->client_id_ == *clientid_);
+    ASSERT_TRUE(lease->hwaddr_);
+    EXPECT_TRUE(*lease->hwaddr_ == *hwaddr_);
+
+    // Check the lease was not updated in the database.
+    Lease4Ptr from_mgr = LeaseMgrFactory::instance().getLease4(addr);
+    ASSERT_TRUE(from_mgr);
+
+    detailCompareLease(original_lease, from_mgr);
+}
+
+// This test checks if a lease can't be reused in DHCPDISCOVER (fake allocation)
+// using too small cache threshold.
+TEST_F(AllocEngine4Test, discoverCacheBadThreshold4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the threshold to 10%.
+    subnet_->setCacheThreshold(.10);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
+
+    // Create a context for fake allocation.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "", true);
+
+    ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was not reused.
+    EXPECT_EQ(0, lease->reuseable_valid_lft_);
+}
+
+// This test checks if a lease can't be reused in DHCPREQUEST (real allocation)
+// using too small cache max age.
+TEST_F(AllocEngine4Test, requestCacheBadMaxAge4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the threshold to 25%.
+    subnet_->setCacheThreshold(.25);
+
+    // Set the max age to 50.
+    subnet_->setCacheMaxAge(50);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+
+    // Create a context for real allocation.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "", false);
+
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was not reused.
+    EXPECT_EQ(0, lease->reuseable_valid_lft_);
+
+    // Check the lease was updated in the database.
+    Lease4Ptr from_mgr = LeaseMgrFactory::instance().getLease4(addr);
+    ASSERT_TRUE(from_mgr);
+
+    detailCompareLease(lease, from_mgr);
+}
+
+// This test checks if a lease can't be reused in DHCPDISCOVER (fake allocation)
+// when the valid lifetime was reduced.
+TEST_F(AllocEngine4Test, discoverCacheReducedValid4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 200.
+    subnet_->setValid(200);
+
+    // Set the threshold to 25%.
+    subnet_->setCacheThreshold(.25);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    uint32_t valid = 500; // Used a value greater than subnet_->getValid().
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
+
+    // Create a context for fake allocation.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "", true);
+
+    ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was not reused.
+    EXPECT_EQ(0, lease->reuseable_valid_lft_);
+}
+
+// This test checks if a lease can't be reused in DHCPREQUEST (real allocation)
+// when DDNS parameter changed.
+TEST_F(AllocEngine4Test, requestCacheFwdDDNS4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the max age to 200.
+    subnet_->setCacheMaxAge(200);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+
+    // Create a context for real allocation with fwd_dns_update changed.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    true, false, "", false);
+
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was not reused.
+    EXPECT_EQ(0, lease->reuseable_valid_lft_);
+
+    // Check the lease was updated in the database.
+    Lease4Ptr from_mgr = LeaseMgrFactory::instance().getLease4(addr);
+    ASSERT_TRUE(from_mgr);
+
+    detailCompareLease(lease, from_mgr);
+}
+
+// This test checks if a lease can't be reused in DHCPDISCOVER (fake allocation)
+// when DDNS parameter changed.
+TEST_F(AllocEngine4Test, discoverCacheRevDDNS4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the threshold to 25%.
+    subnet_->setCacheThreshold(.25);
+
+    // Set the max age to 200.
+    subnet_->setCacheMaxAge(200);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID()));
+    ASSERT_FALSE(lease->expired());
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(lease));
+
+    // Create a context for fake allocation with rev_dns_update changed.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, true, "", true);
+
+    ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was not reused.
+    EXPECT_EQ(0, lease->reuseable_valid_lft_);
+}
+
+// This test checks if a lease can't be reused in DHCPREQUEST (real allocation)
+// when hostname changed.
+TEST_F(AllocEngine4Test, requestCacheHostname4) {
+    boost::scoped_ptr<AllocEngine> engine;
+    ASSERT_NO_THROW(engine.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
+                                                 0, false)));
+    ASSERT_TRUE(engine);
+
+    // Set valid lifetime to 500.
+    uint32_t valid = 500;
+    subnet_->setValid(valid);
+
+    // Set the max age to 200.
+    subnet_->setCacheMaxAge(200);
+
+    IOAddress addr("192.0.2.105");
+    time_t now = time(NULL) - 100; // Allocated 100 seconds ago.
+    Lease4Ptr lease(new Lease4(addr, hwaddr_, clientid_,
+                               valid, now, subnet_->getID(),
+                               false, false, "foo"));
+    ASSERT_FALSE(lease->expired());
+
+    // Create a context for real allocation with fwd_dns_update changed.
+    AllocEngine::ClientContext4 ctx(subnet_, clientid_, hwaddr_, addr,
+                                    false, false, "bar", false);
+
+    ctx.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+    lease = engine->allocateLease4(ctx);
+    // Check that we got that single lease.
+    ASSERT_TRUE(lease);
+    EXPECT_EQ(addr, lease->addr_);
+
+    // The lease was not reused.
+    EXPECT_EQ(0, lease->reuseable_valid_lft_);
+    EXPECT_EQ("bar", lease->hostname_);
+
+    // Check the lease was updated in the database.
+    Lease4Ptr from_mgr = LeaseMgrFactory::instance().getLease4(addr);
+    ASSERT_TRUE(from_mgr);
+
+    detailCompareLease(lease, from_mgr);
+}
+
+// Verifies that AllocEngine::getValidLft(ctx4) returns the appropriate
+// lifetime value based on the context content.
+TEST_F(AllocEngine4Test, getValidLft4) {
+    AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 0, false);
+
+    // Let's make three classes, two with valid-lifetime and one without,
+    // and add them to the dictionary.
+    ClientClassDictionaryPtr dictionary = CfgMgr::instance().getStagingCfg()->getClientClassDictionary();
+
+    ClientClassDefPtr class_def(new ClientClassDef("valid_one", ExpressionPtr()));
+    Triplet<uint32_t> valid_one(50, 100, 150);
+    class_def->setValid(valid_one);
+    dictionary->addClass(class_def);
+
+    class_def.reset(new ClientClassDef("valid_two", ExpressionPtr()));
+    Triplet<uint32_t>valid_two(200, 250, 300);
+    class_def->setValid(valid_two);
+    dictionary->addClass(class_def);
+
+    class_def.reset(new ClientClassDef("valid_unspec", ExpressionPtr()));
+    dictionary->addClass(class_def);
+
+    // Commit our class changes.
+    CfgMgr::instance().commit();
+
+    // Update the subnet's triplet to something more useful.
+    subnet_->setValid(Triplet<uint32_t>(500, 1000, 1500));
+
+    // Describes a test scenario.
+    struct Scenario {
+        std::string desc_;                  // descriptive text for logging
+        std::vector<std::string> classes_;  // class list of assigned classes
+        uint32_t requested_lft_;            // use as option 51 is > 0
+        uint32_t exp_valid_;                // expected lifetime
+    };
+
+    // Scenarios to test.
+    std::vector<Scenario> scenarios = {
+        {
+            "BOOTP",
+            { "BOOTP" },
+            0,
+            Lease::INFINITY_LFT
+        },
+        {
+            "no classes, no option",
+            {},
+            0,
+            subnet_->getValid()
+        },
+        {
+            "no classes, option",
+            {},
+            subnet_->getValid().getMin() + 50,
+            subnet_->getValid().getMin() + 50
+        },
+        {
+            "no classes, option too small",
+            {},
+            subnet_->getValid().getMin() - 50,
+            subnet_->getValid().getMin()
+        },
+        {
+            "no classes, option too big",
+            {},
+            subnet_->getValid().getMax() + 50,
+            subnet_->getValid().getMax()
+        },
+        {
+            "class unspecified, no option",
+            { "valid_unspec" },
+            0,
+            subnet_->getValid()
+        },
+        {
+            "from last class, no option",
+            { "valid_unspec", "valid_one" },
+            0,
+            valid_one.get()
+        },
+        {
+            "from first class, no option",
+            { "valid_two", "valid_one" },
+            0,
+            valid_two.get()
+        },
+        {
+            "class plus option",
+            { "valid_one" },
+            valid_one.getMin() + 25,
+            valid_one.getMin() + 25
+        },
+        {
+            "class plus option too small",
+            { "valid_one" },
+            valid_one.getMin() - 25,
+            valid_one.getMin()
+        },
+        {
+            "class plus option too big",
+            { "valid_one" },
+            valid_one.getMax() + 25,
+            valid_one.getMax()
+        }
+    };
+
+    // Iterate over the scenarios and verify the correct outcome.
+    for (auto scenario : scenarios) {
+        SCOPED_TRACE(scenario.desc_); {
+            // Create a context;
+            AllocEngine::ClientContext4 ctx(subnet_, ClientIdPtr(), hwaddr_,
+                                            IOAddress("0.0.0.0"), false, false,
+                                            "", false);
+            ctx.query_.reset(new Pkt4(DHCPDISCOVER, 1234));
+
+            // Add client classes (if any)
+            for (auto class_name : scenario.classes_) {
+                ctx.query_->addClass(class_name);
+            }
+
+            // Add client option (if one)
+            if (scenario.requested_lft_) {
+                OptionUint32Ptr opt(new OptionUint32(Option::V4, DHO_DHCP_LEASE_TIME,
+                                                     scenario.requested_lft_));
+                ctx.query_->addOption(opt);
+            }
+
+            Lease4Ptr lease = engine.allocateLease4(ctx);
+            ASSERT_TRUE(lease);
+            EXPECT_EQ(lease->valid_lft_, scenario.exp_valid_);
+        }
+    }
 }
 
 }  // namespace test

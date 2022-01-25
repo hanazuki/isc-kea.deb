@@ -20,7 +20,7 @@ libkea_eval_la_SOURCES += token.cc token.h
 
 libkea_eval_la_SOURCES += parser.cc parser.h
 libkea_eval_la_SOURCES += lexer.cc
-libkea_eval_la_SOURCES += location.hh position.hh stack.hh
+libkea_eval_la_SOURCES += location.hh
 libkea_eval_la_SOURCES += eval_context.cc eval_context.h eval_context_decl.h
 libkea_eval_la_SOURCES += eval_messages.h eval_messages.cc
 
@@ -36,7 +36,7 @@ libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_eval_la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_eval_la_LIBADD  += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 
-libkea_eval_la_LDFLAGS  = -no-undefined -version-info 12:0:0
+libkea_eval_la_LDFLAGS  = -no-undefined -version-info 27:0:0
 libkea_eval_la_LDFLAGS += $(CRYPTO_LDFLAGS)
 
 EXTRA_DIST  = eval.dox
@@ -85,7 +85,7 @@ endif
 # reconfigure, a new target parser-clean has been added.
 maintainer-clean-local:
 	rm -f eval_messages.h eval_messages.cc
-	rm -f location.hh lexer.cc parser.cc parser.h position.hh stack.hh
+	rm -f location.hh lexer.cc parser.cc parser.h
 
 # To regenerate flex/bison files, one can do:
 #
@@ -95,11 +95,14 @@ maintainer-clean-local:
 # This is needed only when the lexer.ll or parser.yy files are modified.
 # Make sure you have both flex and bison installed.
 parser-clean:
-	rm -f location.hh lexer.cc parser.cc parser.h position.hh stack.hh
+	rm -f location.hh lexer.cc parser.cc parser.h
 
 if GENERATE_PARSER
 
-parser: lexer.cc location.hh position.hh stack.hh parser.cc parser.h
+# Generate parser first.
+all-recursive: lexer.cc location.hh parser.cc parser.h
+
+parser: lexer.cc location.hh parser.cc parser.h
 	@echo "Flex/bison files regenerated"
 
 # --- Flex/Bison stuff below --------------------------------------------------
@@ -108,15 +111,15 @@ parser: lexer.cc location.hh position.hh stack.hh parser.cc parser.h
 # It can be used to manually follow what's going on in the parser.
 # This is especially useful if yydebug_ is set to 1 as that variable
 # will cause parser to print out its internal state.
-location.hh position.hh stack.hh parser.cc parser.h: parser.yy
-	$(YACC) --defines=parser.h -o parser.cc parser.yy
+location.hh parser.cc parser.h: parser.yy
+	$(YACC) -Wno-yacc --defines=parser.h -o parser.cc parser.yy
 
 lexer.cc: lexer.ll
 	$(LEX) --prefix eval -o lexer.cc lexer.ll
 
 else
 
-parser location.hh position.hh stack.hh parser.cc parser.h lexer.cc:
+parser location.hh parser.cc parser.h lexer.cc:
 	@echo Parser generation disabled. Configure with --enable-generate-parser to enable it.
 
 endif

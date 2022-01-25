@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "PERFDHCP" "8" "26 Feb, 2020" "1.7.5" "Kea"
+.TH "PERFDHCP" "8" "Dec 14, 2021" "2.0.1" "Kea"
 .SH NAME
 perfdhcp \- DHCP benchmarking tool
 .
@@ -32,7 +32,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 ..
 .SH SYNOPSIS
 .sp
-\fBperfdhcp\fP [\fB\-1\fP] [\fB\-4**|\fP\-6**] [\fB\-A\fP encapsulation\-level] [\fB\-b\fP base] [\fB\-B\fP] [\fB\-c\fP] [\fB\-d\fP drop\-time] [\fB\-D\fP max\-drop] [\-e lease\-type] [\fB\-E\fP time\-offset] [\fB\-f\fP renew\-rate] [\fB\-F\fP release\-rate] [\fB\-g\fP thread\-mode] [\fB\-h\fP] [\fB\-i\fP] [\fB\-I\fP ip\-offset] [\fB\-l\fP local\-address|interface] [\fB\-L\fP local\-port] [\fB\-M\fP mac\-list\-file] [\fB\-n\fP num\-request] [\fB\-N\fP remote\-port] [\fB\-O\fP random\-offset] [\fB\-o\fP code,hexstring] [\fB\-p\fP test\-period] [\fB\-P\fP preload] [\fB\-r\fP rate] [\fB\-R\fP num\-clients] [\fB\-s\fP seed] [\fB\-S\fP srvid\-offset] [\fB\-\-scenario\fP name] [\fB\-t\fP report] [\fB\-T\fP template\-file] [\fB\-v\fP] [\fB\-W\fP exit\-wait\-time] [\fB\-w\fP script_name] [\fB\-x\fP diagnostic\-selector] [\fB\-X\fP xid\-offset] [server]
+\fBperfdhcp\fP [\fB\-1\fP] [\fB\-4\fP | \fB\-6\fP] [\fB\-A\fP encapsulation\-level] [\fB\-b\fP base] [\fB\-B\fP] [\fB\-c\fP] [\fB\-C\fP separator] [\fB\-d\fP drop\-time] [\fB\-D\fP max\-drop] [\-e lease\-type] [\fB\-E\fP time\-offset] [\fB\-f\fP renew\-rate] [\fB\-F\fP release\-rate] [\fB\-g\fP thread\-mode] [\fB\-h\fP] [\fB\-i\fP] [\fB\-I\fP ip\-offset] [\fB\-J\fP remote\-address\-list\-file] [\fB\-l\fP local\-address|interface] [\fB\-L\fP local\-port] [\fB\-M\fP mac\-list\-file] [\fB\-n\fP num\-request] [\fB\-N\fP remote\-port] [\fB\-O\fP random\-offset] [\fB\-o\fP code,hexstring] [\fB\-p\fP test\-period] [\fB\-P\fP preload] [\fB\-r\fP rate] [\fB\-R\fP num\-clients] [\fB\-s\fP seed] [\fB\-S\fP srvid\-offset] [\fB\-\-scenario\fP name] [\fB\-t\fP report] [\fB\-T\fP template\-file] [\fB\-u\fP] [\fB\-v\fP] [\fB\-W\fP exit\-wait\-time] [\fB\-w\fP script_name] [\fB\-x\fP diagnostic\-selector] [\fB\-X\fP xid\-offset] [server]
 .SH DESCRIPTION
 .sp
 \fBperfdhcp\fP is a DHCP benchmarking tool. It provides a way of measuring
@@ -131,6 +131,13 @@ points to, and the one which precedes it (random\-offset \- 1). If the
 number of simulated clients exceeds 65535, three bytes will be
 randomized, and so on.
 .sp
+Perfdhcp can now simulate traffic from multiple subnets by enabling option
+\-J and passing path to file that contains v4 or v6 addresses that will be
+used as relay in generated messages. That enable testing of vast numbers
+of Kea shared networks. While testing Kea v4 it should be started with
+KEA_TEST_SEND_RESPONSES_TO_SOURCE environment variable to force Kea
+to send generated messages to source address of incoming packet.
+.sp
 Templates may currently be used to generate packets being sent to the
 server in 4\-way exchanges, i.e. SOLICIT, REQUEST (DHCPv6) and DISCOVER,
 REQUEST (DHCPv4). They cannot be used when RENEW or RELEASE packets are
@@ -181,6 +188,13 @@ Both IPv6 addresses and prefixes will be requested.
 The \fB\-e prefix\-only\fP and \fB\-e address\-and\-prefix\fP forms may not be used
 with the \fB\-4\fP option.
 .TP
+.B \fB\-F release\-rate\fP
+Specifies the rate at which RELEASE requests are sent to a server. This value
+is only valid when used in conjunction with the exchange rate (given
+by \fB\-r rate\fP). Furthermore, the sum of this value and the renew\-rate
+(given by \fB\-f rate\fP) must be equal to or less than the exchange
+rate value.
+.TP
 .B \fB\-f renew\-rate\fP
 Specifies the rate at which DHCPv4 or DHCPv6 renew requests are sent to a server.
 This value is only valid when used in conjunction with the exchange
@@ -206,6 +220,13 @@ selected, SOLICIT\-ADVERTISE if \fB\-6\fP is chosen.
 \fB\-i\fP is incompatible with the following options: \fB\-1\fP, \fB\-d\fP,
 \fB\-D\fP, \fB\-E\fP, \fB\-S\fP, \fB\-I\fP and \fB\-F\fP\&. In addition, it cannot be
 used with multiple instances of \fB\-O\fP, \fB\-T\fP and \fB\-X\fP\&.
+.TP
+.B \fB\-J remote\-address\-list\-file\fP
+Text file that include multiple addresses. If provided perfdhcp will choose
+randomly one of addresses for each exchange. This is used to generate traffic
+from multiple subnets. Designed to test shared\-networks. While testing kea v4 it
+should be started with KEA_TEST_SEND_RESPONSES_TO_SOURCE=ENABLE
+env variable otherwise perfdhcp will not be able to receive responses.
 .TP
 .B \fB\-l local\-addr|interface\fP
 For DHCPv4 operation, specifies the local hostname/address to use when
@@ -274,6 +295,11 @@ hexadecimal digits. This may be specified up to two times and
 controls the contents of the packets sent (see the "Templates"
 section above).
 .TP
+.B \fB\-u\fP
+Enable checking address uniqueness. Lease valid lifetime should not be shorter
+than test duration and clients should not request address more than once without
+releasing it first.
+.TP
 .B \fB\-v\fP
 Prints the version of this program.
 .TP
@@ -304,6 +330,9 @@ Prints the exit reason.
 \fBi\fP
 Prints the rate processing details.
 .TP
+\fBl\fP
+Prints the received leases.
+.TP
 \fBs\fP
 Prints the first server\-ID.
 .TP
@@ -313,6 +342,14 @@ When finished, prints timers of all successful exchanges.
 \fBT\fP
 When finished, prints templates.
 .UNINDENT
+.TP
+.B \fB\-y seconds\fP
+Time in seconds after which perfdhcp will start simulating the client waiting longer for server responses. This increase the
+secs field in DHCPv4 and sends increased values in Elapsed option in DHCPv6. Must be used with \(aq\-Y\(aq.
+.TP
+.B \fB\-Y seconds\fP
+Period of time in seconds in which perfdhcp will be simulating the client waiting longer for server responses. This increase
+the secs field in DHCPv4 and sends increased values in Elapsed option in DHCPv6. Must be used with \(aq\-y\(aq.
 .UNINDENT
 .SH DHCPV4-ONLY OPTIONS
 .sp
@@ -329,13 +366,6 @@ The following options only apply for DHCPv6 (i.e. when \fB\-6\fP is given).
 .TP
 .B \fB\-c\fP
 Adds a rapid\-commit option (exchanges will be SOLICIT\-ADVERTISE).
-.TP
-.B \fB\-F release\-rate\fP
-Specifies the rate at which IPv6 RELEASE requests are sent to a server. This value
-is only valid when used in conjunction with the exchange rate (given
-by \fB\-r rate\fP). Furthermore, the sum of this value and the renew\-rate
-(given by \fB\-f rate\fP) must be equal to or less than the exchange
-rate value.
 .TP
 .B \fB\-A encapsulation\-level\fP
 Specifies that relayed traffic must be generated. The argument
@@ -401,6 +431,11 @@ either limit is reached.
 .TP
 .B \fB\-t interval\fP
 Sets the delay (in seconds) between two successive reports.
+.TP
+.B \fB\-C separator\fP
+Output reduced, an argument is a separator for periodic (\-t) reports
+generated in easy parsable mode. Data output won\(aqt be changed,
+remain identical as in \-t option.
 .UNINDENT
 .SH ARGUMENTS
 .INDENT 0.0
@@ -448,6 +483,29 @@ Error in command\-line arguments.
 No general failures in operation, but one or more exchanges were
 unsuccessful.
 .UNINDENT
+.SH USAGE EXAMPLES
+.sp
+Simulate regular DHCPv4 traffic: 100 DHCPv4 devices (\-R 100), 10 packets per second (\-r 10), show the query/response rate details (\-xi),
+the report should be shown every 2 seconds (\-t 2), send the packets to the IP 192.0.2.1:
+.sp
+sudo perfdhcp \-xi \-t 2 \-r 10 \-R 100 192.0.2.1
+.sp
+Here\(aqs a similar case, but for DHCPv6. Note that DHCPv6 protocol uses link\-local addresses, so you need to specify the interface
+(eth0 in this example) to send the traffic. \(aqall\(aq is a convenience alias for All_DHCP_Relay_Agents_and_Servers (the multicast
+address FF02::1:2). Alternatively, you can use \(aqservers\(aq alias to refer to All_DHCP_Servers (the multicast address FF05::1:3),
+or skip it all together and the default value (all) will be used.
+.sp
+sudo perfdhcp \-6 \-xi \-t 1 \-r 1 \-R 10 \-l eth0 all
+.sp
+The following examples simulate normal DHCPv4 and DHCPv6 traffic that after 3 seconds starts pretending to not receive any
+responses from the server for 10 seconds. DHCPv4 protocol signals this by increased secs field and DHCPv6 uses elapsed option
+for that. In real networks this indicates that the clients are not getting responses in a timely matter. This can be used
+to simulate some HA scenarios, as Kea uses secs field and elapsed option value as one of the indicators that the HA partner
+is not responding. When enabled with \-y and \-Y, the secs and elapsed time value increased steadily.
+.sp
+sudo perfdhcp \-xi \-t 1 \-r 1 \-y 10 \-Y 3 192.0.2.1
+.sp
+sudo perfdhcp \-6 \-xi \-t 1 \-r 1 \-y 10 \-Y 3 2001:db8::1
 .SH MAILING LISTS AND SUPPORT
 .sp
 There are two public mailing lists available for the Kea project. \fBkea\-users\fP
@@ -472,6 +530,6 @@ included \fBperfdhcp\fP, was released in December 2015.
 .SH AUTHOR
 Internet Systems Consortium
 .SH COPYRIGHT
-2019, Internet Systems Consortium
+2019-2020, Internet Systems Consortium
 .\" Generated by docutils manpage writer.
 .

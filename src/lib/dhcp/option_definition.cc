@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,9 +42,10 @@ namespace isc {
 namespace dhcp {
 
 OptionDefinition::OptionDefinition(const std::string& name,
-                                 const uint16_t code,
-                                 const std::string& type,
-                                 const bool array_type /* = false */)
+                                   const uint16_t code,
+                                   const std::string& space,
+                                   const std::string& type,
+                                   const bool array_type /* = false */)
     : name_(name),
       code_(code),
       type_(OPT_UNKNOWN_TYPE),
@@ -52,7 +53,7 @@ OptionDefinition::OptionDefinition(const std::string& name,
       encapsulated_space_(""),
       record_fields_(),
       user_context_(),
-      option_space_name_() {
+      option_space_name_(space) {
     // Data type is held as enum value by this class.
     // Use the provided option type string to get the
     // corresponding enum value.
@@ -61,17 +62,20 @@ OptionDefinition::OptionDefinition(const std::string& name,
 
 OptionDefinition::OptionDefinition(const std::string& name,
                                    const uint16_t code,
+                                   const std::string& space,
                                    const OptionDataType type,
                                    const bool array_type /* = false */)
     : name_(name),
       code_(code),
       type_(type),
       array_type_(array_type),
-      encapsulated_space_("") {
+      encapsulated_space_(""),
+      option_space_name_(space){
 }
 
 OptionDefinition::OptionDefinition(const std::string& name,
                                    const uint16_t code,
+                                   const std::string& space,
                                    const std::string& type,
                                    const char* encapsulated_space)
     : name_(name),
@@ -84,11 +88,12 @@ OptionDefinition::OptionDefinition(const std::string& name,
       encapsulated_space_(encapsulated_space),
       record_fields_(),
       user_context_(),
-      option_space_name_() {
+      option_space_name_(space) {
 }
 
 OptionDefinition::OptionDefinition(const std::string& name,
                                    const uint16_t code,
+                                   const std::string& space,
                                    const OptionDataType type,
                                    const char* encapsulated_space)
     : name_(name),
@@ -98,39 +103,43 @@ OptionDefinition::OptionDefinition(const std::string& name,
       encapsulated_space_(encapsulated_space),
       record_fields_(),
       user_context_(),
-      option_space_name_() {
+      option_space_name_(space) {
 }
 
 OptionDefinitionPtr
 OptionDefinition::create(const std::string& name,
                          const uint16_t code,
+                         const std::string& space,
                          const std::string& type,
                          const bool array_type) {
-    return (boost::make_shared<OptionDefinition>(name, code, type, array_type));
+    return (boost::make_shared<OptionDefinition>(name, code, space, type, array_type));
 }
 
 OptionDefinitionPtr
 OptionDefinition::create(const std::string& name,
                          const uint16_t code,
+                         const std::string& space,
                          const OptionDataType type,
                          const bool array_type) {
-    return (boost::make_shared<OptionDefinition>(name, code, type, array_type));
+    return (boost::make_shared<OptionDefinition>(name, code, space, type, array_type));
 }
 
 OptionDefinitionPtr
 OptionDefinition::create(const std::string& name,
                          const uint16_t code,
+                         const std::string& space,
                          const std::string& type,
                          const char* encapsulated_space) {
-    return (boost::make_shared<OptionDefinition>(name, code, type, encapsulated_space));
+    return (boost::make_shared<OptionDefinition>(name, code, space, type, encapsulated_space));
 }
 
 OptionDefinitionPtr
 OptionDefinition::create(const std::string& name,
                          const uint16_t code,
+                         const std::string& space,
                          const OptionDataType type,
                          const char* encapsulated_space) {
-    return (boost::make_shared<OptionDefinition>(name, code, type, encapsulated_space));
+    return (boost::make_shared<OptionDefinition>(name, code, space, type, encapsulated_space));
 }
 
 bool
@@ -153,14 +162,18 @@ OptionDefinition::addRecordField(const std::string& data_type_name) {
 void
 OptionDefinition::addRecordField(const OptionDataType data_type) {
     if (type_ != OPT_RECORD_TYPE) {
-        isc_throw(isc::InvalidOperation, "'record' option type must be used"
-                  " to add data fields to the record");
+        isc_throw(isc::InvalidOperation,
+                  "'record' option type must be used instead of '"
+                      << OptionDataTypeUtil::getDataTypeName(type_)
+                      << "' to add data fields to the record");
     }
     if (data_type >= OPT_RECORD_TYPE ||
         data_type == OPT_ANY_ADDRESS_TYPE ||
         data_type == OPT_EMPTY_TYPE) {
         isc_throw(isc::BadValue,
-                  "attempted to add invalid data type to the record.");
+                  "attempted to add invalid data type '"
+                      << OptionDataTypeUtil::getDataTypeName(data_type)
+                      << "' to the record.");
     }
     record_fields_.push_back(data_type);
 }
@@ -338,6 +351,10 @@ OptionDefinition::validate() const {
         all(find_tail(name_, 1), boost::is_any_of(std::string("-_")))) {
         err_str << "invalid option name '" << name_ << "'";
 
+    } else if (!OptionSpace::validateName(option_space_name_)) {
+        err_str << "invalid option space name: '"
+                << option_space_name_ << "'";
+
     } else if (!encapsulated_space_.empty() &&
                !OptionSpace::validateName(encapsulated_space_)) {
         err_str << "invalid encapsulated option space name: '"
@@ -376,7 +393,7 @@ OptionDefinition::validate() const {
                             << " fields of other types.";
                     break;
                 }
-                /// Empty type is not allowed within a record.
+                // Empty type is not allowed within a record.
                 if (*it == OPT_EMPTY_TYPE) {
                     err_str << "empty data type can't be stored as a field in"
                             << " an option record.";
@@ -387,11 +404,11 @@ OptionDefinition::validate() const {
             if (err_str.str().empty() && array_type_) {
                 const OptionDataType& last_type = fields.back();
                 if (last_type == OPT_STRING_TYPE) {
-                    err_str << "array of strings is not"
-                            << "a valid option definition.";
+                    err_str
+                        << "array of strings is not a valid option definition.";
                 } else if (last_type == OPT_BINARY_TYPE) {
-                    err_str << "array of binary values is not"
-                            << " a valid option definition.";
+                    err_str << "array of binary values is not a valid option "
+                               "definition.";
                 }
                 // Empty type was already checked.
             }
@@ -419,110 +436,6 @@ OptionDefinition::validate() const {
     if (!err_str.str().empty()) {
         isc_throw(MalformedOptionDefinition, err_str.str());
     }
-}
-
-bool
-OptionDefinition::haveIAx6Format(OptionDataType first_type) const {
-   return (haveType(OPT_RECORD_TYPE) &&
-           !getArrayType() &&
-           record_fields_.size() == 3 &&
-           record_fields_[0] == first_type &&
-           record_fields_[1] == OPT_UINT32_TYPE &&
-           record_fields_[2] == OPT_UINT32_TYPE);
-}
-
-bool
-OptionDefinition::haveIA6Format() const {
-    // Expect that IA_NA option format is defined as record.
-    // Although it consists of 3 elements of the same (uint32)
-    // type it can't be defined as array of uint32 elements because
-    // arrays do not impose limitations on number of elements in
-    // the array while this limitation is needed for IA_NA - need
-    // exactly 3 elements.
-    return (haveIAx6Format(OPT_UINT32_TYPE));
-}
-
-bool
-OptionDefinition::haveIAAddr6Format() const {
-    return (haveIAx6Format(OPT_IPV6_ADDRESS_TYPE));
-}
-
-bool
-OptionDefinition::haveIAPrefix6Format() const {
-    return (haveType(OPT_RECORD_TYPE) &&
-           !getArrayType() &&
-            record_fields_.size() == 4 &&
-            record_fields_[0] == OPT_UINT32_TYPE &&
-            record_fields_[1] == OPT_UINT32_TYPE &&
-            record_fields_[2] == OPT_UINT8_TYPE &&
-            record_fields_[3] == OPT_IPV6_ADDRESS_TYPE);
-}
-
-bool
-OptionDefinition::haveFqdn4Format() const {
-    return (haveType(OPT_RECORD_TYPE) &&
-           !getArrayType() &&
-            record_fields_.size() == 4 &&
-            record_fields_[0] == OPT_UINT8_TYPE &&
-            record_fields_[1] == OPT_UINT8_TYPE &&
-            record_fields_[2] == OPT_UINT8_TYPE &&
-            record_fields_[3] == OPT_FQDN_TYPE);
-}
-
-bool
-OptionDefinition::haveClientFqdnFormat() const {
-    return (haveType(OPT_RECORD_TYPE) &&
-           !getArrayType() &&
-            (record_fields_.size() == 2) &&
-            (record_fields_[0] == OPT_UINT8_TYPE) &&
-            (record_fields_[1] == OPT_FQDN_TYPE));
-}
-
-bool
-OptionDefinition::haveVendor4Format() const {
-    return (true);
-}
-
-bool
-OptionDefinition::haveVendor6Format() const {
-    return  (getType() == OPT_UINT32_TYPE && !getEncapsulatedSpace().empty());
-}
-
-bool
-OptionDefinition::haveVendorClass4Format() const {
-    return (haveType(OPT_RECORD_TYPE) &&
-            (record_fields_.size() == 2) &&
-            (record_fields_[0] == OPT_UINT32_TYPE) &&
-            (record_fields_[1] == OPT_BINARY_TYPE));
-}
-
-bool
-OptionDefinition::haveVendorClass6Format() const {
-    return (haveType(OPT_RECORD_TYPE) &&
-            (record_fields_.size() == 2) &&
-            (record_fields_[0] == OPT_UINT32_TYPE) &&
-            (record_fields_[1] == OPT_BINARY_TYPE));
-}
-
-bool
-OptionDefinition::haveStatusCodeFormat() const {
-    return (haveType(OPT_RECORD_TYPE) &&
-            (record_fields_.size() == 2) &&
-            (record_fields_[0] == OPT_UINT16_TYPE) &&
-            (record_fields_[1] == OPT_STRING_TYPE));
-}
-
-bool
-OptionDefinition::haveServiceScopeFormat() const {
-    return (haveType(OPT_RECORD_TYPE) &&
-            (record_fields_.size() == 2) &&
-            (record_fields_[0] == OPT_BOOLEAN_TYPE) &&
-            (record_fields_[1] == OPT_STRING_TYPE));
-}
-
-bool
-OptionDefinition::haveOpaqueDataTuplesFormat() const {
-    return (haveType(OPT_TUPLE_TYPE) && getArrayType());
 }
 
 bool
@@ -599,9 +512,9 @@ OptionDefinition::lexicalCastWithRangeCheck(const std::string& value_str)
             result < numeric_limits<T>::min()) {
             isc_throw(BadDataTypeCast, "unable to convert '"
                       << value_str << "' to numeric type. This value is "
-                      " expected to be in the range of "
-                      << numeric_limits<T>::min()
-                      << ".." << numeric_limits<T>::max());
+                         "expected to be in the range of "
+                      << +numeric_limits<T>::min() << ".."
+                      << +numeric_limits<T>::max());
         }
     }
     return (static_cast<T>(result));
@@ -893,62 +806,79 @@ OptionPtr
 OptionDefinition::factorySpecialFormatOption(Option::Universe u,
                                              OptionBufferConstIter begin,
                                              OptionBufferConstIter end) const {
-    if (u == Option::V6) {
-        if ((getCode() == D6O_IA_NA || getCode() == D6O_IA_PD) &&
-            haveIA6Format()) {
-            // Return Option6IA instance for IA_PD and IA_NA option
-            // types only. We don't want to return Option6IA for other
-            // options that comprise 3 UINT32 data fields because
-            // Option6IA accessors' and modifiers' names are derived
-            // from the IA_NA and IA_PD options' field names: IAID,
-            // T1, T2. Using functions such as getIAID, getT1 etc. for
-            // options other than IA_NA and IA_PD would be bad practice
-            // and cause confusion.
+    if ((u == Option::V6) && haveSpace(DHCP6_OPTION_SPACE)) {
+        switch (getCode()) {
+        case D6O_IA_NA:
+        case D6O_IA_PD:
+            // Record of 3 uint32, no array.
             return (factoryIA6(getCode(), begin, end));
 
-        } else if (getCode() == D6O_IAADDR && haveIAAddr6Format()) {
-            // Return Option6IAAddr option instance for the IAADDR
-            // option only for the same reasons as described in
-            // for IA_NA and IA_PD above.
+        case D6O_IAADDR:
+            // Record of an IPv6 address followed by 2 uint32, no array.
             return (factoryIAAddr6(getCode(), begin, end));
-        } else if (getCode() == D6O_IAPREFIX && haveIAPrefix6Format()) {
+
+        case D6O_IAPREFIX:
+            // Record of 2 uint32, one uint8 and an IPv6 address, no array.
             return (factoryIAPrefix6(getCode(), begin, end));
-        } else if (getCode() == D6O_CLIENT_FQDN && haveClientFqdnFormat()) {
-            // FQDN option requires special processing. Thus, there is
-            // a specialized class to handle it.
+
+        case D6O_CLIENT_FQDN:
+            // Record of one uint8 and one FQDN, no array.
             return (OptionPtr(new Option6ClientFqdn(begin, end)));
-        } else if (getCode() == D6O_VENDOR_OPTS && haveVendor6Format()) {
-            // Vendor-Specific Information (option code 17)
+
+        case D6O_VENDOR_OPTS:
+            // Type uint32.
+            // Vendor-Specific Information (option code 17).
             return (OptionPtr(new OptionVendor(Option::V6, begin, end)));
-        } else if (getCode() == D6O_VENDOR_CLASS && haveVendorClass6Format()) {
+
+        case D6O_VENDOR_CLASS:
+            // Record of one uint32 and one string.
             // Vendor Class (option code 16).
             return (OptionPtr(new OptionVendorClass(Option::V6, begin, end)));
-        } else if (getCode() == D6O_STATUS_CODE && haveStatusCodeFormat()) {
-            // Status Code (option code 13)
+
+        case D6O_STATUS_CODE:
+            // Record of one uint16 and one string.
+            // Status Code (option code 13).
             return (OptionPtr(new Option6StatusCode(begin, end)));
-        } else if (getCode() == D6O_BOOTFILE_PARAM && haveOpaqueDataTuplesFormat()) {
-            // Bootfile params (option code 60)
+
+        case D6O_BOOTFILE_PARAM:
+            // Array of tuples.
+            // Bootfile params (option code 60).
             return (factoryOpaqueDataTuples(Option::V6, getCode(), begin, end));
-        } else if ((getCode() == D6O_PD_EXCLUDE) && haveType(OPT_IPV6_PREFIX_TYPE)) {
-            // Prefix Exclude (option code 67)
+
+        case D6O_PD_EXCLUDE:
+            // Type IPv6 prefix.
+            // Prefix Exclude (option code 67),
             return (OptionPtr(new Option6PDExclude(begin, end)));
+
+        default:
+            break;
         }
-    } else {
-        if ((getCode() == DHO_SERVICE_SCOPE) && haveServiceScopeFormat()) {
+    } else if ((u == Option::V4) && haveSpace(DHCP4_OPTION_SPACE)) {
+        switch (getCode()) {
+        case DHO_SERVICE_SCOPE:
+            // Record of a boolean and a string.
             return (OptionPtr(new Option4SlpServiceScope(begin, end)));
-        } else if ((getCode() == DHO_FQDN) && haveFqdn4Format()) {
+
+        case DHO_FQDN:
+            // Record of 3 uint8 and a FQDN, no array.
             return (OptionPtr(new Option4ClientFqdn(begin, end)));
-        } else if (haveCompressedFqdnListFormat()) {
-            return (factoryFqdnList(Option::V4, begin, end));
-        } else if ((getCode() == DHO_VIVCO_SUBOPTIONS) &&
-                   haveVendorClass4Format()) {
+
+        case DHO_VIVCO_SUBOPTIONS:
+            // Record of uint32 followed by binary.
             // V-I Vendor Class (option code 124).
             return (OptionPtr(new OptionVendorClass(Option::V4, begin, end)));
-        } else if (getCode() == DHO_VIVSO_SUBOPTIONS && haveVendor4Format()) {
+
+        case DHO_VIVSO_SUBOPTIONS:
+            // Type uint32.
             // Vendor-Specific Information (option code 125).
             return (OptionPtr(new OptionVendor(Option::V4, begin, end)));
 
+        default:
+            break;
         }
+    }
+    if ((u == Option::V4) && haveCompressedFqdnListFormat()) {
+        return (factoryFqdnList(Option::V4, begin, end));
     }
     return (OptionPtr());
 }

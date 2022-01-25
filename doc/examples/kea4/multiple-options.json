@@ -9,7 +9,7 @@
     "interfaces": [ "ethX" ]
   },
 
-// We need to specify the the database used to store leases. As of
+// We need to specify the database used to store leases. As of
 // September 2016, four database backends are supported: MySQL,
 // PostgreSQL, Cassandra, and the in-memory database, Memfile.
 // We'll use memfile  because it doesn't require any prior set up.
@@ -90,7 +90,7 @@
              "data": "example.org"
          },
              // Domain search is also a popular option. It tells the client to
-             // attempt to resolve names within those specificed domains. For
+             // attempt to resolve names within those specified domains. For
              // example, name "foo" would be attempted to be resolved as
              // foo.mydomain.example.com and if it fails, then as
              // foo.example.com

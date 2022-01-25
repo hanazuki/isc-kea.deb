@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -205,6 +205,131 @@ public:
 protected:
     ///< Constant value (empty string if the IP address cannot be converted)
     std::string value_;
+};
+
+/// @brief Token representing an IP address as a string
+///
+/// This token holds the value of an IP address as a string, for instance
+/// 10.0.0.1 is '10.0.0.1'
+class TokenIpAddressToText : public Token {
+public:
+    /// @brief Constructor (does nothing)
+    TokenIpAddressToText() {}
+
+    /// @brief Token evaluation (puts value of the string on the stack after
+    /// decoding)
+    ///
+    /// @param pkt (ignored)
+    /// @param values (represented IP address as a string will be pushed here)
+    void evaluate(Pkt& pkt, ValueStack& values);
+};
+
+/// @brief Token representing an 8 bit integer as a string
+///
+/// This token holds the value of an 8 bit integer as a string, for instance
+/// 0xff is '-1'
+class TokenInt8ToText : public Token {
+public:
+    /// @brief Constructor (does nothing)
+    TokenInt8ToText() {}
+
+    /// @brief Token evaluation (puts value of the string on the stack after
+    /// decoding)
+    ///
+    /// @param pkt (ignored)
+    /// @param values (represented 8 bit integer as a string will be pushed
+    /// here)
+    void evaluate(Pkt& pkt, ValueStack& values);
+};
+
+/// @brief Token representing a 16 bit integer as a string
+///
+/// This token holds the value of a 16 bit integer as a string, for instance
+/// 0xffff is '-1'
+class TokenInt16ToText : public Token {
+public:
+    /// @brief Constructor (does nothing)
+    TokenInt16ToText() {}
+
+    /// @brief Token evaluation (puts value of the string on the stack after
+    /// decoding)
+    ///
+    /// @param pkt (ignored)
+    /// @param values (represented 16 bit integer as a string will be pushed
+    /// here)
+    void evaluate(Pkt& pkt, ValueStack& values);
+};
+
+/// @brief Token representing a 32 bit integer as a string
+///
+/// This token holds the value of a 32 bit integer as a string, for instance
+/// 0xffffffff is '-1'
+class TokenInt32ToText : public Token {
+public:
+    /// @brief Constructor (does nothing)
+    TokenInt32ToText() {}
+
+    /// @brief Token evaluation (puts value of the string on the stack after
+    /// decoding)
+    ///
+    /// @param pkt (ignored)
+    /// @param values (represented 32 bit integer as a string will be pushed
+    /// here)
+    void evaluate(Pkt& pkt, ValueStack& values);
+};
+
+/// @brief Token representing an 8 bit unsigned integer as a string
+///
+/// This token holds the value of an 8 bit unsigned integer as a string, for
+/// instance 0xff is '255'
+class TokenUInt8ToText : public Token {
+public:
+    /// @brief Constructor (does nothing)
+    TokenUInt8ToText() {}
+
+    /// @brief Token evaluation (puts value of the string on the stack after
+    /// decoding)
+    ///
+    /// @param pkt (ignored)
+    /// @param values (represented 8 bit unsigned integer as a string will be
+    /// pushed here)
+    void evaluate(Pkt& pkt, ValueStack& values);
+};
+
+/// @brief Token representing a 16 bit unsigned integer as a string
+///
+/// This token holds the value of a 16 bit unsigned integer as a string, for
+/// instance 0xffff is '65535'
+class TokenUInt16ToText : public Token {
+public:
+    /// @brief Constructor (does nothing)
+    TokenUInt16ToText() {}
+
+    /// @brief Token evaluation (puts value of the string on the stack after
+    /// decoding)
+    ///
+    /// @param pkt (ignored)
+    /// @param values (represented 16 bit unsigned integer as a string will be
+    /// pushed here)
+    void evaluate(Pkt& pkt, ValueStack& values);
+};
+
+/// @brief Token representing a 32 bit unsigned integer as a string
+///
+/// This token holds the value of a 32 bit unsigned integer as a string, for
+/// instance 0xffffffff is '4294967295'
+class TokenUInt32ToText : public Token {
+public:
+    /// @brief Constructor (does nothing)
+    TokenUInt32ToText() {}
+
+    /// @brief Token evaluation (puts value of the string on the stack after
+    /// decoding)
+    ///
+    /// @param pkt (ignored)
+    /// @param values (represented 32 bit unsigned integer as a string will be
+    /// pushed here)
+    void evaluate(Pkt& pkt, ValueStack& values);
 };
 
 /// @brief Token that represents a value of an option
@@ -674,6 +799,7 @@ public:
 ///
 /// For example in the sub-expression "concat('foo','bar')" the result
 /// of the evaluation is "foobar"
+/// For user convenience the "'foo' + 'bar'" alternative does the same.
 class TokenConcat : public Token {
 public:
     /// @brief Constructor (does nothing)
@@ -749,7 +875,7 @@ public:
     ///
     /// binary is the binary value (note it can be any value, i.e.
     /// it is not checked to really be not printable).
-    /// separator is litteral for instance '-' or ':'. The empty separator
+    /// separator is literal for instance '-' or ':'. The empty separator
     /// means no separator.
     ///
     /// The following example use a binary MAC address 06:ce:8f:55:b3:33:
@@ -1119,7 +1245,7 @@ protected:
     uint16_t sub_option_code_; ///< Code of the sub-option to be extracted
 };
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace
 
 #endif

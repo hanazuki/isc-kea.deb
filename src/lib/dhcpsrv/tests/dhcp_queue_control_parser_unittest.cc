@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,19 +9,28 @@
 #include <cc/data.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/parsers/dhcp_queue_control_parser.h>
+#include <testutils/multi_threading_utils.h>
 #include <testutils/test_to_element.h>
+#include <util/multi_threading_mgr.h>
 #include <gtest/gtest.h>
 
 using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::test;
+using namespace isc::util;
 
 namespace {
 
 /// @brief Test fixture class for @c DHCPQueueControlParser
 class DHCPQueueControlParserTest : public ::testing::Test {
-protected:
+public:
+    /// @brief Constructor
+    DHCPQueueControlParserTest() = default;
 
+    /// @brief Destructor
+    virtual ~DHCPQueueControlParserTest() = default;
+
+protected:
     /// @brief Setup for each test.
     ///
     /// Clears the configuration in the @c CfgMgr.
@@ -31,7 +40,6 @@ protected:
     ///
     /// Clears the configuration in the @c CfgMgr.
     virtual void TearDown();
-
 };
 
 void
@@ -45,7 +53,7 @@ DHCPQueueControlParserTest::TearDown() {
 }
 
 // Verifies that DHCPQueueControlParser handles
-// expected valid dhcp-queue-control contet
+// expected valid dhcp-queue-control content
 TEST_F(DHCPQueueControlParserTest, validContent) {
     struct Scenario {
         std::string description_;
@@ -167,5 +175,39 @@ TEST_F(DHCPQueueControlParserTest, invalidContent) {
     }
 }
 
+// Verifies that DHCPQueueControlParser disables the queue when multi-threading
+// is enabled
+TEST_F(DHCPQueueControlParserTest, multiThreading) {
+    // Enable config with some queue type.
+    std::string config =
+        "{ \n"
+        "   \"enable-queue\": true, \n"
+        "   \"queue-type\": \"some-type\" \n"
+        "} \n";
+
+    // Construct the config JSON.
+    ConstElementPtr config_elems;
+    ASSERT_NO_THROW(config_elems = Element::fromJSON(config))
+        << "invalid JSON, test is broken";
+
+    // Parse config.
+    DHCPQueueControlParser parser;
+    ConstElementPtr queue_control;
+    ASSERT_FALSE(MultiThreadingMgr::instance().getMode());
+    ASSERT_NO_THROW(queue_control = parser.parse(config_elems))
+        << "parse fails, test is broken";
+    // Verify that queue is enabled.
+    ASSERT_TRUE(queue_control);
+    ASSERT_TRUE(queue_control->get("enable-queue"));
+    EXPECT_EQ("true", queue_control->get("enable-queue")->str());
+
+    // Retry with multi-threading.
+    MultiThreadingTest mt(true);
+    ASSERT_TRUE(MultiThreadingMgr::instance().getMode());
+    ASSERT_NO_THROW(queue_control = parser.parse(config_elems));
+    ASSERT_TRUE(queue_control);
+    ASSERT_TRUE(queue_control->get("enable-queue"));
+    EXPECT_EQ("false", queue_control->get("enable-queue")->str());
+}
 
 }; // anonymous namespace

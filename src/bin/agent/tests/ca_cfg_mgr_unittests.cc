@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,13 +10,16 @@
 #include <exceptions/exceptions.h>
 #include <process/testutils/d_test_stubs.h>
 #include <process/d_cfg_mgr.h>
-#include <agent/tests/test_libraries.h>
+#include <http/basic_auth_config.h>
+#include <agent/tests/test_callout_libraries.h>
+#include <boost/pointer_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <gtest/gtest.h>
 
 using namespace isc::agent;
 using namespace isc::data;
 using namespace isc::hooks;
+using namespace isc::http;
 using namespace isc::process;
 
 namespace  {
@@ -62,6 +65,25 @@ TEST(CtrlAgentCfgMgr, contextHttpParams) {
 
     ctx.setHttpHost("alnitak");
     EXPECT_EQ("alnitak", ctx.getHttpHost());
+}
+
+// Tests if context can store and retrieve TLS parameters.
+TEST(CtrlAgentCfgMgr, contextTlsParams) {
+    CtrlAgentCfgContext ctx;
+
+    // Check TLS parameters
+    ctx.setTrustAnchor("my-ca");
+    EXPECT_EQ("my-ca", ctx.getTrustAnchor());
+
+    ctx.setCertFile("my-cert");
+    EXPECT_EQ("my-cert", ctx.getCertFile());
+
+    ctx.setKeyFile("my-key");
+    EXPECT_EQ("my-key", ctx.getKeyFile());
+
+    EXPECT_TRUE(ctx.getCertRequired());
+    ctx.setCertRequired(false);
+    EXPECT_FALSE(ctx.getCertRequired());
 }
 
 // Tests if context can store and retrieve control socket information.
@@ -128,6 +150,11 @@ TEST(CtrlAgentCfgMgr, contextSocketInfoCopy) {
     ConstElementPtr exp_param(new StringElement("myparam"));
     libs.add(exp_name, exp_param);
 
+    BasicHttpAuthConfigPtr auth(new BasicHttpAuthConfig());
+    auth->setRealm("foobar");
+    auth->add("foo", "bar");
+    EXPECT_NO_THROW(ctx.setAuthConfig(auth));
+
     // Make a copy.
     ConfigPtr copy_base(ctx.clone());
     CtrlAgentCfgContextPtr copy = boost::dynamic_pointer_cast<CtrlAgentCfgContext>(copy_base);
@@ -151,6 +178,11 @@ TEST(CtrlAgentCfgMgr, contextSocketInfoCopy) {
     EXPECT_EQ(exp_name, libs2[0].first);
     ASSERT_TRUE(libs2[0].second);
     EXPECT_EQ(exp_param->str(), libs2[0].second->str());
+
+    // Check authentication
+    const HttpAuthConfigPtr& auth2 = copy->getAuthConfig();
+    ASSERT_TRUE(auth2);
+    EXPECT_EQ(auth->toElement()->str(), auth2->toElement()->str());
 }
 
 
@@ -173,6 +205,26 @@ TEST(CtrlAgentCfgMgr, contextHookParams) {
     EXPECT_EQ(libs.get(), stored_libs.get());
 }
 
+// Test if the context can store and retrieve basic HTTP authentication
+// configuration.
+TEST(CtrlAgentCfgMgr, contextAuthConfig) {
+    CtrlAgentCfgContext ctx;
+
+    // By default there should be no authentication.
+    EXPECT_FALSE(ctx.getAuthConfig());
+    BasicHttpAuthConfigPtr auth(new BasicHttpAuthConfig());
+    EXPECT_NO_THROW(ctx.setAuthConfig(auth));
+
+    auth->setRealm("foobar");
+    auth->add("foo", "bar");
+    auth->add("test", "123\xa3");
+
+    const HttpAuthConfigPtr& stored_auth = ctx.getAuthConfig();
+    ASSERT_TRUE(stored_auth);
+    EXPECT_FALSE(stored_auth->empty());
+    EXPECT_EQ(auth->toElement()->str(), stored_auth->toElement()->str());
+}
+
 /// Control Agent configurations used in tests.
 const char* AGENT_CONFIGS[] = {
 
@@ -180,7 +232,7 @@ const char* AGENT_CONFIGS[] = {
     "{ }",
 
     // Configuration 1: http parameters only (no control sockets, not hooks)
-    "{  \"http-host\": \"betelgeuse\",\n"
+    "{   \"http-host\": \"betelgeuse\",\n"
     "    \"http-port\": 8001\n"
     "}",
 
@@ -255,11 +307,50 @@ const char* AGENT_CONFIGS[] = {
     "    }\n"
     "}",
 
-    // Configuration 7: http and 2 sockets with user contexts and comments
+    // Configuration 7: http, 1 socket and authentication
+    "{\n"
+    "    \"http-host\": \"betelgeuse\",\n"
+    "    \"http-port\": 8001,\n"
+    "    \"authentication\": {\n"
+    "        \"type\": \"basic\",\n"
+    "        \"realm\": \"foobar\",\n"
+    "        \"clients\": ["
+    "            {"
+    "              \"user\": \"foo\",\n"
+    "              \"password\": \"bar\"\n"
+    "            },{\n"
+    "              \"user\": \"test\",\n"
+    "              \"password\": \"123\\u00a3\"\n"
+    "            }\n"
+    "         ]\n"
+    "    },\n"
+    "    \"control-sockets\": {\n"
+    "        \"dhcp4\": {\n"
+    "            \"socket-name\": \"/tmp/socket-v4\"\n"
+    "        }\n"
+    "    }\n"
+    "}",
+
+    // Configuration 8: http and 2 sockets with user contexts and comments
     "{\n"
     "    \"user-context\": { \"comment\": \"Indirect comment\" },\n"
     "    \"http-host\": \"betelgeuse\",\n"
     "    \"http-port\": 8001,\n"
+    "    \"authentication\": {\n"
+    "        \"comment\": \"basic HTTP authentication\",\n"
+    "        \"type\": \"basic\",\n"
+    "        \"realm\": \"foobar\",\n"
+    "        \"clients\": ["
+    "            {"
+    "              \"comment\": \"foo is authorized\",\n"
+    "              \"user\": \"foo\",\n"
+    "              \"password\": \"bar\"\n"
+    "            },{\n"
+    "              \"user\": \"test\",\n"
+    "              \"user-context\": { \"no password\": true }\n"
+    "            }\n"
+    "         ]\n"
+    "    },\n"
     "    \"control-sockets\": {\n"
     "        \"dhcp4\": {\n"
     "            \"comment\": \"dhcp4 socket\",\n"
@@ -269,7 +360,17 @@ const char* AGENT_CONFIGS[] = {
     "            \"socket-name\": \"/tmp/socket-v6\",\n"
     "            \"user-context\": { \"version\": 1 }\n"
     "        }\n"
-    "   }\n"
+    "    }\n"
+    "}",
+
+    // Configuration 9: https aka http over TLS
+    "{\n"
+    "    \"http-host\": \"betelgeuse\",\n"
+    "    \"http-port\": 8001,\n"
+    "    \"trust-anchor\": \"my-ca\",\n"
+    "    \"cert-file\": \"my-cert\",\n"
+    "    \"key-file\": \"my-key\",\n"
+    "    \"cert-required\": false\n"
     "}"
 };
 
@@ -398,7 +499,7 @@ TEST_F(AgentParserTest, configParse3Sockets) {
 // can't use AGENT_CONFIGS[4] as is, but need to run it through path replacer.
 TEST_F(AgentParserTest, configParseHooks) {
     // Create the configuration with proper lib path.
-    std::string cfg = pathReplacer(AGENT_CONFIGS[4], BASIC_CALLOUT_LIBRARY);
+    std::string cfg = pathReplacer(AGENT_CONFIGS[4], CALLOUT_LIBRARY);
     // The configuration should be successful.
     configParse(cfg.c_str(), 0);
 
@@ -406,14 +507,45 @@ TEST_F(AgentParserTest, configParseHooks) {
     CtrlAgentCfgContextPtr ctx = cfg_mgr_.getCtrlAgentCfgContext();
     const HookLibsCollection libs = ctx->getHooksConfig().get();
     ASSERT_EQ(1, libs.size());
-    EXPECT_EQ(string(BASIC_CALLOUT_LIBRARY), libs[0].first);
+    EXPECT_EQ(string(CALLOUT_LIBRARY), libs[0].first);
     ASSERT_TRUE(libs[0].second);
     EXPECT_EQ("{ \"param1\": \"foo\" }", libs[0].second->str());
 }
 
+// This test checks that the config file with basic HTTP authentication can be
+// loaded.
+TEST_F(AgentParserTest, configParseAuth) {
+    configParse(AGENT_CONFIGS[7], 0);
+    CtrlAgentCfgContextPtr ctx = cfg_mgr_.getCtrlAgentCfgContext();
+    const HttpAuthConfigPtr& auth = ctx->getAuthConfig();
+    ASSERT_TRUE(auth);
+    const BasicHttpAuthConfigPtr& basic_auth =
+        boost::dynamic_pointer_cast<BasicHttpAuthConfig>(auth);
+    ASSERT_TRUE(basic_auth);
+
+    // Check realm
+    EXPECT_EQ("foobar", basic_auth->getRealm());
+
+    // Check credentials
+    auto credentials = basic_auth->getCredentialMap();
+    EXPECT_EQ(2, credentials.size());
+    std::string user;
+    EXPECT_NO_THROW(user = credentials.at("Zm9vOmJhcg=="));
+    EXPECT_EQ("foo", user);
+    EXPECT_NO_THROW(user = credentials.at("dGVzdDoxMjPCow=="));
+    EXPECT_EQ("test", user);
+
+    // Check clients.
+    BasicHttpAuthConfig expected;
+    expected.setRealm("foobar");
+    expected.add("foo", "bar");
+    expected.add("test", "123\xa3");
+    EXPECT_EQ(expected.toElement()->str(), basic_auth->toElement()->str());
+}
+
 // This test checks comments.
 TEST_F(AgentParserTest, comments) {
-    configParse(AGENT_CONFIGS[7], 0);
+    configParse(AGENT_CONFIGS[8], 0);
     CtrlAgentCfgContextPtr agent_ctx = cfg_mgr_.getCtrlAgentCfgContext();
     ASSERT_TRUE(agent_ctx);
 
@@ -445,6 +577,46 @@ TEST_F(AgentParserTest, comments) {
     ASSERT_EQ(1, ctx6->size());
     ASSERT_TRUE(ctx6->get("version"));
     EXPECT_EQ("1", ctx6->get("version")->str());
+
+    // Check authentication comment.
+    const HttpAuthConfigPtr& auth = agent_ctx->getAuthConfig();
+    ASSERT_TRUE(auth);
+    ConstElementPtr ctx7 = auth->getContext();
+    ASSERT_TRUE(ctx7);
+    ASSERT_EQ(1, ctx7->size());
+    ASSERT_TRUE(ctx7->get("comment"));
+    EXPECT_EQ("\"basic HTTP authentication\"", ctx7->get("comment")->str());
+
+    // Check basic HTTP authentication client comment.
+    const BasicHttpAuthConfigPtr& basic_auth =
+        boost::dynamic_pointer_cast<BasicHttpAuthConfig>(auth);
+    ASSERT_TRUE(basic_auth);
+    auto clients = basic_auth->getClientList();
+    ASSERT_EQ(2, clients.size());
+    ConstElementPtr ctx8 = clients.front().getContext();
+    ASSERT_TRUE(ctx8);
+    ASSERT_EQ(1, ctx8->size());
+    ASSERT_TRUE(ctx8->get("comment"));
+    EXPECT_EQ("\"foo is authorized\"", ctx8->get("comment")->str());
+
+    // Check basic HTTP authentication client user context.
+    ConstElementPtr ctx9 = clients.back().getContext();
+    ASSERT_TRUE(ctx9);
+    ASSERT_EQ(1, ctx9->size());
+    ASSERT_TRUE(ctx9->get("no password"));
+    EXPECT_EQ("true", ctx9->get("no password")->str());
 }
 
-}; // end of anonymous namespace
+// This test checks if a config with TLS parameters is parsed properly.
+TEST_F(AgentParserTest, configParseTls) {
+    configParse(AGENT_CONFIGS[9], 0);
+
+    CtrlAgentCfgContextPtr ctx = cfg_mgr_.getCtrlAgentCfgContext();
+    ASSERT_TRUE(ctx);
+    EXPECT_EQ("my-ca", ctx->getTrustAnchor());
+    EXPECT_EQ("my-cert", ctx->getCertFile());
+    EXPECT_EQ("my-key", ctx->getKeyFile());
+    EXPECT_FALSE(ctx->getCertRequired());
+}
+
+} // end of anonymous namespace

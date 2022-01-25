@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,9 @@
 #define HTTP_CONNECTION_POOL_H
 
 #include <http/connection.h>
+
 #include <list>
+#include <mutex>
 
 namespace isc {
 namespace http {
@@ -36,9 +38,18 @@ public:
     /// @param connection Pointer to the new connection.
     void start(const HttpConnectionPtr& connection);
 
-    /// @brief Stops a connection and removes it from the pool.
+    /// @brief Removes a connection from the pool and shutdown it.
     ///
-    /// If the connection is not found in the pool, this method is no-op.
+    /// Shutdown is specific to TLS and is a first part of graceful close (note it is
+    /// NOT the same as TCP shutdown system call).
+    ///
+    /// @note if the TLS connection stalls e.g. the peer does not try I/O
+    /// on it the connection has to be explicitly stopped.
+    ///
+    /// @param connection Pointer to the connection.
+    void shutdown(const HttpConnectionPtr& connection);
+
+    /// @brief Removes a connection from the pool and stops it.
     ///
     /// @param connection Pointer to the connection.
     void stop(const HttpConnectionPtr& connection);
@@ -48,9 +59,16 @@ public:
 
 protected:
 
+    /// @brief Stops all connections and removes them from the pool.
+    ///
+    /// Must be called from with a thread-safe context.
+    void stopAllInternal();
+
     /// @brief Set of connections.
     std::list<HttpConnectionPtr> connections_;
 
+    /// @brief Mutex to protect the internal state.
+    std::mutex mutex_;
 };
 
 }

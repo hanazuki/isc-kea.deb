@@ -511,7 +511,15 @@ void sanitizeStringTest(
 TEST(StringUtilTest, stringSanitizer) {
     // Bad regular expression should throw.
     StringSanitizerPtr ss;
-    ASSERT_THROW (ss.reset(new StringSanitizer("[bogus-regex","")), BadValue);
+    ASSERT_THROW(ss.reset(new StringSanitizer("[bogus-regex","")), BadValue);
+
+    std::string good_data(StringSanitizer::MAX_DATA_SIZE, '0');
+    std::string bad_data(StringSanitizer::MAX_DATA_SIZE + 1, '0');
+
+    ASSERT_NO_THROW(ss.reset(new StringSanitizer(good_data, good_data)));
+
+    ASSERT_THROW(ss.reset(new StringSanitizer(bad_data, "")), BadValue);
+    ASSERT_THROW(ss.reset(new StringSanitizer("", bad_data)), BadValue);
 
     // List of invalid chars should work: (b,c,2 are invalid)
     sanitizeStringTest("abc.123", "[b-c2]", "*",
@@ -597,6 +605,38 @@ TEST(StringUtilTest, seekTrimmed) {
     end = buffer.end();
     ASSERT_NO_THROW(end = seekTrimmed(begin, end, 0));
     EXPECT_EQ(8, std::distance(begin, end));
+}
+
+// Verifies isPrintable predicate on strings.
+TEST(StringUtilTest, stringIsPrintable) {
+    string content;
+
+    // Empty is printable.
+    EXPECT_TRUE(isPrintable(content));
+
+    // Check Abcd.
+    content = "Abcd";
+    EXPECT_TRUE(isPrintable(content));
+
+    // Add a control character (not printable).
+    content += "\a";
+    EXPECT_FALSE(isPrintable(content));
+}
+
+// Verifies isPrintable predicate on byte vectors.
+TEST(StringUtilTest, vectorIsPrintable) {
+    vector<uint8_t> content;
+
+    // Empty is printable.
+    EXPECT_TRUE(isPrintable(content));
+
+    // Check Abcd.
+    content = { 0x41, 0x62, 0x63, 0x64 };
+    EXPECT_TRUE(isPrintable(content));
+
+    // Add a control character (not printable).
+    content.push_back('\a');
+    EXPECT_FALSE(isPrintable(content));
 }
 
 } // end of anonymous namespace

@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -96,7 +96,7 @@ TEST(AddrUtilitiesTest, lastAddrInPrefix6) {
 
     IOAddress addr2("2001::");
 
-    // These are tricker, though, as they are done in 1 bit increments
+    // These are trickier, though, as they are done in 1 bit increments
 
     // the last address in 2001::/127 pool should be 2001::1
     EXPECT_EQ("2001::1", lastAddrInPrefix(addr2, 127).toText());
@@ -134,7 +134,7 @@ TEST(AddrUtilitiesTest, firstAddrInPrefix6) {
 
     IOAddress addr2("2001::ffff");
 
-    // These are tricker, though, as they are done in 1 bit increments
+    // These are trickier, though, as they are done in 1 bit increments
 
     // the first address in 2001::/127 pool should be 2001::1
     EXPECT_EQ("2001::fffe", firstAddrInPrefix(addr2, 127).toText());
@@ -365,6 +365,22 @@ TEST(AddrUtilitiesTest, prefixesInRange) {
     EXPECT_EQ(std::numeric_limits<uint64_t>::max(),
               prefixesInRange(0, 128));
 
+}
+
+// Checks the function which finds an IPv4 address from input address and offset.
+TEST(AddrUtilitiesTest, offsetIPv4Address) {
+    EXPECT_EQ("10.1.2.46", offsetAddress(IOAddress("10.1.1.45"), 257).toText());
+    EXPECT_EQ("10.1.7.9", offsetAddress(IOAddress("10.1.1.45"), 1500).toText());
+    // Using very large offset. The maximum IPv4 address should be returned.
+    EXPECT_EQ("255.255.255.255", offsetAddress(IOAddress("255.255.254.254"), 0xFFFFFFFFFFFFFFFA).toText());
+}
+
+// Checks the function which finds an IPv6 address from input address and offset.
+TEST(AddrUtilitiesTest, offsetIPv6Address) {
+    EXPECT_EQ("2001:db8:1::4", offsetAddress(IOAddress("2001:db8:1::4"), 0).toText());
+    EXPECT_EQ("2001:db8:1::10:3", offsetAddress(IOAddress("2001:db8:1::4"), 0xFFFFF).toText());
+    EXPECT_EQ("2001:db8:2::", offsetAddress(IOAddress("2001:db8:1:FFFF::1"), 0xFFFFFFFFFFFFFFFF).toText());
+    EXPECT_EQ("3000::1c", offsetAddress(IOAddress("3000::15"), 7).toText());
 }
 
 }; // end of anonymous namespace

@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -413,27 +413,54 @@ RRset::toWire(AbstractMessageRenderer& renderer) const {
 }
 
 namespace {
+
 class BasicRdataIterator : public RdataIterator {
-private:
-    BasicRdataIterator() {}
 public:
+    /// @brief Constructor.
     BasicRdataIterator(const std::vector<rdata::ConstRdataPtr>& datavector) :
-        datavector_(&datavector), it_(datavector_->begin())
-    {}
+        datavector_(&datavector), it_(datavector_->begin()) {}
+
+    /// @brief Destructor.
     ~BasicRdataIterator() {}
-    virtual void first() { it_ = datavector_->begin(); }
-    virtual void next() { ++it_; }
-    virtual const rdata::Rdata& getCurrent() const { return (**it_); }
-    virtual bool isLast() const { return (it_ == datavector_->end()); }
+
+    /// @brief Set iterator at first position.
+    virtual void first() {
+        it_ = datavector_->begin();
+    }
+
+    /// @brief Advance iterator.
+    virtual void next() {
+        ++it_;
+    }
+
+    /// @brief Get value at current iterator position.
+    ///
+    /// @return The value at current iterator position.
+    virtual const rdata::Rdata& getCurrent() const {
+        return (**it_);
+    }
+
+    /// @brief Check if iterator has reached the end.
+    ///
+    /// @return true if iterator has reached the end, false otherwise.
+    virtual bool isLast() const {
+        return (it_ == datavector_->end());
+    }
+
 private:
+    /// @brief Vector containing data.
     const std::vector<rdata::ConstRdataPtr>* datavector_;
+
+    /// @brief Iterator used to retrieve data.
     std::vector<rdata::ConstRdataPtr>::const_iterator it_;
 };
+
 }
 
 RdataIteratorPtr
 BasicRRset::getRdataIterator() const {
     return (RdataIteratorPtr(new BasicRdataIterator(impl_->rdatalist_)));
 }
+
 }
 }

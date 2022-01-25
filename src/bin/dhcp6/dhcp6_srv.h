@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -139,8 +139,8 @@ public:
     /// Main server processing loop. Call the processing step routine
     /// until shut down.
     ///
-    /// @return true, if being shut down gracefully, never fail.
-    bool run();
+    /// @return The value returned by @c Daemon::getExitValue().
+    int run();
 
     /// @brief Main server processing step.
     ///
@@ -151,41 +151,56 @@ public:
 
     /// @brief Process a single incoming DHCPv6 packet and sends the response.
     ///
-    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// It verifies correctness of the passed packet, calls per-type processXXX
     /// methods, generates appropriate answer, sends the answer to the client.
     ///
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
-    void processPacketAndSendResponse(Pkt6Ptr& query, Pkt6Ptr& rsp);
+    void processPacketAndSendResponse(Pkt6Ptr& query);
 
     /// @brief Process a single incoming DHCPv6 packet and sends the response.
     ///
-    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// It verifies correctness of the passed packet, calls per-type processXXX
     /// methods, generates appropriate answer, sends the answer to the client.
     ///
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
-    void processPacketAndSendResponseNoThrow(Pkt6Ptr& query, Pkt6Ptr& rsp);
+    void processPacketAndSendResponseNoThrow(Pkt6Ptr& query);
 
     /// @brief Process an unparked DHCPv6 packet and sends the response.
     ///
     /// @param callout_handle pointer to the callout handle.
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
+    /// @param rsp A pointer to the response.
     void sendResponseNoThrow(hooks::CalloutHandlePtr& callout_handle,
                              Pkt6Ptr& query, Pkt6Ptr& rsp);
 
     /// @brief Process a single incoming DHCPv6 packet.
     ///
-    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// It verifies correctness of the passed packet, calls per-type processXXX
     /// methods, generates appropriate answer.
     ///
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
+    /// @param rsp A pointer to the response.
     void processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp);
 
+    /// @brief Process a single incoming DHCPv6 query.
+    ///
+    /// It calls per-type processXXX methods, generates appropriate answer.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response.
+    void processDhcp6Query(Pkt6Ptr& query, Pkt6Ptr& rsp);
+
+    /// @brief Process a single incoming DHCPv6 query.
+    ///
+    /// It calls per-type processXXX methods, generates appropriate answer,
+    /// sends the answer to the client.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response.
+    void processDhcp6QueryAndSendResponse(Pkt6Ptr& query, Pkt6Ptr& rsp);
+
     /// @brief Instructs the server to shut down.
-    void shutdown();
+    void shutdown() override;
 
     ///
     /// @name Public accessors returning values required to (re)open sockets.
@@ -235,9 +250,9 @@ public:
                                       NameChangeSender::Result result,
                                       dhcp_ddns::NameChangeRequestPtr& ncr);
 
-    /// @brief Discards cached and parked packets
-    /// Clears the call_handle store and packet parking lots
-    /// of all packets.  Called during reconfigure and shutdown.
+    /// @brief Discards parked packets
+    /// Clears the packet parking lots of all packets.
+    /// Called during reconfigure and shutdown.
     void discardPackets();
 
 protected:
@@ -428,15 +443,12 @@ protected:
     /// allocation failure.
     ///
     /// @param query client's message (typically SOLICIT or REQUEST)
-    /// @param answer server's response to the client's message. This
-    /// message should contain Client FQDN option being sent by the server
     /// to the client (if the client sent this option to the server).
     /// @param ctx client context (contains subnet, duid and other parameters)
     /// @param ia pointer to client's IA_NA option (client's request)
     ///
     /// @return IA_NA option (server's response)
     OptionPtr assignIA_NA(const isc::dhcp::Pkt6Ptr& query,
-                          const isc::dhcp::Pkt6Ptr& answer,
                           AllocEngine::ClientContext6& ctx,
                           Option6IAPtr ia);
 
@@ -449,12 +461,10 @@ protected:
     /// allocation failure.
     ///
     /// @param query client's message (typically SOLICIT or REQUEST)
-    /// @param answer server's response to the client's message (unused).
     /// @param ctx client context (contains subnet, duid and other parameters)
     /// @param ia pointer to client's IA_PD option (client's request)
     /// @return IA_PD option (server's response)
     OptionPtr assignIA_PD(const Pkt6Ptr& query,
-                          const isc::dhcp::Pkt6Ptr& answer,
                           AllocEngine::ClientContext6& ctx,
                           boost::shared_ptr<Option6IA> ia);
 
@@ -466,14 +476,12 @@ protected:
     /// status code.
     ///
     /// @param query client's message (Renew or Rebind)
-    /// @param answer server's response to the client's message. This
-    /// message should contain Client FQDN option being sent by the server
     /// to the client (if the client sent this option to the server).
     /// @param ctx client context (contains subnet, duid and other parameters)
     /// @param ia IA_NA option which carries address for which lease lifetime
     /// will be extended.
     /// @return IA_NA option (server's response)
-    OptionPtr extendIA_NA(const Pkt6Ptr& query, const Pkt6Ptr& answer,
+    OptionPtr extendIA_NA(const Pkt6Ptr& query,
                           AllocEngine::ClientContext6& ctx,
                           Option6IAPtr ia);
 
@@ -680,7 +688,7 @@ protected:
     ///
     /// - If there is a Client FQDN but no reserved hostname then both the
     /// FQDN and lease hostname will be equal to the name provided in the
-    /// client FQDN adjusted according the the DhcpDdns configuration
+    /// client FQDN adjusted according the DhcpDdns configuration
     /// parameters (e.g.replace-client-name, qualifying suffix...).
     ///
     /// All the logic required to form appropriate answer to the client is
@@ -794,7 +802,7 @@ protected:
     ///
     /// @note This is done in two phases: first the content of the
     /// vendor-class-identifier option is used as a class, by
-    /// calling @ref classifyByVendor(). Second classification match
+    /// calling @ref classifyByVendor(). Second, the classification match
     /// expressions are evaluated. The resulting classes will be stored
     /// in the packet (see @ref isc::dhcp::Pkt6::classes_ and
     /// @ref isc::dhcp::Pkt6::inClass).
@@ -821,6 +829,19 @@ protected:
     void setReservedClientClasses(const Pkt6Ptr& pkt,
                                   const AllocEngine::ClientContext6& ctx);
 
+    /// @brief Assigns classes retrieved from host reservation database
+    /// if they haven't been yet set.
+    ///
+    /// This function sets reserved client classes in case they haven't
+    /// been set after fetching host reservations from the database.
+    /// This is the case when the client has non-global host reservation
+    /// and the selected subnet belongs to a shared network.
+    ///
+    /// @param pkt Pointer to the packet to which classes will be assigned.
+    /// @param ctx Reference to the client context.
+    void conditionallySetReservedClientClasses(const Pkt6Ptr& pkt,
+                                               const AllocEngine::ClientContext6& ctx);
+
     /// @brief Assigns incoming packet to zero or more classes (required pass).
     ///
     /// @note This required classification evaluates all classes which
@@ -831,7 +852,7 @@ protected:
     /// double evaluation (which is not forbidden).
     ///
     /// @param pkt packet to be classified
-    /// @param ctx allocation context where to get informations
+    /// @param ctx allocation context where to get information
     void requiredClassify(const Pkt6Ptr& pkt, AllocEngine::ClientContext6& ctx);
 
     /// @brief Attempts to get a MAC/hardware address using configured sources
@@ -942,6 +963,44 @@ protected:
     void setStatusCode(boost::shared_ptr<Option6IA>& container,
                        const OptionPtr& status);
 
+    /// @brief Iterates over new leases, update stale DNS entries
+    ///
+    /// Checks the context's current subnet (most recently selected) against
+    /// an original selected subnet.  If they are the same the function
+    /// simply returns.
+    ///
+    /// If they differ, we treat this as a dynamic subnet change made by the
+    /// allocation engine. It is possible that DDNS subnet parameters for
+    /// the new subnet are different and this needs to handled. We first
+    /// save the current DNS-related values from the context and then
+    /// re-run processClientFqdn().  This will rebuild the FQDN option
+    /// to send back to the client based on the new subnet as well as
+    /// update the context.  If the new values are different from the
+    /// previous values, we iterate over the leases and update the
+    /// DNS values.
+    ///
+    /// @param question Client's message.
+    /// @param answer Server's response to a client. If server generated
+    /// @param ctx client context (contains subnet, duid and other parameters)
+    /// @param orig_subnet the originally selected subnet
+    ///
+    /// @note
+    /// Subnet may be modified by the allocation engine, if the initial subnet
+    /// belongs to a shared network.  Note that this will only handle cases
+    /// where all IA_xx's in a client request result in a subnet change.  It is
+    /// possible, currently, for the last IA_xx in request to end up using the
+    /// same subnet as originally selected, and we will miss a change incurred
+    /// by preceding IA_xx's.  In general users should be strongly encouraged to
+    /// avoid situations where all of the following are true:
+    ///
+    /// 1. clients send more than one IA_xx in a query
+    /// 2. subnets in the shared-network are equally eligible (i.e don't have
+    /// class guards etc)
+    /// 3. subnets have differing options or DDNS parameters
+    //
+    void checkDynamicSubnetChange(const Pkt6Ptr& question, Pkt6Ptr& answer,
+                                  AllocEngine::ClientContext6& ctx,
+                                  const Subnet6Ptr orig_subnet);
 public:
 
     /// Used for DHCPv4-over-DHCPv6 too.
@@ -1048,6 +1107,7 @@ protected:
     uint16_t client_port_;
 
 public:
+
     /// @note used by DHCPv4-over-DHCPv6 so must be public and static
 
     /// @brief Updates statistics for transmitted packets
@@ -1064,6 +1124,13 @@ public:
     /// @param rsp pointer to a response.
     void processPacketBufferSend(hooks::CalloutHandlePtr& callout_handle,
                                  Pkt6Ptr& rsp);
+
+    /// @brief Return a list of all paths that contain passwords or secrets for
+    /// kea-dhcp6.
+    ///
+    /// @return the list of lists of sequential JSON map keys needed to reach
+    /// the passwords and secrets.
+    std::list<std::list<std::string>> jsonPathsToRedact() const final override;
 
 protected:
 

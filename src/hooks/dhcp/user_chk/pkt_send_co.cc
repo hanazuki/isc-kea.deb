@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -67,6 +67,15 @@ extern "C" {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int pkt4_send(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP) {
+        return (0);
+    }
+
+    if (status == CalloutHandle::NEXT_STEP_SKIP) {
+        isc_throw(isc::InvalidOperation, "packet pack already handled");
+    }
+
     try {
         Pkt4Ptr response;
         handle.getArgument("response4", response);
@@ -138,6 +147,15 @@ int pkt4_send(CalloutHandle& handle) {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int pkt6_send(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP) {
+        return (0);
+    }
+
+    if (status == CalloutHandle::NEXT_STEP_SKIP) {
+        isc_throw(isc::InvalidOperation, "packet pack already handled");
+    }
+
     try {
         Pkt6Ptr response;
         handle.getArgument("response6", response);
@@ -465,7 +483,7 @@ std::string getAddrStrIA_PD(OptionPtr options) {
     // Get the prefix option the IA_PD option.
     options = ia->getOption(D6O_IAPREFIX);
     if (!options) {
-        isc_throw(isc::BadValue, "D60_IAPREFIX option is missing");
+        isc_throw(isc::BadValue, "D6O_IAPREFIX option is missing");
     }
 
     boost::shared_ptr<Option6IAPrefix> addr_option;

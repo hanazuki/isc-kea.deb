@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <flex_option.h>
 #include <flex_option_log.h>
+#include <util/strutil.h>
 #include <cc/simple_parser.h>
 #include <dhcp/dhcp4.h>
 #include <dhcp/libdhcp++.h>
@@ -22,6 +23,7 @@ using namespace isc::dhcp;
 using namespace isc::eval;
 using namespace isc::flex_option;
 using namespace isc::log;
+using namespace isc::util;
 using namespace std;
 
 namespace {
@@ -72,8 +74,9 @@ parseAction(ConstElementPtr option,
 namespace isc {
 namespace flex_option {
 
-FlexOptionImpl::OptionConfig::OptionConfig(uint16_t code)
-    : code_(code), action_(NONE) {
+FlexOptionImpl::OptionConfig::OptionConfig(uint16_t code,
+                                           OptionDefinitionPtr def)
+    : code_(code), def_(def), action_(NONE) {
 }
 
 FlexOptionImpl::OptionConfig::~OptionConfig() {
@@ -113,9 +116,20 @@ FlexOptionImpl::parseOptionConfig(ConstElementPtr option) {
     }
     ConstElementPtr code_elem = option->get("code");
     ConstElementPtr name_elem = option->get("name");
+    ConstElementPtr csv_format_elem = option->get("csv-format");
+    OptionDefinitionPtr def;
     if (!code_elem && !name_elem) {
         isc_throw(BadValue, "'code' or 'name' must be specified: "
                   << option->str());
+    }
+    string space;
+    Option::Universe universe;
+    if (family == AF_INET) {
+        space = DHCP4_OPTION_SPACE;
+        universe = Option::V4;
+    } else {
+        space = DHCP6_OPTION_SPACE;
+        universe = Option::V6;
     }
     uint16_t code;
     if (code_elem) {
@@ -158,13 +172,7 @@ FlexOptionImpl::parseOptionConfig(ConstElementPtr option) {
         if (name.empty()) {
             isc_throw(BadValue, "'name' must not be empty");
         }
-        string space;
-        if (family == AF_INET) {
-            space = DHCP4_OPTION_SPACE;
-        } else {
-            space = DHCP6_OPTION_SPACE;
-        }
-        OptionDefinitionPtr def = LibDHCP::getOptionDef(space, name);
+        def = LibDHCP::getOptionDef(space, name);
         if (!def) {
             def = LibDHCP::getRuntimeOptionDef(space, name);
         }
@@ -182,19 +190,41 @@ FlexOptionImpl::parseOptionConfig(ConstElementPtr option) {
         }
         code = def->getCode();
     }
-
     if (option_config_map_.count(code)) {
         isc_throw(BadValue, "option " << code << " was already specified");
     }
 
-    Option::Universe universe;
-    if (family == AF_INET) {
-        universe = Option::V4;
-    } else {
-        universe = Option::V6;
+    bool csv_format = false;
+    if (csv_format_elem) {
+        if (csv_format_elem->getType() != Element::boolean) {
+            isc_throw(BadValue, "'csv-format' must be a boolean: "
+                      << csv_format_elem->str());
+        }
+        csv_format = csv_format_elem->boolValue();
     }
 
-    OptionConfigPtr opt_cfg(new OptionConfig(code));
+    if (!csv_format) {
+        // No definition means no csv format.
+        if (def) {
+            def.reset();
+        }
+    } else if (!def) {
+        // Definition is required with csv format.
+        def = isc::dhcp::LibDHCP::getOptionDef(space, code);
+        if (!def) {
+            def = isc::dhcp::LibDHCP::getRuntimeOptionDef(space, code);
+        }
+        if (!def) {
+            def = isc::dhcp::LibDHCP::getLastResortOptionDef(space, code);
+        }
+        if (!def) {
+            isc_throw(BadValue, "no known option with code '" << code
+                      << "' in '" << space << "' space");
+        }
+    }
+
+    OptionConfigPtr opt_cfg(new OptionConfig(code, def));
+
     // opt_cfg initial action is NONE.
     parseAction(option, opt_cfg, universe,
                 "add", ADD, EvalContext::PARSER_STRING);
@@ -206,6 +236,7 @@ FlexOptionImpl::parseOptionConfig(ConstElementPtr option) {
     if (opt_cfg->getAction() == NONE) {
         isc_throw(BadValue, "no action: " << option->str());
     }
+
     option_config_map_[code] = opt_cfg;
 }
 
@@ -221,19 +252,12 @@ FlexOptionImpl::logAction(Action action, uint16_t code,
             .arg(code);
         return;
     }
-    bool printable = true;
-    for (const unsigned char& ch : value) {
-        if (isprint(ch) == 0) {
-            printable = false;
-            break;
-        }
-    }
     ostringstream repr;
-    if (printable) {
+    if (str::isPrintable(value)) {
         repr << "'" << value << "'";
     } else {
         repr << "0x" << hex;
-        for (const unsigned char& ch : value) {
+        for (const char& ch : value) {
             repr << setw(2) << setfill('0') << static_cast<unsigned>(ch);
         }
     }

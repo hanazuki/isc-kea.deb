@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -71,7 +71,6 @@ public:
     ReleaseTest()
         : Dhcpv4SrvTest(),
           iface_mgr_test_config_(true) {
-        IfaceMgr::instance().openSockets4();
     }
 
     /// @brief Performs 4-way exchange to obtain new lease.
@@ -142,7 +141,7 @@ ReleaseTest::acquireAndRelease(const std::string& hw_address_1,
     const Subnet4Collection* subnets =
         CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
     ASSERT_EQ(1, subnets->size());
-    name << "subnet[" << subnets->at(0)->getID() << "].assigned-addresses";
+    name << "subnet[" << (*subnets->begin())->getID() << "].assigned-addresses";
 
     ObservationPtr assigned_cnt = StatsMgr::instance().getObservation(name.str());
     ASSERT_TRUE(assigned_cnt);

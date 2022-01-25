@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -349,6 +349,77 @@ TEST_F(CfgHostsTest, getPage6) {
 
     // Verify we have everything.
     page = cfg.getPage6(SubnetID(1), idx, host_id, page_size);
+    EXPECT_EQ(0, page.size());
+}
+
+// This test checks that all hosts can be retrieved from the host
+// configuration by pages.
+TEST_F(CfgHostsTest, getPage4All) {
+    CfgHosts cfg;
+    // Add 25 hosts identified by DUID.
+    for (unsigned i = 0; i < 25; ++i) {
+        cfg.add(HostPtr(new Host(duids_[i]->toText(), "duid",
+                                 SubnetID(i), SubnetID(i),
+                                 addressesa_[i])));
+    }
+    size_t idx(0);
+    uint64_t host_id(0);
+    HostPageSize page_size(10);
+
+    // Try to retrieve all added reservations.
+    // Get first page.
+    HostCollection page = cfg.getPage4(idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+
+    // Get second and last pages.
+    page = cfg.getPage4(idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+    page = cfg.getPage4(idx, host_id, page_size);
+    EXPECT_EQ(5, page.size());
+    host_id = page[4]->getHostId();
+
+    // Verify we have everything.
+    page = cfg.getPage4(idx, host_id, page_size);
+    EXPECT_EQ(0, page.size());
+}
+
+// This test checks that all hosts can be retrieved from the host
+// configuration by pages.
+TEST_F(CfgHostsTest, getPage6All) {
+    CfgHosts cfg;
+    // Add 25 hosts identified by HW address.
+    for (unsigned i = 0; i < 25; ++i) {
+        HostPtr host = HostPtr(new Host(hwaddrs_[i]->toText(false),
+                                        "hw-address",
+                                        SubnetID(i), SubnetID(i),
+                                        IOAddress("0.0.0.0")));
+        host->addReservation(IPv6Resrv(IPv6Resrv::TYPE_NA,
+                                       increase(IOAddress("2001:db8:1::1"),
+                                                i)));
+        cfg.add(host);
+    }
+    size_t idx(0);
+    uint64_t host_id(0);
+    HostPageSize page_size(10);
+
+    // Try to retrieve all added reservations.
+    // Get first page.
+    HostCollection page = cfg.getPage6(idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+
+    // Get second and last pages.
+    page = cfg.getPage6(idx, host_id, page_size);
+    EXPECT_EQ(10, page.size());
+    host_id = page[9]->getHostId();
+    page = cfg.getPage6(idx, host_id, page_size);
+    EXPECT_EQ(5, page.size());
+    host_id = page[4]->getHostId();
+
+    // Verify we have everything.
+    page = cfg.getPage6(idx, host_id, page_size);
     EXPECT_EQ(0, page.size());
 }
 
@@ -860,6 +931,39 @@ TEST_F(CfgHostsTest, add4AlreadyReserved) {
     EXPECT_THROW(cfg.add(host2), isc::dhcp::ReservedAddress);
 }
 
+// Test that it is possible to allow inserting multiple reservations for
+// the same IP address.
+TEST_F(CfgHostsTest, allow4AlreadyReserved) {
+    CfgHosts cfg;
+    // Allow creating multiple reservations for the same IP address.
+    ASSERT_TRUE(cfg.setIPReservationsUnique(false));
+
+    // First host has a reservation for address 192.0.2.1
+    HostPtr host1 = HostPtr(new Host(hwaddrs_[0]->toText(false),
+                                     "hw-address",
+                                     SubnetID(1), SubnetID(SUBNET_ID_UNUSED),
+                                     IOAddress("192.0.2.1")));
+    ASSERT_NO_THROW(cfg.add(host1));
+
+    // The second host has a reservation for the same address.
+    HostPtr host2 = HostPtr(new Host(hwaddrs_[1]->toText(false),
+                                     "hw-address",
+                                     SubnetID(1), SUBNET_ID_UNUSED,
+                                     IOAddress("192.0.2.1")));
+    // Adding this should work because the HW address is different.
+    ASSERT_NO_THROW(cfg.add(host2));
+
+    // Get both hosts.
+    ConstHostCollection returned;
+    ASSERT_NO_THROW(returned = cfg.getAll4(host1->getIPv4SubnetID(), IOAddress("192.0.2.1")));
+    EXPECT_EQ(2, returned.size());
+
+    // Make sure the address is the same but the identifiers are different.
+    EXPECT_NE(returned[0]->getIdentifierAsText(), returned[1]->getIdentifierAsText());
+    EXPECT_EQ(returned[0]->getIPv4Reservation().toText(),
+              returned[1]->getIPv4Reservation().toText());
+}
+
 // Checks that it's not possible for two hosts to have the same address
 // reserved at the same time.
 TEST_F(CfgHostsTest, add6Invalid2Hosts) {
@@ -884,6 +988,88 @@ TEST_F(CfgHostsTest, add6Invalid2Hosts) {
     // This second host has a reservation for an address that is already
     // reserved for the first host, so it should be rejected.
     EXPECT_THROW(cfg.add(host2), isc::dhcp::DuplicateHost);
+}
+
+// Test that it is possible to allow inserting multiple reservations for
+// the same IPv6 address.
+TEST_F(CfgHostsTest, allowAddress6AlreadyReserved) {
+    CfgHosts cfg;
+    // Allow creating multiple reservations for the same IP address.
+    ASSERT_TRUE(cfg.setIPReservationsUnique(false));
+
+    // First host has a reservation for address 2001:db8::1
+    HostPtr host1 = HostPtr(new Host(duids_[0]->toText(), "duid",
+                                     SUBNET_ID_UNUSED, SubnetID(1),
+                                     IOAddress("0.0.0.0")));
+    host1->addReservation(IPv6Resrv(IPv6Resrv::TYPE_NA,
+                                    IOAddress("2001:db8::1")));
+    // Adding this should work.
+    EXPECT_NO_THROW(cfg.add(host1));
+
+    // The second host has a reservation for the same address.
+    HostPtr host2 = HostPtr(new Host(duids_[1]->toText(), "duid",
+                                     SUBNET_ID_UNUSED, SubnetID(1),
+                                     IOAddress("0.0.0.0")));
+    host2->addReservation(IPv6Resrv(IPv6Resrv::TYPE_NA,
+                                    IOAddress("2001:db8::1")));
+
+    // Adding this should work because the DUID is different.
+    ASSERT_NO_THROW(cfg.add(host2));
+
+    ConstHostCollection returned;
+    ASSERT_NO_THROW(returned = cfg.getAll6(host1->getIPv6SubnetID(), IOAddress("2001:db8::1")));
+    EXPECT_EQ(2, returned.size());
+
+    // Make sure the address is the same but the identifiers are different.
+    EXPECT_NE(returned[0]->getIdentifierAsText(), returned[1]->getIdentifierAsText());
+
+    auto range0 = returned[0]->getIPv6Reservations(IPv6Resrv::TYPE_NA);
+    EXPECT_EQ(1, std::distance(range0.first, range0.second));
+    auto range1 = returned[1]->getIPv6Reservations(IPv6Resrv::TYPE_NA);
+    EXPECT_EQ(1, std::distance(range1.first, range1.second));
+    EXPECT_EQ(range0.first->second.getPrefix().toText(),
+              range1.first->second.getPrefix().toText());
+}
+
+// Test that it is possible to allow inserting multiple reservations for
+// the same IPv6 delegated prefix.
+TEST_F(CfgHostsTest, allowPrefix6AlreadyReserved) {
+    CfgHosts cfg;
+    // Allow creating multiple reservations for the same delegated prefix.
+    ASSERT_TRUE(cfg.setIPReservationsUnique(false));
+
+    // First host has a reservation for prefix 3000::/64.
+    HostPtr host1 = HostPtr(new Host(duids_[0]->toText(), "duid",
+                                     SUBNET_ID_UNUSED, SubnetID(1),
+                                     IOAddress("0.0.0.0")));
+    host1->addReservation(IPv6Resrv(IPv6Resrv::TYPE_PD,
+                                    IOAddress("3000::"), 64));
+    // Adding this should work.
+    EXPECT_NO_THROW(cfg.add(host1));
+
+    // The second host has a reservation for the same prefix.
+    HostPtr host2 = HostPtr(new Host(duids_[1]->toText(), "duid",
+                                     SUBNET_ID_UNUSED, SubnetID(1),
+                                     IOAddress("0.0.0.0")));
+    host2->addReservation(IPv6Resrv(IPv6Resrv::TYPE_PD,
+                                    IOAddress("3000::"), 64));
+
+    // Adding this should work because the DUID is different.
+    ASSERT_NO_THROW(cfg.add(host2));
+
+    ConstHostCollection returned;
+    ASSERT_NO_THROW(returned = cfg.getAll6(host1->getIPv6SubnetID(), IOAddress("3000::")));
+    EXPECT_EQ(2, returned.size());
+
+    // Make sure the prefix is the same but the identifiers are different.
+    EXPECT_NE(returned[0]->getIdentifierAsText(), returned[1]->getIdentifierAsText());
+
+    auto range0 = returned[0]->getIPv6Reservations(IPv6Resrv::TYPE_PD);
+    EXPECT_EQ(1, std::distance(range0.first, range0.second));
+    auto range1 = returned[1]->getIPv6Reservations(IPv6Resrv::TYPE_PD);
+    EXPECT_EQ(1, std::distance(range1.first, range1.second));
+    EXPECT_EQ(range0.first->second.getPrefix().toText(),
+              range1.first->second.getPrefix().toText());
 }
 
 // Check that no error is reported when adding a host with subnet

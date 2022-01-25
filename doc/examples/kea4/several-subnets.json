@@ -10,7 +10,7 @@
     "interfaces": [ "ethX" ]
   },
 
-// We need to specify the the database used to store leases. As of
+// We need to specify the database used to store leases. As of
 // September 2016, four database backends are supported: MySQL,
 // PostgreSQL, Cassandra, and the in-memory database, Memfile.
 // We'll use memfile  because it doesn't require any prior set up.
@@ -43,7 +43,7 @@
   // By default, Kea ignores requests by clients for unknown IP addresses,
   // because other non-cooperating DHCP servers could reside on the same
   // network (RFC 2131). This parameter is defined globally, but can be
-  // overriden on a subnet level
+  // overridden on a subnet level
   "authoritative": false,
 
 // The following list defines subnets. Each subnet consists of at

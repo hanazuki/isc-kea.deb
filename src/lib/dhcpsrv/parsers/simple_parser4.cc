@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -36,53 +36,67 @@ namespace dhcp {
 /// list and map types for entries.
 /// Order follows global_param rule in bison grammar.
 const SimpleKeywords SimpleParser4::GLOBAL4_PARAMETERS = {
-    { "valid-lifetime",               Element::integer },
-    { "min-valid-lifetime",           Element::integer },
-    { "max-valid-lifetime",           Element::integer },
-    { "renew-timer",                  Element::integer },
-    { "rebind-timer",                 Element::integer },
-    { "decline-probation-period",     Element::integer },
-    { "subnet4",                      Element::list },
-    { "shared-networks",              Element::list },
-    { "interfaces-config",            Element::map },
-    { "lease-database",               Element::map },
-    { "hosts-database",               Element::map },
-    { "hosts-databases",              Element::list },
-    { "host-reservation-identifiers", Element::list },
-    { "client-classes",               Element::list },
-    { "option-def",                   Element::list },
-    { "option-data",                  Element::list },
-    { "hooks-libraries",              Element::list },
-    { "expired-leases-processing",    Element::map },
-    { "dhcp4o6-port",                 Element::integer },
-    { "control-socket",               Element::map },
-    { "dhcp-queue-control",           Element::map },
-    { "dhcp-ddns",                    Element::map },
-    { "echo-client-id",               Element::boolean },
-    { "match-client-id",              Element::boolean },
-    { "authoritative",                Element::boolean },
-    { "next-server",                  Element::string },
-    { "server-hostname",              Element::string },
-    { "boot-file-name",               Element::string },
-    { "user-context",                 Element::map },
-    { "comment",                      Element::string },
-    { "sanity-checks",                Element::map },
-    { "reservations",                 Element::list },
-    { "config-control",               Element::map },
-    { "server-tag",                   Element::string },
-    { "reservation-mode",             Element::string },
-    { "calculate-tee-times",          Element::boolean },
-    { "t1-percent",                   Element::real },
-    { "t2-percent",                   Element::real },
-    { "loggers",                      Element::list },
-    { "hostname-char-set",            Element::string },
-    { "hostname-char-replacement",    Element::string },
-    { "ddns-send-updates",            Element::boolean },
-    { "ddns-override-no-update",      Element::boolean },
-    { "ddns-override-client-update",  Element::boolean },
-    { "ddns-replace-client-name",     Element::string },
-    { "ddns-generated-prefix",        Element::string },
-    { "ddns-qualifying-suffix",       Element::string }
+    { "valid-lifetime",                 Element::integer },
+    { "min-valid-lifetime",             Element::integer },
+    { "max-valid-lifetime",             Element::integer },
+    { "renew-timer",                    Element::integer },
+    { "rebind-timer",                   Element::integer },
+    { "decline-probation-period",       Element::integer },
+    { "subnet4",                        Element::list },
+    { "shared-networks",                Element::list },
+    { "interfaces-config",              Element::map },
+    { "lease-database",                 Element::map },
+    { "hosts-database",                 Element::map },
+    { "hosts-databases",                Element::list },
+    { "host-reservation-identifiers",   Element::list },
+    { "client-classes",                 Element::list },
+    { "option-def",                     Element::list },
+    { "option-data",                    Element::list },
+    { "hooks-libraries",                Element::list },
+    { "expired-leases-processing",      Element::map },
+    { "dhcp4o6-port",                   Element::integer },
+    { "control-socket",                 Element::map },
+    { "dhcp-queue-control",             Element::map },
+    { "dhcp-ddns",                      Element::map },
+    { "echo-client-id",                 Element::boolean },
+    { "match-client-id",                Element::boolean },
+    { "authoritative",                  Element::boolean },
+    { "next-server",                    Element::string },
+    { "server-hostname",                Element::string },
+    { "boot-file-name",                 Element::string },
+    { "user-context",                   Element::map },
+    { "comment",                        Element::string },
+    { "sanity-checks",                  Element::map },
+    { "reservations",                   Element::list },
+    { "config-control",                 Element::map },
+    { "server-tag",                     Element::string },
+    { "reservation-mode",               Element::string },
+    { "reservations-global",            Element::boolean },
+    { "reservations-in-subnet",         Element::boolean },
+    { "reservations-out-of-pool",       Element::boolean },
+    { "calculate-tee-times",            Element::boolean },
+    { "t1-percent",                     Element::real },
+    { "t2-percent",                     Element::real },
+    { "loggers",                        Element::list },
+    { "hostname-char-set",              Element::string },
+    { "hostname-char-replacement",      Element::string },
+    { "ddns-send-updates",              Element::boolean },
+    { "ddns-override-no-update",        Element::boolean },
+    { "ddns-override-client-update",    Element::boolean },
+    { "ddns-replace-client-name",       Element::string },
+    { "ddns-generated-prefix",          Element::string },
+    { "ddns-qualifying-suffix",         Element::string },
+    { "store-extended-info",            Element::boolean },
+    { "statistic-default-sample-count", Element::integer },
+    { "statistic-default-sample-age",   Element::integer },
+    { "multi-threading",                Element::map },
+    { "cache-threshold",                Element::real },
+    { "cache-max-age",                  Element::integer },
+    { "ip-reservations-unique",         Element::boolean },
+    { "ddns-update-on-renew",           Element::boolean },
+    { "ddns-use-conflict-resolution",   Element::boolean },
+    { "compatibility",                  Element::map },
+    { "parked-packet-limit",            Element::integer },
 };
 
 /// @brief This table defines default global values for DHCPv4
@@ -101,7 +115,9 @@ const SimpleDefaults SimpleParser4::GLOBAL4_DEFAULTS = {
     { "server-hostname",                Element::string,  "" },
     { "boot-file-name",                 Element::string,  "" },
     { "server-tag",                     Element::string,  "" },
-    { "reservation-mode",               Element::string,  "all" },
+    { "reservations-global",            Element::boolean, "false" },
+    { "reservations-in-subnet",         Element::boolean, "true" },
+    { "reservations-out-of-pool",       Element::boolean, "false" },
     { "calculate-tee-times",            Element::boolean, "false" },
     { "t1-percent",                     Element::real,    ".50" },
     { "t2-percent",                     Element::real,    ".875" },
@@ -111,8 +127,15 @@ const SimpleDefaults SimpleParser4::GLOBAL4_DEFAULTS = {
     { "ddns-replace-client-name",       Element::string,  "never" },
     { "ddns-generated-prefix",          Element::string,  "myhost" },
     { "ddns-qualifying-suffix",         Element::string,  "" },
-    { "hostname-char-set",              Element::string, "[^A-Za-z0-9.-]" },
-    { "hostname-char-replacement",      Element::string, "" }
+    { "hostname-char-set",              Element::string,  "[^A-Za-z0-9.-]" },
+    { "hostname-char-replacement",      Element::string,  "" },
+    { "store-extended-info",            Element::boolean, "false" },
+    { "statistic-default-sample-count", Element::integer, "20" },
+    { "statistic-default-sample-age",   Element::integer, "0" },
+    { "ip-reservations-unique",         Element::boolean, "true" },
+    { "ddns-update-on-renew",           Element::boolean, "false" },
+    { "ddns-use-conflict-resolution",   Element::boolean, "true" },
+    { "parked-packet-limit",            Element::integer, "256" },
 };
 
 /// @brief This table defines all option definition parameters.
@@ -139,7 +162,7 @@ const SimpleKeywords SimpleParser4::OPTION4_DEF_PARAMETERS = {
 /// definitions. This array lists default values for those option definitions.
 const SimpleDefaults SimpleParser4::OPTION4_DEF_DEFAULTS = {
     { "record-types", Element::string,  ""},
-    { "space",        Element::string,  "dhcp4"},
+    { "space",        Element::string,  "dhcp4"}, // DHCP4_OPTION_SPACE
     { "array",        Element::boolean, "false"},
     { "encapsulate",  Element::string,  "" }
 };
@@ -167,7 +190,7 @@ const SimpleKeywords SimpleParser4::OPTION4_PARAMETERS = {
 /// subnet, class or host reservations scopes. This array lists default values
 /// for those option-data declarations.
 const SimpleDefaults SimpleParser4::OPTION4_DEFAULTS = {
-    { "space",        Element::string,  "dhcp4"},
+    { "space",        Element::string,  "dhcp4"}, // DHCP4_OPTION_SPACE
     { "csv-format",   Element::boolean, "true"},
     { "always-send",  Element::boolean, "false"}
 };
@@ -192,6 +215,9 @@ const SimpleKeywords SimpleParser4::SUBNET4_PARAMETERS = {
     { "require-client-classes",         Element::list },
     { "reservations",                   Element::list },
     { "reservation-mode",               Element::string },
+    { "reservations-global",            Element::boolean },
+    { "reservations-in-subnet",         Element::boolean },
+    { "reservations-out-of-pool",       Element::boolean },
     { "relay",                          Element::map },
     { "match-client-id",                Element::boolean },
     { "authoritative",                  Element::boolean },
@@ -214,7 +240,12 @@ const SimpleKeywords SimpleParser4::SUBNET4_PARAMETERS = {
     { "ddns-qualifying-suffix",         Element::string },
     { "hostname-char-set",              Element::string },
     { "hostname-char-replacement",      Element::string },
+    { "store-extended-info",            Element::boolean },
     { "metadata",                       Element::map },
+    { "cache-threshold",                Element::real },
+    { "cache-max-age",                  Element::integer },
+    { "ddns-update-on-renew",           Element::boolean },
+    { "ddns-use-conflict-resolution",   Element::boolean }
 };
 
 /// @brief This table defines default values for each IPv4 subnet.
@@ -264,7 +295,10 @@ const ParamsList SimpleParser4::INHERIT_TO_SUBNET4 = {
     "max-valid-lifetime",
     "calculate-tee-times",
     "t1-percent",
-    "t2-percent"
+    "t2-percent",
+    "store-extended-info",
+    "cache-threshold",
+    "cache-max-age"
 };
 
 /// @brief This table defines all pool parameters.
@@ -301,6 +335,9 @@ const SimpleKeywords SimpleParser4::SHARED_NETWORK4_PARAMETERS = {
     { "boot-file-name",                 Element::string },
     { "relay",                          Element::map },
     { "reservation-mode",               Element::string },
+    { "reservations-global",            Element::boolean },
+    { "reservations-in-subnet",         Element::boolean },
+    { "reservations-out-of-pool",       Element::boolean },
     { "client-class",                   Element::string },
     { "require-client-classes",         Element::list },
     { "valid-lifetime",                 Element::integer },
@@ -319,7 +356,12 @@ const SimpleKeywords SimpleParser4::SHARED_NETWORK4_PARAMETERS = {
     { "ddns-qualifying-suffix",         Element::string },
     { "hostname-char-set",              Element::string },
     { "hostname-char-replacement",      Element::string },
+    { "store-extended-info",            Element::boolean },
     { "metadata",                       Element::map },
+    { "cache-threshold",                Element::real },
+    { "cache-max-age",                  Element::integer },
+    { "ddns-update-on-renew",           Element::boolean },
+    { "ddns-use-conflict-resolution",   Element::boolean }
 };
 
 /// @brief This table defines default values for each IPv4 shared network.
@@ -337,7 +379,14 @@ const SimpleDefaults SimpleParser4::IFACE4_DEFAULTS = {
 const SimpleDefaults SimpleParser4::DHCP_QUEUE_CONTROL4_DEFAULTS = {
     { "enable-queue",   Element::boolean, "false"},
     { "queue-type",     Element::string,  "kea-ring4"},
-    { "capacity",       Element::integer, "500"}
+    { "capacity",       Element::integer, "64"}
+};
+
+/// @brief This table defines default values for multi-threading in DHCPv4.
+const SimpleDefaults SimpleParser4::DHCP_MULTI_THREADING4_DEFAULTS = {
+    { "enable-multi-threading", Element::boolean, "false" },
+    { "thread-pool-size",       Element::integer, "0" },
+    { "packet-queue-size",      Element::integer, "64" }
 };
 
 /// @brief This defines default values for sanity checking for DHCPv4.
@@ -411,6 +460,18 @@ size_t SimpleParser4::setAllDefaults(ElementPtr global) {
 
     cnt += setDefaults(mutable_cfg, DHCP_QUEUE_CONTROL4_DEFAULTS);
 
+    // Set the defaults for multi-threading.  If the element isn't there
+    // we'll add it.
+    ConstElementPtr multi_threading = global->get("multi-threading");
+    if (multi_threading) {
+        mutable_cfg = boost::const_pointer_cast<Element>(multi_threading);
+    } else {
+        mutable_cfg = Element::createMap();
+        global->set("multi-threading", mutable_cfg);
+    }
+
+    cnt += setDefaults(mutable_cfg, DHCP_MULTI_THREADING4_DEFAULTS);
+
     // Set the defaults for sanity-checks.  If the element isn't
     // there we'll add it.
     ConstElementPtr sanity_checks = global->get("sanity-checks");
@@ -458,12 +519,11 @@ size_t SimpleParser4::deriveParameters(ElementPtr global) {
                                                       INHERIT_TO_SUBNET4);
                 }
             }
-
         }
     }
 
     return (cnt);
 }
 
-};
-};
+}  // namespace dhcp
+}  // namespace isc

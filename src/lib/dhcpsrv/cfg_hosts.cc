@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -197,6 +197,58 @@ CfgHosts::getPage6(const SubnetID& subnet_id,
                                      lower_host_id,
                                      page_size,
                                      collection);
+    return (collection);
+}
+
+ConstHostCollection
+CfgHosts::getPage4(size_t& /*source_index*/,
+                   uint64_t lower_host_id,
+                   const HostPageSize& page_size) const {
+    // Do not issue logging message here because it will be logged by
+    // the getPageInternal method.
+    ConstHostCollection collection;
+    getPageInternal<ConstHostCollection>(lower_host_id,
+                                         page_size,
+                                         collection);
+    return (collection);
+}
+
+HostCollection
+CfgHosts::getPage4(size_t& /*source_index*/,
+                   uint64_t lower_host_id,
+                   const HostPageSize& page_size) {
+    // Do not issue logging message here because it will be logged by
+    // the getPageInternal method.
+    HostCollection collection;
+    getPageInternal<HostCollection>(lower_host_id,
+                                    page_size,
+                                    collection);
+    return (collection);
+}
+
+ConstHostCollection
+CfgHosts::getPage6(size_t& /*source_index*/,
+                   uint64_t lower_host_id,
+                   const HostPageSize& page_size) const {
+    // Do not issue logging message here because it will be logged by
+    // the getPageInternal method.
+    ConstHostCollection collection;
+    getPageInternal<ConstHostCollection>(lower_host_id,
+                                         page_size,
+                                         collection);
+    return (collection);
+}
+
+HostCollection
+CfgHosts::getPage6(size_t& /*source_index*/,
+                   uint64_t lower_host_id,
+                   const HostPageSize& page_size) {
+    // Do not issue logging message here because it will be logged by
+    // the getPageInternal method.
+    HostCollection collection;
+    getPageInternal<HostCollection>(lower_host_id,
+                                    page_size,
+                                    collection);
     return (collection);
 }
 
@@ -435,6 +487,40 @@ CfgHosts::getAllbyHostnameInternal6(const std::string& hostname,
 
 template<typename Storage>
 void
+CfgHosts::getPageInternal(uint64_t lower_host_id,
+                          const HostPageSize& page_size,
+                          Storage& storage) const {
+
+    LOG_DEBUG(hosts_logger, HOSTS_DBG_TRACE, HOSTS_CFG_GET_ALL);
+
+    // Use the host id last index.
+    const HostContainerIndex4& idx = hosts_.get<4>();
+    HostContainerIndex4::const_iterator host = idx.lower_bound(lower_host_id);
+
+    // Exclude the lower bound id when it is not zero.
+    if (lower_host_id &&
+        (host != idx.end()) && ((*host)->getHostId() == lower_host_id)) {
+        ++host;
+    }
+
+    // Return hosts within the page size.
+    for (; host != idx.end(); ++host) {
+        LOG_DEBUG(hosts_logger, HOSTS_DBG_TRACE_DETAIL_DATA,
+                  HOSTS_CFG_GET_ALL_HOST)
+            .arg((*host)->toText());
+        storage.push_back(*host);
+        if (storage.size() >= page_size.page_size_) {
+            break;
+        }
+    }
+
+    // Log how many hosts have been found.
+    LOG_DEBUG(hosts_logger, HOSTS_DBG_RESULTS, HOSTS_CFG_GET_ALL_COUNT)
+        .arg(storage.size());
+}
+
+template<typename Storage>
+void
 CfgHosts::getPageInternal4(const SubnetID& subnet_id,
                            uint64_t lower_host_id,
                            const HostPageSize& page_size,
@@ -615,6 +701,30 @@ CfgHosts::get4(const SubnetID& subnet_id, const IOAddress& address) const {
     return (ConstHostPtr());
 }
 
+ConstHostCollection
+CfgHosts::getAll4(const SubnetID& subnet_id,
+                  const asiolink::IOAddress& address) const {
+    LOG_DEBUG(hosts_logger, HOSTS_DBG_TRACE, HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4)
+        .arg(subnet_id).arg(address.toText());
+
+    ConstHostCollection hosts;
+    for (auto host : getAll4(address)) {
+        if (host->getIPv4SubnetID() == subnet_id) {
+            LOG_DEBUG(hosts_logger, HOSTS_DBG_TRACE_DETAIL_DATA,
+                      HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4_HOST)
+                .arg(subnet_id)
+                .arg(address.toText())
+                .arg(host->toText());
+            hosts.push_back(host);
+        }
+    }
+    LOG_DEBUG(hosts_logger, HOSTS_DBG_RESULTS, HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4_COUNT)
+        .arg(subnet_id)
+        .arg(address.toText())
+        .arg(hosts.size());
+
+    return (hosts);
+}
 
 ConstHostPtr
 CfgHosts::get6(const SubnetID& subnet_id,
@@ -656,6 +766,14 @@ CfgHosts::get6(const SubnetID& subnet_id,
                const asiolink::IOAddress& address) {
     // Do not log here because getHostInternal6 logs.
     return (getHostInternal6<HostPtr, HostCollection>(subnet_id, address));
+}
+
+ConstHostCollection
+CfgHosts::getAll6(const SubnetID& subnet_id,
+                  const asiolink::IOAddress& address) const {
+    ConstHostCollection hosts;
+    getAllInternal6(subnet_id, address, hosts);
+    return (hosts);
 }
 
 template<typename ReturnType, typename Storage>
@@ -923,7 +1041,7 @@ CfgHosts::add4(const HostPtr& host) {
     }
 
     // Check if the address is already reserved for the specified IPv4 subnet.
-    if (!host->getIPv4Reservation().isV4Zero() &&
+    if (ip_reservations_unique_ && !host->getIPv4Reservation().isV4Zero() &&
         (host->getIPv4SubnetID() != SUBNET_ID_UNUSED) &&
         get4(host->getIPv4SubnetID(), host->getIPv4Reservation())) {
         isc_throw(ReservedAddress, "failed to add new host using the HW"
@@ -975,15 +1093,17 @@ CfgHosts::add6(const HostPtr& host) {
     for (IPv6ResrvIterator it = reservations.first; it != reservations.second;
          ++it) {
 
-        // If there's an entry for this (subnet-id, address), reject it.
-        if (get6(host->getIPv6SubnetID(), it->second.getPrefix())) {
-            isc_throw(DuplicateHost, "failed to add address reservation for "
-                      << "host using the HW address '"
-                      << (hwaddr ? hwaddr->toText(false) : "(null)")
-                      << " and DUID '" << (duid ? duid->toText() : "(null)")
-                      << "' to the IPv6 subnet id '" << host->getIPv6SubnetID()
-                      << "' for address/prefix " << it->second.getPrefix()
-                      << ": There's already reservation for this address/prefix");
+        if (ip_reservations_unique_) {
+            // If there's an entry for this (subnet-id, address), reject it.
+            if (get6(host->getIPv6SubnetID(), it->second.getPrefix())) {
+                isc_throw(DuplicateHost, "failed to add address reservation for "
+                          << "host using the HW address '"
+                          << (hwaddr ? hwaddr->toText(false) : "(null)")
+                          << " and DUID '" << (duid ? duid->toText() : "(null)")
+                          << "' to the IPv6 subnet id '" << host->getIPv6SubnetID()
+                          << "' for address/prefix " << it->second.getPrefix()
+                          << ": There's already reservation for this address/prefix");
+            }
         }
         hosts6_.insert(HostResrv6Tuple(it->second, host));
     }
@@ -1045,6 +1165,13 @@ CfgHosts::del6(const SubnetID& /*subnet_id*/,
     isc_throw(NotImplemented, "sorry, not implemented");
     return (false);
 }
+
+bool
+CfgHosts::setIPReservationsUnique(const bool unique) {
+    ip_reservations_unique_ = unique;
+    return (true);
+}
+
 
 ElementPtr
 CfgHosts::toElement() const {

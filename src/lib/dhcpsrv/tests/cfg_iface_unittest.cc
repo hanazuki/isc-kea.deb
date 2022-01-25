@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -204,7 +204,7 @@ TEST_F(CfgIfaceTest, explicitLoopbackV4) {
     // Reset configuration.
     cfg.reset();
 
-    // Retry with wirdcard
+    // Retry with wildcard
     ASSERT_NO_THROW(cfg.use(AF_INET, "*"));
     ASSERT_NO_THROW(cfg.use(AF_INET, "lo"));
     ASSERT_NO_THROW(cfg.useSocketType(AF_INET, CfgIface::SOCKET_UDP));
@@ -378,7 +378,7 @@ TEST_F(CfgIfaceTest, explicitLoopbackV6) {
     // Reset configuration.
     cfg.reset();
 
-    // Retry with wirdcard
+    // Retry with wildcard
     ASSERT_NO_THROW(cfg.use(AF_INET6, "*"));
     ASSERT_NO_THROW(cfg.use(AF_INET6, "lo/::1"));
     cfg.openSockets(AF_INET6, DHCP6_SERVER_PORT);
@@ -486,10 +486,10 @@ TEST_F(CfgIfaceTest, unparse) {
 
     // Check unparse
     std::string expected =
-        "{ \"comment\": \"foo\", "
+        "{ "
         "\"interfaces\": [ \"*\", \"eth0\", \"eth1/192.0.2.3\" ], "
         "\"re-detect\": false, "
-        "\"user-context\": { \"bar\": 1 } }";
+        "\"user-context\": { \"comment\": \"foo\", \"bar\": 1 } }";
     runToElementTest<CfgIface>(expected, cfg4);
 
     // Now check IPv6
@@ -501,10 +501,10 @@ TEST_F(CfgIfaceTest, unparse) {
     EXPECT_NO_THROW(cfg6.setContext(Element::fromJSON(comment)));
 
     expected =
-        "{ \"comment\": \"bar\", "
+        "{ "
         "\"interfaces\": [ \"*\", \"eth1\", \"eth0/2001:db8:1::1\" ], "
         "\"re-detect\": false, "
-        "\"user-context\": { \"foo\": 2 } }";
+        "\"user-context\": { \"comment\": \"bar\", \"foo\": 2 } }";
     runToElementTest<CfgIface>(expected, cfg6);
 }
 

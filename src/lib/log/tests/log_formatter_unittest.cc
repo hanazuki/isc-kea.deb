@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -30,8 +30,8 @@ public:
         outputs.push_back(Output(prefix, message));
     }
     // Just shortcut for new string
-    string* s(const char* text) {
-        return (new string(text));
+    boost::shared_ptr<string> s(const char* text) {
+        return (boost::make_shared<string>(text));
     }
 };
 

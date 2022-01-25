@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -65,15 +65,17 @@ in the compiled version of the software, hence the need for a rebuild.
 
 The core of Kea is written in C++.  While it is the intention to
 provide interfaces into user code written in other languages, the initial
-versions of the Hooks system requires that user code be written in C++.
-All examples in this guide are in that language.
+versions of the Hooks system required that user code be written in C++.
+It is no longer the case and there are examples of hooks written for
+instance in Python but this guide does not document how to do that.
+All examples in this guide are in C++.
 
 
 @subsection hooksdgTerminology Terminology
 
 In the remainder of this guide, the following terminology is used:
 
-- Hook/Hook Point - used interchageably, this is a point in the code at
+- Hook/Hook Point - used interchangeably, this is a point in the code at
 which a call to user functions is made. Each hook has a name and
 each hook can have any number (including 0) of user functions
 attached to it.
@@ -241,9 +243,9 @@ in this example, the argument specification omits the variable name
 (whilst retaining the type) to avoid an "unused variable" compiler
 warning. (The LibraryHandle and its use is discussed in the section
 @ref hooksdgLibraryHandle.)
-- In the current version of the hooks framework, it is not possible to pass
+- In the initial version of the hooks framework, it was not possible to pass
 any configuration information to the "load" function.  The name of the log
-file must therefore be hard-coded as an absolute path name or communicated
+file had therefore to be hard-coded as an absolute path name or communicated
 to the user code by some other means.
 - "load" must return 0 on success and non-zero on error.  The hooks framework
 will abandon the loading of the library if "load" returns an error status.
@@ -265,8 +267,7 @@ If you'd like to check the address family too it is returned in DHCP servers
 by isc::dhcp::CfgMgr::instance().getFamily() declared in dhcpsrv/cfgmgr.h
 with AF_INET and AF_INET6 values.
 
-@subsubsection hooksdgMultiThreadingCompatibleFunction The
-"multi_threading_compatible" function
+@subsubsection hooksdgMultiThreadingCompatibleFunction The "multi_threading_compatible" function
 
 "multi_threading_compatible" is used by the hooks framework to check
 if the libraries it is loading are compatible with the DHCPv4 or DHCPv6
@@ -289,9 +290,9 @@ them thread safe and to document cases where they are not.
 source) the service methods must be thread safe.
 - a library which modifies the internal configuration of the server,
 e.g. creates or deletes a subnet, it must enter a critical section using
-the @c isc::dhcp::MultiThreadingCriticalSection RAII class.
+the @c isc::util::MultiThreadingCriticalSection RAII class.
 
-In the tutoral, we'll put "multi_threading_compatible" in its own file,
+In the tutorial, we'll put "multi_threading_compatible" in its own file,
 multi_threading_compatible.cc. The contents are:
 
 @code
@@ -309,19 +310,22 @@ int multi_threading_compatible() {
 and for a command creating a new subnet:
 
 @code
-#include <dhcpsrv/multi_threading_utils.h>
+#include <util/multi_threading_mgr.h>
 
 int commandHandler(CalloutHandle& handle) {
     ...
     {
         // Enter the critical section.
-        MultiThreadingCriticalSection ct;
+        isc::util::MultiThreadingCriticalSection ct;
         <add the subnet>
         // Leave the critical section.
     }
     ...
 }
 @endcode
+
+@ref hooksMultiThreading provides more details about thread safety
+requirements.
 
 @subsection hooksdgCallouts Callouts
 
@@ -474,14 +478,18 @@ documentation for details. For historic reasons (Kea 0.9.2 used a single
 boolean flag called skip that also doubled in some cases as an indicator
 to drop the packet) several hooks use SKIP status to drop the packet.
 
-The methods to get and set the "skip" flag are getSkip and setSkip. Their
-usage is intuitive:
+The methods to get and set the "skip" or "drop" state are getStatus and
+setStatus. Their usage is intuitive:
 
 @code
     // Get the current setting of the next step status.
-    CalloutHandle::NextStepStatus status = handle.getStatus();
+    auto status = handle.getStatus();
 
     if (status == CalloutHandle::NEXT_STEP_DROP)
+       // Do something...
+       :
+
+    if (status == CalloutHandle::NEXT_STEP_SKIP)
        // Do something...
        :
 
@@ -498,6 +506,55 @@ usage is intuitive:
 
 Like arguments, the next step status is passed to all callouts on a hook.  Callouts
 later in the list are able to examine (and modify) the settings of earlier ones.
+
+If using multiple libraries, when the library wants to drop the current packet,
+the DROP status must be used instead of the SKIP status so that the packet
+processing ends at that specific hook point.
+
+It is recommended for all callouts to check the status before doing any
+processing.  As callouts can modify the status, it is recommended to take good
+care when doing so, because this will have impact on all remaining hooks as well.
+It is highly recommended to not reset the SKIP or DROP status to CONTINUE, even
+though possible, so that the rest of the loaded hooks and the server can check
+and perform the proper action.
+
+Some hook points handle special functionality for the server, like pkt4_receive,
+pkt6_receive, which handle unpacking of the received packet, pkt4_send, pkt6_send,
+which handle packing of the response packet.
+
+If the hook handles these actions and sets the next step flag to SKIP, it should
+also perform a check for the SKIP flag before anything else.  If it is already
+set, do not pack/unpack the packet (other library, or even the same library, if
+loaded multiple times, has done it already).  Some libraries might also need to
+throw exceptions in such cases because they need to perform specific actions before
+pack/unpack (eg. addOption/delOption before pack action), which have no effect if
+pack/unpack action is done previously by some other library.
+
+@code
+    // Check if other library has already set SKIP flag and performed unpack
+    // so that unpack is skipped
+    if (handle.getStatus() != CalloutHandle::NEXT_STEP_SKIP) {
+        query->unpack();
+    }
+@endcode
+
+@code
+    // Check the status state.
+    auto status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_SKIP) {
+        isc_throw(InvalidOperation, "packet pack already handled");
+    }
+    ...
+    response->delOption(DEL_OPTION_CODE);
+    ...
+    response->addOption(ADD_OPTION_CODE);
+    ...
+    response->pack();
+@endcode
+
+As stated before, the order of loading libraries is critical in achieving the
+desired behavior, so please read @ref hooksdgMultipleLibraries when configuring
+multiple libraries.
 
 @subsubsection hooksdgSkipFlag The "Skip" Flag (deprecated)
 
@@ -528,7 +585,6 @@ if (skip) {
 with this:
 
 @code
-
 // This is the default.
 handle.setStatus(CalloutHandle::NEXT_STEP_CONTINUE);
 
@@ -536,7 +592,7 @@ handle.setStatus(CalloutHandle::NEXT_STEP_CONTINUE);
 handle.setStatus(CalloutHandle::NEXT_STEP_SKIP);
 
 // Check the status state.
-CalloutHandle::NextStepStatus status = handle.getStatus();
+auto status = handle.getStatus();
 if (status == CalloutHandle::NEXT_STEP_SKIP) {
     ...
 }
@@ -1103,7 +1159,7 @@ ones with non-standard names need to be registered manually.
 Kea servers natively support a set of control commands to retrieve and update
 runtime information, e.g. server configuration, basic statistics etc. In
 many cases, however, DHCP deployments require support for additional commands
-or the natively supported commands don't exactly fulfil one's requirements.
+or the natively supported commands don't exactly fulfill one's requirements.
 
 Taking advantage of Kea's modularity and hooks framework, it is now possible
 to easily extend the pool of supported commands by implementing additional
@@ -1370,8 +1426,8 @@ logic. Consider the following example:
 ]
 @endcode
 
-This example has three hook libraries configured. The first and and second have
-no parameters. Note that parameters map is optional, but it's perfectly ok to
+This example has three hook libraries configured. The first and second have
+no parameters. Note that parameters map is optional, but it's perfectly okay to
 specify it as an empty map. The third library is more interesting. It has five
 parameters specified. The first one called 'mail' is a string. The second one
 is an integer and the third one is boolean. Fourth and fifth parameters are
@@ -1468,5 +1524,147 @@ A good sources of examples could be unit-tests in file src/lib/cc/tests/data_uni
 which are dedicated to isc::data::Element testing and src/lib/hooks/tests/callout_params_library.cc,
 which is an example library used in testing. This library expects exactly 3 parameters:
 svalue (which is a string), ivalue (which is an integer) and bvalue (which is a boolean).
+
+@subsection hooksMemoryManagement Memory Management Considerations for Hooks Writer
+
+Both Kea server memory space and hook library memory space share a common
+address space between the opening of the hook (call to dlopen() as the first
+phase of the hook library loading) and the closing of the hook (call to
+dlclose() as the last phase of the hook library unloading). There are
+pointers between the two memory spaces with at least two bad consequences
+when they are not correctly managed:
+
+- Kea uses shared pointers for its objects. If the hook ownership keeps
+ownership of an object, this object will never be destroyed, leading to
+a trivial memory leak. Some care is recommended when the hook library
+uses a garbage collector to not postpone releases of no longer used
+objects. Cycles should be avoided too, for instance using weak pointers.
+Of course at the opposite, if a Kea object is needed ownership on, it must
+be kept in order to not get a dangling pointer when it will be destroyed
+at the end of its last reference lifetime.
+
+- Kea can take some pointers to the hook library memory space, for instance
+when a hook object is registered. If these pointers are not destroyed
+before the hook library memory space is unmapped by dlclose() this likely
+leads to a crash.
+
+Communication between Kea code and hook library code is provided by
+callout handles. For callout points related to a packet, the callout
+handle is associated with the packet allowing to get the same callout handle
+for all callout points called during processing of a query.
+
+Hook libraries are closed i.e. hook library memory spaces are unmapped
+only when there is no active callout handles. This enforces a correct
+behavior at two conditions:
+
+- there is no "wild" dangling pointers, for instance no registered
+objects.
+
+- this can happen i.e. the hook library does not keep a shared pointer
+to a query packet.
+
+To allow hook writers to fulfill these two conditions the unload() entry
+point is called in the first phase of the unloading process since Kea
+version 1.7.10. For instance if the hook library uses the PIMPL code
+pattern the unload() entry point must reset the pointer to the
+hook library implementation.
+
+@subsection hooksMultiThreading Multi-Threading Considerations for Hooks Writers
+
+Multi-threading programming in C++ is not easy. For instance STL containers
+do not support simultaneous read and write accesses. Kea is written in C++
+so a priori for all Kea APIs one should never assume thread safety.
+
+When a hook library is internally multi-threaded, its code and any Kea API
+used simultaneously by different threads must be thread safe. To mark
+the difference between this and the other thread safety requirement this
+is called "generic thread safe".
+
+When multi-threaded packet processing is enabled, Kea servers perform
+some actions by the main thread and packet processing by members of
+a thread pool. The multi-threading mode is returned by:
+@code
+isc::util::MultiThreadingMgr::instance().getMode()
+@endcode
+When it is false, Kea is single threaded and there is no thread safety
+requirement, when it is true, the requirement is named Kea packet processing
+thread safe shorten into "Kea thread safe".
+
+A typical Kea thread safe looks like:
+@code
+int Foo() {
+    if (MultiThreadingMgr::instance().getMode()) {
+        std::lock_guard<std::mutex> lock(mutex_);
+        return (FooInternal());
+    } else {
+        return (FooInternal());
+    }
+}
+@endcode
+
+The overhead of mutexes and other synchronization tools is far greater
+than a test and branch so it is the recommended way to implement Kea
+thread safety.
+
+When a hook library entry point can be called from a packet processing
+thread, typically from a packet processing callout but also when
+implementing a lease or host backend API, the entry point code must
+be Kea thread safe. If it is not possible the hook library must
+be marked as not multi-threading compatible (i.e. return 0 from
+multi_threading_compatible).
+
+At the opposite during (re)configuration including libload command
+and config backend, only the main thread runs, so version, load, unload,
+multi_threading_compatible, dhcp4_srv_configured, dhcp6_srv_configured,
+cb4_updated and cb6_updated have no thread safety requirements.
+
+Other hook library entry points are called by the main thread:
+ - io service (io context is recent boost versions) is polled by the main
+  thread
+ - external socket callbacks are executed by the main thread
+ - commands including command_process
+
+The packet processing threads are not stopped so either the entry
+point code is Kea thread safe or it uses a critical section
+(@c isc::util::MultiThreadingCriticalSection) to stop the packet
+processing threads during the execution of the not Kea thread safe code.
+Of course critical sections have an impact on performance so they should
+be used only for particular cases where no better choice is available.
+
+Some  Kea APIs were made thread safe mainly because they are used by the
+packet processing:
+ - logging is generic thread safe and even multi process safe i.e.
+  messages logged into a file or by syslog from multiple processes
+  do not mix.
+ - statistics update is Kea thread safe.
+ - lease and host database backends are Kea thread safe. Note if you need to
+  perform a direct MySQL or PostgreSQL query you must use the connection pool.
+ - state model and watched thread are generic thread safe (libkea-util)
+ - interval timer setup and cancel are generic thread safe (libkea-asiolink)
+ - parking lots are generic thread safe (libkea-hooks)
+ - external sockets are generic thread safe (libkea-dhcp++)
+ - http client is Kea thread safe (libkea-http)
+
+Some other Kea APIs are intrinsically thread safe because they do not
+involve a shared structure so for instance despite of its name the
+interface manager send methods are generic thread safe.
+
+Per library documentation details thread safety to help hooks writers
+and to provide an exhaustive list of Kea thread safe APIs:
+ - @ref utilMTConsiderations
+ - @ref logMTConsiderations
+ - @ref asiolinkMTConsiderations
+ - @ref ccMTConsiderations
+ - @ref databaseMTConsiderations
+ - @ref ctrlSocketMTConsiderations
+ - @ref libdhcpMTConsiderations
+ - @ref statsMTConsiderations
+ - @ref yangMTConsiderations
+ - @ref libdhcp_ddnsMTConsiderations
+ - @ref dhcpEvalMTConsiderations
+ - @ref cplMTConsiderations
+ - @ref dhcpDatabaseBackendsMTConsiderations
+ - @ref libdhcpsrvMTConsiderations
+ - @ref httpMTConsiderations
 
 */

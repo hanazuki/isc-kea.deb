@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2017 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -23,7 +23,7 @@
 #include <cql/testutils/cql_schema.h>
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/cql_lease_mgr.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <dhcpsrv/tests/generic_lease_mgr_unittest.h>
 #include <exceptions/exceptions.h>
 
@@ -334,7 +334,7 @@ public:
 ///
 /// This test checks if the CqlLeaseMgr can be instantiated.  This happens
 /// only if the database can be opened.  Note that this is not part of the
-/// CqlLeaseMgr test fixure set.  This test checks that the database can be
+/// CqlLeaseMgr test fixture set.  This test checks that the database can be
 /// opened: the fixtures assume that and check basic operations.
 TEST(CqlOpenTest, OpenDatabase) {
 
@@ -704,7 +704,7 @@ TEST_F(CqlLeaseMgrTest, lease6InvalidHostname) {
 /// @brief Verify that large IAID values work correctly.
 ///
 /// Adds lease with a large IAID to the database and verifies it can
-/// fetched correclty.
+/// fetched correctly.
 TEST_F(CqlLeaseMgrTest, leases6LargeIaidCheck) {
     testLease6LargeIaidCheck();
 }
@@ -856,6 +856,16 @@ TEST_F(CqlLeaseMgrTest, leaseStatsQuery4) {
 /// @brief Tests v6 lease stats query variants.
 TEST_F(CqlLeaseMgrTest, leaseStatsQuery6) {
     testLeaseStatsQuery6();
+}
+
+/// @brief Tests v4 lease stats to be attributed to the wrong subnet.
+TEST_F(CqlLeaseMgrTest, leaseStatsQueryAttribution4) {
+    testLeaseStatsQueryAttribution4();
+}
+
+/// @brief Tests v6 lease stats to be attributed to the wrong subnet.
+TEST_F(CqlLeaseMgrTest, leaseStatsQueryAttribution6) {
+    testLeaseStatsQueryAttribution6();
 }
 
 }  // namespace

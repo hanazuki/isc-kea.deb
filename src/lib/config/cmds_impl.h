@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -31,7 +31,7 @@ protected:
             data::ConstElementPtr command;
             handle.getArgument("command", command);
             cmd_name_ = parseCommand(cmd_args_, command);
-        } catch (std::exception& ex) {
+        } catch (const std::exception& ex) {
             isc_throw(isc::BadValue, "JSON command text is invalid: " << ex.what());
         }
     }
@@ -60,7 +60,7 @@ protected:
     /// @brief Set the callout argument "response" to the given response
     ///
     /// @param handle Callout context handle in which to set the "response" argument
-    /// @param response ElementPtr to a the result to use as the reponse
+    /// @param response ElementPtr to the result to use as the response
     void setResponse(hooks::CalloutHandle& handle, data::ConstElementPtr& response) {
         handle.setArgument ("response", response);
     }

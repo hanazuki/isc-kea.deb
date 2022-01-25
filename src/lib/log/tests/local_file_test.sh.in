@@ -1,5 +1,6 @@
 #!/bin/sh
-# Copyright (C) 2011-2016 Internet Systems Consortium, Inc. ("ISC")
+
+# Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,21 +9,17 @@
 # Checks that a local message file can override the definitions in the message
 # dictionary.
 
-testname="Local message file test"
-echo $testname
+# Exit with error if commands exit with non-zero and if undefined variables are
+# used.
+set -eu
 
-failcount=0
-localmes=@abs_builddir@/localdef_mes_$$
-tempfile=@abs_builddir@/run_time_init_test_tempfile_$$
+# Include common test library.
+# shellcheck disable=SC1091
+# SC1091: Not following: ... was not specified as input (see shellcheck -x).
+. "@abs_top_builddir@/src/lib/testutils/dhcp_test_lib.sh"
 
-passfail() {
-    if [ $1 -eq 0 ]; then
-        echo " pass"
-    else
-        echo " FAIL"
-        failcount=`expr $failcount + $1`
-    fi
-}
+localmes="@abs_builddir@/localdef_mes_$$"
+tempfile="@abs_builddir@/run_time_init_test_tempfile_$$"
 
 # Create the local message file for testing
 
@@ -32,7 +29,7 @@ cat > $localmes << .
 % LOG_READING_LOCAL_FILE replacement read local message file, parameter is '%1'
 .
 
-echo -n "1. Local message replacement:"
+test_start 'local-file.local-message-replacement'
 cat > $tempfile << .
 WARN  [example.log] LOG_NO_SUCH_MESSAGE could not replace message text for 'LOG_NOTHERE': no such message
 FATAL [example] LOG_WRITE_ERROR error writing to test1: 42
@@ -44,11 +41,11 @@ ERROR [example.beta] LOG_BAD_DESTINATION unrecognized log destination: beta_erro
 WARN  [example.beta] LOG_BAD_STREAM bad log console output stream: beta_warn
 .
 ./logger_example -c stdout -s warn $localmes | \
-    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\]/[\1]/' | \
+    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\.\(0x\)\{0,1\}\([0-9A-Fa-f]\{1,\}\)\]/[\1]/' | \
     cut -d' ' -f3- | diff $tempfile -
-passfail $?
+test_finish $?
 
-echo -n "2. Report error if unable to read local message file:"
+test_start 'local-file.read-error-reporting'
 cat > $tempfile << .
 ERROR [example.log] LOG_INPUT_OPEN_FAIL unable to open message file $localmes for input: No such file or directory
 FATAL [example] LOG_WRITE_ERROR error writing to test1: 42
@@ -61,19 +58,9 @@ WARN  [example.beta] LOG_BAD_STREAM bad log console output stream: beta_warn
 .
 rm -f $localmes
 ./logger_example -c stdout -s warn $localmes | \
-    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\]/[\1]/' | \
+    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\.\(0x\)\{0,1\}\([0-9A-Fa-f]\{1,\}\)\]/[\1]/' | \
     cut -d' ' -f3- | diff $tempfile -
-passfail $?
-
-if [ $failcount -eq 0 ]; then
-    echo "PASS: $testname"
-elif [ $failcount -eq 1 ]; then
-    echo "FAIL: $testname - 1 test failed"
-else
-    echo "FAIL: $testname - $failcount tests failed"
-fi
+test_finish $?
 
 # Tidy up.
 rm -f $tempfile
-
-exit $failcount

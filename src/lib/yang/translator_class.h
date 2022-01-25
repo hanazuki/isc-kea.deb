@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -25,7 +25,7 @@ namespace yang {
 ///     "option-data": <option data list>,
 ///     (DHCPv4 only)
 ///     "option-def": <option definition list>,
-///     "next-server": <next server addresss>,
+///     "next-server": <next server address>,
 ///     "server-hostname": <server hostname>,
 ///     "boot-file-name": <boot filename>,
 ///     "user-context": { <json map> },
@@ -67,8 +67,8 @@ namespace yang {
 /// @brief A translator class for converting a client class between
 /// YANG and JSON.
 ///
-/// Currently supports on kea-dhcp[46]-server. Ietf-dhcpv6-server does
-/// not define client classe contents.
+/// Currently supports only kea-dhcp[46]-server. Ietf-dhcpv6-server does
+/// not define client class contents.
 class TranslatorClass : virtual public TranslatorOptionDataList,
     virtual public TranslatorOptionDefList  {
 public:
@@ -77,11 +77,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorClass(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorClass(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorClass();
@@ -118,8 +114,8 @@ protected:
 /// @brief A translator class for converting a client class list between
 /// YANG and JSON.
 ///
-/// Currently supports on kea-dhcp[46]-server. Ietf-dhcpv6-server does
-/// not define client classe contents.
+/// Currently supports only kea-dhcp[46]-server. Ietf-dhcpv6-server does
+/// not define client class contents.
 class TranslatorClasses : virtual public TranslatorClass {
 public:
 
@@ -127,11 +123,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorClasses(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorClasses(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorClasses();
@@ -167,7 +159,7 @@ protected:
                        isc::data::ConstElementPtr elem);
 };
 
-}; // end of namespace isc::yang
-}; // end of namespace isc
+}  // namespace yang
+}  // namespace isc
 
 #endif // ISC_TRANSLATOR_CLASS_H

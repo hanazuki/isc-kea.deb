@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,10 +17,11 @@
 #include <dhcp/hwaddr.h>
 #include <dhcp/option.h>
 #include <dhcp/option_int.h>
+#include <dhcpsrv/cfgmgr.h>
 #include <hooks/hooks.h>
 #include <hooks/hooks_manager.h>
 #include <util/range_utilities.h>
-#include <boost/bind.hpp>
+#include <functional>
 #include <utility>
 #include <vector>
 
@@ -72,7 +73,7 @@ void
 HATest::runIOService(long ms) {
     io_service_->get_io_service().reset();
     IntervalTimer timer(*io_service_);
-    timer.setup(boost::bind(&IOService::stop, io_service_), ms,
+    timer.setup(std::bind(&IOService::stop, io_service_), ms,
                 IntervalTimer::ONE_SHOT);
     io_service_->run();
     timer.cancel();
@@ -83,7 +84,7 @@ HATest::runIOService(long ms, std::function<bool()> stop_condition) {
     io_service_->get_io_service().reset();
     IntervalTimer timer(*io_service_);
     bool timeout = false;
-    timer.setup(boost::bind(&HATest::stopIOServiceHandler, this, boost::ref(timeout)),
+    timer.setup(std::bind(&HATest::stopIOServiceHandler, this, std::ref(timeout)),
                 ms, IntervalTimer::ONE_SHOT);
 
     while (!stop_condition() && !timeout) {
@@ -101,10 +102,10 @@ HATest::runIOServiceInThread() {
     std::mutex mutex;
     std::condition_variable condvar;
 
-    io_service_->post(boost::bind(&HATest::signalServiceRunning, this, boost::ref(running),
-                                  boost::ref(mutex), boost::ref(condvar)));
+    io_service_->post(std::bind(&HATest::signalServiceRunning, this, std::ref(running),
+                                std::ref(mutex), std::ref(condvar)));
     boost::shared_ptr<std::thread>
-        th(new std::thread(boost::bind(&IOService::run, io_service_.get())));
+        th(new std::thread(std::bind(&IOService::run, io_service_.get())));
 
     std::unique_lock<std::mutex> lock(mutex);
     while (!running) {
@@ -130,10 +131,8 @@ HATest::testSynchronousCommands(std::function<void()> commands) {
 void
 HATest::signalServiceRunning(bool& running, std::mutex& mutex,
                              std::condition_variable& condvar) {
-    {
-        std::lock_guard<std::mutex> lock(mutex);
-        running = true;
-    }
+    std::lock_guard<std::mutex> lock(mutex);
+    running = true;
     condvar.notify_one();
 }
 
@@ -156,6 +155,7 @@ HATest::createValidJsonConfiguration(const HAConfig::HAMode& ha_mode) const {
         "         \"max-response-delay\": 1000,"
         "         \"max-ack-delay\": 10000,"
         "         \"max-unacked-clients\": 10,"
+        "         \"wait-backup-ack\": false,"
         "         \"peers\": ["
         "             {"
         "                 \"name\": \"server1\","
@@ -183,12 +183,54 @@ HATest::createValidJsonConfiguration(const HAConfig::HAMode& ha_mode) const {
     return (Element::fromJSON(config_text.str()));
 }
 
+ConstElementPtr
+HATest::createValidPassiveBackupJsonConfiguration() const {
+    std::ostringstream config_text;
+    config_text <<
+        "["
+        "     {"
+        "         \"this-server-name\": \"server1\","
+        "         \"mode\": \"passive-backup\","
+        "         \"wait-backup-ack\": false,"
+        "         \"peers\": ["
+        "             {"
+        "                 \"name\": \"server1\","
+        "                 \"url\": \"http://127.0.0.1:18123/\","
+        "                 \"role\": \"primary\""
+        "             },"
+        "             {"
+        "                 \"name\": \"server2\","
+        "                 \"url\": \"http://127.0.0.1:18124/\","
+        "                 \"role\": \"backup\""
+        "             },"
+        "             {"
+        "                 \"name\": \"server3\","
+        "                 \"url\": \"http://127.0.0.1:18125/\","
+        "                 \"role\": \"backup\""
+        "             }"
+        "         ]"
+        "     }"
+        "]";
+
+    return (Element::fromJSON(config_text.str()));
+}
+
+
 HAConfigPtr
-HATest::createValidConfiguration() const {
+HATest::createValidConfiguration(const HAConfig::HAMode& ha_mode) const {
     HAConfigPtr config_storage(new HAConfig());
     HAConfigParser parser;
 
-    parser.parse(config_storage, createValidJsonConfiguration());
+    parser.parse(config_storage, createValidJsonConfiguration(ha_mode));
+    return (config_storage);
+}
+
+HAConfigPtr
+HATest::createValidPassiveBackupConfiguration() const {
+    HAConfigPtr config_storage(new HAConfig());
+    HAConfigParser parser;
+
+    parser.parse(config_storage, createValidPassiveBackupJsonConfiguration());
     return (config_storage);
 }
 
@@ -296,6 +338,32 @@ HATest::createQuery6(const std::string& duid_text) const {
     OptionPtr client_id(new Option(Option::V6, D6O_CLIENTID, duid.getDuid()));
     query6->addOption(client_id);
     return (query6);
+}
+
+void
+HATest::setDHCPMultiThreadingConfig(bool enabled, uint32_t thread_pool_size,
+                                    uint32_t packet_queue_size) {
+    ElementPtr mt_config = Element::createMap();
+    mt_config->set("enable-multi-threading", Element::create(enabled));
+    mt_config->set("thread-pool-size",
+                   Element::create(static_cast<int>(thread_pool_size)));
+    mt_config->set("queue-size",
+                   Element::create(static_cast<int>(packet_queue_size)));
+    CfgMgr::instance().getStagingCfg()->setDHCPMultiThreading(mt_config);
+}
+
+std::string
+HATest::makeHAMtJson(bool enable_multi_threading, bool http_dedicated_listener,
+                     uint32_t http_listener_threads,  uint32_t http_client_threads) {
+    std::stringstream ss;
+    ss << "\"multi-threading\": {"
+       << " \"enable-multi-threading\": "
+       << (enable_multi_threading ? "true" : "false") << ","
+       << " \"http-dedicated-listener\": "
+       << (http_dedicated_listener ? "true" : "false")  << ","
+       << " \"http-listener-threads\": " << http_listener_threads  << ","
+       << " \"http-client-threads\": " << http_client_threads << "}";
+    return (ss.str());
 }
 
 } // end of namespace isc::ha::test

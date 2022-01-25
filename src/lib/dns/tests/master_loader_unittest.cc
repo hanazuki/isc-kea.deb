@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,10 +17,10 @@
 
 #include <gtest/gtest.h>
 
-#include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 
+#include <functional>
 #include <string>
 #include <vector>
 #include <list>
@@ -33,15 +33,16 @@ using std::list;
 using std::stringstream;
 using std::endl;
 using boost::lexical_cast;
+namespace ph = std::placeholders;
 
 namespace {
 class MasterLoaderTest : public ::testing::Test {
 public:
     MasterLoaderTest() :
-        callbacks_(boost::bind(&MasterLoaderTest::callback, this,
-                               &errors_, _1, _2, _3),
-                   boost::bind(&MasterLoaderTest::callback, this,
-                               &warnings_, _1, _2, _3))
+        callbacks_(std::bind(&MasterLoaderTest::callback, this,
+                             &errors_, ph::_1, ph::_2, ph::_3),
+                   std::bind(&MasterLoaderTest::callback, this,
+                             &warnings_, ph::_1, ph::_2, ph::_3))
     {}
 
     void TearDown() {
@@ -71,8 +72,9 @@ public:
                    const RRClass& rrclass, const MasterLoader::Options options)
     {
         loader_.reset(new MasterLoader(file, origin, rrclass, callbacks_,
-                                       boost::bind(&MasterLoaderTest::addRRset,
-                                                   this, _1, _2, _3, _4, _5),
+                                       std::bind(&MasterLoaderTest::addRRset,
+                                                 this, ph::_1, ph::_2, ph::_3,
+                                                 ph::_4, ph::_5),
                                        options));
     }
 
@@ -80,8 +82,9 @@ public:
                    const RRClass& rrclass, const MasterLoader::Options options)
     {
         loader_.reset(new MasterLoader(stream, origin, rrclass, callbacks_,
-                                       boost::bind(&MasterLoaderTest::addRRset,
-                                                   this, _1, _2, _3, _4, _5),
+                                       std::bind(&MasterLoaderTest::addRRset,
+                                                 this, ph::_1, ph::_2, ph::_3,
+                                                 ph::_4, ph::_5),
                                        options));
     }
 
@@ -1314,7 +1317,8 @@ TEST_F(MasterLoaderTest, ttlOverflow) {
     stringstream zone_stream;
     zone_stream << "example.org. IN SOA . . 0 0 0 0 2147483648\n";
     zone_stream << "$TTL 3600\n"; // reset to an in-range value
-    zone_stream << "$TTL 2147483649\n" << "a.example.org. IN A 192.0.2.1\n";
+    zone_stream << "$TTL 2147483649\n";
+    zone_stream << "a.example.org. IN A 192.0.2.1\n";
     zone_stream << "$TTL 3600\n"; // reset to an in-range value
     zone_stream << "b.example.org. 2147483650 IN A 192.0.2.2\n";
     setLoader(zone_stream, Name("example.org."), RRClass::IN(),

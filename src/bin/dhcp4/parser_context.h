@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -30,7 +30,6 @@ public:
     Dhcp4ParseError(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) { };
 };
-
 
 /// @brief Evaluation context, an interface to the expression evaluation.
 class Parser4Context
@@ -90,9 +89,6 @@ public:
 
         /// This will parse the input as config-control.
         PARSER_CONFIG_CONTROL,
-
-        /// This will parse the content of Logging.
-        PARSER_LOGGING
     } ParserType;
 
     /// @brief Default constructor.
@@ -153,10 +149,16 @@ public:
 
     /// @brief Error handler
     ///
+    /// @note The optional position for an error in a string begins by 1
+    /// so the caller should add 1 to the position of the C++ string.
+    ///
     /// @param loc location within the parsed file when experienced a problem.
     /// @param what string explaining the nature of the error.
+    /// @param pos optional position for in string errors.
     /// @throw Dhcp4ParseError
-    void error(const isc::dhcp::location& loc, const std::string& what);
+    void error(const isc::dhcp::location& loc,
+               const std::string& what,
+               size_t pos = 0);
 
     /// @brief Error handler
     ///
@@ -192,27 +194,33 @@ public:
     ///
     /// @param name name of the parameter to check
     /// @param open_loc location of the opening curly bracket
-    /// @param close_loc ocation of the closing curly bracket
+    /// @param close_loc location of the closing curly bracket
     /// @throw Dhcp4ParseError
     void require(const std::string& name,
                  isc::data::Element::Position open_loc,
                  isc::data::Element::Position close_loc);
+
+    /// @brief Check if a parameter is already present
+    ///
+    /// Check if a parameter is already present in the map at the top
+    /// of the stack and raise an error when it is.
+    ///
+    /// @param name name of the parameter to check
+    /// @param loc location of the current parameter
+    /// @throw Dhcp4ParseError
+    void unique(const std::string& name,
+                isc::data::Element::Position loc);
 
     /// @brief Defines syntactic contexts for lexical tie-ins
     typedef enum {
         ///< This one is used in pure JSON mode.
         NO_KEYWORD,
 
-        ///< Used while parsing top level (that contains Dhcp4, Logging and others)
+        ///< Used while parsing top level (that contains Dhcp4)
         CONFIG,
 
         ///< Used while parsing content of Dhcp4.
         DHCP4,
-
-        // not yet Dhcp6, DhcpDdns,
-
-        ///< Used while parsing content of Logging
-        LOGGING,
 
         /// Used while parsing Dhcp4/interfaces structures.
         INTERFACES_CONFIG,
@@ -234,6 +242,9 @@ public:
 
         /// Used while parsing Dhcp4/*-database/type.
         DATABASE_TYPE,
+
+        /// Used while parsing Dhcp4/*-database/on-fail.
+        DATABASE_ON_FAIL,
 
         /// Used while parsing Dhcp4/host-reservation-identifiers.
         HOST_RESERVATION_IDENTIFIERS,
@@ -273,6 +284,9 @@ public:
         /// Used while parsing Dhcp4/dhcp-queue-control structures.
         DHCP_QUEUE_CONTROL,
 
+        /// Used while parsing Dhcp4/multi-threading structures.
+        DHCP_MULTI_THREADING,
+
         /// Used while parsing Dhcp4/subnet4/pools structures.
         POOLS,
 
@@ -304,7 +318,10 @@ public:
         CONFIG_CONTROL,
 
         /// Used while parsing config-control/config-databases
-        CONFIG_DATABASE
+        CONFIG_DATABASE,
+
+        /// Used while parsing compatibility parameters
+        COMPATIBILITY,
 
     } ParserContext;
 

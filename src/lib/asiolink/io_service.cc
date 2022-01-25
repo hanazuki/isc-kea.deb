@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,19 +17,25 @@ namespace isc {
 namespace asiolink {
 
 namespace {
-// A trivial wrapper for boost::function.  SunStudio doesn't seem to be capable
-// of handling a boost::function object if directly passed to
+// A trivial wrapper for std::function.  SunStudio doesn't seem to be capable
+// of handling a std::function object if directly passed to
 // io_service::post().
 class CallbackWrapper {
 public:
-    CallbackWrapper(const boost::function<void()>& callback) :
-        callback_(callback)
-    {}
+
+    /// \brief Constructor
+    CallbackWrapper(const std::function<void()>& callback) :
+        callback_(callback) {}
+
+    /// \brief Function operator
     void operator()() {
         callback_();
     }
+
 private:
-    boost::function<void()> callback_;
+
+    /// \brief The callback function
+    std::function<void()> callback_;
 };
 }
 
@@ -41,8 +47,9 @@ public:
     /// \brief The constructor
     IOServiceImpl() :
         io_service_(),
-        work_(new boost::asio::io_service::work(io_service_))
-    {};
+        work_(new boost::asio::io_service::work(io_service_)) {
+    };
+
     /// \brief The destructor.
     ~IOServiceImpl() {};
     //@}
@@ -75,7 +82,21 @@ public:
     /// \brief Stop the underlying event loop.
     ///
     /// This will return the control to the caller of the \c run() method.
-    void stop() { io_service_.stop();} ;
+    void stop() {
+        io_service_.stop();
+    }
+
+    /// \brief Indicates if the IOService has been stopped.
+    ///
+    /// \return true if the IOService has been stopped, false otherwise.
+    bool stopped() const {
+        return (io_service_.stopped());
+    }
+
+    /// \brief Restarts the IOService in preparation for a subsequent \c run() invocation.
+    void restart() {
+        io_service_.reset();
+    }
 
     /// \brief Removes IO service work object to let it finish running
     /// when all handlers have been invoked.
@@ -89,22 +110,27 @@ public:
     /// that share the same \c io_service with the authoritative server.
     /// It will eventually be removed once the wrapper interface is
     /// generalized.
-    boost::asio::io_service& get_io_service() { return io_service_; };
-    void post(const boost::function<void ()>& callback) {
+    boost::asio::io_service& get_io_service() {
+        return (io_service_);
+    }
+
+    /// \brief Post a callback on the IO service
+    ///
+    /// \param callback The callback to be run on the IO service.
+    void post(const std::function<void ()>& callback) {
         const CallbackWrapper wrapper(callback);
         io_service_.post(wrapper);
     }
+
 private:
     boost::asio::io_service io_service_;
     boost::shared_ptr<boost::asio::io_service::work> work_;
 };
 
-IOService::IOService() {
-    io_impl_ = new IOServiceImpl();
+IOService::IOService() : io_impl_(new IOServiceImpl()) {
 }
 
 IOService::~IOService() {
-    delete io_impl_;
 }
 
 void
@@ -127,6 +153,16 @@ IOService::stop() {
     io_impl_->stop();
 }
 
+bool
+IOService::stopped() const {
+    return (io_impl_->stopped());
+}
+
+void
+IOService::restart() {
+    io_impl_->restart();
+}
+
 void
 IOService::stopWork() {
     io_impl_->stopWork();
@@ -138,7 +174,7 @@ IOService::get_io_service() {
 }
 
 void
-IOService::post(const boost::function<void ()>& callback) {
+IOService::post(const std::function<void ()>& callback) {
     return (io_impl_->post(callback));
 }
 

@@ -10,7 +10,7 @@
     "interfaces": [ "ethX" ]
   },
 
-// We need to specify the the database used to store leases. As of
+// We need to specify the database used to store leases. As of
 // September 2016, four database backends are supported: MySQL,
 // PostgreSQL, Cassandra, and the in-memory database, Memfile.
 // We'll use memfile  because it doesn't require any prior set up.
@@ -35,7 +35,7 @@
         "pools": [ { "pool": "2001:db8:1::/80" } ]
   },
   {
-        // This subnet will use explicit values. Explict
+        // This subnet will use explicit values. Explicit
         // values override calculation.
        "subnet": "2001:db8:2::/64",
        "pools": [ { "pool": "2001:db8:2::/80" } ],

@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,12 +7,11 @@
 #ifndef LOGGER_H
 #define LOGGER_H
 
-#include <cassert>
+#include <atomic>
 #include <cstdlib>
-#include <string>
 #include <cstring>
-
-#include <boost/static_assert.hpp>
+#include <mutex>
+#include <string>
 
 #include <exceptions/exceptions.h>
 #include <log/logger_level.h>
@@ -31,7 +30,7 @@ class InterprocessSync;
 /// \page LoggingApi Logging API
 /// \section LoggingApiOverview Overview
 /// Kea logging uses the concepts of the widely-used Java logging
-/// package log4j (http://logging.apache.log/log4j), albeit implemented
+/// package log4j (https://logging.apache.org/log4j/), albeit implemented
 /// in C++ using an open-source port.  Features of the system are:
 ///
 /// - Within the code objects - known as loggers - can be created and
@@ -81,14 +80,13 @@ class InterprocessSync;
 /// the string passed to the Logger constructor) to a maximum of 31 characters.
 /// There is no reason for this particular value other than limiting the amount
 /// of memory used.  It is defined by the constant Logger::MAX_LOGGER_NAME_SIZE,
-/// and can be made larger (or smaller) if so desired.  Note however, using a
-/// logger name larger than this limit will cause an assertion failure.
+/// and can be made larger (or smaller) if so desired.
 
 class LoggerImpl;   // Forward declaration of the implementation class
 
 /// \brief Bad Interprocess Sync
 ///
-/// Exception thrown if a bad InterprocessSync object (such as NULL) is
+/// Exception thrown if a bad InterprocessSync object (such as null) is
 /// used.
 class BadInterprocessSync : public isc::Exception {
 public:
@@ -107,7 +105,7 @@ public:
     {}
 };
 
-/// \brief Logger Name is Null
+/// \brief Logger Name is null
 ///
 /// Exception thrown if a logger name is null
 class LoggerNameNull : public isc::Exception {
@@ -162,13 +160,10 @@ public:
     /// \note Note also that there is no constructor taking a std::string. This
     /// minimizes the possibility of initializing a static logger with a
     /// string, so leading to problems mentioned above.
-    Logger(const char* name) : loggerptr_(NULL) {
+    Logger(const char* name) : loggerptr_(0), initialized_(false) {
 
         // Validate the name of the logger.
-        if (name == NULL) {
-            isc_throw(LoggerNameNull, "logger names may not be null");
-
-        } else {
+        if (name) {
             // Name not null, is it too short or too long?
             size_t namelen = std::strlen(name);
             if ((namelen == 0) || (namelen > MAX_LOGGER_NAME_SIZE)) {
@@ -177,14 +172,11 @@ public:
                           << "and " << MAX_LOGGER_NAME_SIZE << " characters in "
                           << "length");
             }
+        } else {
+            isc_throw(LoggerNameNull, "logger names may not be null");
         }
 
-        // The checks above and the assertion below ensure that the contents of
-        // "name" plus a trailing null will fit into the space allocated for
-        // "name_".
-        BOOST_STATIC_ASSERT(MAX_LOGGER_NAME_SIZE < sizeof(name_));
-
-        // Do the copy, ensuring a trailing NULL in all cases.
+        // Do the copy, ensuring a trailing null in all cases.
         std::strncpy(name_, name, MAX_LOGGER_NAME_SIZE);
         name_[MAX_LOGGER_NAME_SIZE] = '\0';
     }
@@ -288,7 +280,7 @@ public:
 
     /// \brief Replace the interprocess synchronization object
     ///
-    /// If this method is called with NULL as the argument, it throws a
+    /// If this method is called with null as the argument, it throws a
     /// BadInterprocessSync exception.
     ///
     /// \note This method is intended to be used only within this log library
@@ -298,7 +290,7 @@ public:
     ///
     /// \param sync The logger uses this synchronization object for
     /// synchronizing output of log messages. It should be deletable and
-    /// the ownership is transferred to the logger. If NULL is passed,
+    /// the ownership is transferred to the logger. If null is passed,
     /// a BadInterprocessSync exception is thrown.
     void setInterprocessSync(isc::log::interprocess::InterprocessSync* sync);
 
@@ -344,18 +336,22 @@ private:
     /// cause a "LoggingNotInitialized" exception to be thrown.
     ///
     /// \return Returns pointer to implementation
-    LoggerImpl* getLoggerPtr() {
-        if (!loggerptr_) {
-            initLoggerImpl();
-        }
-        return (loggerptr_);
-    }
+    LoggerImpl* getLoggerPtr();
 
     /// \brief Initialize Underlying Implementation and Set loggerptr_
     void initLoggerImpl();
 
-    LoggerImpl* loggerptr_;                  ///< Pointer to underlying logger
-    char        name_[MAX_LOGGER_NAME_SIZE + 1]; ///< Copy of the logger name
+    ///< Pointer to underlying logger
+    LoggerImpl* loggerptr_;
+
+    ///< Copy of the logger name
+    char name_[MAX_LOGGER_NAME_SIZE + 1];
+
+    ///< Mutex to protect the internal state
+    std::mutex mutex_;
+
+    ///< Flag which indicates if logger is initialized
+    std::atomic<bool> initialized_;
 };
 
 } // namespace log

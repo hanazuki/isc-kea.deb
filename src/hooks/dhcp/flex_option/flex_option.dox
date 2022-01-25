@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,7 +16,7 @@ of the Flexible Option library. This file provides information needed
 to understand and perhaps extend this library.
 
 This documentation is stand-alone: you should have read and understood
-the <a href="https://jenkins.isc.org/job/Kea_doc/doxygen/">Kea
+the <a href="https://reports.kea.isc.org/dev_guide/">Kea
 Developer's Guide</a> and in particular its section about hooks.
 
 @section libdhcp_flex_optionUser Now To Use libdhcp_flex_option
@@ -39,13 +39,14 @@ configuration:
 
 @code
 "Dhcp4": {
-    "hook_libraries": [
+    "hooks-libraries": [
         {   "library": "/usr/local/lib/libdhcp_flex_option.so",
             "parameters": {
                 "options": [
                     {
                         "code": 100,
-                        "add": "concat(relay4[2].hex, 'abc')"
+                        "add": "concat(relay4[2].hex, 'abc')",
+                        "csv-format": false
                     }
                 ]
             }
@@ -59,13 +60,14 @@ To configure it for kea-dhcp6, the commands are simply as shown below:
 
 @code
 "Dhcp6": {
-    "hook_libraries": [
+    "hooks-libraries": [
         {   "library": "/usr/local/lib/libdhcp_flex_option.so",
             "parameters": {
                 "options": [
                     {
                         "code": 100,
-                        "add": "concat(relay6[0].option[37].hex, 'abc')"
+                        "add": "concat(relay6[0].option[37].hex, 'abc')",
+                        "csv-format": false
                     }
                 ]
             }
@@ -77,7 +79,7 @@ To configure it for kea-dhcp6, the commands are simply as shown below:
 
 The sole parameter is a options list of options with:
  - @b code - Specifies the option code.
- - @b name - Speficies the option name, at least the option code or name
+ - @b name - Specifies the option name, at least the option code or name
    must be given.
  - @b add -  Specifies the add action: it takes a string expression on
    the query packet. If the option does not already exist in the response
@@ -91,6 +93,10 @@ The sole parameter is a options list of options with:
    on the query packet. If the expression evaluates to true and the option
    already exists in the response packet, the option is removed from the
    response. Only one action can be specified.
+ - @b csv-format - Specifies the option format used for input. If not
+   specified, it will default to false (raw data). When enabled, the option
+   data will be parsed using csv format and packed according to the option
+   definition.
 
 Note for the rare options which can be empty this mechanism does not work.
 The proposed solution in this case is to use a client class to set the
@@ -111,6 +117,12 @@ the query and response packets. For each configured option the action is
 applied by the template @c process located in flex_option.h. When
 required the expression is evaluated on the query packet and the result
 is used by the action for instance to add a new option.
+
+In case any other library sets the SKIP flag before pkt4_send or pkt6_send, an
+exception with the message "the packet pack already handled" will be thrown, to
+indicate that the action can not be properly performed.
+To fix this, all other libraries which might set the SKIP flag must appear in the
+server configuration after this library.
 
 @section libdhcp_flex_optionMTCompatibility Multi-Threading Compatibility
 

@@ -1,23 +1,29 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
+#include <asiolink/testutils/timed_signal.h>
 #include <netconf/netconf_controller.h>
 #include <netconf/netconf_process.h>
 #include <cc/data.h>
 #include <process/testutils/d_test_stubs.h>
+#include <testutils/gtest_utils.h>
+
 #include <boost/pointer_cast.hpp>
+
 #include <sstream>
 
-using namespace std;
+using namespace isc::asiolink::test;
 using namespace isc::netconf;
 using namespace isc::data;
 using namespace isc::http;
 using namespace isc::process;
 using namespace boost::posix_time;
+using namespace std;
 
 namespace {
 
@@ -87,7 +93,7 @@ TEST_F(NetconfControllerTest, basicInstanceTesting) {
     // it has the correct type.
     DControllerBasePtr& controller = DControllerTest::getController();
     ASSERT_TRUE(controller);
-    ASSERT_NO_THROW(boost::dynamic_pointer_cast<NetconfController>(controller));
+    ASSERT_NO_THROW_LOG(boost::dynamic_pointer_cast<NetconfController>(controller));
 
     // Verify that controller's app name is correct.
     EXPECT_TRUE(checkAppName(NetconfController::netconf_app_name_));
@@ -136,7 +142,7 @@ TEST_F(NetconfControllerTest, commandLineArgs) {
 // Tests application process creation and initialization.
 // Verifies that the process can be successfully created and initialized.
 TEST_F(NetconfControllerTest, initProcessTesting) {
-    ASSERT_NO_THROW(initProcess());
+    ASSERT_NO_THROW_LOG(initProcess());
     EXPECT_TRUE(checkProcess());
 }
 

@@ -1,10 +1,10 @@
 SUBDIRS = . testdata
 
-AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib -I$(top_builddir)/src/bin  -I$(top_srcdir)/src/bin
+AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
+AM_CPPFLAGS += -I$(top_builddir)/src/bin  -I$(top_srcdir)/src/bin
 AM_CPPFLAGS += -I$(srcdir)/.. -I$(builddir)/..
 AM_CPPFLAGS += -DTEST_DATA_DIR=\"$(abs_srcdir)/testdata\"
 AM_CPPFLAGS += $(BOOST_INCLUDES)
-AM_CPPFLAGS += -Werror
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
 if USE_STATIC_LINK
@@ -36,6 +36,7 @@ run_unittests_SOURCES += perf_socket_unittest.cc
 run_unittests_SOURCES += basic_scen_unittest.cc
 run_unittests_SOURCES += avalanche_scen_unittest.cc
 run_unittests_SOURCES += command_options_helper.h
+run_unittests_SOURCES += random_number_generator_unittest.cc
 
 run_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 run_unittests_LDFLAGS  = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(GTEST_LDFLAGS)

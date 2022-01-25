@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -225,15 +225,43 @@ public:
     getModifiedGlobalParameters6(const db::ServerSelector& server_selector,
                                  const boost::posix_time::ptime& modification_time) const;
 
+    /// @brief Retrieves a client class by name.
+    ///
+    /// @param server_selector Server selector.
+    /// @param name Client class name.
+    /// @return Pointer to the retrieved client class.
+    virtual ClientClassDefPtr
+    getClientClass6(const db::ServerSelector& selector, const std::string& name) const;
+
+    /// @brief Retrieves all client classes.
+    ///
+    /// @param selector Server selector.
+    /// @return Collection of client classes.
+    virtual ClientClassDictionary
+    getAllClientClasses6(const db::ServerSelector& selector) const;
+
+    /// @brief Retrieves client classes modified after specified time.
+    ///
+    /// @param selector Server selector.
+    /// @param modification_time Modification time.
+    /// @return Collection of client classes.
+    virtual ClientClassDictionary
+    getModifiedClientClasses6(const db::ServerSelector& selector,
+                              const boost::posix_time::ptime& modification_time) const;
+
     /// @brief Retrieves the most recent audit entries.
     ///
     /// @param selector Server selector.
     /// @param modification_time Timestamp being a lower limit for the returned
     /// result set, i.e. entries later than specified time are returned.
+    /// @param modification_id Identifier being a lower limit for the returned
+    /// result set, used when two (or more) entries have the same
+    /// modification_time.
     /// @return Collection of audit entries.
     virtual db::AuditEntryCollection
     getRecentAuditEntries(const db::ServerSelector& server_selector,
-                          const boost::posix_time::ptime& modification_time) const;
+                          const boost::posix_time::ptime& modification_time,
+                          const uint64_t& modification_id) const;
 
     /// @brief Retrieves all servers.
     ///
@@ -350,6 +378,19 @@ public:
     virtual void
     createUpdateGlobalParameter6(const db::ServerSelector& server_selector,
                                  const data::StampedValuePtr& value);
+
+    /// @brief Creates or updates DHCPv6 client class.
+    ///
+    /// @param server_selector Server selector.
+    /// @param client_class Client class to be added or updated.
+    /// @param follow_class_name name of the class after which the
+    /// new or updated class should be positioned. An empty value
+    /// causes the class to be appended at the end of the class
+    /// hierarchy.
+    virtual void
+    createUpdateClientClass6(const db::ServerSelector& server_selector,
+                             const ClientClassDefPtr& client_class,
+                             const std::string& follow_class_name);
 
     /// @brief Creates or updates a server.
     ///
@@ -524,6 +565,22 @@ public:
     virtual uint64_t
     deleteAllGlobalParameters6(const db::ServerSelector& server_selector);
 
+    /// @brief Deletes DHCPv6 client class.
+    ///
+    /// @param server_selector Server selector.
+    /// @param name Name of the class to be deleted.
+    /// @return Number of deleted client classes.
+    virtual uint64_t
+    deleteClientClass6(const db::ServerSelector& server_selector,
+                       const std::string& name);
+
+    /// @brief Deletes all client classes.
+    ///
+    /// @param server_selector Server selector.
+    /// @return Number of deleted client classes.
+    virtual uint64_t
+    deleteAllClientClasses6(const db::ServerSelector& server_selector);
+
     /// @brief Deletes a server from the backend.
     ///
     /// @param server_tag Tag of the server to be deleted.
@@ -572,16 +629,29 @@ public:
     /// This should be called by the hook lib unload() function.
     static void unregisterBackendType();
 
-protected:
+    /// @brief Flag which indicates if the config backend has an unusable
+    /// connection.
+    ///
+    /// @return true if there is at least one unusable connection, false
+    /// otherwise
+    virtual bool isUnusable();
 
-    /// @brief Pointer to the base implementation of the backend shared by
-    /// DHCPv4 and DHCPv6 servers.
-    boost::shared_ptr<MySqlConfigBackendImpl> base_impl_;
+    /// @brief Return backend parameters
+    ///
+    /// Returns the backend parameters
+    ///
+    /// @return Parameters of the backend.
+    isc::db::DatabaseConnection::ParameterMap getParameters() const;
+
+protected:
 
     /// @brief Pointer to the implementation of the @c MySqlConfigBackendDHCPv6
     /// class.
     boost::shared_ptr<MySqlConfigBackendDHCPv6Impl> impl_;
 
+    /// @brief Pointer to the base implementation of the backend shared by
+    /// DHCPv4 and DHCPv6 servers.
+    boost::shared_ptr<MySqlConfigBackendImpl> base_impl_;
 };
 
 /// @brief Pointer to the @c MySqlConfigBackendDHCPv6 class.

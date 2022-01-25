@@ -3,15 +3,15 @@
 cb_cmds: Configuration Backend Commands
 =======================================
 
-This section describes the ``cb_cmds`` hooks library, which is used to
-manage Kea servers' configurations in the Configuration Backends. This
-library must be used in conjunction with the available CB hooks libraries
-implementing the common APIs to create, read, update, and delete (CRUD)
-the configuration information in the respective databases. For example:
-the ``mysql_cb`` hooks library, released in Kea 1.6.0, implements this
-API for MySQL. In order to manage the configuration information in the
-MySQL database, both the ``mysql_cb`` and ``cb_cmds`` libraries must be
-loaded by the server used for the configuration management.
+This section describes the ``cb_cmds`` hooks library, used to manage Kea
+servers' configurations in the Configuration Backends. This library must
+be used in conjunction with the available CB hooks libraries implementing
+the common APIs to create, read, update, and delete (CRUD) the
+configuration information in the respective databases. For example:
+the ``mysql_cb`` hooks library implements this API for MySQL. In order to
+manage the configuration information in the MySQL database, both the
+``mysql_cb`` and ``cb_cmds`` libraries must be loaded by the server
+used for the configuration management.
 
 The ``cb_cmds`` library is only available to ISC customers with a paid
 support contract.
@@ -20,6 +20,11 @@ support contract.
 
    This library may only be loaded by the ``kea-dhcp4`` or
    ``kea-dhcp6`` process.
+
+.. note::
+
+   Please read about :ref:`cb-limitations` before using the commands
+   described in this section.
 
 Commands Structure
 ~~~~~~~~~~~~~~~~~~
@@ -37,7 +42,7 @@ There are 5 types of commands supported by this library:
 
 -  ``list`` - list all objects of the particular type in the database,
    e.g. ``remote-network4-list``; this class of commands returns brief
-   information about each object comparing to the output of ``get-all``.
+   information about each object compared to the output of ``get-all``.
 
 -  ``set`` - creates or replaces an object of the given type in the
    database, e.g. ``remote-option4-global-set``.
@@ -45,7 +50,7 @@ There are 5 types of commands supported by this library:
 All types of commands accept an optional ``remote`` map which selects the
 database instance to which the command refers. For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-subnet4-list",
@@ -68,12 +73,12 @@ the configuration of the server receiving the command.
 
 .. note::
 
-   As of the Kea 1.6.0 release, it is possible to configure the Kea server
+   In the present Kea release, it is possible to configure the Kea server
    to use only one configuration backend. Strictly speaking, it is
    possible to point the Kea server to at most one MySQL database using the
-   ``config-control`` parameter. That's why, in this release, the
-   ``remote`` parameter may be omitted in the commands and the
-   cb_cmds hooks library will use the sole backend by default.
+   ``config-control`` parameter. That's why the ``remote`` parameter may
+   be omitted in the commands and the cb_cmds hooks library will use the
+   sole backend by default.
 
 .. _cb-cmds-dhcp:
 
@@ -111,16 +116,16 @@ The typical response to the ``get`` or ``list`` command includes a list
 of returned objects (e.g. subnets), and each such object contains the
 ``metadata`` map with some database-specific information describing this
 object. In other words, the metadata contains any information about the
-fetched object which may be useful for the administrator, but which is not
+fetched object which may be useful for an administrator but which is not
 part of the object specification from the DHCP server standpoint. In the
-Kea 1.6.0 release, the metadata is limited to the ``server-tag``, which
+present Kea release, the metadata is limited to the ``server-tag``. It
 describes the association of the object with a particular server or
 all servers.
 
 The following is the example response to the ``remote-network4-list``
 command, which includes the metadata:
 
-::
+.. code-block:: json
 
    {
        "result": 0,
@@ -154,7 +159,7 @@ This command is used to delete the information about a selected DHCP server from
 the configuration database. The server is identified by a unique case
 insensitive server tag.  For example:
 
-::
+.. code-block:: json
 
     {
         "command": "remote-server4-del",
@@ -190,7 +195,7 @@ can be also deleted from the database using the `remote-subnet4-del-by-id` or
 
 The following is the successful response to the `remote-server4-del` command:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -219,7 +224,7 @@ remote-server4-get, remote-server6-get commands
 This command is used to fetch the information about the selected DHCP server
 from the configuration database.  For example:
 
-::
+.. code-block:: json
 
     {
         "command": "remote-server6-get"
@@ -241,7 +246,7 @@ server tag `server1`. The server tag is case insensitive.  A successful response
 returns basic information about the server, such as server tag and the user's
 description of the server:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -266,7 +271,7 @@ remote-server4-get-all, remote-server6-get-all commands
 This command is used to fetch all user defined DHCPv4 or DHCPv6 servers from the
 database. The command structure is very simple:
 
-::
+.. code-block:: json
 
     {
         "command": "remote-server4-get-all"
@@ -280,7 +285,7 @@ database. The command structure is very simple:
 The response includes basic information about each server, such as its server
 tag and description:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -318,7 +323,7 @@ database via the `remote-server4-set` or `remote-server6-set` commands. The
 following command creates a new (or updates an existing) DHCPv6 server in the
 database:
 
-::
+.. code-block:: json
 
     {
         "command": "remote-server6-set"
@@ -335,15 +340,15 @@ database:
         }
     }
 
-The server tag must be unique accross all servers in the database. When the
+The server tag must be unique across all servers in the database. When the
 server information under the given server tag already exists, it is replaced
-with the new information. The specified server tag is case insensitive. The
+with the new information. The specified server tag is case-insensitive, and the
 maximum length of the server tag is 256 characters. The following keywords are
 reserved and must not be used as server tags: "all" and "any".
 
 The following is the example response to the above command:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -375,7 +380,7 @@ the configuration file.
 The following command attempts to delete the DHCPv4 ``renew-timer``
 parameter common for all servers from the database:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-global-parameter4-del",
@@ -406,7 +411,7 @@ configuration database.
 The following command attempts to fetch the ``boot-file-name``
 parameter for the "server1":
 
-::
+.. code-block:: json
 
    {
        "command": "remote-global-parameter4-get",
@@ -426,7 +431,7 @@ or list, are not returned by this command.
 
 In the case of the example above, the string value is returned, e.g.:
 
-::
+.. code-block:: json
 
    {
        "result": 0,
@@ -451,7 +456,7 @@ in the database this value would be returned instead.
 
 The example response for the integer value is:
 
-::
+.. code-block:: json
 
    {
        "result": 0,
@@ -470,7 +475,7 @@ The example response for the integer value is:
 
 The real value:
 
-::
+.. code-block:: json
 
    {
        "result": 0,
@@ -489,7 +494,7 @@ The real value:
 
 Finally, the boolean value:
 
-::
+.. code-block:: json
 
    {
        "result": 0,
@@ -517,7 +522,7 @@ These commands are used to fetch all global DHCP parameters from the database
 for the specified server. The following example demonstrates how to fetch all
 global parameters to be used by the server "server1":
 
-::
+.. code-block:: json
 
     {
         "command": "remote-global-parameter4-get-all",
@@ -531,7 +536,7 @@ global parameters to be used by the server "server1":
 
 The example response may look as follows:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -585,7 +590,7 @@ as a result of this command. It is possible to set multiple parameters
 within a single command, each having one of the four types: string,
 integer, real, or boolean. For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-global-parameter4-set"
@@ -632,7 +637,7 @@ deleted along with the shared network.
 
 The following command:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-network6-del",
@@ -674,7 +679,7 @@ returned together with the shared network.
 The following command fetches the "level3" IPv6 shared network along
 with the full information about the subnets belonging to it:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-network6-get",
@@ -705,7 +710,7 @@ These commands are used to list all IPv4 or IPv6 shared networks for a server.
 The following command retrieves all shared networks to be used by the
 "server1" and "server2":
 
-::
+.. code-block:: json
 
     {
         "command": "remote-network4-list"
@@ -723,7 +728,7 @@ with all servers. When the `server-tags` list contains the
 `null` value the returned response contains a list of unassigned shared
 networks, i.e. the networks which are associated with no servers. For example:
 
-::
+.. code-block:: json
 
     {
         "command": "remote-network4-list"
@@ -738,7 +743,7 @@ networks, i.e. the networks which are associated with no servers. For example:
 The example response to this command when non-null server tags are specified
 looks similar to this:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -773,8 +778,8 @@ network name and the metadata. In order to fetch the detailed information about
 the selected shared network, use the `remote-network[46]-get` command.
 
 The example response above contains three shared networks. One of the
-shared networks is associated will all servers, so it is included in
-the list of shared networks to be used by the "server1" and "server2".
+shared networks is associated with all servers, so it is included in
+the list of shared networks to be used by "server1" and "server2".
 The remaining two shared networks are returned because one of them
 is associated with the "server1" and another one is associated with
 the "server2".
@@ -783,7 +788,7 @@ the "server2".
 When listing unassigned shared networks, the response will look similar
 to this:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -827,7 +832,7 @@ disassociate the subnets with the shared networks, the
 The following command adds the IPv6 shared network "level3" to the
 database:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-network6-set",
@@ -883,7 +888,7 @@ These commands are used to delete a DHCP option definition from the
 database. The option definition is identified by an option code and
 option space. For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option-def6-del",
@@ -907,7 +912,7 @@ code of 1 and belonging to the option space "isc". The default option spaces are
 "dhcp4" and "dhcp6" for the DHCPv4 and DHCPv6 top level options respectively. If
 there is no such option explicitly associated with the server1, no option is
 deleted. In order to delete an option belonging to "all" servers, the keyword
-"all" must be used as server tag. The `server-tags` list must contain exactly
+"all" must be used as the server tag. The `server-tags` list must contain exactly
 one tag. It must not include the `null` value.
 
 .. _command-remote-option-def4-get:
@@ -925,7 +930,7 @@ DHCPv4 and DHCPv6 top-level options, respectively.
 The following command retrieves a DHCPv4 option definition associated with all
 servers, having the code of 1 and belonging to the option space "isc":
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option-def4-get"
@@ -956,7 +961,7 @@ The remote-option-def4-get-all, remote-option-def6-get-all Commands
 These commands are used to fetch all DHCP option definitions from the database
 for the particular server or all servers. For example:
 
-::
+.. code-block:: json
 
     {
         "command": "remote-option-def6-get-all"
@@ -976,7 +981,7 @@ It must not include the `null` value.</para>
 
 The following is the example response to this command:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -1014,10 +1019,10 @@ These commands create a new DHCP option definition or replace an
 existing option definition in the database. The structure of the option
 definition information is the same as in the Kea configuration file (see
 :ref:`dhcp4-custom-options` and :ref:`dhcp6-custom-options`).
-The following command creates the DHCPv4 option definition in the
+The following command creates the DHCPv4 option definition at the
 top-level "dhcp4" option space and associates it with the "server1":
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option-def4-set",
@@ -1042,7 +1047,8 @@ top-level "dhcp4" option space and associates it with the "server1":
 
 The `server-tags` list must include exactly one
 server tag or the keyword "all". It must not contain the
-`null` value.</para>
+`null` value.
+
 
 .. _command-remote-option4-global-del:
 
@@ -1055,7 +1061,7 @@ These commands are used to delete a global DHCP option from the
 database. The option is identified by an option code and option space.
 For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option4-global-del",
@@ -1096,10 +1102,10 @@ option spaces where DHCP standard options belong are called "dhcp4" and
 The following command retrieves the IPv6 "DNS Servers" (code 23) option
 associated with all servers:
 
-::
+.. code-block:: json
 
    {
-       "command": remote-option6-global-get",
+       "command": "remote-option6-global-get",
        "arguments": {
            "options": [
                {
@@ -1129,7 +1135,7 @@ These commands are used to fetch all global DHCP options from the configuration
 database for the particular server or for all servers. The following command
 fetches all global DHCPv4 options for the "server1":
 
-::
+.. code-block:: json
 
     {
         "command": "remote-option6-global-get-all",
@@ -1146,7 +1152,7 @@ it must contain exactly one server tag or a keyword "all". It must not contain
 the `null` value. The following is the example response to this
 command with a single option being associated with the "server1" returned:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -1181,7 +1187,7 @@ option in the database. The structure of the option information is the
 same as in the Kea configuration file (see :ref:`dhcp4-std-options`
 and :ref:`dhcp6-std-options`). For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option6-global-set",
@@ -1209,7 +1215,7 @@ works reliably for the standard DHCP options. When specifying a value
 for the user-defined DHCP option, the option code should be specified
 instead of the name. For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option6-global-set",
@@ -1240,16 +1246,16 @@ with the name of the shared network from which the option is to
 be deleted. If the option is not explicitly specified for this
 shared network, no option is deleted. In particular, the given
 option may be present for a subnet belonging to the shared network.
-Such option instance is not affected by this command as this
-command merely deletes shared network level option. In order to
-delete subnet level option the `remote-option[46]-subnet-del`
+Such an option instance is not affected by this command as this
+command merely deletes the shared network level option. In order to
+delete a subnet level option the `remote-option[46]-subnet-del`
 command must be used instead.
 
 The following command attempts to delete an option having the
 option code 5 in the top-level option space from the shared
 network "fancy".
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option4-network-del",
@@ -1286,10 +1292,10 @@ an existing option in the database. The structure of the option information
 is the same as in the Kea configuration file (see :ref:`dhcp4-std-options`
 and :ref:`dhcp6-std-options`). The option information is carried in the
 `options` list. Another list, `shared-networks`, contains a map with the
-name of the shared network for which the option is to be set. If such option
+name of the shared network for which the option is to be set. If such an option
 already exists for the shared network, it is replaced with the new instance.
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option6-network-set",
@@ -1329,12 +1335,12 @@ and option space and these two parameters are passed within the
 prefix delegation pool prefix and length identifying the pool. If the
 option is not explicitly specified for this pool, no option is deleted.
 In particular, the given option may exist for a subnet containing
-the specified pool. Such option instance is not affected by this
+the specified pool. Such an option instance is not affected by this
 command as this command merely deletes a prefix delegation pool level
-option. In order to delete subnet level option the
+option. In order to delete a subnet level option the
 `remote-option6-subnet-del` command must be used instead.
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option6-pd-pool-del",
@@ -1366,18 +1372,18 @@ belong. The `server-tags` parameter must not be specified for this command.
 The remote-option6-pd-pool-set Command
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-This command creates a new prefix delefation pool specific DHCPv6 option or
+This command creates a new prefix delegation pool-specific DHCPv6 option or
 replaces an existing option in the database. The structure of the option
 information is the same as in the Kea configuration file (see :ref:`dhcp4-std-options`
 and :ref:`dhcp6-std-options`). The option information is carried in the
 `options` list. Another list, `pd-pools`, contains a map with the prefix
-delegation pool prefix and the prefix length identifying the pool. If such
+delegation pool prefix and the prefix length identifying the pool. If such an
 option already exists for the prefix delegation pool, it is replaced with
 the new instance.
 
 For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option6-pd-pool-set",
@@ -1430,7 +1436,7 @@ The following command attempts to delete an option having the
 option code 5 in the top-level option space from an IPv4 address
 pool:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option4-pool-del",
@@ -1468,12 +1474,12 @@ an existing option in the database. The structure of the option information
 is the same as in the Kea configuration file (see :ref:`dhcp4-std-options`
 and :ref:`dhcp6-std-options`). The option information is carried in the
 `options` list. Another list, `pools`, contains a map with the IP address
-range or prefix identifying the pool. If such option already exists for the
-pool, it is replaced with the new instance.
+range or prefix identifying the pool. If such an option already exists for
+the pool, it is replaced with the new instance.
 
 For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option4-pool-set",
@@ -1518,9 +1524,9 @@ option is deleted.
 
 The following command attempts to delete an option having the
 option code 5 in the top-level option space from the subnet
-having an identifer of 123.
+having an identifier of 123.
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option4-subnet-del",
@@ -1557,10 +1563,10 @@ option in the database. The structure of the option information is the same as
 in the Kea configuration file (see :ref:`dhcp4-std-options`
 and :ref:`dhcp6-std-options`). The option information is carried in the
 `options` list. Another list, `subnets`, contains a map with the identifier of
-the subnet for which the option is to be set. If such option already exists
+the subnet for which the option is to be set. If such an option already exists
 for the subnet, it is replaced with the new instance.
 
-::
+.. code-block:: json
 
    {
        "command": "remote-option6-subnet-set",
@@ -1599,7 +1605,7 @@ This is the first variant of the commands used to delete an IPv4 or IPv6
 subnet from the database. It uses the subnet ID to identify the subnet. For
 example, to delete the IPv4 subnet with an ID of 5:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-subnet4-del-by-id",
@@ -1628,7 +1634,7 @@ This is the second variant of the commands used to delete an IPv4 or
 IPv6 subnet from the database. It uses the subnet prefix to identify the
 subnet. For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-subnet6-del-by-prefix",
@@ -1657,7 +1663,7 @@ This is the first variant of the commands used to fetch an IPv4 or IPv6
 subnet from the database. It uses a subnet ID to identify the subnet.
 For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-subnet4-get-by-id",
@@ -1686,7 +1692,7 @@ This is the second variant of the commands used to fetch an IPv4 or IPv6
 subnet from the database. It uses a subnet prefix to identify the
 subnet. For example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-subnet6-get-by-prefix",
@@ -1715,7 +1721,7 @@ These commands are used to list all IPv4 or IPv6 subnets from the database for
 selected servers or all servers. The following command retrieves all servers to
 be used by the "server1" and "server2":
 
-::
+.. code-block:: json
 
     {
         "command": "remote-subnet4-list"
@@ -1727,14 +1733,14 @@ be used by the "server1" and "server2":
         }
     }
 
-The `server-tags` parameter is mandatory and it contains one or
-more server tags. It may contain the keyword "all" to fetchg the subnets
+The `server-tags` parameter is mandatory and contains one or
+more server tags. It may contain the keyword "all", to fetch the subnets
 associated with all servers. When the `server-tags` list
-contains the `null` value the returned response contains a list
+contains the `null` value, the returned response contains a list
 of unassigned subnets, i.e. the subnets which are associated with no servers.
 For example:
 
-::
+.. code-block:: json
 
     {
         "command": "remote-subnet4-list"
@@ -1749,7 +1755,7 @@ For example:
 The example response to this command when non-null server tags are specified
 looks similar to this:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -1790,7 +1796,7 @@ the "server1" and "server2".
 
 When listing unassigned subnets, the response will look similar to this:
 
-::
+.. code-block:: json
 
     {
         "result": 0,
@@ -1833,7 +1839,7 @@ shared network.
 
 Consider the following example:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-subnet4-set",
@@ -1866,7 +1872,7 @@ If the created subnet must be global - that is, not associated with any shared
 network - the ``shared-network-name`` must be explicitly set to
 ``null``:
 
-::
+.. code-block:: json
 
    {
        "command": "remote-subnet4-set",
@@ -1906,3 +1912,254 @@ to the database when the keyword "all" is used as the server tag.</para>
    specified for the updated subnet instance. Any unspecified parameter
    will be marked as unspecified in the database, even if its value was
    present prior to sending the command.
+
+.. _command-remote-class4-del:
+
+.. _command-remote-class6-del:
+
+The remote-class4-del, remote-class6-del Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These commands delete a DHCPv4 or DHCPv6 client class by name. If any client
+classes in the database depend on the deleted class, an error is returned in
+response to this command. In this case, to successfully delete the class,
+the dependent client classes must be deleted first. Use the
+``remote-class4-get-all`` command to fetch all client classes and find
+the dependent ones.
+
+.. code-block:: json
+
+    {
+        "command": "remote-class4-del",
+        "arguments": {
+            "client-classes": [
+                {
+                    "name": "foo"
+                }
+            ],
+            "remote": {
+                "type": "mysql"
+            }
+        }
+    }
+
+The `server-tags` parameter must not be used for this command because client
+classes are uniquely identified by name.
+
+.. _command-remote-class4-get:
+
+.. _command-remote-class6-get:
+
+The remote-class4-get, remote-class6-get Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These commands retrieve DHCPv4 or DHCPv6 client class information by a client
+class name.
+
+.. code-block:: json
+
+    {
+        "command": "remote-class4-get",
+        "arguments": {
+            "client-classes": [
+                {
+                    "name": "foo"
+                }
+            ],
+            "remote": {
+                "type": "mysql"
+            }
+        }
+    }
+
+The `server-tags` parameter must not be used for this command because client
+classes are uniquely identified by name.
+
+A response to the command looks similar to this:
+
+.. code-block:: json
+
+    {
+        "result": 0,
+        "text": "DHCPv4 client class 'foo' found.",
+        "arguments": {
+            "client-classes": [
+                {
+                    "name": "foo",
+                    "metadata": {
+                        "server-tags": [ "all" ]
+                    }
+                }
+            ],
+            "count": 1
+        }
+    }
+
+.. _command-remote-class4-get-all:
+
+.. _command-remote-class6-get-all:
+
+The remote-class4-get-all, remote-class6-get-all Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These commands retrieve all DHCPv4 or DHCPv6 client classes for a particular server,
+multiple explicitly listed servers, or all servers. For example, the following
+command retrieves all client classes defined for a server having the server tag
+of `server1` and all servers. In other words, it returns all client classes
+used by that server.
+
+.. code-block:: json
+
+    {
+        "command": "remote-class4-get-all",
+        "arguments": {
+            "remote": {
+                "type": "mysql"
+            },
+            "server-tags": [ "server1" ]
+        }
+    }
+
+The `server-tags` parameter is mandatory and it contains one or more server
+tags. It may contain the keyword "all" to fetch the client classes associated
+with all servers. When the `server-tags` list contains the
+`null` value the returned response contains a list of unassigned client
+classes, i.e. the networks which are associated with no servers.
+
+A response to the command looks similar to this:
+
+.. code-block:: json
+
+    {
+        "result": 0,
+        "text": "2 DHCPv4 client class(es) found.",
+        "arguments": {
+            "client-classes": [
+                {
+                    "name": "foo",
+                    "metadata": {
+                        "server-tags": [ "all" ]
+                    }
+                },
+                {
+                    "name": "bar",
+                    "test": "member('foo')",
+                    "metadata": {
+                        "server-tags": [ "all" ]
+                    }
+                }
+            ],
+            "count": 2
+        }
+    }
+
+
+.. _command-remote-class4-set:
+
+.. _command-remote-class6-set:
+
+The remote-class4-set, remote-class6-set Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+These commands insert a new or replace an existing DHCPv4 or DHCPv6 client class in
+the database. The client class information structure is the same as in the Kea
+configuration file (see :ref:`dhcp4-client-classifier` and
+:ref:`dhcp6-client-classifier` for details).
+
+.. code-block:: json
+
+    {
+        "command": "remote-class4-set",
+        "arguments": {
+            "client-classes": [
+                {
+                    "name": "foo",
+                    "test": "member('KNOWN') or member('bar')",
+                    "option-def": [
+                        {
+                            "name": "configfile",
+                            "code": 224,
+                            "type": "string"
+                        }
+                    ],
+                    "option-data": [
+                        {
+                            "name": "configfile",
+                            "data": "1APC"
+                        }
+                    ]
+                }
+            ],
+            "remote": {
+                "type": "mysql"
+            },
+            "server-tags": [ "all" ]
+        }
+    }
+
+
+Client class ordering rules described in :ref:`classification-using-expressions`
+apply to the classes inserted into the database. It implies that the class `bar`
+referenced in the test expression must exist in the database when issuing the
+above command.
+
+By default, a new client class is inserted at the end of the class hierarchy in
+the database and can reference any class associated with the same server tag or
+with the special server tag `all`. If an existing class is updated, it remains
+at its current position within the class hierarchy.
+
+However, the class commands allow for specifying a position of the inserted
+or updated client class. The optional `follow-class-name` parameter can be
+included in the command to specify the name of the existing class after which
+the managed class should be placed. Suppose there are two DHCPv6 classes in the
+database: `first-class` and `second-class`. To add a new class, `third-class`,
+between these two, use the command similar to the following:
+
+.. code-block:: json
+
+    {
+        "command": "remote-class6-set",
+        "arguments": {
+            "client-classes": [
+                {
+                    "name": "third-class",
+                    "test": "member('first-class')"
+                }
+            ],
+            "follow-class-name": "first-class",
+            "remote": {
+                "type": "mysql"
+            },
+            "server-tags": [ "all" ]
+        }
+    }
+
+Note that the `third-class` can depend on the `first-class` because it is placed
+after the `first-class`. The `third-class` must not depend on the `second-class`
+because it is placed before it. However, the `second-class` could now be updated to
+depend on the `third-class`.
+
+The `follow-class-name` parameter can be explicitly set to `null`, e.g.:
+
+.. code-block:: json
+
+    {
+        "command": "remote-class6-set",
+        "arguments": {
+            "client-classes": [
+                {
+                    "name": "third-class",
+                    "test": "member('first-class')"
+                }
+            ],
+            "follow-class-name": null,
+            "remote": {
+                "type": "mysql"
+            },
+            "server-tags": [ "all" ]
+        }
+    }
+
+It yields the same behavior as if the `follow-class-name` parameter is not included,
+i.e. the new class is appended at the end of the class hierarchy, and the updated
+class remains at the current position.

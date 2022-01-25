@@ -21,10 +21,10 @@ libkea_dhcp_ddns_la_CXXFLAGS = $(AM_CXXFLAGS)
 libkea_dhcp_ddns_la_CPPFLAGS = $(AM_CPPFLAGS)
 libkea_dhcp_ddns_la_LDFLAGS  = $(AM_LDFLAGS)
 libkea_dhcp_ddns_la_LDFLAGS += $(CRYPTO_LDFLAGS)
-libkea_dhcp_ddns_la_LDFLAGS += -no-undefined -version-info 2:0:0
+libkea_dhcp_ddns_la_LDFLAGS += -no-undefined -version-info 18:0:0
 
 libkea_dhcp_ddns_la_LIBADD  =
-libkea_dhcp_ddns_la_LIBADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+libkea_dhcp_ddns_la_LIBADD += $(top_builddir)/src/lib/stats/libkea-stats.la
 libkea_dhcp_ddns_la_LIBADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 libkea_dhcp_ddns_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 libkea_dhcp_ddns_la_LIBADD += $(top_builddir)/src/lib/cc/libkea-cc.la

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,8 +8,11 @@
 
 #include <dhcp_ddns/dhcp_ddns_log.h>
 #include <dhcp_ddns/ncr_udp.h>
+#include <stats/stats_mgr.h>
 
-#include <boost/bind.hpp>
+#include <functional>
+
+namespace ph = std::placeholders;
 
 namespace isc {
 namespace dhcp_ddns {
@@ -19,7 +22,7 @@ UDPCallback::UDPCallback (RawBufferPtr& buffer, const size_t buf_size,
                           UDPEndpointPtr& data_source,
                           const UDPCompletionHandler& handler)
     : handler_(handler), data_(new Data(buffer, buf_size, data_source)) {
-    if (handler.empty()) {
+    if (!handler) {
         isc_throw(NcrUDPError, "UDPCallback - handler can't be null");
     }
 
@@ -72,10 +75,9 @@ NameChangeUDPListener(const isc::asiolink::IOAddress& ip_address,
     // pointer to our completion handler method, receiveCompletionHandler.
     RawBufferPtr buffer(new uint8_t[RECV_BUF_MAX]);
     UDPEndpointPtr data_source(new asiolink::UDPEndpoint());
-    recv_callback_.reset(new
-                         UDPCallback(buffer, RECV_BUF_MAX, data_source,
-                                     boost::bind(&NameChangeUDPListener::
-                                     receiveCompletionHandler, this, _1, _2)));
+    recv_callback_.reset(new UDPCallback(buffer, RECV_BUF_MAX, data_source,
+        std::bind(&NameChangeUDPListener::receiveCompletionHandler,
+                  this, ph::_1, ph::_2)));
 }
 
 NameChangeUDPListener::~NameChangeUDPListener() {
@@ -85,7 +87,7 @@ NameChangeUDPListener::~NameChangeUDPListener() {
 
 void
 NameChangeUDPListener::open(isc::asiolink::IOService& io_service) {
-    // create our endpoint and bind the the low level socket to it.
+    // create our endpoint and bind the low level socket to it.
     isc::asiolink::UDPEndpoint endpoint(ip_address_, port_);
 
     // Create the low level socket.
@@ -102,7 +104,7 @@ NameChangeUDPListener::open(isc::asiolink::IOService& io_service) {
 
         // Bind the low level socket to our endpoint.
         asio_socket_->bind(endpoint.getASIOEndpoint());
-    } catch (boost::system::system_error& ex) {
+    } catch (const boost::system::system_error& ex) {
         asio_socket_.reset();
         isc_throw (NcrUDPError, ex.code().message());
     }
@@ -132,7 +134,7 @@ NameChangeUDPListener::close() {
         if (asio_socket_->is_open()) {
             try {
                 asio_socket_->close();
-            } catch (boost::system::system_error& ex) {
+            } catch (const boost::system::system_error& ex) {
                 // It is really unlikely that this will occur.
                 // If we do reopen later it will be with a new socket
                 // instance. Repackage exception as one that is conformant
@@ -160,9 +162,13 @@ NameChangeUDPListener::receiveCompletionHandler(const bool successful,
 
         try {
             ncr = NameChangeRequest::fromFormat(format_, input_buffer);
+            isc::stats::StatsMgr::instance().addValue("ncr-received",
+                                                      static_cast<int64_t>(1));
         } catch (const NcrMessageError& ex) {
             // log it and go back to listening
             LOG_ERROR(dhcp_ddns_logger, DHCP_DDNS_INVALID_NCR).arg(ex.what());
+            isc::stats::StatsMgr::instance().addValue("ncr-invalid",
+                                                      static_cast<int64_t>(1));
 
             // Queue up the next receive.
             // NOTE: We must call the base class, NEVER doReceive
@@ -180,6 +186,8 @@ NameChangeUDPListener::receiveCompletionHandler(const bool successful,
         } else {
             LOG_ERROR(dhcp_ddns_logger, DHCP_DDNS_NCR_UDP_RECV_ERROR)
                       .arg(error_code.message());
+            isc::stats::StatsMgr::instance().addValue("ncr-error",
+                                                      static_cast<int64_t>(1));
             result = ERROR;
         }
     }
@@ -208,9 +216,8 @@ NameChangeUDPSender(const isc::asiolink::IOAddress& ip_address,
     RawBufferPtr buffer(new uint8_t[SEND_BUF_MAX]);
     UDPEndpointPtr data_source(new asiolink::UDPEndpoint());
     send_callback_.reset(new UDPCallback(buffer, SEND_BUF_MAX, data_source,
-                                         boost::bind(&NameChangeUDPSender::
-                                         sendCompletionHandler, this,
-                                         _1, _2)));
+        std::bind(&NameChangeUDPSender::sendCompletionHandler,
+                  this, ph::_1, ph::_2)));
 }
 
 NameChangeUDPSender::~NameChangeUDPSender() {
@@ -220,7 +227,7 @@ NameChangeUDPSender::~NameChangeUDPSender() {
 
 void
 NameChangeUDPSender::open(isc::asiolink::IOService& io_service) {
-    // create our endpoint and bind the the low level socket to it.
+    // create our endpoint and bind the low level socket to it.
     isc::asiolink::UDPEndpoint endpoint(ip_address_, port_);
 
     // Create the low level socket.
@@ -237,7 +244,7 @@ NameChangeUDPSender::open(isc::asiolink::IOService& io_service) {
 
         // Bind the low level socket to our endpoint.
         asio_socket_->bind(endpoint.getASIOEndpoint());
-    } catch (boost::system::system_error& ex) {
+    } catch (const boost::system::system_error& ex) {
         isc_throw (NcrUDPError, ex.code().message());
     }
 
@@ -265,7 +272,7 @@ NameChangeUDPSender::close() {
         if (asio_socket_->is_open()) {
             try {
                 asio_socket_->close();
-            } catch (boost::system::system_error& ex) {
+            } catch (const boost::system::system_error& ex) {
                 // It is really unlikely that this will occur.
                 // If we do reopen later it will be with a new socket
                 // instance. Repackage exception as one that is conformant
@@ -376,5 +383,5 @@ NameChangeUDPSender::closeWatchSocket() {
     }
 }
 
-}; // end of isc::dhcp_ddns namespace
-}; // end of isc namespace
+} // end of isc::dhcp_ddns namespace
+} // end of isc namespace

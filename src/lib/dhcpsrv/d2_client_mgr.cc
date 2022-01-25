@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,8 +11,7 @@
 #include <dhcpsrv/d2_client_mgr.h>
 #include <dhcpsrv/dhcpsrv_log.h>
 
-#include <boost/bind.hpp>
-
+#include <functional>
 #include <string>
 
 using namespace std;
@@ -187,14 +186,46 @@ D2ClientMgr::qualifyName(const std::string& partial_name,
 
     gen_name << partial_name;
     std::string suffix = ddns_params.getQualifyingSuffix();
+    bool suffix_present = true;
     if (!suffix.empty()) {
         std::string str = gen_name.str();
-        size_t len = str.length();
-        if ((len > 0) && (str[len - 1] != '.')) {
-            gen_name << ".";
+        auto suffix_rit = suffix.rbegin();
+        if (*suffix_rit == '.') {
+            ++suffix_rit;
         }
 
-        gen_name << suffix;
+        auto gen_rit = str.rbegin();
+        if (*gen_rit == '.') {
+            ++gen_rit;
+        }
+
+        while (suffix_rit != suffix.rend()) {
+            if ((gen_rit == str.rend()) || (*suffix_rit != *gen_rit)) {
+                // They don't match.
+                suffix_present = false;
+                break;
+            }
+
+            ++suffix_rit;
+            ++gen_rit;
+        }
+
+        // Catch the case where name has suffix embedded.
+        // input: foo.barexample.com   suffix: example.com
+        if ((suffix_present) && (suffix_rit == suffix.rend())) {
+            if ((gen_rit != str.rend()) && (*gen_rit != '.')) {
+                suffix_present = false;
+            }
+        }
+
+        if (!suffix_present) {
+            size_t len = str.length();
+            if ((len > 0) && (str[len - 1] != '.')) {
+                gen_name << ".";
+            }
+
+            gen_name << suffix;
+        }
     }
 
     std::string str = gen_name.str();
@@ -259,8 +290,8 @@ D2ClientMgr::startSender(D2ClientErrorHandler error_handler,
     // IO error handling in the sender may alter its select-fd.
     registered_select_fd_ = name_change_sender_->getSelectFd();
     IfaceMgr::instance().addExternalSocket(registered_select_fd_,
-                                           boost::bind(&D2ClientMgr::runReadyIO,
-                                                       this));
+                                           std::bind(&D2ClientMgr::runReadyIO,
+                                                     this));
 }
 
 bool

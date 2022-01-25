@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,16 +13,16 @@
 #include <perfdhcp/receiver.h>
 #include <perfdhcp/command_options.h>
 #include <perfdhcp/perf_socket.h>
+#include <perfdhcp/random_number_generator.h>
 
 #include <dhcp/iface_mgr.h>
+#include <dhcp/dhcp4.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/pkt4.h>
 #include <dhcp/pkt6.h>
-#include <util/random/random_number_generator.h>
 
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
-#include <boost/function.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include <string>
@@ -128,7 +128,7 @@ public:
     /// @brief Delay the exit by a fixed given time to catch up to all exchanges
     ///     that were already started.
     /// @return true if need to wait, false = ok to exit now
-    bool waitToExit() const;
+    bool waitToExit();
 
     /// @brief Checks if all expected packets were already received
     bool haveAllPacketsBeenReceived() const;
@@ -269,10 +269,13 @@ public:
 
     /// \brief Send number of DHCPREQUEST (renew) messages to a server.
     ///
+    /// \param msg_type A type of the messages to be sent (DHCPREQUEST or
+    /// DHCPRELEASE).
     /// \param msg_num A number of messages to be sent.
     ///
     /// \return A number of messages actually sent.
-    uint64_t sendMultipleRequests(const uint64_t msg_num);
+    uint64_t sendMultipleMessages4(const uint32_t msg_type,
+                                   const uint64_t msg_num);
 
     /// \brief Send number of DHCPv6 Renew or Release messages to the server.
     ///
@@ -318,13 +321,34 @@ public:
         return unique_address_;
     }
 
+    /// \brief Convert binary value to hex string.
+    ///
+    /// \todo Consider moving this function to src/lib/util.
+    ///
+    /// \param b byte to convert.
+    /// \return hex string.
+    static std::string byte2Hex(const uint8_t b);
+
+    /// \brief Convert vector in hexadecimal string.
+    ///
+    /// \todo Consider moving this function to src/lib/util.
+    ///
+    /// \param vec vector to be converted.
+    /// \param separator separator.
+    static std::string vector2Hex(const std::vector<uint8_t>& vec,
+                                  const std::string& separator = "");
+
+    /// \brief Initialized at first exit condition with the time perfdhcp
+    ///  should exit
+    boost::posix_time::ptime exit_time_;
+
     // We would really like following methods and members to be private but
     // they have to be accessible for unit-testing. Another, possibly better,
     // solution is to make this class friend of test class but this is not
     // what's followed in other classes.
 protected:
     /// Generate uniformly distributed integers in range of [min, max]
-    isc::util::random::UniformRandomIntegerGenerator number_generator_;
+    UniformRandomIntegerGenerator number_generator_;
 
     /// \brief Creates DHCPREQUEST from a DHCPACK message.
     ///
@@ -332,7 +356,8 @@ protected:
     /// create a new message.
     ///
     /// \return Pointer to the created message.
-    dhcp::Pkt4Ptr createRequestFromAck(const dhcp::Pkt4Ptr& ack);
+    dhcp::Pkt4Ptr createMessageFromAck(const uint16_t msg_type,
+                                       const dhcp::Pkt4Ptr& ack);
 
     /// \brief Creates DHCPv6 message from the Reply packet.
     ///
@@ -568,7 +593,7 @@ protected:
     /// Generate list of addresses and check for uniqueness.
     ///
     /// \param pkt6 object representing received DHCPv6 packet
-    /// \param ExhchangeType enum value.
+    /// \param xchg_type ExchangeType enum value.
     void address6Uniqueness(const dhcp::Pkt6Ptr& pkt6, ExchangeType xchg_type);
 
     /// \brief Process received v4 addresses uniqueness.
@@ -576,7 +601,7 @@ protected:
     /// Generate list of addresses and check for uniqueness.
     ///
     /// \param pkt4 object representing received DHCPv4 packet
-    /// \param ExchangeType enum value.
+    /// \param xchg_type ExchangeType enum value.
     void address4Uniqueness(const dhcp::Pkt4Ptr& pkt4, ExchangeType xchg_type);
 
     /// \brief add unique address to already assigned list.
@@ -584,8 +609,8 @@ protected:
     /// Add address and/or prefix to unique set if it's not already there,
     /// otherwise increment the number of non unique addresses.
     ///
-    /// \param std::set set of addresses that should be added to unique list
-    /// \param ExchangeType enum value.
+    /// \param current set of addresses that should be added to unique list
+    /// \param xchg_type ExchangeType enum value.
     void addUniqeAddr(const std::set<std::string>& current, ExchangeType xchg_type) {
         switch(xchg_type) {
             case ExchangeType::SA: {
@@ -610,6 +635,7 @@ protected:
                 }
                 break;
             }
+            case ExchangeType::RLA:
             case ExchangeType::RL: {
                 removeUniqueAddr(current);
                 break;
@@ -648,7 +674,7 @@ protected:
     /// If address is released we should remove it from both
     /// advertised (offered) and assigned sets.
     ///
-    /// \param std::string holding value of unique address.
+    /// \param addr holding value of unique address.
     void removeUniqueAddr(const std::set<std::string>& addr) {
         for (auto addr_it = addr.begin(); addr_it != addr.end(); ++addr_it) {
             auto it = unique_address_.find(*addr_it);
@@ -774,8 +800,11 @@ protected:
 
     /// \brief Send DHCPv4 renew (DHCPREQUEST).
     ///
+    /// \param msg_type A type of the message to be sent (DHCPREQUEST or
+    /// DHCPRELEASE).
+    ///
     /// \return true if the message has been sent, false otherwise.
-    bool sendRequestFromAck();
+    bool sendMessageFromAck(const uint16_t msg_type);
 
     /// \brief Send DHCPv6 Renew or Release message.
     ///
@@ -946,14 +975,6 @@ protected:
     /// is NULL.
     void copyIaOptions(const dhcp::Pkt6Ptr& pkt_from, dhcp::Pkt6Ptr& pkt_to);
 
-    /// \brief Convert binary value to hex string.
-    ///
-    /// \todo Consider moving this function to src/lib/util.
-    ///
-    /// \param b byte to convert.
-    /// \return hex string.
-    std::string byte2Hex(const uint8_t b) const;
-
     /// \brief Calculate elapsed time between two packets.
     ///
     /// This function calculates the time elapsed between two packets. If
@@ -996,15 +1017,6 @@ protected:
     /// one to be used.
     /// \return transaction id offset in packet.
     int getTransactionIdOffset(const int arg_idx) const;
-
-    /// \brief Convert vector in hexadecimal string.
-    ///
-    /// \todo Consider moving this function to src/lib/util.
-    ///
-    /// \param vec vector to be converted.
-    /// \param separator separator.
-    std::string vector2Hex(const std::vector<uint8_t>& vec,
-                           const std::string& separator = "") const;
 
     /// \brief Handle child signal.
     ///

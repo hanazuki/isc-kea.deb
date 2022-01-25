@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 /* Generated files do not make clang static analyser so happy */
 #ifndef __clang_analyzer__
 
+#include <cctype>
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
@@ -85,10 +86,10 @@ JSONString                      \"{JSONStringCharacter}*\"
 
 /* for errors */
 
-BadUnicodeEscapeSequence        u[0-9A-Fa-f]{0,3}[^0-9A-Fa-f]
+BadUnicodeEscapeSequence        u[0-9A-Fa-f]{0,3}[^0-9A-Fa-f"]
 BadJSONEscapeSequence           [^"\\/bfnrtu]|{BadUnicodeEscapeSequence}
 ControlCharacter                [\x00-\x1f]
-ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
+ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
 
 %{
 /* This code run each time a pattern is matched. It updates the location
@@ -137,8 +138,6 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
             return isc::dhcp::Dhcp4Parser::make_SUB_DHCP_DDNS(driver.loc_);
         case Parser4Context::PARSER_CONFIG_CONTROL:
             return isc::dhcp::Dhcp4Parser::make_SUB_CONFIG_CONTROL(driver.loc_);
-        case Parser4Context::PARSER_LOGGING:
-            return isc::dhcp::Dhcp4Parser::make_SUB_LOGGING(driver.loc_);
         }
     }
 %}
@@ -455,6 +454,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::LEASE_DATABASE:
     case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
         return isc::dhcp::Dhcp4Parser::make_PERSIST(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("persist", driver.loc_);
@@ -465,6 +465,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::LEASE_DATABASE:
     case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
         return isc::dhcp::Dhcp4Parser::make_LFC_INTERVAL(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("lfc-interval", driver.loc_);
@@ -523,6 +524,44 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
         return isc::dhcp::Dhcp4Parser::make_RECONNECT_WAIT_TIME(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("reconnect-wait-time", driver.loc_);
+    }
+}
+
+\"on-fail\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_ON_FAIL(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("on-fail", driver.loc_);
+    }
+}
+
+\"stop-retry-exit\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DATABASE_ON_FAIL:
+        return isc::dhcp::Dhcp4Parser::make_STOP_RETRY_EXIT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("stop-retry-exit", driver.loc_);
+    }
+}
+
+\"serve-retry-exit\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DATABASE_ON_FAIL:
+        return isc::dhcp::Dhcp4Parser::make_SERVE_RETRY_EXIT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("serve-retry-exit", driver.loc_);
+    }
+}
+
+\"serve-retry-continue\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DATABASE_ON_FAIL:
+        return isc::dhcp::Dhcp4Parser::make_SERVE_RETRY_CONTINUE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("serve-retry-continue", driver.loc_);
     }
 }
 
@@ -595,6 +634,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     case isc::dhcp::Parser4Context::DHCP4:
     case isc::dhcp::Parser4Context::SUBNET4:
     case isc::dhcp::Parser4Context::SHARED_NETWORK:
+    case isc::dhcp::Parser4Context::CLIENT_CLASSES:
         return isc::dhcp::Dhcp4Parser::make_VALID_LIFETIME(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("valid-lifetime", driver.loc_);
@@ -606,6 +646,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     case isc::dhcp::Parser4Context::DHCP4:
     case isc::dhcp::Parser4Context::SUBNET4:
     case isc::dhcp::Parser4Context::SHARED_NETWORK:
+    case isc::dhcp::Parser4Context::CLIENT_CLASSES:
         return isc::dhcp::Dhcp4Parser::make_MIN_VALID_LIFETIME(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("min-valid-lifetime", driver.loc_);
@@ -617,6 +658,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     case isc::dhcp::Parser4Context::DHCP4:
     case isc::dhcp::Parser4Context::SUBNET4:
     case isc::dhcp::Parser4Context::SHARED_NETWORK:
+    case isc::dhcp::Parser4Context::CLIENT_CLASSES:
         return isc::dhcp::Dhcp4Parser::make_MAX_VALID_LIFETIME(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("max-valid-lifetime", driver.loc_);
@@ -660,6 +702,33 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
         return isc::dhcp::Dhcp4Parser::make_SERVER_TAG(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("server-tag", driver.loc_);
+    }
+}
+
+\"parked-packet-limit\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+        return isc::dhcp::Dhcp4Parser::make_PARKED_PACKET_LIMIT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("parked-packet-limit", driver.loc_);
+    }
+}
+
+\"statistic-default-sample-count\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+        return isc::dhcp::Dhcp4Parser::make_STATISTIC_DEFAULT_SAMPLE_COUNT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("statistic-default-sample-count", driver.loc_);
+    }
+}
+
+\"statistic-default-sample-age\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+        return isc::dhcp::Dhcp4Parser::make_STATISTIC_DEFAULT_SAMPLE_AGE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("statistic-default-sample-age", driver.loc_);
     }
 }
 
@@ -729,6 +798,28 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
+\"ddns-update-on-renew\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_DDNS_UPDATE_ON_RENEW(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("ddns-update-on-renew", driver.loc_);
+    }
+}
+
+\"ddns-use-conflict-resolution\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_DDNS_USE_CONFLICT_RESOLUTION(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("ddns-use-conflict-resolution", driver.loc_);
+    }
+}
+
 \"subnet4\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::DHCP4:
@@ -736,6 +827,17 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
         return isc::dhcp::Dhcp4Parser::make_SUBNET4(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("subnet4", driver.loc_);
+    }
+}
+
+\"store-extended-info\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_STORE_EXTENDED_INFO(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("store-extended-info", driver.loc_);
     }
 }
 
@@ -837,6 +939,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     case isc::dhcp::Parser4Context::CLIENT_CLASSES:
     case isc::dhcp::Parser4Context::CONTROL_SOCKET:
     case isc::dhcp::Parser4Context::DHCP_QUEUE_CONTROL:
+    case isc::dhcp::Parser4Context::DHCP_MULTI_THREADING:
     case isc::dhcp::Parser4Context::LOGGERS:
     case isc::dhcp::Parser4Context::DHCP_DDNS:
         return isc::dhcp::Dhcp4Parser::make_USER_CONTEXT(driver.loc_);
@@ -858,6 +961,7 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     case isc::dhcp::Parser4Context::CLIENT_CLASSES:
     case isc::dhcp::Parser4Context::CONTROL_SOCKET:
     case isc::dhcp::Parser4Context::DHCP_QUEUE_CONTROL:
+    case isc::dhcp::Parser4Context::DHCP_MULTI_THREADING:
     case isc::dhcp::Parser4Context::LOGGERS:
     case isc::dhcp::Parser4Context::DHCP_DDNS:
         return isc::dhcp::Dhcp4Parser::make_COMMENT(driver.loc_);
@@ -950,6 +1054,39 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
+\"reservations-global\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_RESERVATIONS_GLOBAL(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("reservations-global", driver.loc_);
+    }
+}
+
+\"reservations-in-subnet\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_RESERVATIONS_IN_SUBNET(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("reservations-in-subnet", driver.loc_);
+    }
+}
+
+\"reservations-out-of-pool\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_RESERVATIONS_OUT_OF_POOL(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("reservations-out-of-pool", driver.loc_);
+    }
+}
+
 \"code\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::OPTION_DEF:
@@ -1002,20 +1139,32 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
-
-\"Logging\" {
+\"cache-threshold\" {
     switch(driver.ctx_) {
-    case isc::dhcp::Parser4Context::CONFIG:
-        return isc::dhcp::Dhcp4Parser::make_LOGGING(driver.loc_);
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_CACHE_THRESHOLD(driver.loc_);
     default:
-        return isc::dhcp::Dhcp4Parser::make_STRING("Logging", driver.loc_);
+        return isc::dhcp::Dhcp4Parser::make_STRING("cache-threshold", driver.loc_);
     }
 }
+
+\"cache-max-age\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_CACHE_MAX_AGE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("cache-max-age", driver.loc_);
+    }
+}
+
 
 \"loggers\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::DHCP4:
-    case isc::dhcp::Parser4Context::LOGGING:
         return isc::dhcp::Dhcp4Parser::make_LOGGERS(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("loggers", driver.loc_);
@@ -1389,6 +1538,42 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
+\"multi-threading\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+        return isc::dhcp::Dhcp4Parser::make_DHCP_MULTI_THREADING(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("multi-threading", driver.loc_);
+    }
+}
+
+\"enable-multi-threading\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP_MULTI_THREADING:
+        return isc::dhcp::Dhcp4Parser::make_ENABLE_MULTI_THREADING(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("enable-multi-threading", driver.loc_);
+    }
+}
+
+\"thread-pool-size\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP_MULTI_THREADING:
+        return isc::dhcp::Dhcp4Parser::make_THREAD_POOL_SIZE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("thread-pool-size", driver.loc_);
+    }
+}
+
+\"packet-queue-size\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP_MULTI_THREADING:
+        return isc::dhcp::Dhcp4Parser::make_PACKET_QUEUE_SIZE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("packet-queue-size", driver.loc_);
+    }
+}
+
 \"control-socket\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::DHCP4:
@@ -1692,33 +1877,6 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     return isc::dhcp::Dhcp4Parser::make_STRING(tmp, driver.loc_);
 }
 
-\"Dhcp6\"  {
-    switch(driver.ctx_) {
-    case isc::dhcp::Parser4Context::CONFIG:
-        return isc::dhcp::Dhcp4Parser::make_DHCP6(driver.loc_);
-    default:
-        return isc::dhcp::Dhcp4Parser::make_STRING("Dhcp6", driver.loc_);
-    }
-}
-
-\"DhcpDdns\" {
-    switch(driver.ctx_) {
-    case isc::dhcp::Parser4Context::CONFIG:
-        return isc::dhcp::Dhcp4Parser::make_DHCPDDNS(driver.loc_);
-    default:
-        return isc::dhcp::Dhcp4Parser::make_STRING("DhcpDdns", driver.loc_);
-    }
-}
-
-\"Control-agent\" {
-    switch(driver.ctx_) {
-    case isc::dhcp::Parser4Context::CONFIG:
-        return isc::dhcp::Dhcp4Parser::make_CONTROL_AGENT(driver.loc_);
-    default:
-        return isc::dhcp::Dhcp4Parser::make_STRING("Control-agent", driver.loc_);
-    }
-}
-
 \"4o6-interface\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::SUBNET4:
@@ -1816,7 +1974,32 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
+\"ip-reservations-unique\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+        return isc::dhcp::Dhcp4Parser::make_IP_RESERVATIONS_UNIQUE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("ip-reservations-unique", driver.loc_);
+    }
+}
 
+\"compatibility\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+        return  isc::dhcp::Dhcp4Parser::make_COMPATIBILITY(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("compatibility", driver.loc_);
+    }
+}
+
+\"lenient-option-parsing\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::COMPATIBILITY:
+        return isc::dhcp::Dhcp4Parser::make_LENIENT_OPTION_PARSING(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("lenient-option-parsing", driver.loc_);
+    }
+}
 
 {JSONString} {
     /* A string has been matched. It contains the actual string and single quotes.
@@ -1872,7 +2055,9 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
                                  "Overflow unicode escape in \"" + raw + "\"");
                 }
                 if ((raw[pos] != '0') || (raw[pos + 1] != '0')) {
-                    driver.error(driver.loc_, "Unsupported unicode escape in \"" + raw + "\"");
+                    driver.error(driver.loc_,
+                    "Unsupported unicode escape in \"" + raw + "\"",
+                    pos + 1);
                 }
                 pos += 2;
                 c = raw[pos];
@@ -1919,17 +2104,90 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
 
 \"{JSONStringCharacter}*{ControlCharacter}{ControlCharacterFill}*\" {
     /* Bad string with a forbidden control character inside */
-    driver.error(driver.loc_, "Invalid control in " + std::string(yytext));
+    std::string raw(yytext+1);
+    size_t len = raw.size() - 1;
+    size_t pos = 0;
+    for (; pos < len; ++pos) {
+        char c = raw[pos];
+        if ((c >= 0) && (c < 0x20)) {
+            break;
+        }
+    }
+    driver.error(driver.loc_,
+                 "Invalid control in " + std::string(yytext),
+                 pos + 1);
 }
 
-\"{JSONStringCharacter}*\\{BadJSONEscapeSequence}[^\x00-\x1f"]*\" {
+\"{JSONStringCharacter}*\\{BadJSONEscapeSequence}[^"]*\" {
     /* Bad string with a bad escape inside */
-    driver.error(driver.loc_, "Bad escape in " + std::string(yytext));
+    std::string raw(yytext+1);
+    size_t len = raw.size() - 1;
+    size_t pos = 0;
+    bool found = false;
+    for (; pos < len; ++pos) {
+        if (found) {
+            break;
+        }
+        char c = raw[pos];
+        if (c == '\\') {
+            ++pos;
+            c = raw[pos];
+            switch (c) {
+            case '"':
+            case '\\':
+            case '/':
+            case 'b':
+            case 'f':
+            case 'n':
+            case 'r':
+            case 't':
+                break;
+            case 'u':
+                if ((pos + 4 > len) ||
+                    !std::isxdigit(raw[pos + 1]) ||
+                    !std::isxdigit(raw[pos + 2]) ||
+                    !std::isxdigit(raw[pos + 3]) ||
+                    !std::isxdigit(raw[pos + 4])) {
+                    found = true;
+                }
+                break;
+            default:
+                found = true;
+                break;
+            }
+        }
+    }
+    /* The rule stops on the first " including on \" so add ... in this case */
+    std::string trailer = "";
+    if (raw[len - 1] == '\\') {
+        trailer = "...";
+    }
+    driver.error(driver.loc_,
+                 "Bad escape in " + std::string(yytext) + trailer,
+                 pos);
 }
 
 \"{JSONStringCharacter}*\\\" {
     /* Bad string with an open escape at the end */
-    driver.error(driver.loc_, "Overflow escape in " + std::string(yytext));
+    std::string raw(yytext+1);
+    driver.error(driver.loc_,
+                 "Overflow escape in " + std::string(yytext),
+                 raw.size() + 1);
+}
+
+\"{JSONStringCharacter}*\\u[0-9A-Fa-f]{0,3}\" {
+    /* Bad string with an open unicode escape at the end */
+    std::string raw(yytext+1);
+    size_t pos = raw.size() - 1;
+    for (; pos > 0; --pos) {
+        char c = raw[pos];
+        if (c == 'u') {
+            break;
+        }
+    }
+    driver.error(driver.loc_,
+                 "Overflow unicode escape in " + std::string(yytext),
+                 pos + 1);
 }
 
 "["    { return isc::dhcp::Dhcp4Parser::make_LSQUARE_BRACKET(driver.loc_); }

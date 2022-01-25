@@ -1,11 +1,11 @@
 .. _hooks-bootp:
 
-BOOTP support
+BOOTP Support
 =============
 
 .. note::
 
-   This is library is still in experimental phase. Use with care!
+   This library is still in the experimental phase. Use with care!
 
 
 This hooks library adds support for BOOTP with vendor information extensions
@@ -20,13 +20,13 @@ the server's responses and responses shorter than the BOOTP minimum
 size (300 octets) are padded to this size.
 
 The library is available since Kea 1.7.2 and can be loaded in a
-similar way as other hook libraries by the ``kea-dhcp4`` process.
+similar way to other hook libraries by the ``kea-dhcp4`` process.
 It takes no parameter.
 
 ::
 
     "Dhcp4": {
-        "hook_libraries": [
+        "hooks-libraries": [
             {   "library": "/usr/local/lib/libdhcp_bootp.so" },
             ...
         ]
@@ -46,7 +46,7 @@ It takes no parameter.
 .. _hooks-bootp-config:
 
 Incoming BOOTP packets are added to the BOOTP class. This can be used
-to segregate BOOTP clients to separate pool. For example you can do
+to segregate BOOTP clients to separate pools. For example you can do
 the following:
 
 ::
@@ -83,16 +83,10 @@ the following:
 
 .. _hooks-bootp-limitations:
 
-BOOTP Hooks Limitations
-~~~~~~~~~~~~~~~~~~~~~~~
+BOOTP Hooks Limitation
+~~~~~~~~~~~~~~~~~~~~~~
 
-Currently the BOOTP library has the following limitations:
-
-- BOOTP protocol assumes all lease assignments are permanent. Kea does
-  not support infinite leases yet. You may configure arbitrarily long
-  leases (e.g. a year), but after the lease lifetime elapses, Kea will
-  recycle the lease and may assign it to some other device. This
-  limitation will be removed in the near future.
+Currently the BOOTP library has the following limitation:
 
 - A basic BOOTP as defined in `RFC 951
   <https://tools.ietf.org/html/rfc951>`__ is not supported. Kea only

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,9 +6,12 @@
 
 #include <config.h>
 #include <asiolink/io_address.h>
+#include <cc/data.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/option.h>
 #include <dhcpsrv/network.h>
+#include <dhcpsrv/parsers/base_network_parser.h>
+#include <testutils/gtest_utils.h>
 #include <boost/shared_ptr.hpp>
 #include <functional>
 #include <gtest/gtest.h>
@@ -17,6 +20,7 @@ using namespace isc::asiolink;
 using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::util;
+using namespace isc::test;
 
 namespace {
 
@@ -145,26 +149,16 @@ public:
     ElementPtr globals_;
 };
 
-// This test verifies conversions of host reservation mode names to
-// appropriate enum values.
-TEST_F(NetworkTest, hrModeFromString) {
-    EXPECT_EQ(Network::HR_DISABLED, Network::hrModeFromString("off"));
-    EXPECT_EQ(Network::HR_DISABLED, Network::hrModeFromString("disabled"));
-    EXPECT_EQ(Network::HR_OUT_OF_POOL, Network::hrModeFromString("out-of-pool"));
-    EXPECT_EQ(Network::HR_GLOBAL, Network::hrModeFromString("global"));
-    EXPECT_EQ(Network::HR_ALL, Network::hrModeFromString("all"));
-    EXPECT_THROW(Network::hrModeFromString("bogus"), isc::BadValue);
-}
-
 // This test verifies that the inheritance is supported for certain
 // network parameters.
 TEST_F(NetworkTest, inheritanceSupport4) {
     // Set global values for each parameter.
-    globals_->set("interface", Element::create("g"));
     globals_->set("valid-lifetime", Element::create(80));
     globals_->set("renew-timer", Element::create(80));
     globals_->set("rebind-timer", Element::create(80));
-    globals_->set("reservation-mode", Element::create("disabled"));
+    globals_->set("reservations-global", Element::create(false));
+    globals_->set("reservations-in-subnet", Element::create(false));
+    globals_->set("reservations-out-of-pool", Element::create(false));
     globals_->set("calculate-tee-times", Element::create(false));
     globals_->set("t1-percent", Element::create(0.75));
     globals_->set("t2-percent", Element::create(0.6));
@@ -181,15 +175,15 @@ TEST_F(NetworkTest, inheritanceSupport4) {
     globals_->set("ddns-qualifying-suffix", Element::create("gs"));
     globals_->set("hostname-char-set", Element::create("gc"));
     globals_->set("hostname-char-replacement", Element::create("gr"));
+    globals_->set("store-extended-info", Element::create(true));
+    globals_->set("cache-threshold", Element::create(.25));
+    globals_->set("cache-max-age", Element::create(20));
+    globals_->set("ddns-update-on-renew", Element::create(true));
+    globals_->set("ddns-use-conflict-resolution", Element::create(true));
 
     // For each parameter for which inheritance is supported run
     // the test that checks if the values are inherited properly.
 
-    {
-        SCOPED_TRACE("interface");
-        testNetworkInheritance<TestNetwork>(&Network::getIface, &Network::setIface,
-                                            "n", "g");
-    }
     {
         SCOPED_TRACE("client_class");
         testNetworkInheritance<TestNetwork>(&Network::getClientClass,
@@ -212,11 +206,22 @@ TEST_F(NetworkTest, inheritanceSupport4) {
                                             60, 80);
     }
     {
-        SCOPED_TRACE("reservation-mode");
-        testNetworkInheritance<TestNetwork>(&Network::getHostReservationMode,
-                                            &Network::setHostReservationMode,
-                                            Network::HR_OUT_OF_POOL,
-                                            Network::HR_DISABLED);
+        SCOPED_TRACE("reservation-global");
+        testNetworkInheritance<TestNetwork>(&Network::getReservationsGlobal,
+                                            &Network::setReservationsGlobal,
+                                            true, false);
+    }
+    {
+        SCOPED_TRACE("reservation-in-subnet");
+        testNetworkInheritance<TestNetwork>(&Network::getReservationsInSubnet,
+                                            &Network::setReservationsInSubnet,
+                                            true, false);
+    }
+    {
+        SCOPED_TRACE("reservation-out-of-pool");
+        testNetworkInheritance<TestNetwork>(&Network::getReservationsOutOfPool,
+                                            &Network::setReservationsOutOfPool,
+                                            true, false);
     }
     {
         SCOPED_TRACE("calculate-tee-times");
@@ -291,7 +296,7 @@ TEST_F(NetworkTest, inheritanceSupport4) {
         testNetworkInheritance<TestNetwork4>(&Network4::getDdnsReplaceClientNameMode,
                                              &Network4::setDdnsReplaceClientNameMode,
                                              D2ClientConfig::RCM_WHEN_PRESENT,
-                                             D2ClientConfig::RCM_ALWAYS); 
+                                             D2ClientConfig::RCM_ALWAYS);
     }
     {
         SCOPED_TRACE("ddns-generated-prefix");
@@ -317,6 +322,36 @@ TEST_F(NetworkTest, inheritanceSupport4) {
                                              &Network4::setHostnameCharReplacement,
                                              "nr", "gr");
     }
+    {
+        SCOPED_TRACE("store-extended-info");
+        testNetworkInheritance<TestNetwork4>(&Network4::getStoreExtendedInfo,
+                                             &Network4::setStoreExtendedInfo,
+                                             false, true);
+    }
+    {
+        SCOPED_TRACE("cache-threshold");
+        testNetworkInheritance<TestNetwork4>(&Network::getCacheThreshold,
+                                             &Network::setCacheThreshold,
+                                             .1, .25);
+    }
+    {
+        SCOPED_TRACE("cache-max-age");
+        testNetworkInheritance<TestNetwork4>(&Network::getCacheMaxAge,
+                                             &Network::setCacheMaxAge,
+                                             10, 20);
+    }
+    {
+        SCOPED_TRACE("ddns-update-on-renew");
+        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsUpdateOnRenew,
+                                             &Network4::setDdnsUpdateOnRenew,
+                                             false, true);
+    }
+    {
+        SCOPED_TRACE("ddns-use-conflict-resolution");
+        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsUseConflictResolution,
+                                             &Network4::setDdnsUseConflictResolution,
+                                             false, true);
+    }
 }
 
 // This test verifies that the inheritance is supported for DHCPv6
@@ -333,6 +368,9 @@ TEST_F(NetworkTest, inheritanceSupport6) {
     globals_->set("ddns-qualifying-suffix", Element::create("gs"));
     globals_->set("hostname-char-set", Element::create("gc"));
     globals_->set("hostname-char-replacement", Element::create("gr"));
+    globals_->set("store-extended-info", Element::create(true));
+    globals_->set("ddns-update-on-renew", Element::create(true));
+    globals_->set("ddns-use-conflict-resolution", Element::create(true));
 
     // For each parameter for which inheritance is supported run
     // the test that checks if the values are inherited properly.
@@ -351,40 +389,40 @@ TEST_F(NetworkTest, inheritanceSupport6) {
     }
     {
         SCOPED_TRACE("ddns-send-updates");
-        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsSendUpdates,
-                                             &Network4::setDdnsSendUpdates,
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsSendUpdates,
+                                             &Network6::setDdnsSendUpdates,
                                              false, true);
     }
     {
         SCOPED_TRACE("ddns-override-no-update");
-        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsOverrideNoUpdate,
-                                             &Network4::setDdnsOverrideNoUpdate,
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsOverrideNoUpdate,
+                                             &Network6::setDdnsOverrideNoUpdate,
                                              false, true);
     }
     {
         SCOPED_TRACE("ddns-override-client-update");
-        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsOverrideClientUpdate,
-                                             &Network4::setDdnsOverrideClientUpdate,
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsOverrideClientUpdate,
+                                             &Network6::setDdnsOverrideClientUpdate,
                                              false, true);
     }
 
     {
         SCOPED_TRACE("ddns-replace-client-name");
-        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsReplaceClientNameMode,
-                                             &Network4::setDdnsReplaceClientNameMode,
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsReplaceClientNameMode,
+                                             &Network6::setDdnsReplaceClientNameMode,
                                              D2ClientConfig::RCM_WHEN_PRESENT,
-                                             D2ClientConfig::RCM_ALWAYS); 
+                                             D2ClientConfig::RCM_ALWAYS);
     }
     {
         SCOPED_TRACE("ddns-generated-prefix");
-        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsGeneratedPrefix,
-                                             &Network4::setDdnsGeneratedPrefix,
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsGeneratedPrefix,
+                                             &Network6::setDdnsGeneratedPrefix,
                                              "np", "gp");
     }
     {
         SCOPED_TRACE("ddns-qualifying-suffix");
-        testNetworkInheritance<TestNetwork4>(&Network4::getDdnsQualifyingSuffix,
-                                             &Network4::setDdnsQualifyingSuffix,
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsQualifyingSuffix,
+                                             &Network6::setDdnsQualifyingSuffix,
                                              "ns", "gs");
     }
     {
@@ -398,6 +436,24 @@ TEST_F(NetworkTest, inheritanceSupport6) {
         testNetworkInheritance<TestNetwork6>(&Network6::getHostnameCharReplacement,
                                              &Network6::setHostnameCharReplacement,
                                              "nr", "gr");
+    }
+    {
+        SCOPED_TRACE("store-extended-info");
+        testNetworkInheritance<TestNetwork6>(&Network6::getStoreExtendedInfo,
+                                             &Network6::setStoreExtendedInfo,
+                                             false, true);
+    }
+    {
+        SCOPED_TRACE("ddns-update-on-renew");
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsUpdateOnRenew,
+                                             &Network6::setDdnsUpdateOnRenew,
+                                             false, true);
+    }
+    {
+        SCOPED_TRACE("ddns-use-conflict-resolution");
+        testNetworkInheritance<TestNetwork6>(&Network6::getDdnsUseConflictResolution,
+                                             &Network6::setDdnsUseConflictResolution,
+                                             false, true);
     }
 
     // Interface-id requires special type of test.
@@ -444,62 +500,62 @@ TEST_F(NetworkTest, inheritanceSupport6) {
 // parent no global value exists.
 TEST_F(NetworkTest, getPropertyNoParentNoChild) {
     NetworkPtr net_child(new Network());
-    EXPECT_TRUE(net_child->getIface().unspecified());
+    EXPECT_TRUE(net_child->getValid().unspecified());
 }
 
 // Test that child network returns specified value.
 TEST_F(NetworkTest, getPropertyNoParentChild) {
     NetworkPtr net_child(new Network());
-    net_child->setIface("child_iface");
+    net_child->setValid(12345);
 
-    EXPECT_FALSE(net_child->getIface().unspecified());
-    EXPECT_FALSE(net_child->getIface(Network::Inheritance::NONE).unspecified());
-    EXPECT_TRUE(net_child->getIface(Network::Inheritance::PARENT_NETWORK).unspecified());
-    EXPECT_TRUE(net_child->getIface(Network::Inheritance::GLOBAL).unspecified());
+    EXPECT_FALSE(net_child->getValid().unspecified());
+    EXPECT_FALSE(net_child->getValid(Network::Inheritance::NONE).unspecified());
+    EXPECT_TRUE(net_child->getValid(Network::Inheritance::PARENT_NETWORK).unspecified());
+    EXPECT_TRUE(net_child->getValid(Network::Inheritance::GLOBAL).unspecified());
 
-    EXPECT_EQ("child_iface", net_child->getIface(Network::Inheritance::NONE).get());
-    EXPECT_EQ("child_iface", net_child->getIface().get());
+    EXPECT_EQ(12345, net_child->getValid(Network::Inheritance::NONE).get());
+    EXPECT_EQ(12345, net_child->getValid().get());
 }
 
 // Test that parent specific value is returned when the value
 // is not specified for the child network.
 TEST_F(NetworkTest, getPropertyParentNoChild) {
     TestNetworkPtr net_child(new TestNetwork());
-    EXPECT_TRUE(net_child->getIface().unspecified());
+    EXPECT_TRUE(net_child->getValid().unspecified());
 
     TestNetworkPtr net_parent(new TestNetwork());
-    net_parent->setIface("parent_iface");
-    EXPECT_EQ("parent_iface", net_parent->getIface().get());
+    net_parent->setValid(23456);
+    EXPECT_EQ(23456, net_parent->getValid().get());
 
     ASSERT_NO_THROW(net_child->setParent(net_parent));
 
-    EXPECT_FALSE(net_child->getIface().unspecified());
-    EXPECT_TRUE(net_child->getIface(Network::Inheritance::NONE).unspecified());
-    EXPECT_FALSE(net_child->getIface(Network::Inheritance::PARENT_NETWORK).unspecified());
-    EXPECT_TRUE(net_child->getIface(Network::Inheritance::GLOBAL).unspecified());
+    EXPECT_FALSE(net_child->getValid().unspecified());
+    EXPECT_TRUE(net_child->getValid(Network::Inheritance::NONE).unspecified());
+    EXPECT_FALSE(net_child->getValid(Network::Inheritance::PARENT_NETWORK).unspecified());
+    EXPECT_TRUE(net_child->getValid(Network::Inheritance::GLOBAL).unspecified());
 
-    EXPECT_EQ("parent_iface", net_child->getIface().get());
+    EXPECT_EQ(23456, net_child->getValid().get());
 }
 
 // Test that value specified for the child network takes
 // precedence over the value specified for the parent network.
 TEST_F(NetworkTest, getPropertyParentChild) {
     TestNetworkPtr net_child(new TestNetwork());
-    net_child->setIface("child_iface");
-    EXPECT_EQ("child_iface", net_child->getIface().get());
+    net_child->setValid(12345);
+    EXPECT_EQ(12345, net_child->getValid().get());
 
     TestNetworkPtr net_parent(new TestNetwork());
-    net_parent->setIface("parent_iface");
-    EXPECT_EQ("parent_iface", net_parent->getIface().get());
+    net_parent->setValid(23456);
+    EXPECT_EQ(23456, net_parent->getValid().get());
 
     ASSERT_NO_THROW(net_child->setParent(net_parent));
 
-    EXPECT_FALSE(net_child->getIface().unspecified());
-    EXPECT_FALSE(net_child->getIface(Network::Inheritance::NONE).unspecified());
-    EXPECT_FALSE(net_child->getIface(Network::Inheritance::PARENT_NETWORK).unspecified());
-    EXPECT_TRUE(net_child->getIface(Network::Inheritance::GLOBAL).unspecified());
+    EXPECT_FALSE(net_child->getValid().unspecified());
+    EXPECT_FALSE(net_child->getValid(Network::Inheritance::NONE).unspecified());
+    EXPECT_FALSE(net_child->getValid(Network::Inheritance::PARENT_NETWORK).unspecified());
+    EXPECT_TRUE(net_child->getValid(Network::Inheritance::GLOBAL).unspecified());
 
-    EXPECT_EQ("child_iface", net_child->getIface().get());
+    EXPECT_EQ(12345, net_child->getValid().get());
 }
 
 // Test that global value is inherited if there is no network
@@ -507,16 +563,16 @@ TEST_F(NetworkTest, getPropertyParentChild) {
 TEST_F(NetworkTest, getPropertyGlobalNoParentNoChild) {
     TestNetworkPtr net_child(new TestNetwork());
 
-    globals_->set("interface", Element::create("global_iface"));
+    globals_->set("valid-lifetime", Element::create(34567));
 
     net_child->setFetchGlobalsFn(getFetchGlobalsFn());
 
-    EXPECT_FALSE(net_child->getIface().unspecified());
-    EXPECT_TRUE(net_child->getIface(Network::Inheritance::NONE).unspecified());
-    EXPECT_TRUE(net_child->getIface(Network::Inheritance::PARENT_NETWORK).unspecified());
-    EXPECT_FALSE(net_child->getIface(Network::Inheritance::GLOBAL).unspecified());
+    EXPECT_FALSE(net_child->getValid().unspecified());
+    EXPECT_TRUE(net_child->getValid(Network::Inheritance::NONE).unspecified());
+    EXPECT_TRUE(net_child->getValid(Network::Inheritance::PARENT_NETWORK).unspecified());
+    EXPECT_FALSE(net_child->getValid(Network::Inheritance::GLOBAL).unspecified());
 
-    EXPECT_EQ("global_iface", net_child->getIface().get());
+    EXPECT_EQ(34567, net_child->getValid().get());
 }
 
 // Test that getSiaddr() never fails.
@@ -532,6 +588,196 @@ TEST_F(NetworkTest, getSiaddrNeverFail) {
     // Get an IPv4 view of the test network.
     auto net4_child = boost::dynamic_pointer_cast<Network4>(net_child);
     EXPECT_NO_THROW(net4_child->getSiaddr());
+}
+
+/// @brief Test fixture class for testing @c moveReservationMode.
+class NetworkReservationTest : public ::testing::Test {
+public:
+
+    /// @brief Move test error case.
+    ///
+    /// Error cases of @ref BaseNetworkParser::moveReservationMode.
+    ///
+    /// @param config String with the config to test.
+    /// @param expected String with the expected error message.
+    void TestError(const std::string& config, const std::string& expected) {
+        ElementPtr cfg;
+        ASSERT_NO_THROW(cfg = Element::fromJSON(config))
+            << "bad config, test broken";
+
+        ElementPtr copy = isc::data::copy(cfg);
+
+        EXPECT_THROW_MSG(BaseNetworkParser::moveReservationMode(cfg),
+                         DhcpConfigError, expected);
+
+        ASSERT_TRUE(copy->equals(*cfg));
+    }
+
+    /// @brief Move test case.
+    ///
+    /// Test cases of @ref BaseNetworkParser::moveReservationMode.
+    ///
+    /// @param config String with the config to test.
+    /// @param expected String with the config after move.
+    void TestMove(const std::string& config, const std::string& expected) {
+        ElementPtr cfg;
+        ASSERT_NO_THROW(cfg = Element::fromJSON(config))
+            << "bad config, test broken";
+
+        EXPECT_NO_THROW(BaseNetworkParser::moveReservationMode(cfg));
+
+        EXPECT_EQ(expected, cfg->str());
+    }
+};
+
+/// @brief Test @ref BaseNetworkParser::moveReservationMode error cases.
+TEST_F(NetworkReservationTest, errors) {
+    // Conflicts.
+    std::string config = "{\n"
+        "\"reservation-mode\": \"all\",\n"
+        "\"reservations-global\": true\n"
+        "}";
+    std::string expected = "invalid use of both 'reservation-mode'"
+        " and one of 'reservations-global', 'reservations-in-subnet'"
+        " or 'reservations-out-of-pool' parameters";
+    TestError(config, expected);
+
+    config = "{\n"
+        "\"reservation-mode\": \"all\",\n"
+        "\"reservations-in-subnet\": true\n"
+        "}";
+    TestError(config, expected);
+
+    config = "{\n"
+        "\"reservation-mode\": \"all\",\n"
+        "\"reservations-out-of-pool\": false\n"
+        "}";
+    TestError(config, expected);
+
+    // Unknown mode.
+    config = "{\n"
+        "\"reservation-mode\": \"foo\"\n"
+        "}";
+    expected = "invalid reservation-mode parameter: 'foo' (<string>:2:21)";
+    TestError(config, expected);
+}
+
+/// @brief Test @ref BaseNetworkParser::moveReservationMode.
+TEST_F(NetworkReservationTest, move) {
+    // No-ops.
+    std::string config = "{\n"
+        "}";
+    std::string expected = "{ "
+        " }";
+    TestMove(config, expected);
+
+    config = "{\n"
+        "\"reservations-global\": true\n"
+        "}";
+    expected = "{"
+        " \"reservations-global\": true"
+        " }";
+    TestMove(config, expected);
+
+    // Disabled.
+    config = "{\n"
+        "\"reservation-mode\": \"disabled\"\n"
+        "}";
+    expected = "{"
+        " \"reservations-global\": false,"
+        " \"reservations-in-subnet\": false"
+        " }";
+    TestMove(config, expected);
+
+    config = "{\n"
+        "\"reservation-mode\": \"off\"\n"
+        "}";
+    TestMove(config, expected);
+
+    // Out-of-pool.
+    config = "{\n"
+        "\"reservation-mode\": \"out-of-pool\"\n"
+        "}";
+    expected = "{"
+        " \"reservations-global\": false,"
+        " \"reservations-in-subnet\": true,"
+        " \"reservations-out-of-pool\": true"
+        " }";
+    TestMove(config, expected);
+
+    // Global.
+    config = "{\n"
+        "\"reservation-mode\": \"global\"\n"
+        "}";
+    expected = "{"
+        " \"reservations-global\": true,"
+        " \"reservations-in-subnet\": false"
+        " }";
+    TestMove(config, expected);
+
+    // All.
+    config = "{\n"
+        "\"reservation-mode\": \"all\"\n"
+        "}";
+    expected = "{"
+        " \"reservations-global\": false,"
+        " \"reservations-in-subnet\": true,"
+        " \"reservations-out-of-pool\": false"
+        " }";
+    TestMove(config, expected);
+
+    config = "{\n"
+        "\"foobar\": 1234,\n"
+        "\"reservation-mode\": \"all\"\n"
+        "}";
+    expected = "{"
+        " \"foobar\": 1234,"
+        " \"reservations-global\": false,"
+        " \"reservations-in-subnet\": true,"
+        " \"reservations-out-of-pool\": false"
+        " }";
+    TestMove(config, expected);
+}
+
+// This test verifies that the inheritance is supported for triplets.
+// Note that triplets have no comparison operator.
+TEST_F(NetworkTest, inheritanceTriplet) {
+    NetworkPtr net(new Network());
+    EXPECT_TRUE(net->getValid().unspecified());
+    EXPECT_TRUE(net->getValid(Network::Inheritance::ALL).unspecified());
+    EXPECT_TRUE(net->getValid(Network::Inheritance::GLOBAL).unspecified());
+
+    // Set valid lifetime global parameter.
+    globals_->set("valid-lifetime", Element::create(200));
+    net->setFetchGlobalsFn(getFetchGlobalsFn());
+    EXPECT_FALSE(net->getValid().unspecified());
+    EXPECT_FALSE(net->getValid(Network::Inheritance::ALL).unspecified());
+    EXPECT_FALSE(net->getValid(Network::Inheritance::GLOBAL).unspecified());
+    EXPECT_EQ(200, net->getValid().get());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::ALL).get());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::GLOBAL).get());
+    EXPECT_EQ(200, net->getValid().getMin());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::ALL).getMin());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::GLOBAL).getMin());
+    EXPECT_EQ(200, net->getValid().getMax());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::ALL).getMax());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::GLOBAL).getMax());
+
+    // Set all valid lifetime global parameters.
+    globals_->set("min-valid-lifetime", Element::create(100));
+    globals_->set("max-valid-lifetime", Element::create(300));
+    EXPECT_FALSE(net->getValid().unspecified());
+    EXPECT_FALSE(net->getValid(Network::Inheritance::ALL).unspecified());
+    EXPECT_FALSE(net->getValid(Network::Inheritance::GLOBAL).unspecified());
+    EXPECT_EQ(200, net->getValid().get());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::ALL).get());
+    EXPECT_EQ(200, net->getValid(Network::Inheritance::GLOBAL).get());
+    EXPECT_EQ(100, net->getValid().getMin());
+    EXPECT_EQ(100, net->getValid(Network::Inheritance::ALL).getMin());
+    EXPECT_EQ(100, net->getValid(Network::Inheritance::GLOBAL).getMin());
+    EXPECT_EQ(300, net->getValid().getMax());
+    EXPECT_EQ(300, net->getValid(Network::Inheritance::ALL).getMax());
+    EXPECT_EQ(300, net->getValid(Network::Inheritance::GLOBAL).getMax());
 }
 
 }

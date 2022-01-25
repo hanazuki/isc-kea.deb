@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #include <config.h>
 #include <exceptions/exceptions.h>
 #include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/parsers/base_network_parser.h>
 #include <dhcpsrv/parsers/simple_parser4.h>
 #include <dhcpsrv/srv_config.h>
 #include <dhcpsrv/lease_mgr_factory.h>
@@ -16,7 +17,10 @@
 #include <log/logger_manager.h>
 #include <log/logger_specification.h>
 #include <dhcp/pkt.h> // Needed for HWADDR_SOURCE_*
+#include <stats/stats_mgr.h>
 #include <util/strutil.h>
+
+#include <boost/make_shared.hpp>
 
 #include <list>
 #include <sstream>
@@ -41,11 +45,10 @@ SrvConfig::SrvConfig()
       cfg_host_operations6_(CfgHostOperations::createConfig6()),
       class_dictionary_(new ClientClassDictionary()),
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
-      server_threads_(0),
-      server_max_thread_queue_size_(0),
       d2_client_config_(new D2ClientConfig()),
       configured_globals_(Element::createMap()),
-      cfg_consist_(new CfgConsistency()) {
+      cfg_consist_(new CfgConsistency()),
+      lenient_option_parsing_(false) {
 }
 
 SrvConfig::SrvConfig(const uint32_t sequence)
@@ -61,11 +64,10 @@ SrvConfig::SrvConfig(const uint32_t sequence)
       cfg_host_operations6_(CfgHostOperations::createConfig6()),
       class_dictionary_(new ClientClassDictionary()),
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
-      server_threads_(0),
-      server_max_thread_queue_size_(0),
       d2_client_config_(new D2ClientConfig()),
       configured_globals_(Element::createMap()),
-      cfg_consist_(new CfgConsistency()) {
+      cfg_consist_(new CfgConsistency()),
+      lenient_option_parsing_(false) {
 }
 
 std::string
@@ -183,6 +185,15 @@ SrvConfig::merge(ConfigBase& other) {
         // Merge options.
         cfg_option_->merge(cfg_option_def_, (*other_srv_config.getCfgOption()));
 
+        if (!other_srv_config.getClientClassDictionary()->empty()) {
+            // Client classes are complicated because they are ordered and may
+            // depend on each other. Merging two lists of classes with preserving
+            // the order would be very involved and could result in errors. Thus,
+            // we simply replace the current list of classes with a new list.
+            setClientClassDictionary(boost::make_shared
+                                     <ClientClassDictionary>(*other_srv_config.getClientClassDictionary()));
+        }
+
         if (CfgMgr::instance().getFamily() == AF_INET) {
             merge4(other_srv_config);
         } else {
@@ -221,39 +232,49 @@ SrvConfig::merge6(SrvConfig& other) {
 
 void
 SrvConfig::mergeGlobals(SrvConfig& other) {
+    auto config_set = getConfiguredGlobals();
+    ElementPtr mutable_cfg = boost::const_pointer_cast<Element>(config_set);
+    // If the deprecated reservation-mode is found in database, overwrite other
+    // reservation flags so there is no conflict when merging to new flags.
+    if (other.getConfiguredGlobals()->find("reservation-mode")) {
+        mutable_cfg->remove("reservations-global");
+        mutable_cfg->remove("reservations-in-subnet");
+        mutable_cfg->remove("reservations-out-of-pool");
+    }
     // Iterate over the "other" globals, adding/overwriting them into
     // this config's list of globals.
     for (auto other_global : other.getConfiguredGlobals()->mapValue()) {
         addConfiguredGlobal(other_global.first, other_global.second);
     }
 
+    // Merge the reservation-mode to new reservation flags.
+    BaseNetworkParser::moveReservationMode(mutable_cfg);
+
     // A handful of values are stored as members in SrvConfig. So we'll
-    // iterate over the merged globals, setting approprate members.
-    for (auto merged_global : getConfiguredGlobals()->mapValue()) {
+    // iterate over the merged globals, setting appropriate members.
+    for (auto merged_global : config_set->mapValue()) {
         std::string name = merged_global.first;
         ConstElementPtr element = merged_global.second;
         try {
             if (name == "decline-probation-period") {
                 setDeclinePeriod(element->intValue());
-            }
-            else if (name == "echo-client-id") {
+            } else if (name == "echo-client-id") {
                 // echo-client-id is v4 only, but we'll let upstream
                 // worry about that.
                 setEchoClientId(element->boolValue());
-            }
-            else if (name == "dhcp4o6-port") {
+            } else if (name == "dhcp4o6-port") {
                 setDhcp4o6Port(element->intValue());
-            }
-            else if (name == "server-tag") {
+            } else if (name == "server-tag") {
                 setServerTag(element->stringValue());
+            } else if (name == "ip-reservations-unique") {
+                setIPReservationsUnique(element->boolValue());
             }
         } catch(const std::exception& ex) {
             isc_throw (BadValue, "Invalid value:" << element->str()
-                       << " explict global:" << name);
+                       << " explicit global:" << name);
         }
     }
 }
-
 
 void
 SrvConfig::removeStatistics() {
@@ -265,6 +286,29 @@ SrvConfig::removeStatistics() {
 
 void
 SrvConfig::updateStatistics() {
+    // Update default sample limits.
+    stats::StatsMgr& stats_mgr = stats::StatsMgr::instance();
+    ConstElementPtr samples =
+        getConfiguredGlobal("statistic-default-sample-count");
+    uint32_t max_samples = 0;
+    if (samples) {
+        max_samples = samples->intValue();
+        stats_mgr.setMaxSampleCountDefault(max_samples);
+        if (max_samples != 0) {
+            stats_mgr.setMaxSampleCountAll(max_samples);
+        }
+    }
+    ConstElementPtr duration =
+        getConfiguredGlobal("statistic-default-sample-age");
+    if (duration) {
+        int64_t time_duration = duration->intValue();
+        auto max_age = std::chrono::seconds(time_duration);
+        stats_mgr.setMaxSampleAgeDefault(max_age);
+        if (max_samples == 0) {
+            stats_mgr.setMaxSampleAgeAll(max_age);
+        }
+    }
+
     // Updating subnet statistics involves updating lease statistics, which
     // is done by the LeaseMgr.  Since servers with subnets, must have a
     // LeaseMgr, we do not bother updating subnet stats for servers without
@@ -379,6 +423,195 @@ SrvConfig::extractConfiguredGlobals(isc::data::ConstElementPtr config) {
     }
 }
 
+void
+SrvConfig::sanityChecksLifetime(const std::string& name) const {
+    // Initialize as some compilers complain otherwise.
+    uint32_t value = 0;
+    ConstElementPtr has_value = getConfiguredGlobal(name);
+    if (has_value) {
+        value = has_value->intValue();
+    }
+
+    uint32_t min_value = 0;
+    ConstElementPtr has_min = getConfiguredGlobal("min-" + name);
+    if (has_min) {
+        min_value = has_min->intValue();
+    }
+
+    uint32_t max_value = 0;
+    ConstElementPtr has_max = getConfiguredGlobal("max-" + name);
+    if (has_max) {
+        max_value = has_max->intValue();
+    }
+
+    if (!has_value && !has_min && !has_max) {
+        return;
+    }
+    if (has_value) {
+        if (!has_min && !has_max) {
+            // default only.
+            return;
+        } else if (!has_min) {
+            // default and max.
+            min_value = value;
+        } else if (!has_max) {
+            // default and min.
+            max_value = value;
+        }
+    } else if (has_min) {
+        if (!has_max) {
+            // min only.
+            return;
+        } else {
+            // min and max.
+            isc_throw(BadValue, "have min-" << name << " and max-"
+                      << name << " but no " << name << " (default)");
+        }
+    } else {
+        // max only.
+        return;
+    }
+
+    // Check that min <= max.
+    if (min_value > max_value) {
+        if (has_min && has_max) {
+            isc_throw(BadValue, "the value of min-" << name << " ("
+                      << min_value << ") is not less than max-" << name << " ("
+                      << max_value << ")");
+        } else if (has_min) {
+            // Only min and default so min > default.
+            isc_throw(BadValue, "the value of min-" << name << " ("
+                      << min_value << ") is not less than (default) " << name
+                      << " (" << value << ")");
+        } else {
+            // Only default and max so default > max.
+            isc_throw(BadValue, "the value of (default) " << name
+                      << " (" << value << ") is not less than max-" << name
+                      << " (" << max_value << ")");
+        }
+    }
+
+    // Check that value is between min and max.
+    if ((value < min_value) || (value > max_value)) {
+        isc_throw(BadValue, "the value of (default) " << name << " ("
+                  << value << ") is not between min-" << name << " ("
+                  << min_value << ") and max-" << name << " ("
+                  << max_value << ")");
+    }
+}
+
+void
+SrvConfig::sanityChecksLifetime(const SrvConfig& target_config,
+                                const std::string& name) const {
+    // Three cases:
+    //  - the external/source config has the parameter: use it.
+    //  - only the target config has the parameter: use this one.
+    //  - no config has the parameter.
+    uint32_t value = 0;
+    ConstElementPtr has_value = getConfiguredGlobal(name);
+    bool new_value = true;
+    if (!has_value) {
+        has_value = target_config.getConfiguredGlobal(name);
+        new_value = false;
+    }
+    if (has_value) {
+        value = has_value->intValue();
+    }
+
+    uint32_t min_value = 0;
+    ConstElementPtr has_min = getConfiguredGlobal("min-" + name);
+    bool new_min = true;
+    if (!has_min) {
+        has_min = target_config.getConfiguredGlobal("min-" + name);
+        new_min = false;
+    }
+    if (has_min) {
+        min_value = has_min->intValue();
+    }
+
+    uint32_t max_value = 0;
+    ConstElementPtr has_max = getConfiguredGlobal("max-" + name);
+    bool new_max = true;
+    if (!has_max) {
+        has_max = target_config.getConfiguredGlobal("max-" + name);
+        new_max = false;
+    }
+    if (has_max) {
+        max_value = has_max->intValue();
+    }
+
+    if (!has_value && !has_min && !has_max) {
+        return;
+    }
+    if (has_value) {
+        if (!has_min && !has_max) {
+            // default only.
+            return;
+        } else if (!has_min) {
+            // default and max.
+            min_value = value;
+        } else if (!has_max) {
+            // default and min.
+            max_value = value;
+        }
+    } else if (has_min) {
+        if (!has_max) {
+            // min only.
+            return;
+        } else {
+            // min and max.
+            isc_throw(BadValue, "have min-" << name << " and max-"
+                      << name << " but no " << name << " (default)");
+        }
+    } else {
+        // max only.
+        return;
+    }
+
+    // Check that min <= max.
+    if (min_value > max_value) {
+        if (has_min && has_max) {
+            std::string from_min = (new_min ? "new" : "previous");
+            std::string from_max = (new_max ? "new" : "previous");
+            isc_throw(BadValue, "the value of " << from_min
+                      << " min-" << name << " ("
+                      << min_value << ") is not less than "
+                      << from_max << " max-" << name
+                      << " (" << max_value << ")");
+        } else if (has_min) {
+            // Only min and default so min > default.
+            std::string from_min = (new_min ? "new" : "previous");
+            std::string from_value = (new_value ? "new" : "previous");
+            isc_throw(BadValue, "the value of " << from_min
+                      << " min-" << name << " ("
+                      << min_value << ") is not less than " << from_value
+                      << " (default) " << name
+                      << " (" << value << ")");
+        } else {
+            // Only default and max so default > max.
+            std::string from_max = (new_max ? "new" : "previous");
+            std::string from_value = (new_value ? "new" : "previous");
+            isc_throw(BadValue, "the value of " << from_value
+                      << " (default) " << name
+                      << " (" << value << ") is not less than " << from_max
+                      << " max-" << name << " (" << max_value << ")");
+        }
+    }
+
+    // Check that value is between min and max.
+    if ((value < min_value) || (value > max_value)) {
+        std::string from_value = (new_value ? "new" : "previous");
+        std::string from_min = (new_min ? "new" : "previous");
+        std::string from_max = (new_max ? "new" : "previous");
+        isc_throw(BadValue, "the value of " << from_value
+                  <<" (default) " << name << " ("
+                  << value << ") is not between " << from_min
+                  << " min-" << name << " (" << min_value
+                  << ") and " << from_max << " max-"
+                  << name << " (" << max_value << ")");
+    }
+}
+
 ElementPtr
 SrvConfig::toElement() const {
     // Toplevel map
@@ -414,7 +647,6 @@ SrvConfig::toElement() const {
     // Set dhcp4o6-port
     dhcp->set("dhcp4o6-port",
               Element::create(static_cast<int>(dhcp4o6_port_)));
-
     // Set dhcp-ddns
     dhcp->set("dhcp-ddns", d2_client_config_->toElement());
     // Set interfaces-config
@@ -591,12 +823,18 @@ SrvConfig::toElement() const {
         dhcp->set("dhcp-queue-control", dhcp_queue_control);
     }
 
+    // Set multi-threading (if it exists)
+    data::ConstElementPtr dhcp_multi_threading = getDHCPMultiThreading();
+    if (dhcp_multi_threading) {
+        dhcp->set("multi-threading", dhcp_multi_threading);
+    }
+
     return (result);
 }
 
 DdnsParamsPtr
 SrvConfig::getDdnsParams(const Subnet4Ptr& subnet) const {
-    return (DdnsParamsPtr(new DdnsParams(subnet, 
+    return (DdnsParamsPtr(new DdnsParams(subnet,
                                          getD2ClientConfig()->getEnableUpdates())));
 }
 
@@ -656,6 +894,20 @@ SrvConfig::moveDdnsParams(isc::data::ElementPtr srv_elem) {
     }
 }
 
+void
+SrvConfig::setIPReservationsUnique(const bool unique) {
+    if (!getCfgDbAccess()->getIPReservationsUnique() && unique) {
+        LOG_WARN(dhcpsrv_logger, DHCPSRV_CFGMGR_IP_RESERVATIONS_UNIQUE_DUPLICATES_POSSIBLE);
+    }
+    getCfgHosts()->setIPReservationsUnique(unique);
+    getCfgDbAccess()->setIPReservationsUnique(unique);
+}
+
+void
+SrvConfig::configureLowerLevelLibraries() const {
+    Option::lenient_parsing_ = lenient_option_parsing_;
+}
+
 bool
 DdnsParams::getEnableUpdates() const {
     if (!subnet_) {
@@ -673,6 +925,7 @@ DdnsParams::getOverrideNoUpdate() const {
 
     return (subnet_->getDdnsOverrideNoUpdate().get());
 }
+
 bool DdnsParams::getOverrideClientUpdate() const {
     if (!subnet_) {
         return (false);
@@ -743,6 +996,24 @@ DdnsParams::getHostnameSanitizer() const {
     }
 
     return (sanitizer);
+}
+
+bool
+DdnsParams::getUpdateOnRenew() const {
+    if (!subnet_) {
+        return (false);
+    }
+
+    return (subnet_->getDdnsUpdateOnRenew().get());
+}
+
+bool
+DdnsParams::getUseConflictResolution() const {
+    if (!subnet_) {
+        return (true);
+    }
+
+    return (subnet_->getDdnsUseConflictResolution().get());
 }
 
 } // namespace dhcp

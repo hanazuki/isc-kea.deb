@@ -15,7 +15,7 @@ dnl If you pass --disable-rpath to configure, ISC_RPATH_FLAG is not set
 AC_DEFUN([AX_ISC_RPATH], [
 
 AC_ARG_ENABLE(rpath,
-    [AC_HELP_STRING([--disable-rpath], [don't hardcode library path into binaries])],
+    [AS_HELP_STRING([--disable-rpath],[don't hardcode library path into binaries])],
     rpath=$enableval, rpath=yes)
 
 if test x$rpath != xno; then
@@ -33,25 +33,29 @@ if test x$rpath != xno; then
 
     # check -Wl,-R and -R rather than gcc specific -rpath to be as portable
     # as possible.  -Wl,-R seems to be safer, so we try it first.  In some
-    # cases -R is not actually recognized but AC_TRY_LINK doesn't fail due to
-    # that.
+    # cases -R is not actually recognized but AC_LINK_IFELSE doesn't fail due
+    # to that.
     AC_MSG_CHECKING([whether -Wl,-R flag is available in linker])
-    AC_TRY_LINK([],[],
-        [ AC_MSG_RESULT(yes)
+    AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+        [AC_MSG_RESULT(yes)
             ISC_RPATH_FLAG=-Wl,-R
-        ],[ AC_MSG_RESULT(no)
+        ],
+        [AC_MSG_RESULT(no)
             AC_MSG_CHECKING([whether -R flag is available in linker])
 
-	    # Apple clang 5.1 is now considers unknown parameters passed to linker (ld) as errors.
-	    # However, the same unknown parameters passed to compiler (g++ ) are merely threated
-	    # as warnings. To make sure that we pick those up, is to use -Werror.
+            # Apple clang 5.1 is now considers unknown parameters
+            # passed to linker (ld) as errors.  However, the same
+            # unknown parameters passed to compiler (g++) are merely
+            # treated as warnings. To make sure that we pick those
+            # up, is to use -Werror.
             CXXFLAGS="$CXXFLAGS_SAVED -R/usr/lib"
             CCFLAGS="$CCFLAGS_SAVED -R/usr/lib"
-        AC_TRY_LINK([], [],
-            [ AC_MSG_RESULT([yes; note that -R is more sensitive about the position in option arguments])
-                ISC_RPATH_FLAG=-R
-            ],[ AC_MSG_RESULT(no) ])
-        ])
+            AC_LINK_IFELSE([AC_LANG_PROGRAM([[]], [[]])],
+                [AC_MSG_RESULT([yes; note that -R is more sensitive about the position in option arguments])
+                    ISC_RPATH_FLAG=-R],
+                [AC_MSG_RESULT(no)])
+        ]
+    )
 
     CXXFLAGS=$CXXFLAGS_SAVED
     CCFLAGS=$CCFLAGS_SAVED

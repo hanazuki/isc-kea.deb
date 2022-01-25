@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,14 +6,16 @@
 
 #include <config.h>
 
-#include <iostream>
-#include <iomanip>
-#include <algorithm>
 
+#include <algorithm>
+#include <cstring>
+#include <iomanip>
+#include <iostream>
 #include <stdarg.h>
 #include <stdio.h>
-#include <cstring>
 #include <sstream>
+
+#include <boost/make_shared.hpp>
 #include <boost/lexical_cast.hpp>
 #include <boost/static_assert.hpp>
 #include <boost/algorithm/string.hpp>
@@ -128,17 +130,16 @@ LoggerImpl::getEffectiveDebugLevel() {
 
 
 // Output a general message
-string*
+boost::shared_ptr<string>
 LoggerImpl::lookupMessage(const MessageID& ident) {
-    return (new string(string(ident) + " " +
-                       MessageDictionary::globalDictionary()->getText(ident)));
+    return (boost::make_shared<string>(string(ident) + " " +
+        MessageDictionary::globalDictionary()->getText(ident)));
 }
 
 // Replace the interprocess synchronization object
 
 void
-LoggerImpl::setInterprocessSync(isc::log::interprocess::InterprocessSync* sync)
-{
+LoggerImpl::setInterprocessSync(interprocess::InterprocessSync* sync) {
     if (sync == NULL) {
         isc_throw(BadInterprocessSync,
                   "NULL was passed to setInterprocessSync()");

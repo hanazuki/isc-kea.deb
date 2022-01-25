@@ -1,11 +1,11 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 /// @file
-/// @brief Callout library for tesing execution of the dhcp4_srv_configured
+/// @brief Callout library for testing execution of the dhcp4_srv_configured
 /// hook point.
 ///
 static const int LIBRARY_NUMBER = 3;
@@ -17,6 +17,9 @@ static const int LIBRARY_NUMBER = 3;
 
 using namespace isc::hooks;
 
+// Functions accessed by the hooks framework use C linkage to avoid the name
+// mangling that accompanies use of the C++ compiler as well as to avoid
+// issues related to namespaces.
 extern "C" {
 
 /// @brief Callout which appends library number and provided arguments to
@@ -43,4 +46,11 @@ dhcp4_srv_configured(CalloutHandle& handle) {
     return (0);
 }
 
+/// @brief This function is called to retrieve the multi-threading compatibility.
+///
+/// @return 0 which means not compatible with multi-threading.
+int multi_threading_compatible() {
+    return (0);
 }
+
+} // end extern "C"

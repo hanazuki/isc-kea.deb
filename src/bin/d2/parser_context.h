@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -31,7 +31,6 @@ public:
         isc::Exception(file, line, what) { };
 };
 
-
 /// @brief Evaluation context, an interface to the expression evaluation.
 class D2ParserContext
 {
@@ -48,7 +47,7 @@ public:
         /// This parser will parse the content as generic JSON.
         PARSER_JSON,
 
-        ///< Used for parsing top level (contains DhcpDdns, Logging, others)
+        ///< Used for parsing top level (contains DhcpDdns)
         PARSER_DHCPDDNS,
 
         ///< Used for parsing content of DhcpDdns.
@@ -70,11 +69,17 @@ public:
         PARSER_DNS_SERVER,
 
         ///< Used for parsing a list of DNS servers.
-        PARSER_DNS_SERVERS
+        PARSER_DNS_SERVERS,
+
+        ///< Used for parsing content of hooks libraries.
+        PARSER_HOOKS_LIBRARY
     } ParserType;
 
     /// @brief Default constructor.
     D2ParserContext();
+
+    /// @brief destructor.
+    virtual ~D2ParserContext();
 
     /// @brief JSON elements being parsed.
     std::vector<isc::data::ElementPtr> stack_;
@@ -128,10 +133,16 @@ public:
 
     /// @brief Error handler
     ///
+    /// @note The optional position for an error in a string begins by 1
+    /// so the caller should add 1 to the position of the C++ string.
+    ///
     /// @param loc location within the parsed file when experienced a problem.
     /// @param what string explaining the nature of the error.
+    /// @param pos optional position for in string errors.
     /// @throw D2ParseError
-    void error(const isc::d2::location& loc, const std::string& what);
+    void error(const isc::d2::location& loc,
+               const std::string& what,
+               size_t pos = 0);
 
     /// @brief Error handler
     ///
@@ -160,12 +171,36 @@ public:
     /// @return Position in format accepted by Element
     isc::data::Element::Position loc2pos(isc::d2::location& loc);
 
+    /// @brief Check if a required parameter is present
+    ///
+    /// Check if a required parameter is present in the map at the top
+    /// of the stack and raise an error when it is not.
+    ///
+    /// @param name name of the parameter to check
+    /// @param open_loc location of the opening curly bracket
+    /// @param close_loc location of the closing curly bracket
+    /// @throw D2ParseError
+    void require(const std::string& name,
+                 isc::data::Element::Position open_loc,
+                 isc::data::Element::Position close_loc);
+
+    /// @brief Check if a parameter is already present
+    ///
+    /// Check if a parameter is already present in the map at the top
+    /// of the stack and raise an error when it is.
+    ///
+    /// @param name name of the parameter to check
+    /// @param loc location of the current parameter
+    /// @throw D2ParseError
+    void unique(const std::string& name,
+                isc::data::Element::Position loc);
+
     /// @brief Defines syntactic contexts for lexical tie-ins
     typedef enum {
         ///< This one is used in pure JSON mode.
         NO_KEYWORD,
 
-        ///< Used while parsing top level (contains DhcpDdns, Logging, ...)
+        ///< Used while parsing top level (contains DhcpDdns).
         CONFIG,
 
         ///< Used while parsing content of DhcpDdns.
@@ -207,9 +242,6 @@ public:
         ///< Used while parsing content of a control-socket
         CONTROL_SOCKET,
 
-        ///< Used while parsing content of Logging
-        LOGGING,
-
         /// Used while parsing DhcpDdns/loggers structures.
         LOGGERS,
 
@@ -220,7 +252,10 @@ public:
         NCR_PROTOCOL,
 
         /// Used while parsing DhcpDdns/ncr-format
-        NCR_FORMAT
+        NCR_FORMAT,
+
+        /// Used while parsing DhcpDdns/hooks-libraries.
+        HOOKS_LIBRARIES
 
     } ParserContext;
 
@@ -295,7 +330,7 @@ public:
     isc::data::ElementPtr parseCommon();
 };
 
-}; // end of isc::eval namespace
-}; // end of isc namespace
+} // end of isc::eval namespace
+} // end of isc namespace
 
 #endif

@@ -17,12 +17,12 @@ libkea_cc_la_SOURCES += stamped_element.cc stamped_element.h
 libkea_cc_la_SOURCES += stamped_value.cc stamped_value.h
 libkea_cc_la_SOURCES += user_context.cc user_context.h
 
-libkea_cc_la_LIBADD  = $(top_builddir)/src/lib/util/libkea-util.la
-libkea_cc_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
+libkea_cc_la_LIBADD  = $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
+libkea_cc_la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_cc_la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_cc_la_LIBADD += $(BOOST_LIBS)
 
-libkea_cc_la_LDFLAGS = -no-undefined -version-info 9:2:1
+libkea_cc_la_LDFLAGS = -no-undefined -version-info 25:0:0
 
 # Specify the headers for copying into the installation directory tree.
 libkea_cc_includedir = $(pkgincludedir)/cc

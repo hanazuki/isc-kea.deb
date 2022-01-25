@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -173,6 +173,16 @@ public:
     /// \return delay between two consecutive performance reports.
     int getReportDelay() const { return report_delay_; }
 
+    /// \brief Returns clean report mode.
+    ///
+    /// \return true if cleaner report is enabled.
+    int getCleanReport() const { return clean_report_; }
+
+    /// \brief Returns clean report separator.
+    ///
+    /// \return returns string which is used as separator for report..
+    std::string getCleanReportSeparator() const { return clean_report_separator_; }
+
     /// \brief Returns number of simulated clients.
     ///
     /// \return number of simulated clients.
@@ -207,6 +217,18 @@ public:
     ///
     /// \return test period before it is aborted.
     int getPeriod() const { return period_; }
+
+    /// \brief Returns time to wait for elapsed time increase.
+    ///
+    /// \return how long perfdhcp will wait before start sending
+    /// messages with increased elapsed time.
+    int getWaitForElapsedTime() const { return wait_for_elapsed_time_; }
+
+    /// \brief Returns increased elapsed time.
+    ///
+    /// \return how long perfdhcp will send messages with increased
+    /// elapsed time.
+    int getIncreaseElapsedTime() const { return increased_elapsed_time_; }
 
     /// \brief Returns drop time.
     ///
@@ -370,6 +392,25 @@ public:
     /// \return server name.
     std::string getServerName() const { return server_name_; }
 
+    /// \brief Returns file location with set of relay addresses.
+    ///
+    /// \return relay addresses list file location.
+    std::string getRelayAddrListFile() const { return relay_addr_list_file_; }
+
+    /// \brief Returns list of relay addresses.
+    ///
+    /// \return list of relay addresses.
+    std::vector<std::string> getRelayAddrList() const { return relay_addr_list_; }
+
+    /// \brief Returns random relay address.
+    ///
+    /// \return single string containing relay address.
+    std::string getRandRelayAddr() { return relay_addr_list_[rand() % relay_addr_list_.size()]; }
+
+    /// \brief Check if multi subnet mode is enabled.
+    ///
+    /// \return true if multi subnet mode is enabled.
+    bool checkMultiSubnet() { return multi_subnet_; }
 
     /// \brief Find if diagnostic flag has been set.
     ///
@@ -388,7 +429,7 @@ public:
     /// \brief Print usage.
     ///
     /// Prints perfdhcp usage.
-    void usage() const;
+    static void usage();
 
     /// \brief Print program version.
     ///
@@ -524,6 +565,15 @@ private:
     /// mac_list_ vector.
     bool decodeMacString(const std::string& line);
 
+    /// \brief Opens the text file containing list of addresses (one per line).
+    void loadRelayAddr();
+
+    /// \brief Checks if loaded relay addresses from text file are correct,
+    /// adds them to relay_addr_list_.
+    ///
+    /// \return true if address is incorrect.
+    bool validateIP(const std::string& line);
+
     /// IP protocol version to be used, expected values are:
     /// 4 for IPv4 and 6 for IPv6, default value 0 means "not set".
     uint8_t ipversion_;
@@ -545,6 +595,12 @@ private:
 
     /// Delay between generation of two consecutive performance reports.
     int report_delay_;
+
+    /// Enable cleaner, easy to parse, output of performance reports.
+    bool clean_report_;
+
+    /// If clean report is enabled separator for output can be configured.
+    std::string clean_report_separator_;
 
     /// Number of simulated clients (aka randomization range).
     uint32_t clients_num_;
@@ -572,6 +628,14 @@ private:
 
     /// Test period in seconds.
     int period_;
+
+    // for how long perfdhcp will wait before start sending
+    // messages with increased elapsed time.
+    int wait_for_elapsed_time_;
+
+    // Amount of time after which perfdhcp will send messages with
+    // elapsed time increased.
+    int increased_elapsed_time_;
 
     /// Indicates number of -d<value> parameters specified by user.
     /// If this value goes above 2, command line parsing fails.
@@ -640,6 +704,15 @@ private:
 
     /// List of MAC addresses loaded from a file.
     std::vector<std::vector<uint8_t> > mac_list_;
+
+    /// Location of a file containing a list of subnet addresses, one per line.
+    std::string relay_addr_list_file_;
+
+    /// List of validated subnet addresses.
+    std::vector<std::string> relay_addr_list_;
+
+    /// Flag to indicate multiple subnets testing.
+    bool multi_subnet_;
 
     /// Offset of transaction id in template files. First vector
     /// element points to offset for DISCOVER/SOLICIT messages,

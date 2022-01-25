@@ -1,10 +1,15 @@
-# Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 $NAMESPACE isc::http
+
+% HTTPS_REQUEST_RECEIVE_START start receiving request from %1
+This debug message is issued when the server starts receiving new request
+over the established connection. The argument specifies the address
+of the remote endpoint.
 
 % HTTP_BAD_CLIENT_REQUEST_RECEIVED bad request received from %1: %2
 This debug message is issued when an HTTP client sends malformed request to
@@ -33,13 +38,26 @@ from the server. The first argument specifies an URL of the server. The
 second argument provides a response in the textual format. The request is
 truncated by the logger if it is too large to be printed.
 
+% HTTP_CLIENT_MT_STARTED HttpClient has been started in multi-threaded mode running %1 threads
+This debug message is issued when a multi-threaded HTTP client instance has
+been created.  The argument specifies the maximum number of threads.
+
+% HTTP_CLIENT_QUEUE_SIZE_GROWING queue for URL: %1, now has %2 entries and may be growing too quickly
+This warning message is issued when the queue of pending requests for the
+given URL appears to be growing more quickly than the requests can be handled.
+It will be emitted periodically as long as the queue size continues to grow.
+This may occur with a surge of client traffic creating a momentary backlog
+which then subsides as the surge subsides.  If it happens continually then
+it most likely indicates a deployment configuration that cannot sustain the
+client load.
+
 % HTTP_CLIENT_REQUEST_RECEIVED received HTTP request from %1
 This debug message is issued when the server finished receiving a HTTP
 request from the remote endpoint. The address of the remote endpoint is
 specified as an argument.
 
-% HTTP_CLIENT_REQUEST_RECEIVED_DETAILS detailed information about well formed request received from %1:\n%2
-This debug message is issued when the HTTP server receives a well formed
+% HTTP_CLIENT_REQUEST_RECEIVED_DETAILS detailed information about well-formed request received from %1:\n%2
+This debug message is issued when the HTTP server receives a well-formed
 request. It includes detailed information about the received request. The
 first argument specifies an address of the remote endpoint which sent the
 request. The second argument provides the request in the textual format.
@@ -68,6 +86,25 @@ This is an error message emitted when the close connection callback
 registered on the connection failed unexpectedly.  This is a programmatic
 error that should be submitted as a bug.
 
+% HTTP_CONNECTION_HANDSHAKE_FAILED TLS handshake with %1 failed with %2
+This information message is issued when the TLS handshake failed at the
+server side. The client address and the error message are displayed.
+
+% HTTP_CONNECTION_HANDSHAKE_START start TLS handshake with %1 with timeout %2
+This debug message is issued when the server starts the TLS handshake
+with the remote endpoint. The first argument specifies the address
+of the remote endpoint. The second argument specifies request timeout in
+seconds.
+
+% HTTP_CONNECTION_SHUTDOWN shutting down HTTP connection from %1
+This debug message is issued when one of the HTTP connections is shut down.
+The connection can be stopped as a result of an error or after the
+successful message exchange with a client.
+
+% HTTP_CONNECTION_SHUTDOWN_FAILED shutting down HTTP connection failed
+This error message is issued when an error occurred during shutting down
+a HTTP connection with a client.
+
 % HTTP_CONNECTION_STOP stopping HTTP connection from %1
 This debug message is issued when one of the HTTP connections is stopped.
 The connection can be stopped as a result of an error or after the
@@ -88,7 +125,7 @@ produced the data.
 This debug message is issued when the persistent HTTP connection is being
 closed as a result of being idle.
 
-% HTTP_PREMATURE_CONNECTION_TIMEOUT_OCCURRED premature connection timeout occurred, possibly caused by system clock change
+% HTTP_PREMATURE_CONNECTION_TIMEOUT_OCCURRED premature connection timeout occurred: in transaction ? %1, transid: %2, current_transid: %3
 This warning message is issued when unexpected timeout occurred during the
 transaction. This is proven to occur when the system clock is moved manually
 or as a result of synchronization with a time server. Any ongoing transactions
@@ -104,8 +141,8 @@ seconds.
 This debug message is issued when the client finished receiving an HTTP
 response from the server. The URL of the server is specified as an argument.
 
-% HTTP_SERVER_RESPONSE_RECEIVED_DETAILS detailed information about well formed response received from %1:\n%2
-This debug message is issued when the HTTP client receives a well formed
+% HTTP_SERVER_RESPONSE_RECEIVED_DETAILS detailed information about well-formed response received from %1:\n%2
+This debug message is issued when the HTTP client receives a well-formed
 response from the server. It includes detailed information about the
 received response. The first argument specifies a URL of the server which
 sent the response. The second argument provides the response in the textual

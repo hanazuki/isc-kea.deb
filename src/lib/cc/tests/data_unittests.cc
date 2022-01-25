@@ -1,4 +1,4 @@
-// Copyright (C) 2009-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2009-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -163,7 +163,9 @@ TEST(Element, from_and_to_json) {
 
     // some json specific format tests, here the str() output is
     // different from the string input
-    EXPECT_EQ("100", Element::fromJSON("+100")->str());
+    // +100 is incorrect according to the ECMA 404 JSON standard.
+    // Keeping it as it will be reversed.
+    // EXPECT_EQ("100", Element::fromJSON("+100")->str());
     EXPECT_EQ("100.0", Element::fromJSON("1e2")->str());
     EXPECT_EQ("100.0", Element::fromJSON("+1e2")->str());
     EXPECT_EQ("-100.0", Element::fromJSON("-1e2")->str());
@@ -1147,8 +1149,8 @@ TEST(Element, prettyPrint) {
 
     // default step is 2, order is alphabetic, no \n at the end
     string text = "{\n"
-        "  \"comment\": \"this is an exception\",\n"
         "  \"boolean\": true,\n"
+        "  \"comment\": \"this is an exception\",\n"
         "  \"empty-list\": [ ],\n"
         "  \"empty-map\": { },\n"
         "  \"integer\": 1,\n"
@@ -1388,4 +1390,140 @@ TEST(Element, empty) {
     l->remove(0);
     EXPECT_TRUE(l->empty());
 }
+
+TEST(Element, sortIntegers) {
+    ElementPtr l(Element::fromJSON("[5, 7, 4, 2, 8, 6, 1, 9, 0, 3]"));
+    ElementPtr expected(Element::fromJSON("[0, 1, 2, 3, 4, 5, 6, 7, 8, 9]"));
+    boost::dynamic_pointer_cast<ListElement>(l)->sort();
+    EXPECT_EQ(*l, *expected);
 }
+
+TEST(Element, sortFloatingPoint) {
+    ElementPtr l(Element::fromJSON("[2.1, 3.2, 2.1, 2.2, 4.1, 3.2, 1.1, 4.2, 0.1, 1.2]"));
+    ElementPtr expected(Element::fromJSON("[0.1, 1.1, 1.2, 2.1, 2.1, 2.2, 3.2, 3.2, 4.1, 4.2]"));
+    boost::dynamic_pointer_cast<ListElement>(l)->sort();
+    EXPECT_EQ(*l, *expected);
+}
+
+TEST(Element, sortBooleans) {
+    ElementPtr l(Element::fromJSON("[false, true, false, true]"));
+    ElementPtr expected(Element::fromJSON("[false, false, true, true]"));
+    boost::dynamic_pointer_cast<ListElement>(l)->sort();
+    EXPECT_EQ(*l, *expected);
+}
+
+TEST(Element, sortStrings) {
+    ElementPtr l(Element::fromJSON(R"(["hello", "world", "lorem", "ipsum", "dolor", "sit", "amet"])"));
+    ElementPtr expected(Element::fromJSON(R"(["amet", "dolor", "hello", "ipsum", "lorem", "sit", "world"])"));
+    boost::dynamic_pointer_cast<ListElement>(l)->sort();
+    EXPECT_EQ(*l, *expected);
+}
+
+TEST(Element, sortMaps) {
+    ElementPtr e1(Element::fromJSON(R"({"id": 1, "subnet": "10.0.2.0/24"})"));
+    ElementPtr e2(Element::fromJSON(R"({"id": 2, "subnet": "10.0.1.0/24"})"));
+    ElementPtr l;
+
+    // Test sorting by "id". Order shouldn't change.
+    l = Element::createList();
+    l->add(e1);
+    l->add(e2);
+    boost::dynamic_pointer_cast<ListElement>(l)->sort("id");
+    ASSERT_EQ(l->size(), 2);
+    EXPECT_EQ(*l->get(0), *e1);
+    EXPECT_EQ(*l->get(1), *e2);
+
+    // Test sorting by "id". Order should change.
+    l = Element::createList();
+    l->add(e2);
+    l->add(e1);
+    boost::dynamic_pointer_cast<ListElement>(l)->sort("id");
+    ASSERT_EQ(l->size(), 2);
+    EXPECT_EQ(*l->get(0), *e1);
+    EXPECT_EQ(*l->get(1), *e2);
+
+    // Test sorting by "subnet". Order should change.
+    l = Element::createList();
+    l->add(e1);
+    l->add(e2);
+    boost::dynamic_pointer_cast<ListElement>(l)->sort("subnet");
+    ASSERT_EQ(l->size(), 2);
+    EXPECT_EQ(*l->get(0), *e2);
+    EXPECT_EQ(*l->get(1), *e1);
+
+    // Test sorting by "subnet". Order shouldn't change.
+    l = Element::createList();
+    l->add(e2);
+    l->add(e1);
+    boost::dynamic_pointer_cast<ListElement>(l)->sort("subnet");
+    ASSERT_EQ(l->size(), 2);
+    EXPECT_EQ(*l->get(0), *e2);
+    EXPECT_EQ(*l->get(1), *e1);
+}
+
+TEST(Element, removeEmptyContainersRecursively) {
+    ElementPtr e(Element::fromJSON(R"(
+{
+  "list": [
+    {
+      "nested-list": [
+        {
+          "nestedx2-list": [
+            {}
+          ]
+        }
+      ]
+    }
+  ],
+  "map": {
+    "nested-map": {
+      "nestedx2-map": {}
+    }
+  },
+  "simple-list": {},
+  "simple-map": {}
+}
+)"));
+    e->removeEmptyContainersRecursively();
+    EXPECT_EQ(*e, *Element::fromJSON("{}"));
+
+    e = Element::fromJSON(R"(
+{
+  "list": [
+    {
+      "value": "not empty anymore",
+      "nested-list": [
+        {
+          "nestedx2-list": [
+            {}
+          ]
+        }
+      ]
+    }
+  ],
+  "map": {
+    "value": "not empty anymore",
+    "nested-map": {
+      "nestedx2-map": {}
+    }
+  },
+  "simple-list": {},
+  "simple-map": {}
+}
+)");
+    e->removeEmptyContainersRecursively();
+    EXPECT_EQ(*e, *Element::fromJSON(R"(
+{
+  "list": [
+    {
+      "value": "not empty anymore"
+    }
+  ],
+  "map": {
+    "value": "not empty anymore"
+  }
+}
+)"));
+}
+
+}  // namespace

@@ -1,7 +1,8 @@
 // Copyright (C) 2019-2020 Internet Systems Consortium, Inc. ("ISC")
 //
-// This Source Code Form is subject to the terms of the End User License
-// Agreement. See COPYING file in the premium/ directory.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
 
@@ -41,6 +42,11 @@ extern "C" {
 ///
 /// @return 0 upon success, non-zero otherwise
 int pkt4_send(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP) {
+        return (0);
+    }
+
     // Sanity.
     if (!impl) {
         return (0);
@@ -51,6 +57,10 @@ int pkt4_send(CalloutHandle& handle) {
     Pkt4Ptr response;
     handle.getArgument("query4", query);
     handle.getArgument("response4", response);
+
+    if (status == CalloutHandle::NEXT_STEP_SKIP) {
+        isc_throw(InvalidOperation, "packet pack already handled");
+    }
 
     try {
         impl->process<Pkt4Ptr>(Option::V4, query, response);
@@ -73,9 +83,18 @@ int pkt4_send(CalloutHandle& handle) {
 ///
 /// @return 0 upon success, non-zero otherwise
 int pkt6_send(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP) {
+        return (0);
+    }
+
     // Sanity.
     if (!impl) {
         return (0);
+    }
+
+    if (status == CalloutHandle::NEXT_STEP_SKIP) {
+        isc_throw(InvalidOperation, "packet pack already handled");
     }
 
     // Get the parameters.

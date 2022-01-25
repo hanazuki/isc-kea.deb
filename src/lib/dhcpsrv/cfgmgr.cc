@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -88,8 +88,6 @@ CfgMgr::clear() {
 
 void
 CfgMgr::commit() {
-
-
     ensureCurrentAllocated();
 
     // First we need to remove statistics. The new configuration can have fewer
@@ -114,6 +112,8 @@ CfgMgr::commit() {
 
     // Now we need to set the statistics back.
     configuration_->updateStatistics();
+
+    configuration_->configureLowerLevelLibraries();
 }
 
 void
@@ -229,5 +229,5 @@ CfgMgr::CfgMgr()
 CfgMgr::~CfgMgr() {
 }
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace

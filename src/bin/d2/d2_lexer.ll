@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 /* Generated files do not make clang static analyser so happy */
 #ifndef __clang_analyzer__
 
+#include <cctype>
 #include <cerrno>
 #include <climits>
 #include <cstdlib>
@@ -83,10 +84,10 @@ JSONString                      \"{JSONStringCharacter}*\"
 
 /* for errors */
 
-BadUnicodeEscapeSequence        u[0-9A-Fa-f]{0,3}[^0-9A-Fa-f]
+BadUnicodeEscapeSequence        u[0-9A-Fa-f]{0,3}[^0-9A-Fa-f"]
 BadJSONEscapeSequence           [^"\\/bfnrtu]|{BadUnicodeEscapeSequence}
 ControlCharacter                [\x00-\x1f]
-ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
+ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
 
 %{
 /* This code run each time a pattern is matched. It updates the location
@@ -125,6 +126,8 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
             return isc::d2::D2Parser::make_SUB_DDNS_DOMAINS(driver.loc_);
         case D2ParserContext::PARSER_DNS_SERVER:
             return isc::d2::D2Parser::make_SUB_DNS_SERVER(driver.loc_);
+        case D2ParserContext::PARSER_HOOKS_LIBRARY:
+            return isc::d2::D2Parser::make_SUB_HOOKS_LIBRARY(driver.loc_);
         }
     }
 %}
@@ -326,6 +329,8 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     switch(driver.ctx_) {
     case isc::d2::D2ParserContext::DDNS_DOMAIN:
     case isc::d2::D2ParserContext::DDNS_DOMAINS:
+    case isc::d2::D2ParserContext::DNS_SERVER:
+    case isc::d2::D2ParserContext::DNS_SERVERS:
         return isc::d2::D2Parser::make_KEY_NAME(driver.loc_);
     default:
         return isc::d2::D2Parser::make_STRING("key-name", driver.loc_);
@@ -419,20 +424,36 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
-
-\"Logging\" {
+\"hooks-libraries\" {
     switch(driver.ctx_) {
-    case isc::d2::D2ParserContext::CONFIG:
-        return isc::d2::D2Parser::make_LOGGING(driver.loc_);
+    case isc::d2::D2ParserContext::DHCPDDNS:
+        return isc::d2::D2Parser::make_HOOKS_LIBRARIES(driver.loc_);
     default:
-        return isc::d2::D2Parser::make_STRING("Logging", driver.loc_);
+        return isc::d2::D2Parser::make_STRING("hooks-libraries", driver.loc_);
+    }
+}
+
+\"parameters\" {
+    switch(driver.ctx_) {
+    case isc::d2::D2ParserContext::HOOKS_LIBRARIES:
+        return isc::d2::D2Parser::make_PARAMETERS(driver.loc_);
+    default:
+        return isc::d2::D2Parser::make_STRING("parameters", driver.loc_);
+    }
+}
+
+\"library\" {
+    switch(driver.ctx_) {
+    case isc::d2::D2ParserContext::HOOKS_LIBRARIES:
+        return isc::d2::D2Parser::make_LIBRARY(driver.loc_);
+    default:
+        return isc::d2::D2Parser::make_STRING("library", driver.loc_);
     }
 }
 
 \"loggers\" {
     switch(driver.ctx_) {
     case isc::d2::D2ParserContext::DHCPDDNS:
-    case isc::d2::D2ParserContext::LOGGING:
         return isc::d2::D2Parser::make_LOGGERS(driver.loc_);
     default:
         return isc::d2::D2Parser::make_STRING("loggers", driver.loc_);
@@ -524,34 +545,6 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
     }
 }
 
-\"Dhcp4\" {
-    switch(driver.ctx_) {
-    case isc::d2::D2ParserContext::CONFIG:
-        return isc::d2::D2Parser::make_DHCP4(driver.loc_);
-    default:
-        return isc::d2::D2Parser::make_STRING("Dhcp4", driver.loc_);
-    }
-}
-
-\"Dhcp6\" {
-    switch(driver.ctx_) {
-    case isc::d2::D2ParserContext::CONFIG:
-        return isc::d2::D2Parser::make_DHCP6(driver.loc_);
-    default:
-        return isc::d2::D2Parser::make_STRING("Dhcp6", driver.loc_);
-    }
-}
-
-\"Control-agent\" {
-    switch(driver.ctx_) {
-    case isc::d2::D2ParserContext::CONFIG:
-        return isc::d2::D2Parser::make_CONTROL_AGENT(driver.loc_);
-    default:
-        return isc::d2::D2Parser::make_STRING("Control-agent", driver.loc_);
-    }
-}
-
-
 {JSONString} {
     /* A string has been matched. It contains the actual string and single quotes.
        We need to get those quotes out of the way and just use its content, e.g.
@@ -606,7 +599,9 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
                                  "Overflow unicode escape in \"" + raw + "\"");
                 }
                 if ((raw[pos] != '0') || (raw[pos + 1] != '0')) {
-                    driver.error(driver.loc_, "Unsupported unicode escape in \"" + raw + "\"");
+                    driver.error(driver.loc_,
+                    "Unsupported unicode escape in \"" + raw + "\"",
+                    pos + 1);
                 }
                 pos += 2;
                 c = raw[pos];
@@ -653,17 +648,90 @@ ControlCharacterFill            [^"\\]|\\{JSONEscapeSequence}
 
 \"{JSONStringCharacter}*{ControlCharacter}{ControlCharacterFill}*\" {
     /* Bad string with a forbidden control character inside */
-    driver.error(driver.loc_, "Invalid control in " + std::string(yytext));
+    std::string raw(yytext+1);
+    size_t len = raw.size() - 1;
+    size_t pos = 0;
+    for (; pos < len; ++pos) {
+        char c = raw[pos];
+        if ((c >= 0) && (c < 0x20)) {
+            break;
+        }
+    }
+    driver.error(driver.loc_,
+                 "Invalid control in " + std::string(yytext),
+                 pos + 1);
 }
 
-\"{JSONStringCharacter}*\\{BadJSONEscapeSequence}[^\x00-\x1f"]*\" {
+\"{JSONStringCharacter}*\\{BadJSONEscapeSequence}[^"]*\" {
     /* Bad string with a bad escape inside */
-    driver.error(driver.loc_, "Bad escape in " + std::string(yytext));
+    std::string raw(yytext+1);
+    size_t len = raw.size() - 1;
+    size_t pos = 0;
+    bool found = false;
+    for (; pos < len; ++pos) {
+        if (found) {
+            break;
+        }
+        char c = raw[pos];
+        if (c == '\\') {
+            ++pos;
+            c = raw[pos];
+            switch (c) {
+            case '"':
+            case '\\':
+            case '/':
+            case 'b':
+            case 'f':
+            case 'n':
+            case 'r':
+            case 't':
+                break;
+            case 'u':
+                if ((pos + 4 > len) ||
+                    !std::isxdigit(raw[pos + 1]) ||
+                    !std::isxdigit(raw[pos + 2]) ||
+                    !std::isxdigit(raw[pos + 3]) ||
+                    !std::isxdigit(raw[pos + 4])) {
+                    found = true;
+                }
+                break;
+            default:
+                found = true;
+                break;
+            }
+        }
+    }
+    /* The rule stops on the first " including on \" so add ... in this case */
+    std::string trailer = "";
+    if (raw[len - 1] == '\\') {
+        trailer = "...";
+    }
+    driver.error(driver.loc_,
+                 "Bad escape in " + std::string(yytext) + trailer,
+                 pos);
 }
 
 \"{JSONStringCharacter}*\\\" {
     /* Bad string with an open escape at the end */
-    driver.error(driver.loc_, "Overflow escape in " + std::string(yytext));
+    std::string raw(yytext+1);
+    driver.error(driver.loc_,
+                 "Overflow escape in " + std::string(yytext),
+                 raw.size() + 1);
+}
+
+\"{JSONStringCharacter}*\\u[0-9A-Fa-f]{0,3}\" {
+    /* Bad string with an open unicode escape at the end */
+    std::string raw(yytext+1);
+    size_t pos = raw.size() - 1;
+    for (; pos > 0; --pos) {
+        char c = raw[pos];
+        if (c == 'u') {
+            break;
+        }
+    }
+    driver.error(driver.loc_,
+                 "Overflow unicode escape in " + std::string(yytext),
+                 pos + 1);
 }
 
 "["    { return isc::d2::D2Parser::make_LSQUARE_BRACKET(driver.loc_); }

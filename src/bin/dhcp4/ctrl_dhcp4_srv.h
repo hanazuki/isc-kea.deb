@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -43,13 +43,19 @@ public:
     /// This method may throw if initialization fails.
     void init(const std::string& config_file);
 
-    /// @brief Loads specific config file
+    /// @brief Configure DHCPv4 server using the configuration file specified.
     ///
     /// This utility method is called whenever we know a filename of the config
     /// and need to load it. It calls config-set command once the content of
     /// the file has been loaded and verified to be a sane JSON configuration.
     /// config-set handler will process the config file (load it as current
     /// configuration).
+    ///
+    /// This function is used to both configure the DHCP server on its startup
+    /// and dynamically reconfigure the server when SIGHUP signal is received.
+    ///
+    /// It fetches DHCPv4 server's configuration from the 'Dhcp4' section of
+    /// the JSON configuration file.
     ///
     /// @param file_name name of the file to be loaded
     /// @return status of the file loading and outcome of config-set
@@ -63,7 +69,8 @@ public:
     void cleanup();
 
     /// @brief Initiates shutdown procedure for the whole DHCPv4 server.
-    void shutdown();
+    /// @param exit_value integer value to the process should exit with.
+    void shutdownServer(int exit_value);
 
     /// @brief Command processor
     ///
@@ -205,8 +212,6 @@ private:
     /// @param command (parameter ignored)
     /// @param args configuration to be processed. Expected format:
     /// map containing Dhcp4 map that contains DHCPv4 server configuration.
-    /// May also contain Logging map that specifies logging configuration
-    /// for backward compatibility.
     ///
     /// @return status of the command
     isc::data::ConstElementPtr
@@ -220,8 +225,6 @@ private:
     /// @param command (parameter ignored)
     /// @param args configuration to be checked. Expected format:
     /// map containing Dhcp4 map that contains DHCPv4 server configuration.
-    /// May also contain Logging map that specifies logging configuration
-    /// for backward compatibility.
     ///
     /// @return status of the command
     isc::data::ConstElementPtr
@@ -231,7 +234,7 @@ private:
     /// @brief A handler for processing 'dhcp-disable' command.
     ///
     /// @param command command name (ignored).
-    /// @param args aguments for the command. It must be a map and
+    /// @param args arguments for the command. It must be a map and
     /// it may include optional 'max-period' parameter.
     ///
     /// @return result of the command.
@@ -328,6 +331,32 @@ private:
     commandStatusGetHandler(const std::string& command,
                             isc::data::ConstElementPtr args);
 
+    /// @brief handler for processing 'statistic-sample-count-set-all' command
+    ///
+    /// This handler processes statistic-sample-count-set-all command,
+    /// which sets max_sample_count_ limit of all statistics and the default.
+    /// @ref isc::stats::StatsMgr::statisticSetMaxSampleCountAllHandler
+    ///
+    /// @param command (ignored)
+    /// @param args structure containing a map that contains "max-samples"
+    /// @return process information wrapped in a response
+    isc::data::ConstElementPtr
+    commandStatisticSetMaxSampleCountAllHandler(const std::string& command,
+                                                isc::data::ConstElementPtr args);
+
+    /// @brief handler for processing 'statistic-sample-age-set-all' command
+    ///
+    /// This handler processes statistic-sample-age-set-all command,
+    /// which sets max_sample_age_ limit of all statistics and the default.
+    /// @ref isc::stats::StatsMgr::statisticSetMaxSampleAgeAllHandler
+    ///
+    /// @param command (ignored)
+    /// @param args structure containing a map that contains "duration"
+    /// @return process information wrapped in a response
+    isc::data::ConstElementPtr
+    commandStatisticSetMaxSampleAgeAllHandler(const std::string& command,
+                                              isc::data::ConstElementPtr args);
+
     /// @brief Reclaims expired IPv4 leases and reschedules timer.
     ///
     /// This is a wrapper method for @c AllocEngine::reclaimExpiredLeases4.
@@ -358,27 +387,7 @@ private:
     /// deleted.
     void deleteExpiredReclaimedLeases(const uint32_t secs);
 
-    /// @brief Attempts to reconnect the server to the DB backend managers
-    ///
-    /// This is a self-rescheduling function that attempts to reconnect to the
-    /// server's DB backends after connectivity to one or more have been
-    /// lost.  Upon entry it will attempt to reconnect via @ref CfgDdbAccess::
-    /// createManagers.  If this is succesful, DHCP servicing is re-enabled and
-    /// server returns to normal operation.
-    ///
-    /// If reconnection fails and the maximum number of retries has not been
-    /// exhausted, it will schedule a call to itself to occur at the
-    /// configured retry interval. DHCP service remains disabled.
-    ///
-    /// If the maximum number of retries has been exhausted an error is logged
-    /// and the server shuts down.
-    ///
-    /// @param db_reconnect_ctl pointer to the ReconnectCtl containing the
-    /// configured reconnect parameters
-    ///
-    void dbReconnect(db::ReconnectCtlPtr db_reconnect_ctl);
-
-    /// @brief Callback DB backends should invoke upon loss of connectivity
+    /// @brief Callback DB backends should invoke upon loss of the connectivity
     ///
     /// This function is invoked by DB backends when they detect a loss of
     /// connectivity.  The parameter, db_reconnect_ctl, conveys the configured
@@ -387,16 +396,33 @@ private:
     ///
     /// If either value is zero, reconnect is presumed to be disabled and
     /// the function will schedule a shutdown and return false.  This instructs
-    /// the DB backend layer (the caller) to treat the connectivity loss as fatal.
-    ///
-    /// Otherwise, the function saves db_reconnect_ctl and invokes
-    /// dbReconnect to initiate the reconnect process.
+    /// the DB backend layer (the caller) to treat the connectivity loss as
+    /// fatal. It stops the DHCP service until the connection is recovered.
     ///
     /// @param db_reconnect_ctl pointer to the ReconnectCtl containing the
     /// configured reconnect parameters
     ///
     /// @return false if reconnect is not configured, true otherwise
     bool dbLostCallback(db::ReconnectCtlPtr db_reconnect_ctl);
+
+    /// @brief Callback DB backends should invoke upon restoration of
+    /// connectivity
+    ///
+    /// This function is invoked by DB backends when they recover the
+    /// connectivity. It starts the DHCP service after the connection is
+    /// recovered.
+    ///
+    /// @return false if reconnect is not configured, true otherwise
+    bool dbRecoveredCallback(db::ReconnectCtlPtr db_reconnect_ctl);
+
+    /// @brief Callback DB backends should invoke upon failing to restore
+    /// connectivity
+    ///
+    /// This function is invoked by DB backends when they fail to recover the
+    /// connectivity. It stops the server.
+    ///
+    /// @return false if reconnect is not configured, true otherwise
+    bool dbFailedCallback(db::ReconnectCtlPtr db_reconnect_ctl);
 
     /// @brief Callback invoked periodically to fetch configuration updates
     /// from the Config Backends.
@@ -417,9 +443,6 @@ private:
     /// This is required for config and command handlers to gain access to
     /// the server. Some of them need to be static methods.
     static ControlledDhcpv4Srv* server_;
-
-    /// @brief IOService object, used for all ASIO operations.
-    isc::asiolink::IOService io_service_;
 
     /// @brief Instance of the @c TimerMgr.
     ///

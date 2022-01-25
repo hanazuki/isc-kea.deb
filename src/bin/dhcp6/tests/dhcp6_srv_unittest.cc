@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,7 +18,6 @@
 #include <dhcp/option_string.h>
 #include <dhcp/iface_mgr.h>
 #include <dhcp6/json_config_parser.h>
-#include <dhcp/dhcp6.h>
 #include <dhcp/docsis3_option_defs.h>
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/cfgmgr.h>
@@ -30,11 +29,11 @@
 #include <util/range_utilities.h>
 #include <util/encode/hex.h>
 #include <stats/stats_mgr.h>
-
 #include <dhcp6/tests/dhcp6_test_utils.h>
 #include <dhcp6/tests/dhcp6_client.h>
 #include <dhcp/tests/pkt_captures.h>
 #include <cc/command_interpreter.h>
+
 #include <boost/pointer_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <gtest/gtest.h>
@@ -382,6 +381,7 @@ TEST_F(Dhcpv6SrvTest, advertiseOptions) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
@@ -474,6 +474,7 @@ TEST_F(Dhcpv6SrvTest, SolicitBasic) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
@@ -522,6 +523,7 @@ TEST_F(Dhcpv6SrvTest, pdSolicitBasic) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     sol->addOption(generateIA(D6O_IA_PD, 234, 1500, 3000));
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
@@ -561,6 +563,7 @@ TEST_F(Dhcpv6SrvTest, defaultLifetimeSolicit) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
@@ -602,6 +605,7 @@ TEST_F(Dhcpv6SrvTest, hintZeroLifetimeSolicit) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     OptionPtr iapd = generateIA(D6O_IA_PD, 234, 1500, 3000);
     sol->addOption(iapd);
     OptionPtr clientid = generateClientId();
@@ -649,6 +653,7 @@ TEST_F(Dhcpv6SrvTest, hintLifetimeSolicit) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     OptionPtr iana = generateIA(D6O_IA_NA, 234, 1500, 3000);
     sol->addOption(iana);
     OptionPtr clientid = generateClientId();
@@ -696,6 +701,7 @@ TEST_F(Dhcpv6SrvTest, minLifetimeSolicit) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     OptionPtr iapd = generateIA(D6O_IA_PD, 234, 1500, 3000);
     sol->addOption(iapd);
     OptionPtr clientid = generateClientId();
@@ -744,6 +750,7 @@ TEST_F(Dhcpv6SrvTest, maxLifetimeSolicit) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     OptionPtr iana = generateIA(D6O_IA_NA, 234, 1500, 3000);
     sol->addOption(iana);
     OptionPtr clientid = generateClientId();
@@ -802,6 +809,7 @@ TEST_F(Dhcpv6SrvTest, SolicitHint) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     boost::shared_ptr<Option6IA> ia = generateIA(D6O_IA_NA, 234, 1500, 3000);
 
     // with a valid hint
@@ -861,6 +869,7 @@ TEST_F(Dhcpv6SrvTest, SolicitInvalidHint) {
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     boost::shared_ptr<Option6IA> ia = generateIA(D6O_IA_NA, 234, 1500, 3000);
     IOAddress hint("2001:db8:1::cafe:babe");
     ASSERT_FALSE(subnet_->inPool(Lease::TYPE_NA, hint));
@@ -916,8 +925,11 @@ TEST_F(Dhcpv6SrvTest, ManySolicits) {
     sol3->setRemoteAddr(IOAddress("fe80::3467"));
 
     sol1->setIface("eth0");
+    sol1->setIndex(ETH0_INDEX);
     sol2->setIface("eth0");
+    sol2->setIndex(ETH0_INDEX);
     sol3->setIface("eth0");
+    sol3->setIndex(ETH0_INDEX);
 
     sol1->addOption(generateIA(D6O_IA_NA, 1, 1500, 3000));
     sol2->addOption(generateIA(D6O_IA_NA, 2, 1500, 3000));
@@ -985,6 +997,147 @@ TEST_F(Dhcpv6SrvTest, ManySolicits) {
     cout << "Offered address to client3=" << addr3->getAddress() << endl;
 }
 
+// This test verifies that incoming SOLICIT can't reuse an existing lease
+// and simply return it, i.e. fake allocation ignores the cache feature.
+TEST_F(Dhcpv6SrvTest, SolicitCache) {
+    NakedDhcpv6Srv srv(0);
+
+    // Enable lease reuse.
+    subnet_->setCacheThreshold(.1);
+
+    const IOAddress addr("2001:db8:1:1::cafe:babe");
+    const uint32_t iaid = 234;
+    const uint32_t pref = subnet_->getPreferred();
+    const uint32_t valid = subnet_->getValid();
+    const int delta = 100;
+    const time_t timestamp = time(NULL) - delta;
+
+    // Generate client-id also duid_.
+    OptionPtr clientid = generateClientId();
+
+    // Check that the address we are about to use is indeed in pool.
+    ASSERT_TRUE(subnet_->inPool(Lease::TYPE_NA, addr));
+
+    Lease6Ptr used(new Lease6(Lease::TYPE_NA, addr, duid_, iaid, pref, valid,
+                              subnet_->getID()));
+    used->cltt_ = timestamp;
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(used));
+
+    // Check that the lease is really in the database.
+    Lease6Ptr l = LeaseMgrFactory::instance().getLease6(Lease::TYPE_NA, addr);
+    ASSERT_TRUE(l);
+
+    // Check that preferred, valid and cltt really set.
+    // Constructed lease looks as if it was assigned 100 seconds ago.
+    EXPECT_EQ(l->preferred_lft_, pref);
+    EXPECT_EQ(l->valid_lft_, valid);
+    EXPECT_EQ(l->cltt_, timestamp);
+
+    // Let's create a SOLICIT.
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
+    sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
+    sol->addOption(clientid);
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processSolicit(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+    // check that IA_NA was returned and that there's an address included
+    boost::shared_ptr<Option6IAAddr> iaaddr =
+        checkIA_NA(reply, 234, subnet_->getT1(), subnet_->getT2());
+    ASSERT_TRUE(iaaddr);
+
+    // Check the address.
+    EXPECT_EQ(addr, iaaddr->getAddress());
+    EXPECT_EQ(pref, iaaddr->getPreferred());
+    EXPECT_EQ(valid, iaaddr->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
+// This test verifies that incoming SOLICIT can't reuse an existing lease
+// and simply return it, i.e. fake allocation ignores the cache feature.
+// Prefix variant.
+TEST_F(Dhcpv6SrvTest, pdSolicitCache) {
+    NakedDhcpv6Srv srv(0);
+
+    // Enable lease reuse.
+    subnet_->setCacheThreshold(.1);
+
+    const IOAddress prefix("2001:db8:1:2::");
+    const uint8_t prefixlen = pd_pool_->getLength();
+    const uint32_t iaid = 234;
+    const uint32_t pref = subnet_->getPreferred();
+    const uint32_t valid = subnet_->getValid();
+    const int delta = 100;
+    const time_t timestamp = time(NULL) - delta;
+
+    // Generate client-id also duid_.
+    OptionPtr clientid = generateClientId();
+
+    // Check that the prefix we are about to use is indeed in pool.
+    ASSERT_TRUE(subnet_->inPool(Lease::TYPE_PD, prefix));
+
+    Lease6Ptr used(new Lease6(Lease::TYPE_PD, prefix, duid_, iaid, pref, valid,
+                              subnet_->getID(), HWAddrPtr(), prefixlen));
+    used->cltt_ = timestamp;
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(used));
+
+    // Check that the lease is really in the database.
+    Lease6Ptr l = LeaseMgrFactory::instance().getLease6(Lease::TYPE_PD, prefix);
+    ASSERT_TRUE(l);
+
+    // Check that preferred, valid and cltt really set.
+    // Constructed lease looks as if it was assigned 100 seconds ago.
+    EXPECT_EQ(l->preferred_lft_, pref);
+    EXPECT_EQ(l->valid_lft_, valid);
+    EXPECT_EQ(l->cltt_, timestamp);
+
+    // Let's create a SOLICIT.
+    Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
+    sol->addOption(generateIA(D6O_IA_PD, 234, 1500, 3000));
+    sol->addOption(clientid);
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processSolicit(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_ADVERTISE, 1234);
+
+    // check that IA_PD was returned and that there's a prefix included
+    boost::shared_ptr<Option6IAPrefix> iapref =
+        checkIA_PD(reply, 234, subnet_->getT1(), subnet_->getT2());
+    ASSERT_TRUE(iapref);
+
+    // Check the prefix.
+    EXPECT_EQ(prefix, iapref->getAddress());
+    EXPECT_EQ(prefixlen, iapref->getLength());
+    EXPECT_EQ(pref, iapref->getPreferred());
+    EXPECT_EQ(valid, iapref->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
 // This test verifies that incoming REQUEST can be handled properly, that a
 // REPLY is generated, that the response has an address and that address
 // really belongs to the configured pool.
@@ -1007,6 +1160,7 @@ TEST_F(Dhcpv6SrvTest, RequestBasic) {
     Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_REQUEST, 1234));
     req->setRemoteAddr(IOAddress("fe80::abcd"));
     req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
     boost::shared_ptr<Option6IA> ia = generateIA(D6O_IA_NA, 234, 1500, 3000);
 
     // with a valid hint
@@ -1046,9 +1200,9 @@ TEST_F(Dhcpv6SrvTest, RequestBasic) {
     // check that the lease is really in the database
     Lease6Ptr l = checkLease(duid_, reply->getOption(D6O_IA_NA), addr);
     EXPECT_TRUE(l);
-    Lease6Ptr lease(new Lease6());
-    lease->addr_ = addr->getAddress();
-    LeaseMgrFactory::instance().deleteLease(lease);
+    Lease6Ptr lease = LeaseMgrFactory::instance().getLease6(Lease::TYPE_NA,
+                                                            addr->getAddress());
+    EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 }
 
 // This test verifies that incoming REQUEST can be handled properly, that a
@@ -1074,6 +1228,7 @@ TEST_F(Dhcpv6SrvTest, pdRequestBasic) {
     Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_REQUEST, 1234));
     req->setRemoteAddr(IOAddress("fe80::abcd"));
     req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
     boost::shared_ptr<Option6IA> ia = generateIA(D6O_IA_PD, 234, 1500, 3000);
 
     // with a valid hint
@@ -1114,8 +1269,8 @@ TEST_F(Dhcpv6SrvTest, pdRequestBasic) {
     // check that the lease is really in the database
     Lease6Ptr l = checkPdLease(duid_, reply->getOption(D6O_IA_PD), prf);
     EXPECT_TRUE(l);
-    Lease6Ptr lease(new Lease6());
-    lease->addr_ = prf->getAddress();
+    Lease6Ptr lease = LeaseMgrFactory::instance().getLease6(Lease::TYPE_PD,
+                                                            prf->getAddress());
     EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 }
 
@@ -1140,8 +1295,11 @@ TEST_F(Dhcpv6SrvTest, ManyRequests) {
     req3->setRemoteAddr(IOAddress("fe80::3467"));
 
     req1->setIface("eth0");
+    req1->setIndex(ETH0_INDEX);
     req2->setIface("eth0");
+    req2->setIndex(ETH0_INDEX);
     req3->setIface("eth0");
+    req3->setIndex(ETH0_INDEX);
 
     req1->addOption(generateIA(D6O_IA_NA, 1, 1500, 3000));
     req2->addOption(generateIA(D6O_IA_NA, 2, 1500, 3000));
@@ -1203,6 +1361,147 @@ TEST_F(Dhcpv6SrvTest, ManyRequests) {
     cout << "Assigned address to client1=" << addr1->getAddress() << endl;
     cout << "Assigned address to client2=" << addr2->getAddress() << endl;
     cout << "Assigned address to client3=" << addr3->getAddress() << endl;
+}
+
+// This test verifies that incoming REQUEST can reuse an existing lease.
+TEST_F(Dhcpv6SrvTest, RequestCache) {
+    NakedDhcpv6Srv srv(0);
+
+    // Enable lease reuse.
+    subnet_->setCacheThreshold(.1);
+
+    const IOAddress addr("2001:db8:1:1::cafe:babe");
+    const uint32_t iaid = 234;
+    const uint32_t pref = subnet_->getPreferred();
+    const uint32_t valid = subnet_->getValid();
+    const int delta = 100;
+    const time_t timestamp = time(NULL) - delta;
+
+    // Generate client-id also duid_.
+    OptionPtr clientid = generateClientId();
+
+    // Check that the address we are about to use is indeed in pool.
+    ASSERT_TRUE(subnet_->inPool(Lease::TYPE_NA, addr));
+
+    Lease6Ptr used(new Lease6(Lease::TYPE_NA, addr, duid_, iaid, pref, valid,
+                              subnet_->getID()));
+    used->cltt_ = timestamp;
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(used));
+
+    // Check that the lease is really in the database.
+    Lease6Ptr l = LeaseMgrFactory::instance().getLease6(Lease::TYPE_NA, addr);
+    ASSERT_TRUE(l);
+
+    // Check that preferred, valid and cltt really set.
+    // Constructed lease looks as if it was assigned 100 seconds ago.
+    EXPECT_EQ(l->preferred_lft_, pref);
+    EXPECT_EQ(l->valid_lft_, valid);
+    EXPECT_EQ(l->cltt_, timestamp);
+
+    // Let's create a REQUEST.
+    Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_REQUEST, 1234));
+    req->setRemoteAddr(IOAddress("fe80::abcd"));
+    req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
+    req->addOption(createIA(Lease::TYPE_NA, addr, 128, iaid));
+    req->addOption(clientid);
+    req->addOption(srv.getServerID());
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(req, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processRequest(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_REPLY, 1234);
+
+    // check that IA_NA was returned and that there's an address included
+    boost::shared_ptr<Option6IAAddr> iaaddr =
+        checkIA_NA(reply, 234, subnet_->getT1(), subnet_->getT2());
+    ASSERT_TRUE(iaaddr);
+
+    // Check the address.
+    EXPECT_EQ(addr, iaaddr->getAddress());
+    EXPECT_EQ(pref - delta, iaaddr->getPreferred());
+    EXPECT_EQ(valid - delta, iaaddr->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
+// This test verifies that incoming REQUEST can reuse an existing lease.
+// Prefix variant.
+TEST_F(Dhcpv6SrvTest, pdRequestCache) {
+    NakedDhcpv6Srv srv(0);
+
+    // Enable lease reuse.
+    subnet_->setCacheThreshold(.1);
+
+    const IOAddress prefix("2001:db8:1:2::");
+    const uint8_t prefixlen = pd_pool_->getLength();
+    const uint32_t iaid = 234;
+    const uint32_t pref = subnet_->getPreferred();
+    const uint32_t valid = subnet_->getValid();
+    const int delta = 100;
+    const time_t timestamp = time(NULL) - delta;
+
+    // Generate client-id also duid_.
+    OptionPtr clientid = generateClientId();
+
+    // Check that the prefix we are about to use is indeed in pool.
+    ASSERT_TRUE(subnet_->inPool(Lease::TYPE_PD, prefix));
+
+    Lease6Ptr used(new Lease6(Lease::TYPE_PD, prefix, duid_, iaid, pref, valid,
+                              subnet_->getID(), HWAddrPtr(), prefixlen));
+    used->cltt_ = timestamp;
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(used));
+
+    // Check that the lease is really in the database.
+    Lease6Ptr l = LeaseMgrFactory::instance().getLease6(Lease::TYPE_PD, prefix);
+    ASSERT_TRUE(l);
+
+    // Check that preferred, valid and cltt really set.
+    // Constructed lease looks as if it was assigned 100 seconds ago.
+    EXPECT_EQ(l->preferred_lft_, pref);
+    EXPECT_EQ(l->valid_lft_, valid);
+    EXPECT_EQ(l->cltt_, timestamp);
+
+    // Let's create a REQUEST.
+    Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_REQUEST, 1234));
+    req->setRemoteAddr(IOAddress("fe80::abcd"));
+    req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
+    req->addOption(createIA(Lease::TYPE_PD, prefix, prefixlen, iaid));
+    req->addOption(clientid);
+    req->addOption(srv.getServerID());
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(req, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processRequest(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_REPLY, 1234);
+
+    // check that IA_PD was returned and that there's a prefix included
+    boost::shared_ptr<Option6IAPrefix> iapref =
+        checkIA_PD(reply, 234, subnet_->getT1(), subnet_->getT2());
+    ASSERT_TRUE(iapref);
+
+    // Check the prefix.
+    EXPECT_EQ(prefix, iapref->getAddress());
+    EXPECT_EQ(prefixlen, iapref->getLength());
+    EXPECT_EQ(pref - delta, iapref->getPreferred());
+    EXPECT_EQ(valid - delta, iapref->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
 }
 
 // This test verifies that incoming (positive) RENEW can be handled properly, that a
@@ -1346,6 +1645,147 @@ TEST_F(Dhcpv6SrvTest, maxLifetimeReuseExpired) {
     testRenewBasic(Lease::TYPE_NA, "2001:db8:1:1::cafe:babe",
                    "2001:db8:1:1::cafe:babe", 128,
                    true, true, 5000, 6000, 4000, 5000);
+}
+
+// This test verifies that incoming RENEW can reuse an existing lease.
+TEST_F(Dhcpv6SrvTest, RenewCache) {
+    NakedDhcpv6Srv srv(0);
+
+    // Enable lease reuse.
+    subnet_->setCacheThreshold(.1);
+
+    const IOAddress addr("2001:db8:1:1::cafe:babe");
+    const uint32_t iaid = 234;
+    const uint32_t pref = subnet_->getPreferred();
+    const uint32_t valid = subnet_->getValid();
+    const int delta = 100;
+    const time_t timestamp = time(NULL) - delta;
+
+    // Generate client-id also duid_.
+    OptionPtr clientid = generateClientId();
+
+    // Check that the address we are about to use is indeed in pool.
+    ASSERT_TRUE(subnet_->inPool(Lease::TYPE_NA, addr));
+
+    Lease6Ptr used(new Lease6(Lease::TYPE_NA, addr, duid_, iaid, pref, valid,
+                              subnet_->getID()));
+    used->cltt_ = timestamp;
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(used));
+
+    // Check that the lease is really in the database.
+    Lease6Ptr l = LeaseMgrFactory::instance().getLease6(Lease::TYPE_NA, addr);
+    ASSERT_TRUE(l);
+
+    // Check that preferred, valid and cltt really set.
+    // Constructed lease looks as if it was assigned 100 seconds ago.
+    EXPECT_EQ(l->preferred_lft_, pref);
+    EXPECT_EQ(l->valid_lft_, valid);
+    EXPECT_EQ(l->cltt_, timestamp);
+
+    // Let's create a RENEW.
+    Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_RENEW, 1234));
+    req->setRemoteAddr(IOAddress("fe80::abcd"));
+    req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
+    req->addOption(createIA(Lease::TYPE_NA, addr, 128, iaid));
+    req->addOption(clientid);
+    req->addOption(srv.getServerID());
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(req, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processRenew(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_REPLY, 1234);
+
+    // check that IA_NA was returned and that there's an address included
+    boost::shared_ptr<Option6IAAddr> iaaddr =
+        checkIA_NA(reply, 234, subnet_->getT1(), subnet_->getT2());
+    ASSERT_TRUE(iaaddr);
+
+    // Check the address.
+    EXPECT_EQ(addr, iaaddr->getAddress());
+    EXPECT_EQ(pref - delta, iaaddr->getPreferred());
+    EXPECT_EQ(valid - delta, iaaddr->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
+}
+
+// This test verifies that incoming RENEW can reuse an existing lease.
+// Prefix variant.
+TEST_F(Dhcpv6SrvTest, pdRenewCache) {
+    NakedDhcpv6Srv srv(0);
+
+    // Enable lease reuse.
+    subnet_->setCacheThreshold(.1);
+
+    const IOAddress prefix("2001:db8:1:2::");
+    const uint8_t prefixlen = pd_pool_->getLength();
+    const uint32_t iaid = 234;
+    const uint32_t pref = subnet_->getPreferred();
+    const uint32_t valid = subnet_->getValid();
+    const int delta = 100;
+    const time_t timestamp = time(NULL) - delta;
+
+    // Generate client-id also duid_.
+    OptionPtr clientid = generateClientId();
+
+    // Check that the prefix we are about to use is indeed in pool.
+    ASSERT_TRUE(subnet_->inPool(Lease::TYPE_PD, prefix));
+
+    Lease6Ptr used(new Lease6(Lease::TYPE_PD, prefix, duid_, iaid, pref, valid,
+                              subnet_->getID(), HWAddrPtr(), prefixlen));
+    used->cltt_ = timestamp;
+    ASSERT_TRUE(LeaseMgrFactory::instance().addLease(used));
+
+    // Check that the lease is really in the database.
+    Lease6Ptr l = LeaseMgrFactory::instance().getLease6(Lease::TYPE_PD, prefix);
+    ASSERT_TRUE(l);
+
+    // Check that preferred, valid and cltt really set.
+    // Constructed lease looks as if it was assigned 100 seconds ago.
+    EXPECT_EQ(l->preferred_lft_, pref);
+    EXPECT_EQ(l->valid_lft_, valid);
+    EXPECT_EQ(l->cltt_, timestamp);
+
+    // Let's create a RENEW.
+    Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_RENEW, 1234));
+    req->setRemoteAddr(IOAddress("fe80::abcd"));
+    req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
+    req->addOption(createIA(Lease::TYPE_PD, prefix, prefixlen, iaid));
+    req->addOption(clientid);
+    req->addOption(srv.getServerID());
+
+    // Pass it to the server and get an advertise
+    AllocEngine::ClientContext6 ctx;
+    bool drop = false;
+    srv.initContext(req, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr reply = srv.processRenew(ctx);
+
+    // check if we get response at all
+    checkResponse(reply, DHCPV6_REPLY, 1234);
+
+    // check that IA_PD was returned and that there's a prefix included
+    boost::shared_ptr<Option6IAPrefix> iapref =
+        checkIA_PD(reply, 234, subnet_->getT1(), subnet_->getT2());
+    ASSERT_TRUE(iapref);
+
+    // Check the prefix.
+    EXPECT_EQ(prefix, iapref->getAddress());
+    EXPECT_EQ(prefixlen, iapref->getLength());
+    EXPECT_EQ(pref - delta, iapref->getPreferred());
+    EXPECT_EQ(valid - delta, iapref->getValid());
+
+    // check DUIDs
+    checkServerId(reply, srv.getServerID());
+    checkClientId(reply, clientid);
 }
 
 // This test verifies that incoming (positive) RELEASE with address can be
@@ -1725,6 +2165,7 @@ TEST_F(Dhcpv6SrvTest, selectSubnetIface) {
 
     Pkt6Ptr pkt = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
     pkt->setIface("eth0");
+    pkt->setIndex(ETH0_INDEX);
 
     bool drop = false;
     Subnet6Ptr selected = srv.selectSubnet(pkt, drop);
@@ -1738,6 +2179,7 @@ TEST_F(Dhcpv6SrvTest, selectSubnetIface) {
     CfgMgr::instance().commit();
 
     pkt->setIface("eth1");
+    pkt->setIndex(ETH1_INDEX);
 
     selected = srv.selectSubnet(pkt, drop);
     EXPECT_FALSE(selected);
@@ -1753,14 +2195,17 @@ TEST_F(Dhcpv6SrvTest, selectSubnetIface) {
     CfgMgr::instance().commit();
 
     pkt->setIface("eth0");
+    pkt->setIndex(ETH0_INDEX);
     EXPECT_EQ(subnet1, srv.selectSubnet(pkt, drop));
     EXPECT_FALSE(drop);
 
     pkt->setIface("eth3"); // no such interface
+    pkt->setIndex(3);
     EXPECT_EQ(Subnet6Ptr(), srv.selectSubnet(pkt, drop)); // nothing selected
     EXPECT_FALSE(drop);
 
     pkt->setIface("wifi1");
+    pkt->setIndex(101); // arbitrary value
     EXPECT_EQ(subnet3, srv.selectSubnet(pkt, drop));
     EXPECT_FALSE(drop);
 }
@@ -2074,6 +2519,7 @@ TEST_F(Dhcpv6SrvTest, relaySourcePort) {
     Pkt6Ptr sol(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
@@ -2108,6 +2554,7 @@ TEST_F(Dhcpv6SrvTest, relaySourcePort) {
     query->setLocalAddr(sol->getLocalAddr());
     query->setLocalPort(sol->getLocalPort());
     query->setIface(sol->getIface());
+    query->setIndex(sol->getIndex());
 
     srv.fakeReceive(query);
 
@@ -2153,6 +2600,7 @@ TEST_F(Dhcpv6SrvTest, prlPersistency) {
     Pkt6Ptr sol(new Pkt6(DHCPV6_SOLICIT, 1234));
     sol->setRemoteAddr(IOAddress("fe80::abcd"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
@@ -2194,6 +2642,28 @@ TEST_F(Dhcpv6SrvTest, prlPersistency) {
     // and now a dns-servers
     ASSERT_TRUE(response->getOption(D6O_NAME_SERVERS));
     // and still no sntp-servers
+    ASSERT_FALSE(response->getOption(D6O_SNTP_SERVERS));
+
+    // Reset ORO adding subscriber-id
+    sol->delOption(D6O_ORO);
+    OptionUint16ArrayPtr oro2(new OptionUint16Array(Option::V6, D6O_ORO));
+    ASSERT_TRUE(oro2);
+    oro2->addValue(D6O_SUBSCRIBER_ID);
+    sol->addOption(oro2);
+
+    // Let the server process it again.
+    AllocEngine::ClientContext6 ctx3;
+    srv_.initContext(sol, ctx3, drop);
+    ASSERT_FALSE(drop);
+    response = srv_.processSolicit(ctx3);
+
+    // The subscriber-id option should be present but only once despite
+    // it is both requested and has always-send.
+    const OptionCollection& sifs = response->getOptions(D6O_SUBSCRIBER_ID);
+    ASSERT_EQ(1, sifs.size());
+    // But no dns-servers
+    ASSERT_FALSE(response->getOption(D6O_NAME_SERVERS));
+    // Nor a sntp-servers
     ASSERT_FALSE(response->getOption(D6O_SNTP_SERVERS));
 }
 
@@ -2261,8 +2731,8 @@ TEST_F(Dhcpv6SrvTest, relayOverride) {
     ASSERT_EQ(2, subnets->size());
 
     // Let's get them for easy reference
-    Subnet6Ptr subnet1 = (*subnets)[0];
-    Subnet6Ptr subnet2 = (*subnets)[1];
+    Subnet6Ptr subnet1 = *subnets->begin();
+    Subnet6Ptr subnet2 = *std::next(subnets->begin());
     ASSERT_TRUE(subnet1);
     ASSERT_TRUE(subnet2);
 
@@ -2620,7 +3090,7 @@ TEST_F(Dhcpv6SrvTest, receiveParseFailedStat) {
     // Let's get a simple SOLICIT...
     Pkt6Ptr pkt = PktCaptures::captureSimpleSolicit();
 
-    // And pretend it's packet is only 3 bytes long.
+    // And pretend its packet is only 3 bytes long.
     pkt->data_.resize(3);
 
     // Check that the tested statistics is initially set to 0
@@ -2778,7 +3248,7 @@ TEST_F(Dhcpv6SrvTest, userContext) {
     ASSERT_EQ(1, subnets->size());
 
     // Let's get the subnet and check its context.
-    Subnet6Ptr subnet1 = (*subnets)[0];
+    Subnet6Ptr subnet1 = (*subnets->begin());
     ASSERT_TRUE(subnet1);
     ASSERT_TRUE(subnet1->getContext());
     EXPECT_EQ("{ \"secure\": false }", subnet1->getContext()->str());
@@ -2834,9 +3304,9 @@ TEST_F(Dhcpv6SrvTest, calculateTeeTimers) {
         Triplet<uint32_t> cfg_t2_;
         // whether or not calculation is enabled
         bool calculate_tee_times;
-        // configured value for sunbet's t1_percent.
+        // configured value for subnet's t1_percent.
         double t1_percent_;
-        // configured value for sunbet's t2_percent.
+        // configured value for subnet's t2_percent.
         double t2_percent_;
         // expected value for T1 in server response.
         // A value of 0 means server should not have sent T1.
@@ -2947,12 +3417,13 @@ TEST_F(Dhcpv6SrvTest, calculateTeeTimers) {
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
 
     // Iterate over the test scenarios.
     for (auto test = tests.begin(); test != tests.end(); ++test) {
         {
             SCOPED_TRACE((*test).description_);
-            // Configure sunbet for the scenario
+            // Configure subnet for the scenario
             subnet_->setT1((*test).cfg_t1_);
             subnet_->setT2((*test).cfg_t2_);
             subnet_->setCalculateTeeTimes((*test).calculate_tee_times);

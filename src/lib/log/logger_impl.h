@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,8 +15,9 @@
 #include <string>
 #include <map>
 #include <utility>
-#include <boost/noncopyable.hpp>
 
+#include <boost/shared_ptr.hpp>
+#include <boost/noncopyable.hpp>
 
 // log4cplus logger header file
 #include <log4cplus/logger.h>
@@ -163,7 +164,7 @@ public:
     /// \brief Look up message text in dictionary
     ///
     /// This gets you the unformatted text of message for given ID.
-    std::string* lookupMessage(const MessageID& id);
+    boost::shared_ptr<std::string> lookupMessage(const MessageID& id);
 
     /// \brief Replace the interprocess synchronization object
     ///

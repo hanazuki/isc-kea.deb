@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -110,9 +110,9 @@ WatchSocket::clearReady() {
             // or testing the fd with select_fd will fail.
             const char* errstr = strerror(errno);
             closeSocket();
-            isc_throw(WatchSocketError, "WatchSocket clearReady failed:"
-                      << " bytes read: " << nbytes << " : "
-                      << " value read: " << buf << " error :" <<errstr);
+            isc_throw(WatchSocketError, "WatchSocket clearReady failed: "
+                      "bytes read: " << nbytes << " : "
+                      "value read: " << buf << " error :" << errstr);
         }
     }
 }

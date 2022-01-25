@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2017 Deutsche Telekom AG.
 //
 // Author: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -18,7 +18,7 @@
 #include <config.h>
 
 #include <asiolink/io_address.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <exceptions/exceptions.h>
 #include <dhcpsrv/host.h>
 #include <dhcpsrv/cql_host_data_source.h>
@@ -70,6 +70,7 @@ public:
         }
 
         hdsptr_ = HostMgr::instance().getHostDataSource();
+        hdsptr_->setIPReservationsUnique(true);
     }
 
     /// @brief Destroys the HDS and the schema.
@@ -182,7 +183,7 @@ public:
 ///
 /// This test checks if the CqlHostDataSource can be instantiated.  This happens
 /// only if the database can be opened.  Note that this is not part of the
-/// CqlHostMgr test fixure set.  This test checks that the database can be
+/// CqlHostMgr test fixture set.  This test checks that the database can be
 /// opened: the fixtures assume that and check basic operations.
 
 TEST(CqlHostDataSource, OpenDatabase) {
@@ -298,13 +299,13 @@ TEST_F(CqlHostDataSourceTest, basic4HWAddr) {
     testBasic4(Host::IDENT_HWADDR);
 }
 
-// Verifies that IPv4 host reservation with options can have a the global
+// Verifies that IPv4 host reservation with options can have the global
 // subnet id value
 TEST_F(CqlHostDataSourceTest, globalSubnetId4) {
     testGlobalSubnetId4();
 }
 
-// Verifies that IPv6 host reservation with options can have a the global
+// Verifies that IPv6 host reservation with options can have the global
 // subnet id value
 TEST_F(CqlHostDataSourceTest, globalSubnetId6) {
     testGlobalSubnetId6();
@@ -383,6 +384,16 @@ TEST_F(CqlHostDataSourceTest, getPage4Subnets) {
 // by pages even with multiple subnets.
 TEST_F(CqlHostDataSourceTest, getPage6Subnets) {
     testGetPage6Subnets();
+}
+
+// Verifies that all IPv4 host reservations can be retrieved by pages.
+TEST_F(CqlHostDataSourceTest, getPage4All) {
+    testGetPage4All();
+}
+
+// Verifies that all IPv6 host reservations can be retrieved by pages.
+TEST_F(CqlHostDataSourceTest, getPage6All) {
+    testGetPage6All();
 }
 
 // Test verifies if a host reservation can be added and later retrieved by IPv4
@@ -605,8 +616,14 @@ TEST_F(CqlHostDataSourceTest, addDuplicate6WithHWAddr) {
 // Test if the duplicate IPv4 host instances can't be inserted. The test logic is as
 // follows: try to add multiple instances of the same host reservation and
 // verify that the second and following attempts will throw exceptions.
-TEST_F(CqlHostDataSourceTest, addDuplicate4) {
-    testAddDuplicate4();
+TEST_F(CqlHostDataSourceTest, addDuplicateIPv4) {
+    testAddDuplicateIPv4();
+}
+
+/// @brief Test that the CQL backend does not support using non-unique
+/// IP addresses between multiple reservations.
+TEST_F(CqlHostDataSourceTest, disallowDuplicateIP) {
+    testDisallowDuplicateIP();
 }
 
 // This test verifies that DHCPv4 options can be inserted in a binary format
@@ -749,6 +766,143 @@ TEST_F(CqlHostDataSourceTest, testMultipleHostsNoAddress4) {
 // Tests that multiple hosts can be specified within an IPv6 subnet.
 TEST_F(CqlHostDataSourceTest, testMultipleHosts6) {
     testMultipleHosts6();
+}
+
+/// @brief Test fixture class for validating @c HostMgr using
+/// CQL as alternate host data source.
+class CQLHostMgrTest : public HostMgrTest {
+protected:
+
+    /// @brief Build CQL schema for a test.
+    virtual void SetUp();
+
+    /// @brief Rollback and drop CQL schema after the test.
+    virtual void TearDown();
+};
+
+void
+CQLHostMgrTest::SetUp() {
+    HostMgrTest::SetUp();
+
+    // Ensure we have the proper schema with no transient data.
+    db::test::createCqlSchema();
+
+    // Connect to the database
+    try {
+        HostMgr::addBackend(db::test::validCqlConnectionString());
+    } catch (...) {
+        std::cerr << "*** ERROR: unable to open database. The test\n"
+            "*** environment is broken and must be fixed before\n"
+            "*** the CQL tests will run correctly.\n"
+            "*** The reason for the problem is described in the\n"
+            "*** accompanying exception output.\n";
+        throw;
+    }
+}
+
+void
+CQLHostMgrTest::TearDown() {
+    HostMgr::instance().getHostDataSource()->rollback();
+    HostMgr::delBackend("cql");
+
+    // If data wipe enabled, delete transient data otherwise destroy the schema
+    db::test::destroyCqlSchema();
+}
+
+// This test verifies that reservations for a particular client can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(CQLHostMgrTest, getAll) {
+    testGetAll(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(CQLHostMgrTest, getAll4BySubnet) {
+    testGetAll4BySubnet(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(CQLHostMgrTest, getAll6BySubnet) {
+    testGetAll6BySubnet(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular hostname can be
+// retrieved from the configuration file and a database simultaneously.
+TEST_F(CQLHostMgrTest, getAllbyHostname) {
+    testGetAllbyHostname(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular hostname and
+// DHCPv4 subnet can be retrieved from the configuration file and a
+// database simultaneously.
+TEST_F(CQLHostMgrTest, getAllbyHostnameSubnet4) {
+    testGetAllbyHostnameSubnet4(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular hostname and
+// DHCPv6 subnet can be retrieved from the configuration file and a
+// database simultaneously.
+TEST_F(CQLHostMgrTest, getAllbyHostnameSubnet6) {
+    testGetAllbyHostnameSubnet6(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved by pages from the configuration file and a database
+// simultaneously.
+TEST_F(CQLHostMgrTest, getPage4) {
+    testGetPage4(true);
+}
+
+// This test verifies that all v4 reservations be retrieved by pages
+// from the configuration file and a database simultaneously.
+TEST_F(CQLHostMgrTest, getPage4All) {
+    testGetPage4All(true);
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved by pages from the configuration file and a database
+// simultaneously.
+TEST_F(CQLHostMgrTest, getPage6) {
+    testGetPage6(true);
+}
+
+// This test verifies that all v6 reservations be retrieved by pages
+// from the configuration file and a database simultaneously.
+TEST_F(CQLHostMgrTest, getPage6All) {
+    testGetPage6All(true);
+}
+
+// This test verifies that IPv4 reservations for a particular client can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(CQLHostMgrTest, getAll4) {
+    testGetAll4(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that the IPv4 reservation can be retrieved from a
+// database.
+TEST_F(CQLHostMgrTest, get4) {
+    testGet4(HostMgr::instance());
+}
+
+// This test verifies that the IPv6 reservation can be retrieved from a
+// database.
+TEST_F(CQLHostMgrTest, get6) {
+    testGet6(HostMgr::instance());
+}
+
+// This test verifies that the IPv6 prefix reservation can be retrieved
+// from a configuration file and a database.
+TEST_F(CQLHostMgrTest, get6ByPrefix) {
+    testGet6ByPrefix(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that it is possible to control whether the reserved
+// IP addresses are unique or non unique via the HostMgr.
+TEST_F(CQLHostMgrTest, setIPReservationsUnique) {
+    EXPECT_TRUE(HostMgr::instance().setIPReservationsUnique(true));
+    // This is currently not supported for Cassandra.
+    EXPECT_FALSE(HostMgr::instance().setIPReservationsUnique(false));
 }
 
 }  // namespace

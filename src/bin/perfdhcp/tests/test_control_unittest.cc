@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,16 +14,19 @@
 #include <dhcp/dhcp4.h>
 #include <dhcp/pkt4.h>
 #include <dhcp/iface_mgr.h>
+#include <dhcp/option_int.h>
 #include <dhcp/option6_iaaddr.h>
 #include <dhcp/option6_iaprefix.h>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/foreach.hpp>
+#include <boost/format.hpp>
 
 #include <algorithm>
 #include <cstddef>
 #include <stdint.h>
 #include <string>
+#include <vector>
 #include <fstream>
 #include <gtest/gtest.h>
 
@@ -69,6 +72,7 @@ public:
     virtual bool send(const dhcp::Pkt4Ptr& pkt) override {
         sent_cnt_++;
         pkt->updateTimestamp();
+        sent_pkts4_.push_back(pkt);
         return true;
     };
 
@@ -76,6 +80,7 @@ public:
     virtual bool send(const dhcp::Pkt6Ptr& pkt) override {
         sent_cnt_++;
         pkt->updateTimestamp();
+        sent_pkts6_.push_back(pkt);
         return true;
     };
 
@@ -86,6 +91,9 @@ public:
         sent_cnt_ = 0;
         recv_cnt_ = 0;
     }
+
+    std::vector<dhcp::Pkt4Ptr> sent_pkts4_; /// output v4 packets are stored here
+    std::vector<dhcp::Pkt6Ptr> sent_pkts6_; /// output v6 packets are stored here
 };
 
 
@@ -133,7 +141,7 @@ public:
     typedef boost::shared_ptr<IncrementalGenerator> IncrementalGeneratorPtr;
 
     using TestControl::createMessageFromReply;
-    using TestControl::createRequestFromAck;
+    using TestControl::createMessageFromAck;
     using TestControl::factoryElapsedTime6;
     using TestControl::factoryGeneric;
     using TestControl::factoryIana6;
@@ -152,7 +160,7 @@ public:
     using TestControl::sendDiscover4;
     using TestControl::sendRequest4;
     using TestControl::sendPackets;
-    using TestControl::sendMultipleRequests;
+    using TestControl::sendMultipleMessages4;
     using TestControl::sendMultipleMessages6;
     using TestControl::sendRequest6;
     using TestControl::sendSolicit6;
@@ -167,7 +175,7 @@ public:
     using TestControl::template_packets_v4_;
     using TestControl::template_packets_v6_;
     using TestControl::ack_storage_;
-    using TestControl::sendRequestFromAck;
+    using TestControl::sendMessageFromAck;
     using TestControl::options_;
     using TestControl::stats_mgr_;
 
@@ -178,7 +186,6 @@ public:
             1 : opt.getClientsNum();
         setMacAddrGenerator(NumberGeneratorPtr(new TestControl::SequentialGenerator(clients_num)));
     };
-
 };
 
 
@@ -502,7 +509,7 @@ public:
         tc.setTransidGenerator(generator);
         for (int i = 0; i < iterations_num; ++i) {
             // Get next transaction id, without actually using it. The same
-            // id wll be used by the TestControl class for DHCPDISCOVER.
+            // id will be used by the TestControl class for DHCPDISCOVER.
             uint32_t transid = generator->getNext();
             if (use_templates) {
                 tc.sendDiscover4(tc.getTemplateBuffer(0));
@@ -665,12 +672,16 @@ public:
     /// number of leases acquired (10). This function also checks that an
     /// attempt to send more renew messages than the number of leases acquired
     /// will fail.
-    void testSendRenew4() {
+    ///
+    /// \param msg_type A type of the message which is simulated to be sent
+    /// (DHCPREQUEST in renew state or DHCPRELEASE).
+    void testSendRenewRelease4(const uint16_t msg_type) {
         // Build a command line. Depending on the message type, we will use
         // -f<renew-rate> or -F<release-rate> parameter.
         CommandOptions opt;
         std::ostringstream s;
-        s << "perfdhcp -4 -l fake -r 10 -f";
+        s << "perfdhcp -4 -l fake -r 10 ";
+        s << (msg_type == DHCPREQUEST ? "-f" : "-F");
         s << " 10 -R 10 -L 10067 -n 10 127.0.0.1";
         processCmdLine(opt, s.str());
         // Create a test controller class.
@@ -715,31 +726,35 @@ public:
         // Try to send 5 messages. It should be successful because 10
         // DHCPREQUEST messages has been received. For each of them we
         // should be able to send renewal.
-        msg_num = tc.sendMultipleRequests(5);
+        msg_num = tc.sendMultipleMessages4(msg_type, 5);
         // Make sure that we have sent 5 messages.
         EXPECT_EQ(5, msg_num);
 
         // Try to do it again. We should still have 5 Reply packets for
         // which renews haven't been sent yet.
-        msg_num = tc.sendMultipleRequests(5);
+        msg_num = tc.sendMultipleMessages4(msg_type, 5);
         EXPECT_EQ(5, msg_num);
 
         // We used all the DHCPACK packets (we sent renew or release for each of
         // them already). Therefore, no further renew messages should be sent
         // before we acquire new leases.
-        msg_num = tc.sendMultipleRequests(5);
+        msg_num = tc.sendMultipleMessages4(msg_type, 5);
         // Make sure that no message has been sent.
         EXPECT_EQ(0, msg_num);
     }
 
     /// \brief Test that the DHCPREQUEST message is created correctly and
     /// comprises expected values.
-    void testCreateRequest() {
+    ///
+    /// \param msg_type A type of the message to be tested:
+    /// DHCPREQUEST in renew state or DHCPRELEASE.
+    void testCreateRenewRelease4(const uint16_t msg_type) {
         // This command line specifies that the Release/Renew messages should
         // be sent with the same rate as the Solicit messages.
         CommandOptions opt;
         std::ostringstream s;
-        s << "perfdhcp -4 -l lo -r 10 -f 10";
+        s << "perfdhcp -4 -l lo -r 10 ";
+        s << (msg_type == DHCPREQUEST ? "-F" : "-f") << " 10";
         s << " -R 10 -L 10067 -n 10 127.0.0.1";
         processCmdLine(opt, s.str());
         // Create a test controller class.
@@ -753,28 +768,28 @@ public:
         Pkt4Ptr ack = createAckPkt4(1);
 
         // Create DHCPREQUEST from DHCPACK.
-        Pkt4Ptr request;
-        request = tc.createRequestFromAck(ack);
+        Pkt4Ptr msg;
+        msg = tc.createMessageFromAck(msg_type, ack);
 
         // Make sure that the DHCPACK has been successfully created and that
         // it holds expected data.
-        ASSERT_TRUE(request);
-        EXPECT_EQ("127.0.0.1", request->getCiaddr().toText());
+        ASSERT_TRUE(msg);
+        EXPECT_EQ("127.0.0.1", msg->getCiaddr().toText());
 
         // HW address.
         HWAddrPtr hwaddr_ack = ack->getHWAddr();
         ASSERT_TRUE(hwaddr_ack);
-        HWAddrPtr hwaddr_req = request->getHWAddr();
+        HWAddrPtr hwaddr_req = msg->getHWAddr();
         ASSERT_TRUE(hwaddr_req);
         EXPECT_TRUE(hwaddr_ack->hwaddr_ == hwaddr_req->hwaddr_);
 
         // Creating message from null DHCPACK should fail.
-        EXPECT_THROW(tc.createRequestFromAck(Pkt4Ptr()), isc::BadValue);
+        EXPECT_THROW(tc.createMessageFromAck(msg_type, Pkt4Ptr()), isc::BadValue);
 
         // Creating message from DHCPACK holding zero yiaddr should fail.
         asiolink::IOAddress yiaddr = ack->getYiaddr();
         ack->setYiaddr(asiolink::IOAddress::IPV4_ZERO_ADDRESS());
-        EXPECT_THROW(tc.createRequestFromAck(ack), isc::BadValue);
+        EXPECT_THROW(tc.createMessageFromAck(msg_type, ack), isc::BadValue);
         ack->setYiaddr(yiaddr);
     }
 
@@ -783,7 +798,7 @@ public:
     ///
     /// \param msg_type A type of the message to be tested: DHCPV6_RELEASE
     /// or DHCPV6_RENEW.
-    void testCreateRenewRelease(const uint16_t msg_type) {
+    void testCreateRenewRelease6(const uint16_t msg_type) {
         // This command line specifies that the Release/Renew messages should
         // be sent with the same rate as the Solicit messages.
         CommandOptions opt;
@@ -857,7 +872,7 @@ public:
     ///
     /// \param msg_type A type of the message which is simulated to be sent
     /// (DHCPV6_RENEW or DHCPV6_RELEASE).
-    void testSendRenewRelease(const uint16_t msg_type) {
+    void testSendRenewRelease6(const uint16_t msg_type) {
         // Build a command line. Depending on the message type, we will use
         // -f<renew-rate> or -F<release-rate> parameter.
         CommandOptions opt;
@@ -1086,6 +1101,30 @@ public:
         reply->updateTimestamp();
         return (reply);
 
+    }
+
+    /// @brief Check presence and content of v4 options 55.
+    ///
+    /// \param pkt packet to be checked
+    /// \param expected_option_requests only these option requests should be
+    ///     found under option 55 in the packet, nothing more, nothing less
+    void checkOptions55(Pkt4Ptr const& pkt,
+                        vector<uint8_t> const& expected_option_requests) {
+        // Sanity checks
+        ASSERT_TRUE(pkt);
+        OptionPtr const& opt(pkt->getOption(55));
+        ASSERT_TRUE(opt);
+        EXPECT_TRUE(opt->getUniverse() == Option::V4);
+
+        // Create the text of the expected option.
+        string const length(to_string(expected_option_requests.size()));
+        string const buffer(
+            TestControl::vector2Hex(expected_option_requests, ":"));
+        string const expected_option_text(boost::str(
+            boost::format("type=055, len=%03u: %s") % length % buffer));
+
+        // Compare.
+        EXPECT_EQ(opt->toText(), expected_option_text);
     }
 
     /// @brief check if v4 options 200 and 201 are present.
@@ -1453,7 +1492,7 @@ TEST_F(TestControlTest, Packet6Relayed) {
     EXPECT_EQ(asiolink::IOAddress("FF05::1:3"), pkt6->getRemoteAddr());
     // Packet should be relayed.
     EXPECT_EQ(pkt6->relay_info_.size(), 1);
-    EXPECT_EQ(pkt6->relay_info_[0].hop_count_, 1);
+    EXPECT_EQ(pkt6->relay_info_[0].hop_count_, 0);
     EXPECT_EQ(pkt6->relay_info_[0].msg_type_, DHCPV6_RELAY_FORW);
     EXPECT_EQ(pkt6->relay_info_[0].linkaddr_, tc.socket_.addr_);
     EXPECT_EQ(pkt6->relay_info_[0].peeraddr_, tc.socket_.addr_);
@@ -1663,31 +1702,49 @@ TEST_F(TestControlTest, PacketTemplates) {
 // This test verifies that DHCPv4 renew (DHCPREQUEST) messages can be
 // sent for acquired leases.
 TEST_F(TestControlTest, processRenew4) {
-    testSendRenew4();
+    testSendRenewRelease4(DHCPREQUEST);
+}
+
+// This test verifies that DHCPv4 release (DHCPRELEASE) messages can be
+// sent for acquired leases.
+TEST_F(TestControlTest, processRelease4) {
+    testSendRenewRelease4(DHCPRELEASE);
 }
 
 // This test verifies that DHCPv6 Renew messages can be sent for acquired
 // leases.
 TEST_F(TestControlTest, processRenew6) {
-    testSendRenewRelease(DHCPV6_RENEW);
+    testSendRenewRelease6(DHCPV6_RENEW);
 }
 
 // This test verifies that DHCPv6 Release messages can be sent for acquired
 // leases.
 TEST_F(TestControlTest, processRelease6) {
-    testSendRenewRelease(DHCPV6_RELEASE);
+    testSendRenewRelease6(DHCPV6_RELEASE);
 }
 
 // This test verifies that DHCPREQUEST is created correctly from the
 // DHCPACK message.
-TEST_F(TestControlTest, createRequest) {
-    testCreateRequest();
+TEST_F(TestControlTest, createRenew4) {
+    testCreateRenewRelease4(DHCPREQUEST);
+}
+
+// This test verifies that DHCPRELEASE is created correctly from the
+// DHCPACK message.
+TEST_F(TestControlTest, createRelease4) {
+    testCreateRenewRelease4(DHCPRELEASE);
 }
 
 // This test verifies that the DHCPV6 Renew message is created correctly
 // and that it comprises all required options.
-TEST_F(TestControlTest, createRenew) {
-    testCreateRenewRelease(DHCPV6_RENEW);
+TEST_F(TestControlTest, createRenew6) {
+    testCreateRenewRelease6(DHCPV6_RENEW);
+}
+
+// This test verifies that the DHCPv6 Release message is created correctly
+// and that it comprises all required options.
+TEST_F(TestControlTest, createRelease6) {
+    testCreateRenewRelease6(DHCPV6_RELEASE);
 }
 
 // This test verifies that the counter of rejected leases in
@@ -1696,16 +1753,9 @@ TEST_F(TestControlTest, rejectedLeasesAdv) {
     testCountRejectedLeasesSolAdv();
 }
 
-// This test verifies that the DHCPv6 Release message is created correctly
-// and that it comprises all required options.
-TEST_F(TestControlTest, createRelease) {
-    testCreateRenewRelease(DHCPV6_RELEASE);
-}
-
 // Test checks if sendDiscover really includes custom options
 TEST_F(TestControlTest, sendDiscoverExtraOpts) {
-
-    // Important paramters here:
+    // Important parameters here:
     // -xT - save first packet of each type for templates (useful for packet inspection)
     // -o 200,abcdef1234 - send option 200 with hex content: ab:cd:ef:12:34
     // -o 201,00 - send option 201 with hex content: 00
@@ -1732,7 +1782,7 @@ TEST_F(TestControlTest, sendDiscoverExtraOpts) {
 // Test checks if regular packet exchange inserts the extra v4 options
 // specified on command line.
 TEST_F(TestControlTest, Packet4ExchangeExtraOpts) {
-    // Important paramters here:
+    // Important parameters here:
     // -xT - save first packet of each type for templates (useful for packet inspection)
     // -o 200,abcdef1234 - send option 200 with hex content: ab:cd:ef:12:34
     // -o 201,00 - send option 201 with hex content: 00
@@ -1767,7 +1817,7 @@ TEST_F(TestControlTest, Packet4ExchangeExtraOpts) {
 // Test checks if regular packet exchange inserts the extra v6 options
 // specified on command line.
 TEST_F(TestControlTest, Packet6ExchangeExtraOpts) {
-    // Important paramters here:
+    // Important parameters here:
     // -xT - save first packet of each type for templates (useful for packet inspection)
     // -o 200,abcdef1234 - send option 200 with hex content: ab:cd:ef:12:34
     // -o 201,00 - send option 201 with hex content: 00
@@ -1792,13 +1842,103 @@ TEST_F(TestControlTest, Packet6ExchangeExtraOpts) {
     EXPECT_EQ(tc.stats_mgr_.getSentPacketsNum(ExchangeType::RR), iterations_num);
     EXPECT_EQ(tc.stats_mgr_.getRcvdPacketsNum(ExchangeType::RR), 0);
 
-    // Check if Solicit was recored and if it contains options 200 and 201.
+    // Check if Solicit was recorded and if it contains options 200 and 201.
     auto sol = tc.template_packets_v6_.find(DHCPV6_SOLICIT);
     ASSERT_TRUE(sol != tc.template_packets_v6_.end());
     checkOptions20x(sol->second);
 
-    // Check if Request was recored and if it contains options 200 and 201.
+    // Check if Request was recorded and if it contains options 200 and 201.
     auto req = tc.template_packets_v6_.find(DHCPV6_REQUEST);
     ASSERT_TRUE(req != tc.template_packets_v6_.end());
     checkOptions20x(req->second);
+}
+
+// Test checks if multiple v4 PRL options can be sent. They should be merged
+// into a single PRL option by perfdhcp.
+TEST_F(TestControlTest, sendDiscoverMultiplePRLs) {
+    // Important parameters here:
+    // -o 55,1234 - send option 55 with hex content '1234'
+    // -o 55,abcd - send option 55 with hex content 'abcd'
+    CommandOptions opt;
+    processCmdLine(
+        opt, "perfdhcp -4 -l fake -o 55,1234 -o 55,abcd -r 1 -xT 127.0.0.1");
+
+    // Create test control and set up some basic defaults.
+    NakedTestControl tc(opt);
+    tc.registerOptionFactories();
+    NakedTestControl::IncrementalGeneratorPtr gen(
+        boost::make_shared<NakedTestControl::IncrementalGenerator>());
+    tc.setTransidGenerator(gen);
+
+    // Send the packet.
+    tc.sendDiscover4();
+
+    // Let's find the packet and see if it includes the right option.
+    auto const pkt_it(tc.template_packets_v4_.find(DHCPDISCOVER));
+    ASSERT_TRUE(pkt_it != tc.template_packets_v4_.end());
+
+    checkOptions55(pkt_it->second,
+                   {
+                       // Added to all perfdhcp egress packets by default
+                       DHO_SUBNET_MASK,
+                       DHO_BROADCAST_ADDRESS,
+                       DHO_TIME_OFFSET,
+                       DHO_ROUTERS,
+                       DHO_DOMAIN_NAME,
+                       DHO_DOMAIN_NAME_SERVERS,
+                       DHO_HOST_NAME,
+                       // Explicitly added in this test
+                       0x12,
+                       0x34,
+                       0xab,
+                       0xcd,
+                   });
+}
+
+// This test checks if HA failure can be simulated using -y and -Y options with DHCPv4.
+TEST_F(TestControlTest, haFailure4) {
+    CommandOptions opt;
+    processCmdLine(opt, "perfdhcp -l fake -r 1 -n 1 -R 2 -y 10 -Y 0 -L 10547 127.0.0.1");
+    NakedTestControl tc(opt);
+
+    tc.sendPackets(1); // Send one packet. It should have secs set to 1.
+    sleep(1);          // wait a second...
+    tc.sendPackets(1); // and send another packet. This should have secs set to 2.
+
+    EXPECT_EQ(tc.fake_sock_.sent_cnt_, 2); // Make sure the stats are up.
+    ASSERT_EQ(tc.fake_sock_.sent_pkts4_.size(), 2); // And the packets were captured.
+    Pkt4Ptr dis1 = tc.fake_sock_.sent_pkts4_[0];
+    Pkt4Ptr dis2 = tc.fake_sock_.sent_pkts4_[1];
+    ASSERT_TRUE(dis1);
+    ASSERT_TRUE(dis2);
+
+    EXPECT_EQ(dis1->getSecs(), 1); // Make sure it has secs set to 1.
+    EXPECT_GT(dis2->getSecs(), 1); // Should be 2, but we want to avoid rare cases when the test
+                                   // could fall exactly on the second boundary, so checking for
+                                   // greater than 1.
+}
+
+// This test checks if HA failure can be simulated using -y and -Y options with DHCPv6.
+TEST_F(TestControlTest, haFailure6) {
+    CommandOptions opt;
+    processCmdLine(opt, "perfdhcp -6 -l fake -r 1 -n 1 -R 2 -y 10 -Y 0 -L 10547 all");
+    NakedTestControl tc(opt);
+
+    tc.sendPackets(1); // Send one packet. It should have secs set to 1.
+    sleep(1);          // wait a second...
+    tc.sendPackets(1); // and send another packet. This should have secs set to 2.
+
+    EXPECT_EQ(tc.fake_sock_.sent_cnt_, 2); // Make sure the stats are up.
+    ASSERT_EQ(tc.fake_sock_.sent_pkts6_.size(), 2); // And the packets were captured.
+    Pkt6Ptr sol1 = tc.fake_sock_.sent_pkts6_[0];
+    Pkt6Ptr sol2 = tc.fake_sock_.sent_pkts6_[1];
+    ASSERT_TRUE(sol1);
+    ASSERT_TRUE(sol2);
+    OptionUint16Ptr elapsed1(boost::dynamic_pointer_cast<OptionUint16>(sol1->getOption(D6O_ELAPSED_TIME)));
+    OptionUint16Ptr elapsed2(boost::dynamic_pointer_cast<OptionUint16>(sol2->getOption(D6O_ELAPSED_TIME)));
+    ASSERT_TRUE(elapsed1);
+    ASSERT_TRUE(elapsed2);
+
+    EXPECT_EQ(elapsed1->getValue(), 100);
+    EXPECT_GT(elapsed2->getValue(), 100);
 }

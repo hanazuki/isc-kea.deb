@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -46,12 +46,11 @@ buffer holding the DHCPv6 message. The arguments specify the source and
 destination addresses as well as the interface over which the buffer has
 been received.
 
-% DHCP6_BUFFER_WAIT_SIGNAL signal received while waiting for next packet, next waiting signal is %1
+% DHCP6_BUFFER_WAIT_SIGNAL signal received while waiting for next packet
 This debug message is issued when the server was waiting for the
 packet, but the wait has been interrupted by the signal received
 by the process. The signal will be handled before the server starts
-waiting for next packets. The argument specifies the next signal to
-be handled by the server.
+waiting for next packets.
 
 % DHCP6_CB_ON_DEMAND_FETCH_UPDATES_FAIL error on demand attempt to fetch configuration updates from the configuration backend(s): %1
 This error message is issued when the server attempted to fetch
@@ -124,6 +123,16 @@ This is a debug message that is issued every time the server receives a
 configuration. That happens start up and also when a server configuration
 change is committed by the administrator.
 
+% DHCP6_CONFIG_UNRECOVERABLE_ERROR DHCPv6 server new configuration failed with an error which cannot be recovered
+This fatal error message is issued when a new configuration raised an error
+which cannot be recovered. A correct configuration must be applied as soon
+as possible as the server is no longer working.
+The configuration can be fixed in several ways. If the control channel
+is open, config-set with a valid configuration can be
+used. Alternatively, the original config file on disk could be fixed
+and SIGHUP signal could be sent (or the config-reload command
+issued). Finally, the server could be restarted completely.
+
 % DHCP6_CONFIG_UNSUPPORTED_OBJECT DHCPv6 server configuration includes an unsupported object: %1
 This error message is issued when the configuration includes an unsupported
 object (i.e. a top level element).
@@ -137,32 +146,31 @@ This informational message is printed every time the IPv6 DHCP server
 is started.  It indicates what database backend type is being to store
 lease and other information.
 
-% DHCP6_DB_RECONNECT_ATTEMPT_FAILED database reconnect failed: %1
-An error message indicating that an attempt to reconnect to the lease and/or
-host data bases has failed.  This occurs after connectivity to either one
-has been lost and an automatic attempt to reconnect has failed.
-
-% DHCP6_DB_RECONNECT_ATTEMPT_SCHEDULE scheduling attempt %1 of %2 in %3 milliseconds
-An informational message indicating that the server is scheduling the next
-attempt to reconnect to its lease and/or host databases.  This occurs when the
-server has lost databse connectivity and is attempting to reconnect
-automatically.
-
 % DHCP6_DB_RECONNECT_DISABLED database reconnect is disabled: max-reconnect-tries %1, reconnect-wait-time %2
 This is an informational message indicating that connectivity to either the
 lease or host database or both and that automatic reconnect is not enabled.
 
+% DHCP6_DB_RECONNECT_FAILED maximum number of database reconnect attempts: %1, has been exhausted without success
+This error indicates that the server failed to reconnect to the lease and/or
+host database(s) after making the maximum configured number of reconnect
+attempts. This might cause the server to shut down as specified in the
+configuration. Loss of connectivity is typically a network or database server
+issue.
+
+% DHCP6_DB_RECONNECT_LOST_CONNECTION database connection lost.
+This info message indicates that the connection has been lost and the dhcp
+service might have been disabled, as specified in the configuration, in order to
+try to recover the connection.
+
 % DHCP6_DB_RECONNECT_NO_DB_CTL unexpected error in database reconnect
 This is an error message indicating a programmatic error that should not
-occur. It will prohibit the server from attempting to reconnect to its
-databases if connectivy is lost, and the server will exit. This error
+occur. It prohibits the server from attempting to reconnect to its
+databases if connectivity is lost, and the server exits. This error
 should be reported.
 
-% DHCP6_DB_RECONNECT_RETRIES_EXHAUSTED maximum number of database reconnect attempts: %1, has been exhausted without success, server is shutting down!
-This error indicates that the server is shutting down after failing to reconnect to
-the lease and/or host database(s) after making the maximum configured number
-of reconnect attempts.  Loss of connectivity is typically a network or database
-server issue.
+% DHCP6_DB_RECONNECT_SUCCEEDED database connection recovered.
+This info message indicates that the connection has been recovered and the dhcp
+service has been restored.
 
 % DHCP6_DDNS_CREATE_ADD_NAME_CHANGE_REQUEST created name change request: %1
 This debug message is logged when the new Name Change Request has been created
@@ -198,7 +206,7 @@ includes the received FQDN.
 
 % DHCP6_DDNS_REMOVE_OLD_LEASE_FQDN %1: FQDN for a lease: %2 has changed. New values: hostname = %3, reverse mapping = %4, forward mapping = %5
 This debug message is logged during lease renewal when an old lease that is
-no longer being offered has a different FQDN than the renewing lesae. Thus
+no longer being offered has a different FQDN than the renewing lease. Thus
 the old DNS entries need to be removed.  The first argument includes the client
 and the transaction identification information. The second argument holds the
 details about the lease for which the FQDN information and/or mappings have
@@ -226,6 +234,14 @@ in its response to the client.
 This message is printed when DHCPv6 server disables an interface from being
 used to receive DHCPv6 traffic. Sockets on this interface will not be opened
 by the Interface Manager until interface is enabled.
+
+% DHCP6_DECLINE_FAIL %1: error on decline lease for address %2: %3
+This error message indicates that the software failed to decline a
+lease from the lease database due to an error during a database
+operation. The first argument includes the client and the transaction
+identification information. The second argument holds the IPv6 address
+which decline was attempted. The last one contains the reason for
+failure.
 
 % DHCP6_DECLINE_FAIL_DUID_MISMATCH Client %1 sent DECLINE for address %2, but it belongs to client with DUID %3
 This informational message is printed when a client attempts to decline
@@ -270,6 +286,10 @@ received in Decline message. It's expected that the option will contain an
 address that is being declined. Specific information will be printed in a
 separate message.
 
+% DHCP6_DEVELOPMENT_VERSION This software is a development branch of Kea. It is not recommended for production use.
+This warning message is displayed when the version is a development
+(vs stable) one: the second number of the version is odd.
+
 % DHCP6_DHCP4O6_PACKET_RECEIVED received DHCPv4o6 packet from DHCPv4 server (type %1) for %2 port %3 on interface %4
 This debug message is printed when the server is receiving a DHCPv4o6
 from the DHCPv4 server over inter-process communication.
@@ -293,8 +313,12 @@ This is the info message logged when the DHCPv6 server starts reconfiguration
 as a result of receiving SIGHUP signal or config-reload command.
 
 % DHCP6_DYNAMIC_RECONFIGURATION_FAIL dynamic server reconfiguration failed with file: %1
-This is an error message logged when the dynamic reconfiguration of the
+This is a fatal error message logged when the dynamic reconfiguration of the
 DHCP server failed.
+
+% DHCP6_DYNAMIC_RECONFIGURATION_SUCCESS dynamic server reconfiguration succeeded with file: %1
+This is info message logged when the dynamic reconfiguration of the DHCP server
+succeeded.
 
 % DHCP6_FLEX_ID flexible identifier generated for incoming packet: %1
 This debug message is printed when host reservation type is set to flexible identifier
@@ -373,8 +397,16 @@ This debug message is printed when a callout installed on the leases6_committed
 hook point sets the next step to DROP.
 
 % DHCP6_HOOK_LEASES6_COMMITTED_PARK %1: packet is parked, because a callout set the next step to PARK
-This debug message is printed when a callout installed on the lease6_committed
+This debug message is printed when a callout installed on the leases6_committed
 hook point sets the next step to PARK.
+
+% DHCP6_HOOK_LEASES6_PARKING_LOT_FULL The parked-packet-limit %1, has been reached, dropping query: %2
+This debug message occurs when the parking lot used to hold client queries
+while hook library work for them completes has reached or exceeded the
+limit set by the parked-packet-limit global parameter. This can occur when
+kea-dhcp6 is using hook libraries (e.g. HA) that implement the
+"leases6-committed" callout and client queries are arriving faster than
+those callouts can fulfill them.
 
 % DHCP6_HOOK_PACKET_RCVD_SKIP %1: packet is dropped, because a callout set the next step to SKIP
 This debug message is printed when a callout installed on the pkt6_receive
@@ -484,7 +516,15 @@ The first argument includes the client and transaction identification
 information. The remaining arguments hold the allocated address and
 IAID.
 
-% DHCP6_MULTI_THREADING_INFO enabled: %1, number of threads: %2, queue size per thread: %3
+% DHCP6_LEASE_REUSE %1: lease for address %2 and iaid=%3 has been reused for %4 seconds
+This informational message indicates that in response to a client's
+message, the server successfully reused a non-temporary address
+lease. This is a normal behavior and indicates successful operation.
+The first argument includes the client and transaction identification
+information. The remaining arguments hold the allocated address,
+IAID and validity lifetime.
+
+% DHCP6_MULTI_THREADING_INFO enabled: %1, number of threads: %2, queue size: %3
 This is a message listing some information about the multi-threading parameters
 with which the server is running.
 
@@ -519,6 +559,17 @@ after a specified amount of time since receiving "dhcp-disable" command.
 This debug message is emitted when an incoming packet was classified
 into the special class 'DROP' and dropped. The packet details are displayed.
 
+% DHCP6_PACKET_DROP_DROP_CLASS2 dropped as member of the special class 'DROP' after host reservation lookup: %1
+This debug message is emitted when an incoming packet was classified
+after host reservation lookup into the special class 'DROP' and dropped.
+The packet details are displayed.
+
+% DHCP6_PACKET_DROP_DUPLICATE dropped as sent by the same client than a packet being processed by another thread: dropped %1 by thread %2 as duplicate of %3 processed by %4
+Currently multi-threading processing avoids races between packets sent by
+the same client by dropping new packets until processing is finished.
+Packet details and thread identifiers are included for both packets in
+this warning message.
+
 % DHCP6_PACKET_DROP_PARSE_FAIL failed to parse packet from %1 to %2, received over interface %3, reason: %4
 The DHCPv6 server has received a packet that it is unable to
 interpret. The reason why the packet is invalid is included in the message.
@@ -533,7 +584,7 @@ because packets of this type must be sent to multicast. The first argument
 specifies the client and transaction identification information, the
 second argument specifies packet type.
 
-% DHCP6_PACKET_OPTIONS_SKIPPED An error upacking an option, caused subsequent options to be skipped: %1
+% DHCP6_PACKET_OPTIONS_SKIPPED An error unpacking an option, caused subsequent options to be skipped: %1
 A debug message issued when an option failed to unpack correctly, making it
 impossible to unpack the remaining options in the packet.  The server will
 server will still attempt to service the packet.
@@ -554,6 +605,10 @@ This error message indicates that a standard exception was raised
 during packet processing that was not caught by other, more specific
 exception handlers. This packet will be dropped and the server will
 continue operation.
+
+% DHCP6_PACKET_QUEUE_FULL multi-threading packet queue is full
+A debug message noting that the multi-threading packet queue is full so
+the oldest packet of the queue was dropped to make room for the received one.
 
 % DHCP6_PACKET_RECEIVED %1: %2 (type %3) received from %4 to %5 on interface %6
 A debug message noting that the server has received the specified type of
@@ -653,7 +708,15 @@ message, the server successfully renewed a prefix lease.
 This is a normal behavior and indicates successful operation.
 The first argument includes the client and transaction identification
 information. The remaining arguments hold the allocated prefix,
-prefix length and and IAID.
+prefix length and IAID.
+
+% DHCP6_PD_LEASE_REUSE %1: lease for prefix %2/%3 and iaid=%4 has been reused for %5 seconds
+This informational message indicates that in response to a client's
+message, the server successfully reused a prefix lease.
+This is a normal behavior and indicates successful operation.
+The first argument includes the client and transaction identification
+information. The remaining arguments hold the allocated prefix,
+prefix length, IAID and validity lifetime.
 
 % DHCP6_PROCESS_IA_NA_EXTEND %1: extending lease lifetime for IA_NA option with iaid=%2
 This message is logged when the server is starting to extend the lifetime
@@ -701,6 +764,10 @@ This debug message is issued when the server found a Rapid Commit option
 in the client's message and 2-way exchanges are supported by the
 server for the subnet on which the client is connected. The argument
 specifies the client and transaction identification information.
+
+% DHCP6_RECLAIM_EXPIRED_LEASES_FAIL failed to reclaim expired leases: %1
+This error message indicates that the reclaim expired leases operation failed
+and provides the cause of failure.
 
 % DHCP6_RELEASE_NA %1: binding for address %2 and iaid=%3 was released properly
 This informational message indicates that an address was released properly. It
@@ -805,6 +872,13 @@ stopping IO between the DHCPv6 server and the DHCP_DDNS server.  This is
 probably due to a programmatic error is not likely to impact either server
 upon restart.  The reason for the failure is given within the message.
 
+% DHCP6_SRV_UNLOAD_LIBRARIES_ERROR error unloading hooks libraries during shutdown: %1
+This error message indicates that during shutdown, unloading hooks
+libraries failed to close them. If the list of libraries is empty it is
+a programmatic error in the server code. If it is not empty it could be
+a programmatic error in one of the hooks libraries which could lead to
+a crash during finalization.
+
 % DHCP6_STANDALONE skipping message queue, running standalone
 This is a debug message indicating that the IPv6 server is running in
 standalone mode, not connected to the message queue.  Standalone mode
@@ -816,7 +890,7 @@ This informational message indicates that the IPv6 DHCP server has
 processed all configuration information and is ready to process
 DHCPv6 packets.  The version is also printed.
 
-% DHCP6_STARTING Kea DHCPv6 server version %1 starting
+% DHCP6_STARTING Kea DHCPv6 server version %1 (%2) starting
 This informational message indicates that the IPv6 DHCP server has
 processed any command-line switches and is starting. The version
 is also printed.

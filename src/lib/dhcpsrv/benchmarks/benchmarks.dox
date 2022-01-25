@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -39,7 +39,7 @@ $ cd src/lib/dhcpsrv/benchmarks
 $ ./run-benchmarks --benchmark_list_tests
 @endcode
 
-The list is dependandant on the configuration flags and availability of
+The list is dependant on the configuration flags and availability of
 various backends. For example, to run specific benchmark you may
 specify its name. Wildcards are supported:
 

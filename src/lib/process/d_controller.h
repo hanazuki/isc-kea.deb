@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,13 +8,13 @@
 #define D_CONTROLLER_H
 
 #include <asiolink/io_service.h>
+#include <asiolink/io_service_signal.h>
 #include <cc/data.h>
 #include <exceptions/exceptions.h>
 #include <log/logger_support.h>
 #include <process/daemon.h>
 #include <process/d_log.h>
 #include <process/d_process.h>
-#include <process/io_service_signal.h>
 
 #include <boost/shared_ptr.hpp>
 #include <boost/noncopyable.hpp>
@@ -149,7 +149,8 @@ public:
     /// process object.
     /// ProcessRunError - A fatal error occurred while in the application
     /// process event loop.
-    virtual void launch(int argc, char* argv[], const bool test_mode);
+    /// @return The value from @c Daemon::getExitValue().
+    virtual int launch(int argc, char* argv[], const bool test_mode);
 
     /// @brief Instance method invoked by the configuration event handler and
     /// which processes the actual configuration update.  Provides behavioral
@@ -406,9 +407,8 @@ protected:
 
     /// @brief Application-level signal processing method.
     ///
-    /// This method is the last step in processing a OS signal occurrence.  It
-    /// is invoked when an IOSignal's internal timer callback is executed by
-    /// IOService.  It currently supports the following signals as follows:
+    /// This method is the last step in processing a OS signal occurrence.
+    /// It currently supports the following signals as follows:
     /// -# SIGHUP - instigates reloading the configuration file
     /// -# SIGINT - instigates a graceful shutdown
     /// -# SIGTERM - instigates a graceful shutdown
@@ -574,36 +574,9 @@ protected:
     /// @brief Initializes signal handling
     ///
     /// This method configures the controller to catch and handle signals.
-    /// It instantiates an IOSignalQueue, registers @c osSignalHandler() as
-    /// the SignalSet "on-receipt" handler, and lastly instantiates a SignalSet
-    /// which listens for SIGHUP, SIGINT, and SIGTERM.
+    /// It instantiates a IOSignalSet which listens for SIGHUP, SIGINT, and
+    /// SIGTERM.
     void initSignalHandling();
-
-    /// @brief Handler for processing OS-level signals
-    ///
-    /// This method is installed as the SignalSet "on-receipt" handler. Upon
-    /// invocation, it uses the controller's IOSignalQueue to schedule an
-    /// IOSignal with for the given signal value.
-    ///
-    /// @param signum OS signal value (e.g. SIGINT, SIGUSR1 ...) to received
-    ///
-    /// @return SignalSet "on-receipt" handlers are required to return a
-    /// boolean indicating if the OS signal has been processed (true) or if it
-    /// should be saved for deferred processing (false).  Currently this
-    /// method processes all received signals, so it always returns true.
-    bool osSignalHandler(int signum);
-
-    /// @brief Handler for processing IOSignals
-    ///
-    /// This method is supplied as the callback when IOSignals are scheduled.
-    /// It fetches the IOSignal for the given sequence_id and then invokes
-    /// the virtual method, @c processSignal() passing it the signal value
-    /// obtained from the IOSignal.  This allows derivations to supply a
-    /// custom signal processing method, while ensuring IOSignalQueue
-    /// integrity.
-    ///
-    /// @param sequence_id id of the IOSignal instance "received"
-    void ioSignalHandler(IOSignalId sequence_id);
 
     /// @brief Fetches the current process
     ///
@@ -631,10 +604,10 @@ protected:
     ///
     /// Code shared between configuration handlers:
     ///  - check obsolete or unknown (aka unsupported) objects.
-    ///  - relocate Logging.
     ///
     /// @param args Command arguments.
-    void handleOtherObjects(isc::data::ConstElementPtr args);
+    /// @return Error message or empty string.
+    std::string handleOtherObjects(isc::data::ConstElementPtr args);
 
 private:
     /// @brief Name of the service under control.
@@ -661,10 +634,10 @@ private:
     DProcessBasePtr process_;
 
     /// @brief Shared pointer to an IOService object, used for ASIO operations.
-    asiolink::IOServicePtr io_service_;
+    isc::asiolink::IOServicePtr io_service_;
 
-    /// @brief Queue for propagating caught signals to the IOService.
-    IOSignalQueuePtr io_signal_queue_;
+    /// @brief ASIO signal set.
+    isc::asiolink::IOSignalSetPtr io_signal_set_;
 
     /// @brief Singleton instance value.
     static DControllerBasePtr controller_;
@@ -674,7 +647,7 @@ private:
 friend class DControllerTest;
 };
 
-}; // namespace isc::process
-}; // namespace isc
+} // namespace isc::process
+} // namespace isc
 
 #endif

@@ -1,18 +1,18 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 
+#include <config.h>
+
 #include <perfdhcp/perf_socket.h>
 #include <perfdhcp/command_options.h>
+#include <perfdhcp/stats_mgr.h>
 
 #include <dhcp/iface_mgr.h>
 #include <asiolink/io_address.h>
-
-#include <boost/foreach.hpp>
-
 
 using namespace isc::dhcp;
 using namespace isc::asiolink;
@@ -134,8 +134,8 @@ PerfSocket::~PerfSocket() {
 
 void
 PerfSocket::initSocketData() {
-    BOOST_FOREACH(IfacePtr iface, IfaceMgr::instance().getIfaces()) {
-        BOOST_FOREACH(SocketInfo s, iface->getSockets()) {
+    for (IfacePtr iface : IfaceMgr::instance().getIfaces()) {
+        for (SocketInfo s : iface->getSockets()) {
             if (s.sockfd_ == sockfd_) {
                 ifindex_ = iface->getIndex();
                 addr_ = s.addr_;
@@ -150,9 +150,13 @@ Pkt4Ptr
 PerfSocket::receive4(uint32_t timeout_sec, uint32_t timeout_usec) {
     Pkt4Ptr pkt = IfaceMgr::instance().receive4(timeout_sec, timeout_usec);
     if (pkt) {
-        /// @todo: Add packet exception handling here. Right now any
-        /// malformed packet will cause perfdhcp to abort.
-        pkt->unpack();
+        try {
+            pkt->unpack();
+        } catch (const std::exception &e) {
+                ExchangeStats::malformed_pkts_++;
+                std::cout << "Incorrect DHCP packet received"
+                          << e.what() << std::endl;
+        }
     }
     return (pkt);
 }
@@ -161,9 +165,13 @@ Pkt6Ptr
 PerfSocket::receive6(uint32_t timeout_sec, uint32_t timeout_usec) {
     Pkt6Ptr pkt = IfaceMgr::instance().receive6(timeout_sec, timeout_usec);
     if (pkt) {
-        /// @todo: Add packet exception handling here. Right now any
-        /// malformed packet will cause perfdhcp to abort.
-        pkt->unpack();
+        try {
+            pkt->unpack();
+        } catch (const std::exception &e) {
+                ExchangeStats::malformed_pkts_++;
+                std::cout << "Incorrect DHCP packet received"
+                          << e.what() << std::endl;
+        }
     }
     return (pkt);
 }

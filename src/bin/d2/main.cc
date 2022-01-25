@@ -1,15 +1,15 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
-#include <d2/d2_log.h>
 #include <d2/d2_controller.h>
+#include <d2srv/d2_log.h>
 #include <exceptions/exceptions.h>
-#include <log/logger_support.h>
 #include <log/logger_manager.h>
+#include <log/logger_support.h>
 
 #include <iostream>
 
@@ -27,12 +27,12 @@ int main(int argc, char* argv[]) {
 
     // Launch the controller passing in command line arguments.
     // Exit program with the controller's return code.
-    try  {
+    try {
         // Instantiate/fetch the DHCP-DDNS application controller singleton.
         DControllerBasePtr& controller = D2Controller::instance();
 
         // 'false' value disables test mode.
-        controller->launch(argc, argv, false);
+        ret = controller->launch(argc, argv, false);
     } catch (const VersionMessage& ex) {
         std::string msg(ex.what());
         if (!msg.empty()) {
@@ -44,10 +44,15 @@ int main(int argc, char* argv[]) {
             std::cerr << msg << std::endl;
         }
         ret = EXIT_FAILURE;
-    } catch (const isc::Exception& ex) {
+    } catch (const std::exception& ex) {
         std::cerr << "Service failed: " << ex.what() << std::endl;
         ret = EXIT_FAILURE;
+    } catch (...) {
+        std::cerr << "Service failed" << std::endl;
+        ret = EXIT_FAILURE;
     }
+
+    D2Controller::instance().reset();
 
     return (ret);
 }

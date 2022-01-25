@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,20 +9,20 @@
 #include <asiolink/io_service.h>
 #include <asiolink/interval_timer.h>
 #include <d2/d2_queue_mgr.h>
+#include <d2srv/testutils/stats_test_utils.h>
 #include <dhcp_ddns/ncr_udp.h>
 #include <util/time_utilities.h>
 
-#include <boost/function.hpp>
-#include <boost/bind.hpp>
-#include <gtest/gtest.h>
 #include <gtest/gtest.h>
 #include <algorithm>
+#include <functional>
 #include <vector>
 
 using namespace std;
 using namespace isc;
 using namespace isc::dhcp_ddns;
 using namespace isc::d2;
+using namespace isc::d2::test;
 
 namespace {
 
@@ -38,7 +38,8 @@ const char *valid_msgs[] =
      " \"ip-address\" : \"192.168.2.1\" , "
      " \"dhcid\" : \"010203040A7F8E3D\" , "
      " \"lease-expires-on\" : \"20130121132405\" , "
-     " \"lease-length\" : 1300 "
+     " \"lease-length\" : 1300, "
+     " \"use-conflict-resolution\" : true "
      "}",
     // Valid Remove.
      "{"
@@ -49,7 +50,8 @@ const char *valid_msgs[] =
      " \"ip-address\" : \"192.168.2.1\" , "
      " \"dhcid\" : \"010203040A7F8E3D\" , "
      " \"lease-expires-on\" : \"20130121132405\" , "
-     " \"lease-length\" : 1300 "
+     " \"lease-length\" : 1300, "
+     " \"use-conflict-resolution\" : true "
      "}",
      // Valid Add with IPv6 address
      "{"
@@ -60,7 +62,8 @@ const char *valid_msgs[] =
      " \"ip-address\" : \"fe80::2acf:e9ff:fe12:e56f\" , "
      " \"dhcid\" : \"010203040A7F8E3D\" , "
      " \"lease-expires-on\" : \"20130121132405\" , "
-     " \"lease-length\" : 1300 "
+     " \"lease-length\" : 1300, "
+     " \"use-conflict-resolution\" : true "
      "}"
 };
 
@@ -202,7 +205,7 @@ bool checkSendVsReceived(NameChangeRequestPtr sent_ncr,
 /// @brief Text fixture that allows testing a listener and sender together
 /// It derives from both the receive and send handler classes and contains
 /// and instance of UDP listener and UDP sender.
-class QueueMgrUDPTest : public virtual ::testing::Test,
+class QueueMgrUDPTest : public virtual ::testing::Test, public D2StatTest,
                         NameChangeSender::RequestSendHandler {
 public:
     asiolink::IOServicePtr io_service_;
@@ -224,8 +227,8 @@ public:
                                               FMT_JSON, *this, 100, true));
 
         // Set the test timeout to break any running tasks if they hang.
-        test_timer_.setup(boost::bind(&QueueMgrUDPTest::testTimeoutHandler,
-                                      this),
+        test_timer_.setup(std::bind(&QueueMgrUDPTest::testTimeoutHandler,
+                                    this),
                           TEST_TIMEOUT);
     }
 
@@ -383,6 +386,13 @@ TEST_F (QueueMgrUDPTest, liveFeed) {
         EXPECT_EQ(0, queue_mgr_->getQueueSize());
     }
 
+    StatMap stats_ncr = {
+        { "ncr-received", 3},
+        { "ncr-invalid", 0},
+        { "ncr-error", 0}
+    };
+    checkStats(stats_ncr);
+
     // Iterate over the list of requests, sending and receiving
     // each one. Allow them to accumulate in the queue.
     for (int i = 0; i < VALID_MSG_CNT; i++) {
@@ -395,6 +405,13 @@ TEST_F (QueueMgrUDPTest, liveFeed) {
         EXPECT_NO_THROW(io_service_->run_one());
         EXPECT_EQ(i+1, queue_mgr_->getQueueSize());
     }
+
+    StatMap stats_ncr_new = {
+        { "ncr-received", 6},
+        { "ncr-invalid", 0},
+        { "ncr-error", 0}
+    };
+    checkStats(stats_ncr_new);
 
     // Verify that the queue is at max capacity.
     EXPECT_EQ(queue_mgr_->getMaxQueueSize(), queue_mgr_->getQueueSize());
@@ -426,7 +443,6 @@ TEST_F (QueueMgrUDPTest, liveFeed) {
     // Verify that clearQueue works.
     EXPECT_NO_THROW(queue_mgr_->clearQueue());
     EXPECT_EQ(0, queue_mgr_->getQueueSize());
-
 
     // Verify that we can again receive requests.
     // Send should be fine.

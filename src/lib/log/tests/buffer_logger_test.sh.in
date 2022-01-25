@@ -1,5 +1,6 @@
 #!/bin/sh
-# Copyright (C) 2012-2016 Internet Systems Consortium, Inc. ("ISC")
+
+# Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,47 +8,38 @@
 
 # Checks that the initLogger() call uses for unit tests respects the setting of
 # the buffer value
-#
 
-testname="bufferLogger test"
-echo $testname
+# Exit with error if commands exit with non-zero and if undefined variables are
+# used.
+set -eu
 
-failcount=0
-tempfile=@abs_builddir@/buffer_logger_test_tempfile_$$
+# Include common test library.
+# shellcheck disable=SC1091
+# SC1091: Not following: ... was not specified as input (see shellcheck -x).
+. "@abs_top_builddir@/src/lib/testutils/dhcp_test_lib.sh"
 
-passfail() {
-    if [ $1 -eq 0 ]; then
-        echo " pass"
-    else
-        echo " FAIL"
-        failcount=`expr $failcount + $1`
-    fi
-}
+tempfile="@abs_builddir@/buffer_logger_test_tempfile_$$"
 
-echo "1. Checking that buffer initialization works"
+printf 'Checking that buffer initialization works:\n'
 
-echo -n  "   - Buffer including process() call: "
+test_start 'buffer-logger.buffer-including-process()-call'
 cat > $tempfile << .
 INFO  [buffertest.log] LOG_BAD_SEVERITY unrecognized log severity: info
 INFO  [buffertest.log] LOG_BAD_SEVERITY unrecognized log severity: info
 .
 ./buffer_logger_test 2>&1 | \
-    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\]/[\1]/' | \
+    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\.\(0x\)\{0,1\}\([0-9A-Fa-f]\{1,\}\)\]/[\1]/' | \
     cut -d' ' -f3- | diff $tempfile -
-passfail $?
+test_finish 0
 
-echo -n  "   - Buffer excluding process() call: "
+test_start 'buffer-logger.buffer-excluding-process()-call'
 cat > $tempfile << .
 INFO [buffertest.log]: LOG_BAD_SEVERITY unrecognized log severity: info
 DEBUG [buffertest.log]: LOG_BAD_DESTINATION unrecognized log destination: debug-50
 INFO [buffertest.log]: LOG_BAD_SEVERITY unrecognized log severity: info
 .
 ./buffer_logger_test -n 2>&1 | diff $tempfile -
-passfail $?
-
-
+test_finish 0
 
 # Tidy up.
 rm -f $tempfile
-
-exit $failcount

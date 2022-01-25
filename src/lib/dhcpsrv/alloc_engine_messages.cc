@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/dhcpsrv/alloc_engine_messages.mes on Mon Oct 28 2019 01:43
+// File created from ../../../src/lib/dhcpsrv/alloc_engine_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>
@@ -12,6 +12,9 @@ extern const isc::log::MessageID ALLOC_ENGINE_REMOVAL_NCR_FAILED = "ALLOC_ENGINE
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_ERROR = "ALLOC_ENGINE_V4_ALLOC_ERROR";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL = "ALLOC_ENGINE_V4_ALLOC_FAIL";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_CLASSES = "ALLOC_ENGINE_V4_ALLOC_FAIL_CLASSES";
+extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_NO_POOLS = "ALLOC_ENGINE_V4_ALLOC_FAIL_NO_POOLS";
+extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_SHARED_NETWORK = "ALLOC_ENGINE_V4_ALLOC_FAIL_SHARED_NETWORK";
+extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_SUBNET = "ALLOC_ENGINE_V4_ALLOC_FAIL_SUBNET";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DECLINED_RECOVERED = "ALLOC_ENGINE_V4_DECLINED_RECOVERED";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT = "ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_HR = "ALLOC_ENGINE_V4_DISCOVER_HR";
@@ -40,6 +43,9 @@ extern const isc::log::MessageID ALLOC_ENGINE_V4_REQUEST_USE_HR = "ALLOC_ENGINE_
 extern const isc::log::MessageID ALLOC_ENGINE_V4_REUSE_EXPIRED_LEASE_DATA = "ALLOC_ENGINE_V4_REUSE_EXPIRED_LEASE_DATA";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_ERROR = "ALLOC_ENGINE_V6_ALLOC_ERROR";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL = "ALLOC_ENGINE_V6_ALLOC_FAIL";
+extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL_NO_POOLS = "ALLOC_ENGINE_V6_ALLOC_FAIL_NO_POOLS";
+extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL_SHARED_NETWORK = "ALLOC_ENGINE_V6_ALLOC_FAIL_SHARED_NETWORK";
+extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL_SUBNET = "ALLOC_ENGINE_V6_ALLOC_FAIL_SUBNET";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_HR_LEASE_EXISTS = "ALLOC_ENGINE_V6_ALLOC_HR_LEASE_EXISTS";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_LEASES_HR = "ALLOC_ENGINE_V6_ALLOC_LEASES_HR";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_LEASES_NO_HR = "ALLOC_ENGINE_V6_ALLOC_LEASES_NO_HR";
@@ -72,6 +78,8 @@ extern const isc::log::MessageID ALLOC_ENGINE_V6_RENEW_REMOVE_UNRESERVED = "ALLO
 extern const isc::log::MessageID ALLOC_ENGINE_V6_REUSE_EXPIRED_LEASE_DATA = "ALLOC_ENGINE_V6_REUSE_EXPIRED_LEASE_DATA";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_ADDR_LEASE = "ALLOC_ENGINE_V6_REVOKED_ADDR_LEASE";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_PREFIX_LEASE = "ALLOC_ENGINE_V6_REVOKED_PREFIX_LEASE";
+extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_SHARED_ADDR_LEASE = "ALLOC_ENGINE_V6_REVOKED_SHARED_ADDR_LEASE";
+extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_SHARED_PREFIX_LEASE = "ALLOC_ENGINE_V6_REVOKED_SHARED_PREFIX_LEASE";
 
 } // namespace dhcp
 } // namespace isc
@@ -84,6 +92,9 @@ const char* values[] = {
     "ALLOC_ENGINE_V4_ALLOC_ERROR", "%1: error during attempt to allocate an IPv4 address: %2",
     "ALLOC_ENGINE_V4_ALLOC_FAIL", "%1: failed to allocate an IPv4 address after %2 attempt(s)",
     "ALLOC_ENGINE_V4_ALLOC_FAIL_CLASSES", "%1: Failed to allocate an IPv4 address for client with classes: %2",
+    "ALLOC_ENGINE_V4_ALLOC_FAIL_NO_POOLS", "%1: no pools were available for the address allocation",
+    "ALLOC_ENGINE_V4_ALLOC_FAIL_SHARED_NETWORK", "%1: failed to allocate an IPv4 address in the shared network %2: %3 subnets have no available addresses, %4 subnets have no matching pools",
+    "ALLOC_ENGINE_V4_ALLOC_FAIL_SUBNET", "%1: failed to allocate an IPv4 address in the subnet %2, subnet-id %3, shared network %4",
     "ALLOC_ENGINE_V4_DECLINED_RECOVERED", "IPv4 address %1 was recovered after %2 seconds of probation-period",
     "ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT", "%1: conflicting reservation for address %2 with existing lease %3",
     "ALLOC_ENGINE_V4_DISCOVER_HR", "client %1 sending DHCPDISCOVER has reservation for the address %2",
@@ -111,7 +122,10 @@ const char* values[] = {
     "ALLOC_ENGINE_V4_REQUEST_USE_HR", "client %1 hasn't requested specific address, using reserved address %2",
     "ALLOC_ENGINE_V4_REUSE_EXPIRED_LEASE_DATA", "%1: reusing expired lease, updated lease information: %2",
     "ALLOC_ENGINE_V6_ALLOC_ERROR", "%1: error during attempt to allocate an IPv6 address: %2",
-    "ALLOC_ENGINE_V6_ALLOC_FAIL", "%1: failed to allocate an IPv6 address after %2 attempt(s)",
+    "ALLOC_ENGINE_V6_ALLOC_FAIL", "%1: failed to allocate an IPv6 lease after %2 attempt(s)",
+    "ALLOC_ENGINE_V6_ALLOC_FAIL_NO_POOLS", "%1: no pools were available for the lease allocation",
+    "ALLOC_ENGINE_V6_ALLOC_FAIL_SHARED_NETWORK", "%1: failed to allocate a lease in the shared network %2: %3 subnets have no available leases, %4 subnets have no matching pools",
+    "ALLOC_ENGINE_V6_ALLOC_FAIL_SUBNET", "%1: failed to allocate an IPv6 lease in the subnet with id %2",
     "ALLOC_ENGINE_V6_ALLOC_HR_LEASE_EXISTS", "%1: lease type %2 for reserved address/prefix %3 already exists",
     "ALLOC_ENGINE_V6_ALLOC_LEASES_HR", "leases and static reservations found for client %1",
     "ALLOC_ENGINE_V6_ALLOC_LEASES_NO_HR", "no reservations found but leases exist for client %1",
@@ -143,7 +157,9 @@ const char* values[] = {
     "ALLOC_ENGINE_V6_RENEW_REMOVE_UNRESERVED", "dynamically allocating leases for the renewing client %1",
     "ALLOC_ENGINE_V6_REUSE_EXPIRED_LEASE_DATA", "%1: reusing expired lease, updated lease information: %2",
     "ALLOC_ENGINE_V6_REVOKED_ADDR_LEASE", "address %1 was revoked from client %2 as it is reserved for client %3",
-    "ALLOC_ENGINE_V6_REVOKED_PREFIX_LEASE", "Prefix %1/%2 was revoked from client %3 as it is reserved for client %4",
+    "ALLOC_ENGINE_V6_REVOKED_PREFIX_LEASE", "prefix %1/%2 was revoked from client %3 as it is reserved for client %4",
+    "ALLOC_ENGINE_V6_REVOKED_SHARED_ADDR_LEASE", "address %1 was revoked from client %2 as it is reserved for %3 other clients",
+    "ALLOC_ENGINE_V6_REVOKED_SHARED_PREFIX_LEASE", "prefix %1/%2 was revoked from client %3 as it is reserved for %4 other clients",
     NULL
 };
 

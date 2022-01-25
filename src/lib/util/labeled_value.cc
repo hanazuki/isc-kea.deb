@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -74,14 +74,14 @@ LabeledValueSet::add(LabeledValuePtr entry) {
         isc_throw(LabeledValueError,
                   "value: " << value << " is already defined as: "
                   << getLabel(value));
-        }
+    }
 
-    map_[entry->getValue()]=entry;
+    map_[value] = entry;
 }
 
 void
 LabeledValueSet::add(const int value, const std::string& label) {
-    add (LabeledValuePtr(new LabeledValue(value,label)));
+    add(LabeledValuePtr(new LabeledValue(value,label)));
 }
 
 const LabeledValuePtr&

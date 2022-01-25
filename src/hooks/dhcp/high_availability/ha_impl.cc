@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -44,6 +44,17 @@ HAImpl::startService(const IOServicePtr& io_service,
     // Create the HA service and crank up the state machine.
     service_ = boost::make_shared<HAService>(io_service, network_state,
                                              config_, server_type);
+    // Schedule a start of the services. This ensures we begin after
+    // the dust has settled and Kea MT mode has been firmly established.
+    io_service->post([&]() { service_->startClientAndListener(); } );
+}
+
+HAImpl::~HAImpl() {
+    if (service_) {
+        // Shut down the services explicitly, we need finer control
+        // than relying on destruction order.
+        service_->stopClientAndListener();
+    }
 }
 
 void
@@ -56,7 +67,9 @@ HAImpl::buffer4Receive(hooks::CalloutHandle& callout_handle) {
     try {
         // We have to unpack the query to get access into HW address which is
         // used to load balance the packet.
-        query4->unpack();
+        if (callout_handle.getStatus() != CalloutHandle::NEXT_STEP_SKIP) {
+            query4->unpack();
+        }
 
     } catch (const SkipRemainingOptionsError& ex) {
         // An option failed to unpack but we are to attempt to process it
@@ -132,22 +145,29 @@ HAImpl::leases4Committed(CalloutHandle& callout_handle) {
     // pointer until we unpark the packet.
     ParkingLotHandlePtr parking_lot = callout_handle.getParkingLotHandlePtr();
 
+    // Create a reference to the parked packet. This signals that we have a
+    // stake in unparking it.
+    parking_lot->reference(query4);
+
     // Asynchronously send lease updates. In some cases no updates will be sent,
     // e.g. when this server is in the partner-down state and there are no backup
     // servers. In those cases we simply return without parking the DHCP query.
     // The response will be sent to the client immediately.
-    if (service_->asyncSendLeaseUpdates(query4, leases4, deleted_leases4, parking_lot) == 0) {
-        return;
+    try {
+        if (service_->asyncSendLeaseUpdates(query4, leases4, deleted_leases4, parking_lot) == 0) {
+            // Dereference the parked packet.  This releases our stake in it.
+            parking_lot->dereference(query4);
+            return;
+        }
+    } catch (...) {
+        // Make sure we dereference.
+        parking_lot->dereference(query4);
+        throw;
     }
 
-    // This is required step every time we ask the server to park the packet.
-    // The reference counting is required to keep the packet parked until
-    // all callouts call unpark. Then, the packet gets unparked and the
-    // associated callback is triggered. The callback resumes packet processing.
-    parking_lot->reference(query4);
-
     // The callout returns this status code to indicate to the server that it
-    // should park the query packet.
+    // should leave the packet parked.  It will be parked until each hook
+    // library with a reference, unparks the packet.
     callout_handle.setStatus(CalloutHandle::NEXT_STEP_PARK);
 }
 
@@ -161,7 +181,9 @@ HAImpl::buffer6Receive(hooks::CalloutHandle& callout_handle) {
     try {
         // We have to unpack the query to get access into DUID which is
         // used to load balance the packet.
-        query6->unpack();
+        if (callout_handle.getStatus() != CalloutHandle::NEXT_STEP_SKIP) {
+            query6->unpack();
+        }
 
     } catch (const SkipRemainingOptionsError& ex) {
         // An option failed to unpack but we are to attempt to process it
@@ -237,22 +259,29 @@ HAImpl::leases6Committed(CalloutHandle& callout_handle) {
     // pointer until we unpark the packet.
     ParkingLotHandlePtr parking_lot = callout_handle.getParkingLotHandlePtr();
 
+    // Create a reference to the parked packet. This signals that we have a
+    // stake in unparking it.
+    parking_lot->reference(query6);
+
     // Asynchronously send lease updates. In some cases no updates will be sent,
     // e.g. when this server is in the partner-down state and there are no backup
     // servers. In those cases we simply return without parking the DHCP query.
     // The response will be sent to the client immediately.
-    if (service_->asyncSendLeaseUpdates(query6, leases6, deleted_leases6, parking_lot) == 0) {
-        return;
+    try {
+        if (service_->asyncSendLeaseUpdates(query6, leases6, deleted_leases6, parking_lot) == 0) {
+            // Dereference the parked packet.  This releases our stake in it.
+            parking_lot->dereference(query6);
+            return;
+        }
+    } catch (...) {
+        // Make sure we dereference.
+        parking_lot->dereference(query6);
+        throw;
     }
 
-    // This is required step every time we ask the server to park the packet.
-    // The reference counting is required to keep the packet parked until
-    // all callouts call unpark. Then, the packet gets unparked and the
-    // associated callback is triggered. The callback resumes packet processing.
-    parking_lot->reference(query6);
-
     // The callout returns this status code to indicate to the server that it
-    // should park the query packet.
+    // should leave the packet parked.  It will be unparked until each hook
+    // library with a reference, unparks the packet.
     callout_handle.setStatus(CalloutHandle::NEXT_STEP_PARK);
 }
 
@@ -260,9 +289,7 @@ void
 HAImpl::commandProcessed(hooks::CalloutHandle& callout_handle) {
     std::string command_name;
     callout_handle.getArgument("name", command_name);
-    if (command_name == "dhcp-enable") {
-        service_->adjustNetworkState();
-    } else if (command_name == "status-get") {
+    if (command_name == "status-get") {
         // Get the response.
         ConstElementPtr response;
         callout_handle.getArgument("response", response);
@@ -277,8 +304,17 @@ HAImpl::commandProcessed(hooks::CalloutHandle& callout_handle) {
         // Add the ha servers info to arguments.
         ElementPtr mutable_resp_args =
             boost::const_pointer_cast<Element>(resp_args);
+
+        /// @todo Today we support only one HA relationship per Kea server.
+        /// In the future there will be more of them. Therefore we enclose
+        /// our sole relationship in a list.
+        auto ha_relationships = Element::createList();
+        auto ha_relationship = Element::createMap();
         ConstElementPtr ha_servers = service_->processStatusGet();
-        mutable_resp_args->set("ha-servers", ha_servers);
+        ha_relationship->set("ha-servers", ha_servers);
+        ha_relationship->set("ha-mode", Element::create(HAConfig::HAModeToString(config_->getHAMode())));
+        ha_relationships->add(ha_relationship);
+        mutable_resp_args->set("high-availability", ha_relationships);
     }
 }
 
@@ -445,6 +481,18 @@ HAImpl::maintenanceStartHandler(hooks::CalloutHandle& callout_handle) {
 void
 HAImpl::maintenanceCancelHandler(hooks::CalloutHandle& callout_handle) {
     ConstElementPtr response = service_->processMaintenanceCancel();
+    callout_handle.setArgument("response", response);
+}
+
+void
+HAImpl::haResetHandler(hooks::CalloutHandle& callout_handle) {
+    ConstElementPtr response = service_->processHAReset();
+    callout_handle.setArgument("response", response);
+}
+
+void
+HAImpl::syncCompleteNotifyHandler(hooks::CalloutHandle& callout_handle) {
+    ConstElementPtr response = service_->processSyncCompleteNotify();
     callout_handle.setArgument("response", response);
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -28,8 +28,12 @@ public:
 
     /// @brief Constructor
     ///
+    /// In test mode only the configuration is checked. In particular
+    /// sockets are not opened or closed.
+    ///
     /// @param protocol AF_INET for DHCPv4 and AF_INET6 for DHCPv6.
-    explicit IfacesConfigParser(const uint16_t protocol);
+    /// @param test_mode True if in test mode, False if not.
+    IfacesConfigParser(const uint16_t protocol, bool test_mode);
 
     /// @brief Parses content of the "interfaces-config".
     ///
@@ -55,6 +59,9 @@ private:
 
     /// @brief AF_INET for DHCPv4 and AF_INET6 for DHCPv6.
     int protocol_;
+
+    /// @brief Test mode.
+    bool test_mode_;
 };
 
 }

@@ -1,4 +1,4 @@
-// File created from ../../../src/bin/lfc/lfc_messages.mes on Fri Feb 08 2019 20:33
+// File created from ../../../src/bin/lfc/lfc_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>

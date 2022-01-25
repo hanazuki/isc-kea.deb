@@ -6,7 +6,7 @@
 // do. Comments in this configuration file sometimes refer to sections for more
 // details. These are section numbers in Kea User's Guide. The version matching
 // your software should come with your Kea package, but it is also available
-// in ISC's Knowledgebase (https://kb.isc.org/docs/kea-administrator-reference-manual; the direct link for
+// in ISC's Knowledgebase (https://kea.readthedocs.io; the direct link for
 // the stable version is https://kea.readthedocs.io/).
 //
 // This configuration file contains only Control Agent's configuration.
@@ -18,6 +18,12 @@
 // RESTful interface to be available at http://127.0.0.1:8000/
 "Control-agent": {
     "http-host": "127.0.0.1",
+    // If enabling HA and multi-threading, the 8000 port is used by the HA
+    // hook library http listener. When using HA hook library with
+    // multi-threading to function, make sure the port used by dedicated
+    // listener is different (e.g. 8001) than the one used by CA. Note
+    // the commands should still be sent via CA. The dedicated listener
+    // is specifically for HA updates only.
     "http-port": 8000,
 
     // Specify location of the files to which the Control Agent
@@ -66,7 +72,7 @@
                 // - stderr (prints on standard error)
                 // - syslog (logs to syslog)
                 // - syslog:name (logs to syslog using specified name)
-                // Any other value is considered a name of a time
+                // Any other value is considered a name of the file
                 "output": "@localstatedir@/log/kea-ctrl-agent.log"
 
                 // Shorter log pattern suitable for use with systemd,

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Copyright (C) 2011-2016 Internet Systems Consortium, Inc. ("ISC")
+
+# Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,22 +9,18 @@
 # Checks that the logger will limit the output of messages less severe than
 # the severity/debug setting.
 
-testname="Severity test"
-echo $testname
+# Exit with error if commands exit with non-zero and if undefined variables are
+# used.
+set -eu
 
-failcount=0
-tempfile=@abs_builddir@/severity_test_tempfile_$$
+# Include common test library.
+# shellcheck disable=SC1091
+# SC1091: Not following: ... was not specified as input (see shellcheck -x).
+. "@abs_top_builddir@/src/lib/testutils/dhcp_test_lib.sh"
 
-passfail() {
-    if [ $1 -eq 0 ]; then
-        echo " pass"
-    else
-        echo " FAIL"
-        failcount=`expr $failcount + $1`
-    fi
-}
+tempfile="@abs_builddir@/severity_test_tempfile_$$"
 
-echo -n "1. Default parameters:"
+test_start 'severity.default-parameters'
 cat > $tempfile << .
 FATAL [example] LOG_WRITE_ERROR error writing to test1: 42
 ERROR [example] LOG_READING_LOCAL_FILE reading local message file dummy/file
@@ -36,11 +33,11 @@ WARN  [example.beta] LOG_BAD_STREAM bad log console output stream: beta_warn
 INFO  [example.beta] LOG_READ_ERROR error reading from message file beta: info
 .
 ./logger_example -c stdout | \
-    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\]/[\1]/' | \
+    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\.\(0x\)\{0,1\}\([0-9A-Fa-f]\{1,\}\)\]/[\1]/' | \
     cut -d' ' -f3- | diff $tempfile -
-passfail $?
+test_finish $?
 
-echo -n "2. Severity filter:"
+test_start 'severity.filter'
 cat > $tempfile << .
 FATAL [example] LOG_WRITE_ERROR error writing to test1: 42
 ERROR [example] LOG_READING_LOCAL_FILE reading local message file dummy/file
@@ -48,11 +45,11 @@ FATAL [example.beta] LOG_BAD_SEVERITY unrecognized log severity: beta_fatal
 ERROR [example.beta] LOG_BAD_DESTINATION unrecognized log destination: beta_error
 .
 ./logger_example -c stdout -s error | \
-    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\]/[\1]/' | \
+    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\.\(0x\)\{0,1\}\([0-9A-Fa-f]\{1,\}\)\]/[\1]/' | \
     cut -d' ' -f3- | diff $tempfile -
-passfail $?
+test_finish $?
 
-echo -n "3. Debug level:"
+test_start 'severity.debug-level'
 cat > $tempfile << .
 FATAL [example] LOG_WRITE_ERROR error writing to test1: 42
 ERROR [example] LOG_READING_LOCAL_FILE reading local message file dummy/file
@@ -69,19 +66,9 @@ INFO  [example.beta] LOG_READ_ERROR error reading from message file beta: info
 DEBUG [example.beta] LOG_BAD_SEVERITY unrecognized log severity: beta/25
 .
 ./logger_example -c stdout -s debug -d 25 | \
-    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\]/[\1]/' | \
+    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\.\(0x\)\{0,1\}\([0-9A-Fa-f]\{1,\}\)\]/[\1]/' | \
     cut -d' ' -f3- | diff $tempfile -
-passfail $?
-
-if [ $failcount -eq 0 ]; then
-    echo "PASS: $testname"
-elif [ $failcount -eq 1 ]; then
-    echo "FAIL: $testname - 1 test failed"
-else
-    echo "FAIL: $testname - $failcount tests failed"
-fi
+test_finish $?
 
 # Tidy up
 rm -f $tempfile
-
-exit $failcount

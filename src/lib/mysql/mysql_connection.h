@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #ifndef MYSQL_CONNECTION_H
 #define MYSQL_CONNECTION_H
 
+#include <asiolink/io_service.h>
 #include <database/database_connection.h>
 #include <database/db_exceptions.h>
 #include <database/db_log.h>
@@ -70,11 +71,52 @@ private:
 ///
 /// Each statement is associated with an index, which is used to reference the
 /// associated prepared statement.
-
 struct TaggedStatement {
     uint32_t index;
     const char* text;
 };
+
+/// @brief Retry on InnoDB deadlock.
+///
+/// When f(args) returns ER_LOCK_DEADLOCK f(args) is called again up to 5 times.
+///
+/// @tparam Fun Type of the function which must return an int.
+/// @tparam Args Types of arguments.
+/// @param fun The function to call.
+/// @param args Arguments.
+/// @return status (can be ER_LOCK_DEADLOCK after 5 retries).
+template <typename Fun, typename... Args>
+int retryOnDeadlock(Fun& fun, Args... args) {
+    int status;
+    for (unsigned count = 0; count < 5; ++count) {
+        status = fun(args...);
+        if (status != ER_LOCK_DEADLOCK) {
+            break;
+        }
+    }
+    return (status);
+}
+
+/// @brief Execute a prepared statement.
+///
+/// Call mysql_stmt_execute and retry on ER_LOCK_DEADLOCK.
+///
+/// @param stmt Statement to execute.
+/// @return status (can be ER_LOCK_DEADLOCK after 5 retries).
+inline int MysqlExecuteStatement(MYSQL_STMT* stmt) {
+    return (retryOnDeadlock(mysql_stmt_execute, stmt));
+}
+
+/// @brief Execute a literal statement.
+///
+/// Call mysql_query and retry on ER_LOCK_DEADLOCK.
+///
+/// @param mysql MySQL context.
+/// @param stmt Statement to execute.
+/// @return status (can be ER_LOCK_DEADLOCK after 5 retries).
+inline int MysqlQuery(MYSQL* mysql, const char* stmt) {
+    return (retryOnDeadlock(mysql_query, mysql, stmt));
+}
 
 /// @brief MySQL Handle Holder
 ///
@@ -119,9 +161,11 @@ public:
     }
 
 private:
-    static bool atexit_; ///< Flag to call atexit once.
+    /// @brief Variable used for its static property to call atexit() once.
+    static int atexit_;
 
-    MYSQL* mysql_;       ///< Initialization context
+    /// @brief Initialization context
+    MYSQL* mysql_;
 };
 
 /// @brief Forward declaration to @ref MySqlConnection.
@@ -197,8 +241,16 @@ public:
     /// @brief Constructor
     ///
     /// Initialize MySqlConnection object with parameters needed for connection.
-    MySqlConnection(const ParameterMap& parameters)
-        : DatabaseConnection(parameters) {
+    ///
+    /// @param parameters Specify the connection details.
+    /// @param io_accessor The IOService accessor function.
+    /// @param callback The connection recovery callback.
+    MySqlConnection(const ParameterMap& parameters,
+                    IOServiceAccessorPtr io_accessor = IOServiceAccessorPtr(),
+                    DbCallback callback = DbCallback())
+        : DatabaseConnection(parameters, callback),
+          io_service_accessor_(io_accessor), io_service_(),
+          transaction_ref_count_(0) {
     }
 
     /// @brief Destructor
@@ -298,7 +350,7 @@ public:
     /// greater than the value of @c LeaseMgr::MAX_DB_TIME.
     static
     void convertToDatabaseTime(const time_t cltt, const uint32_t valid_lifetime,
-            MYSQL_TIME& expire);
+                               MYSQL_TIME& expire);
 
     /// @brief Convert Database Time to Lease Times
     ///
@@ -319,11 +371,28 @@ public:
     ///        is put.
     static
     void convertFromDatabaseTime(const MYSQL_TIME& expire,
-            uint32_t valid_lifetime, time_t& cltt);
+                                 uint32_t valid_lifetime, time_t& cltt);
     ///@}
 
-    /// @brief Starts Transaction
+    /// @brief Starts new transaction
+    ///
+    /// This function begins a new transaction by sending the START TRANSACTION
+    /// statement to the database. The transaction should be explicitly committed
+    /// by calling @c commit() or rolled back by calling @c rollback(). MySQL
+    /// does not support nested transactions, and it implicitly commits a
+    /// current transaction when the new transaction begins. Therefore, this
+    /// function checks if a transaction has already started and does not start
+    /// a new transaction. However, it increments a transaction reference counter
+    /// which is later decremented when @c commit() or @c rollback() is called.
+    /// When this mechanism is used properly, it guarantees that nested
+    /// transactions are not attempted, thus avoiding implicit (unexpected)
+    /// commits of the pending transaction.
     void startTransaction();
+
+    /// @brief Checks if there is a transaction in progress.
+    ///
+    /// @return true if a transaction has been started, false otherwise.
+    bool isTransactionStarted() const;
 
     /// @brief Executes SELECT query using prepared statement.
     ///
@@ -357,6 +426,7 @@ public:
                      const MySqlBindingCollection& in_bindings,
                      MySqlBindingCollection& out_bindings,
                      ConsumeResultFun process_result) {
+        checkUnusable();
         // Extract native input bindings.
         std::vector<MYSQL_BIND> in_bind_vec;
         for (MySqlBindingPtr in_binding : in_bindings) {
@@ -382,7 +452,7 @@ public:
         }
 
         // Execute query.
-        status = mysql_stmt_execute(statements_[index]);
+        status = MysqlExecuteStatement(statements_[index]);
         checkError(status, index, "unable to execute");
 
         status = mysql_stmt_store_result(statements_[index]);
@@ -434,6 +504,7 @@ public:
     template<typename StatementIndex>
     void insertQuery(const StatementIndex& index,
                      const MySqlBindingCollection& in_bindings) {
+        checkUnusable();
         std::vector<MYSQL_BIND> in_bind_vec;
         for (MySqlBindingPtr in_binding : in_bindings) {
             in_bind_vec.push_back(in_binding->getMySqlBinding());
@@ -445,7 +516,7 @@ public:
         checkError(status, index, "unable to bind parameters");
 
         // Execute the statement
-        status = mysql_stmt_execute(statements_[index]);
+        status = MysqlExecuteStatement(statements_[index]);
 
         if (status != 0) {
             // Failure: check for the special case of duplicate entry.
@@ -470,13 +541,14 @@ public:
     /// @tparam StatementIndex Type of the statement index enum.
     ///
     /// @param index Index of the query to be executed.
-    /// @param in_bindings Input bindings holding values to substitue placeholders
+    /// @param in_bindings Input bindings holding values to substitute placeholders
     /// in the query.
     ///
     /// @return Number of affected rows.
     template<typename StatementIndex>
     uint64_t updateDeleteQuery(const StatementIndex& index,
                                const MySqlBindingCollection& in_bindings) {
+        checkUnusable();
         std::vector<MYSQL_BIND> in_bind_vec;
         for (MySqlBindingPtr in_binding : in_bindings) {
             in_bind_vec.push_back(in_binding->getMySqlBinding());
@@ -488,7 +560,7 @@ public:
         checkError(status, index, "unable to bind parameters");
 
         // Execute the statement
-        status = mysql_stmt_execute(statements_[index]);
+        status = MysqlExecuteStatement(statements_[index]);
 
         if (status != 0) {
             // Failure: check for the special case of duplicate entry.
@@ -512,19 +584,26 @@ public:
         return (static_cast<uint64_t>(mysql_stmt_affected_rows(statements_[index])));
     }
 
-
-    /// @brief Commit Transactions
+    /// @brief Commits current transaction
     ///
     /// Commits all pending database operations. On databases that don't
     /// support transactions, this is a no-op.
     ///
+    /// When this method is called for a nested transaction it decrements the
+    /// transaction reference counter incremented during the call to
+    /// @c startTransaction.
+    ///
     /// @throw DbOperationError If the commit failed.
     void commit();
 
-    /// @brief Rollback Transactions
+    /// @brief Rollbacks current transaction
     ///
     /// Rolls back all pending database operations. On databases that don't
     /// support transactions, this is a no-op.
+    ///
+    /// When this method is called for a nested transaction it decrements the
+    /// transaction reference counter incremented during the call to
+    /// @c startTransaction.
     ///
     /// @throw DbOperationError If the rollback failed.
     void rollback();
@@ -541,10 +620,8 @@ public:
     ///
     /// If the error is recoverable, the function will throw a DbOperationError.
     /// If the error is deemed unrecoverable, such as a loss of connectivity
-    /// with the server, the function will call invokeDbLostCallback(). If the
-    /// invocation returns false then either there is no callback registered
-    /// or the callback has elected not to attempt to reconnect, and a
-    /// DbUnrecoverableError is thrown.
+    /// with the server, the function will call startRecoverDbConnection() which
+    /// will start the connection recovery.
     ///
     /// If the invocation returns true, this indicates the calling layer will
     /// attempt recovery, and the function throws a DbOperationError to allow
@@ -561,7 +638,7 @@ public:
     ///        failed.
     template<typename StatementIndex>
     void checkError(const int status, const StatementIndex& index,
-                    const char* what) const {
+                    const char* what) {
         if (status != 0) {
             switch(mysql_errno(mysql_)) {
                 // These are the ones we consider fatal. Remember this method is
@@ -573,24 +650,24 @@ public:
             case CR_SERVER_GONE_ERROR:
             case CR_SERVER_LOST:
             case CR_OUT_OF_MEMORY:
-            case CR_CONNECTION_ERROR:
+            case CR_CONNECTION_ERROR: {
                 DB_LOG_ERROR(db::MYSQL_FATAL_ERROR)
                     .arg(what)
                     .arg(text_statements_[static_cast<int>(index)])
                     .arg(mysql_error(mysql_))
                     .arg(mysql_errno(mysql_));
 
-                // If there's no lost db callback or it returns false,
-                // then we're not attempting to recover so we're done.
-                if (!invokeDbLostCallback()) {
-                    isc_throw(db::DbUnrecoverableError,
-                              "database connectivity cannot be recovered");
-                }
+                // Mark this connection as no longer usable.
+                markUnusable();
+
+                // Start the connection recovery.
+                startRecoverDbConnection();
 
                 // We still need to throw so caller can error out of the current
                 // processing.
-                isc_throw(db::DbOperationError,
-                          "fatal database errror or connectivity lost");
+                isc_throw(db::DbConnectionUnusable,
+                          "fatal database error or connectivity lost");
+            }
             default:
                 // Connection is ok, so it must be an SQL error
                 isc_throw(db::DbOperationError, what << " for <"
@@ -598,6 +675,24 @@ public:
                           << ">, reason: "
                           << mysql_error(mysql_) << " (error code "
                           << mysql_errno(mysql_) << ")");
+            }
+        }
+    }
+
+    /// @brief The recover connection
+    ///
+    /// This function starts the recover process of the connection.
+    ///
+    /// @note The recover function must be run on the IO Service thread.
+    void startRecoverDbConnection() {
+        if (callback_) {
+            if (!io_service_ && io_service_accessor_) {
+                io_service_ = (*io_service_accessor_)();
+                io_service_accessor_.reset();
+            }
+
+            if (io_service_) {
+                io_service_->post(std::bind(callback_, reconnectCtl()));
             }
         }
     }
@@ -619,9 +714,29 @@ public:
     /// This field is public, because it is used heavily from MySqlConnection
     /// and will be from MySqlHostDataSource.
     MySqlHolder mysql_;
+
+    /// @brief Accessor function which returns the IOService that can be used to
+    /// recover the connection.
+    ///
+    /// This accessor is used to lazy retrieve the IOService when the connection
+    /// is lost. It is useful to retrieve it at a later time to support hook
+    /// libraries which create managers on load and set IOService later on by
+    /// using the dhcp4_srv_configured and dhcp6_srv_configured hooks.
+    IOServiceAccessorPtr io_service_accessor_;
+
+    /// @brief IOService object, used for all ASIO operations.
+    isc::asiolink::IOServicePtr io_service_;
+
+    /// @brief Reference counter for transactions.
+    ///
+    /// It precludes starting and committing nested transactions. MySQL
+    /// implicitly commits current transaction when new transaction is
+    /// started. We want to not start new transactions when one is already
+    /// in progress.
+    int transaction_ref_count_;
 };
 
-}; // end of isc::db namespace
-}; // end of isc namespace
+} // end of isc::db namespace
+} // end of isc namespace
 
 #endif // MYSQL_CONNECTION_H

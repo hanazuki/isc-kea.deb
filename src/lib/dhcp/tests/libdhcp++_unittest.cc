@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -184,8 +184,10 @@ public:
                 std::ostringstream name;
                 name << "name-for-option-" << code;
                 OptionDefinitionPtr opt_def(new OptionDefinition(name.str(),
-                                                                 code, "string"));
-                defs.addItem(opt_def, space_name.str());
+                                                                 code,
+                                                                 space_name.str(),
+                                                                 "string"));
+                defs.addItem(opt_def);
             }
         }
     }
@@ -274,7 +276,8 @@ private:
             << " is invalid";
         // Check that the valid encapsulated option space name
         // has been specified.
-        EXPECT_EQ(encapsulates, def->getEncapsulatedSpace());
+        EXPECT_EQ(encapsulates, def->getEncapsulatedSpace()) <<
+            "opt name: " << def->getName();
         OptionPtr option;
         // Create the option.
         ASSERT_NO_THROW(option = def->optionFactory(u, code, begin, end))
@@ -538,6 +541,7 @@ TEST_F(LibDhcpTest, unpackOptions6) {
 TEST_F(LibDhcpTest, unpackEmptyOption6) {
     // Create option definition for the option code 1024 without fields.
     OptionDefinitionPtr opt_def(new OptionDefinition("option-empty", 1024,
+                                                     DHCP6_OPTION_SPACE,
                                                      "empty", false));
 
     // Use it as runtime option definition within standard options space.
@@ -545,7 +549,7 @@ TEST_F(LibDhcpTest, unpackEmptyOption6) {
     // option definitions set when it detects that this definition is
     // not a standard definition.
     OptionDefSpaceContainer defs;
-    defs.addItem(opt_def, DHCP6_OPTION_SPACE);
+    defs.addItem(opt_def);
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
@@ -578,20 +582,25 @@ TEST_F(LibDhcpTest, unpackSubOptions6) {
     // option code because they belong to different option spaces.
 
     // Top level option encapsulates options which belong to 'space-foo'.
-    OptionDefinitionPtr opt_def(new OptionDefinition("option-foobar", 1, "uint32",
-                                                      "space-foo"));\
+    OptionDefinitionPtr opt_def(new OptionDefinition("option-foobar", 1,
+                                                     "space-foobar",
+                                                     "uint32",
+                                                     "space-foo"));
     // Middle option encapsulates options which belong to 'space-bar'
-    OptionDefinitionPtr opt_def2(new OptionDefinition("option-foo", 1, "uint16",
+    OptionDefinitionPtr opt_def2(new OptionDefinition("option-foo", 1,
+                                                      "space-foo",
+                                                      "uint16",
                                                       "space-bar"));
     // Low level option doesn't encapsulate any option space.
     OptionDefinitionPtr opt_def3(new OptionDefinition("option-bar", 1,
+                                                      "space-bar",
                                                       "uint8"));
 
     // Register created option definitions as runtime option definitions.
     OptionDefSpaceContainer defs;
-    ASSERT_NO_THROW(defs.addItem(opt_def, "space-foobar"));
-    ASSERT_NO_THROW(defs.addItem(opt_def2, "space-foo"));
-    ASSERT_NO_THROW(defs.addItem(opt_def3, "space-bar"));
+    ASSERT_NO_THROW(defs.addItem(opt_def));
+    ASSERT_NO_THROW(defs.addItem(opt_def2));
+    ASSERT_NO_THROW(defs.addItem(opt_def3));
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
@@ -904,6 +913,7 @@ TEST_F(LibDhcpTest, unpackOptions4) {
 TEST_F(LibDhcpTest, unpackEmptyOption4) {
     // Create option definition for the option code 254 without fields.
     OptionDefinitionPtr opt_def(new OptionDefinition("option-empty", 254,
+                                                     DHCP4_OPTION_SPACE,
                                                      "empty", false));
 
     // Use it as runtime option definition within standard options space.
@@ -911,7 +921,7 @@ TEST_F(LibDhcpTest, unpackEmptyOption4) {
     // option definitions set when it detects that this definition is
     // not a standard definition.
     OptionDefSpaceContainer defs;
-    defs.addItem(opt_def, DHCP4_OPTION_SPACE);
+    defs.addItem(opt_def);
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
@@ -946,20 +956,25 @@ TEST_F(LibDhcpTest, unpackSubOptions4) {
     // option code because they belong to different option spaces.
 
     // Top level option encapsulates options which belong to 'space-foo'.
-    OptionDefinitionPtr opt_def(new OptionDefinition("option-foobar", 1, "uint32",
-                                                      "space-foo"));\
+    OptionDefinitionPtr opt_def(new OptionDefinition("option-foobar", 1,
+                                                     "space-foobar",
+                                                     "uint32",
+                                                     "space-foo"));     \
     // Middle option encapsulates options which belong to 'space-bar'
-    OptionDefinitionPtr opt_def2(new OptionDefinition("option-foo", 1, "uint16",
+    OptionDefinitionPtr opt_def2(new OptionDefinition("option-foo", 1,
+                                                      "space-foo",
+                                                      "uint16",
                                                       "space-bar"));
     // Low level option doesn't encapsulate any option space.
     OptionDefinitionPtr opt_def3(new OptionDefinition("option-bar", 1,
+                                                      "space-bar",
                                                       "uint8"));
 
     // Register created option definitions as runtime option definitions.
     OptionDefSpaceContainer defs;
-    ASSERT_NO_THROW(defs.addItem(opt_def, "space-foobar"));
-    ASSERT_NO_THROW(defs.addItem(opt_def2, "space-foo"));
-    ASSERT_NO_THROW(defs.addItem(opt_def3, "space-bar"));
+    ASSERT_NO_THROW(defs.addItem(opt_def));
+    ASSERT_NO_THROW(defs.addItem(opt_def2));
+    ASSERT_NO_THROW(defs.addItem(opt_def3));
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
@@ -1014,23 +1029,26 @@ TEST_F(LibDhcpTest, unpackSubOptions4) {
 TEST_F(LibDhcpTest, unpackPadEnd) {
     // Create option definition for the container.
     OptionDefinitionPtr opt_def(new OptionDefinition("container", 200,
+                                                     DHCP4_OPTION_SPACE,
                                                      "empty", "my-space"));
     // Create option definition for option 0.
-    OptionDefinitionPtr opt_def0(new OptionDefinition("zero", 0, "uint8"));
+    OptionDefinitionPtr opt_def0(new OptionDefinition("zero", 0,
+                                                      "my-space", "uint8"));
 
     // Create option definition for option 255.
-    OptionDefinitionPtr opt_def255(new OptionDefinition("max", 255, "uint8"));
+    OptionDefinitionPtr opt_def255(new OptionDefinition("max", 255,
+                                                        "my-space", "uint8"));
 
     // Create option definition for another option.
     OptionDefinitionPtr opt_def2(new OptionDefinition("my-option", 1,
-                                                      "string"));
+                                                      "my-space", "string"));
 
     // Register created option definitions as runtime option definitions.
     OptionDefSpaceContainer defs;
-    ASSERT_NO_THROW(defs.addItem(opt_def, DHCP4_OPTION_SPACE));
-    ASSERT_NO_THROW(defs.addItem(opt_def0, "my-space"));
-    ASSERT_NO_THROW(defs.addItem(opt_def255, "my-space"));
-    ASSERT_NO_THROW(defs.addItem(opt_def2, "my-space"));
+    ASSERT_NO_THROW(defs.addItem(opt_def));
+    ASSERT_NO_THROW(defs.addItem(opt_def0));
+    ASSERT_NO_THROW(defs.addItem(opt_def255));
+    ASSERT_NO_THROW(defs.addItem(opt_def2));
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
@@ -1098,21 +1116,21 @@ TEST_F(LibDhcpTest, unpackPadEnd) {
     EXPECT_EQ("foo", sub->getValue());
 }
 
-// Verfies that option 0 (PAD) is handled as PAD in option 43 (so when
+// Verifies that option 0 (PAD) is handled as PAD in option 43 (so when
 // flexible pad end flag is true) only when option 0 (PAD) is not defined.
 TEST_F(LibDhcpTest, option43Pad) {
     string space = "my-option43-space";
 
     // Create option definition for option 1.
-    OptionDefinitionPtr opt_def1(new OptionDefinition("one", 1, "binary"));
+    OptionDefinitionPtr opt_def1(new OptionDefinition("one", 1, space, "binary"));
 
     // Create option definition for option 2.
-    OptionDefinitionPtr opt_def2(new OptionDefinition("two", 2, "uint8"));
+    OptionDefinitionPtr opt_def2(new OptionDefinition("two", 2, space, "uint8"));
 
     // Register created option definitions as runtime option definitions.
     OptionDefSpaceContainer defs;
-    ASSERT_NO_THROW(defs.addItem(opt_def1, space));
-    ASSERT_NO_THROW(defs.addItem(opt_def2, space));
+    ASSERT_NO_THROW(defs.addItem(opt_def1));
+    ASSERT_NO_THROW(defs.addItem(opt_def2));
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
@@ -1129,9 +1147,7 @@ TEST_F(LibDhcpTest, option43Pad) {
     // Parse options.
     OptionCollection options;
     list<uint16_t> deferred;
-    size_t offset = 0;
-    ASSERT_NO_THROW(offset = LibDHCP::unpackOptions4(buf, space,
-                                                     options, deferred, true));
+    ASSERT_NO_THROW(LibDHCP::unpackOptions4(buf, space, options, deferred, true));
 
     // There should be 2 suboptions (1 and 2) because no sub-option 0
     // was defined so code 0 means PAD.
@@ -1152,16 +1168,14 @@ TEST_F(LibDhcpTest, option43Pad) {
     EXPECT_EQ(1, sub2->getValue());
 
     // Create option definition for option 0 and register it.
-    OptionDefinitionPtr opt_def0(new OptionDefinition("zero", 0, "uint8"));
-    ASSERT_NO_THROW(defs.addItem(opt_def0, space));
+    OptionDefinitionPtr opt_def0(new OptionDefinition("zero", 0, space, "uint8"));
+    ASSERT_NO_THROW(defs.addItem(opt_def0));
     LibDHCP::clearRuntimeOptionDefs();
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
     options.clear();
-    offset = 0;
-    ASSERT_NO_THROW(offset = LibDHCP::unpackOptions4(buf, space,
-                                                     options, deferred, true));
+    ASSERT_NO_THROW(LibDHCP::unpackOptions4(buf, space, options, deferred, true));
 
     // There should be 2 suboptions (0 and 1).
     EXPECT_EQ(2, options.size());
@@ -1183,7 +1197,7 @@ TEST_F(LibDhcpTest, option43Pad) {
     EXPECT_EQ(1, sub2->getValue());
 }
 
-// Verfies that option 255 (END) is handled as END in option 43 (so when
+// Verifies that option 255 (END) is handled as END in option 43 (so when
 //flexible pad end flag is true) only when option 255 (END) is not defined.
 TEST_F(LibDhcpTest, option43End) {
     string space = "my-option43-space";
@@ -1209,11 +1223,11 @@ TEST_F(LibDhcpTest, option43End) {
 
 
     // Create option definition for option 255.
-    OptionDefinitionPtr opt_def255(new OptionDefinition("max", 255, "uint8"));
+    OptionDefinitionPtr opt_def255(new OptionDefinition("max", 255, space, "uint8"));
 
     // Register created option definition as runtime option definitions.
     OptionDefSpaceContainer defs;
-    ASSERT_NO_THROW(defs.addItem(opt_def255, space));
+    ASSERT_NO_THROW(defs.addItem(opt_def255));
     LibDHCP::setRuntimeOptionDefs(defs);
     LibDHCP::commitRuntimeOptionDefs();
 
@@ -1285,7 +1299,7 @@ TEST_F(LibDhcpTest, emptyHostName) {
     list<uint16_t> deferred;
 
     ASSERT_NO_THROW(
-        LibDHCP::unpackOptions4(packed, "dhcp4", options, deferred, false);
+        LibDHCP::unpackOptions4(packed, DHCP4_OPTION_SPACE, options, deferred, false);
     );
 
     // Host Name should not exist, we quietly drop it when empty.
@@ -1636,6 +1650,9 @@ TEST_F(LibDhcpTest, stdOptionDefs4) {
     LibDhcpTest::testStdOptionDefs4(DHO_TCODE, begin, end,
                                     typeid(OptionString));
 
+    LibDhcpTest::testStdOptionDefs4(DHO_V6_ONLY_PREFERRED, begin, begin + 4,
+                                    typeid(OptionInt<uint32_t>));
+
     LibDhcpTest::testStdOptionDefs4(DHO_NETINFO_ADDR, begin, end,
                                     typeid(Option4AddrLst));
 
@@ -1840,8 +1857,7 @@ TEST_F(LibDhcpTest, stdOptionDefs6) {
 
     LibDhcpTest::testStdOptionDefs6(D6O_VENDOR_OPTS, vopt_buf.begin(),
                                     vopt_buf.end(),
-                                    typeid(OptionVendor),
-                                    VENDOR_OPTION_SPACE);
+                                    typeid(OptionVendor));
 
     LibDhcpTest::testStdOptionDefs6(D6O_INTERFACE_ID, begin, end,
                                     typeid(Option));
@@ -1928,10 +1944,10 @@ TEST_F(LibDhcpTest, stdOptionDefs6) {
                                     typeid(OptionIntArray<uint16_t>));
 
     LibDhcpTest::testStdOptionDefs6(D6O_LQ_QUERY, begin, end,
-                                    typeid(OptionCustom));
+                                    typeid(OptionCustom), DHCP6_OPTION_SPACE);
 
     LibDhcpTest::testStdOptionDefs6(D6O_CLIENT_DATA, begin, end,
-                                    typeid(Option));
+                                    typeid(OptionCustom), DHCP6_OPTION_SPACE);
 
     LibDhcpTest::testStdOptionDefs6(D6O_CLT_TIME, begin, begin + 4,
                                     typeid(OptionInt<uint32_t>));
@@ -2373,7 +2389,7 @@ TEST_F(LibDhcpTest, sw46options) {
 
     size_t parsed = 0;
 
-    EXPECT_NO_THROW (parsed = LibDHCP::unpackOptions6(buf, "dhcp6", options));
+    EXPECT_NO_THROW (parsed = LibDHCP::unpackOptions6(buf, DHCP6_OPTION_SPACE, options));
     EXPECT_EQ(mape_bin.size(), parsed);
 
     // We expect to have exactly one option (with tons of suboptions, but we'll

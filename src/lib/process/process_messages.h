@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/process/process_messages.mes on Thu Jun 13 2019 01:25
+// File created from ../../../src/lib/process/process_messages.mes
 
 #ifndef PROCESS_MESSAGES_H
 #define PROCESS_MESSAGES_H
@@ -22,6 +22,7 @@ extern const isc::log::MessageID DCTL_CONFIG_LOAD_FAIL;
 extern const isc::log::MessageID DCTL_CONFIG_START;
 extern const isc::log::MessageID DCTL_CONFIG_STUB;
 extern const isc::log::MessageID DCTL_CONFIG_UPDATE;
+extern const isc::log::MessageID DCTL_DEVELOPMENT_VERSION;
 extern const isc::log::MessageID DCTL_INIT_PROCESS;
 extern const isc::log::MessageID DCTL_INIT_PROCESS_FAIL;
 extern const isc::log::MessageID DCTL_NOT_RUNNING;
@@ -33,9 +34,9 @@ extern const isc::log::MessageID DCTL_RUN_PROCESS;
 extern const isc::log::MessageID DCTL_SESSION_FAIL;
 extern const isc::log::MessageID DCTL_SHUTDOWN;
 extern const isc::log::MessageID DCTL_SHUTDOWN_SIGNAL_RECVD;
-extern const isc::log::MessageID DCTL_SIGNAL_ERROR;
 extern const isc::log::MessageID DCTL_STANDALONE;
 extern const isc::log::MessageID DCTL_STARTING;
+extern const isc::log::MessageID DCTL_UNLOAD_LIBRARIES_ERROR;
 extern const isc::log::MessageID DCTL_UNSUPPORTED_SIGNAL;
 
 } // namespace process

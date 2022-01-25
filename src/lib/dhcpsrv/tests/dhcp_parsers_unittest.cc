@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -468,7 +468,7 @@ public:
         family_ = family;
 
         // Ensure no hooks libraries are loaded.
-        HooksManager::unloadLibraries();
+        EXPECT_TRUE(HooksManager::unloadLibraries());
 
         // Set it to minimal, disabled config
         D2ClientConfigPtr tmp(new D2ClientConfig());
@@ -2728,8 +2728,14 @@ TEST_F(ParseConfigTest, defaultSubnet4) {
     EXPECT_TRUE(subnet->getT2().unspecified());
     EXPECT_EQ(0, subnet->getT2().get());
 
-    EXPECT_TRUE(subnet->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, subnet->getHostReservationMode().get());
+    EXPECT_TRUE(subnet->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(subnet->getReservationsGlobal().get());
+
+    EXPECT_TRUE(subnet->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(subnet->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(subnet->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(subnet->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(subnet->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(subnet->getCalculateTeeTimes().get());
@@ -2787,6 +2793,15 @@ TEST_F(ParseConfigTest, defaultSubnet4) {
 
     EXPECT_TRUE(subnet->getHostnameCharReplacement().unspecified());
     EXPECT_TRUE(subnet->getHostnameCharReplacement().empty());
+
+    EXPECT_TRUE(subnet->getStoreExtendedInfo().unspecified());
+    EXPECT_FALSE(subnet->getStoreExtendedInfo().get());
+
+    EXPECT_TRUE(subnet->getDdnsUpdateOnRenew().unspecified());
+    EXPECT_FALSE(subnet->getDdnsUpdateOnRenew().get());
+
+    EXPECT_TRUE(subnet->getDdnsUseConflictResolution().unspecified());
+    EXPECT_FALSE(subnet->getDdnsUseConflictResolution().get());
 }
 
 // This test verifies that it is possible to parse an IPv6 subnet for which
@@ -2823,8 +2838,14 @@ TEST_F(ParseConfigTest, defaultSubnet6) {
     EXPECT_TRUE(subnet->getT2().unspecified());
     EXPECT_EQ(0, subnet->getT2().get());
 
-    EXPECT_TRUE(subnet->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, subnet->getHostReservationMode().get());
+    EXPECT_TRUE(subnet->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(subnet->getReservationsGlobal().get());
+
+    EXPECT_TRUE(subnet->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(subnet->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(subnet->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(subnet->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(subnet->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(subnet->getCalculateTeeTimes().get());
@@ -2864,6 +2885,15 @@ TEST_F(ParseConfigTest, defaultSubnet6) {
 
     EXPECT_TRUE(subnet->getHostnameCharReplacement().unspecified());
     EXPECT_TRUE(subnet->getHostnameCharReplacement().empty());
+
+    EXPECT_TRUE(subnet->getStoreExtendedInfo().unspecified());
+    EXPECT_FALSE(subnet->getStoreExtendedInfo().get());
+
+    EXPECT_TRUE(subnet->getDdnsUpdateOnRenew().unspecified());
+    EXPECT_FALSE(subnet->getDdnsUpdateOnRenew().get());
+
+    EXPECT_TRUE(subnet->getDdnsUseConflictResolution().unspecified());
+    EXPECT_FALSE(subnet->getDdnsUseConflictResolution().get());
 }
 
 // This test verifies that it is possible to parse an IPv4 shared network
@@ -2885,7 +2915,6 @@ TEST_F(ParseConfigTest, defaultSharedNetwork4) {
     ASSERT_TRUE(network);
 
     EXPECT_TRUE(network->hasFetchGlobalsFn());
-
     EXPECT_TRUE(network->getIface().unspecified());
     EXPECT_TRUE(network->getIface().empty());
 
@@ -2901,8 +2930,14 @@ TEST_F(ParseConfigTest, defaultSharedNetwork4) {
     EXPECT_TRUE(network->getT2().unspecified());
     EXPECT_EQ(0, network->getT2().get());
 
-    EXPECT_TRUE(network->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, network->getHostReservationMode().get());
+    EXPECT_TRUE(network->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(network->getReservationsGlobal().get());
+
+    EXPECT_TRUE(network->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(network->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(network->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(network->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(network->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(network->getCalculateTeeTimes().get());
@@ -2936,6 +2971,15 @@ TEST_F(ParseConfigTest, defaultSharedNetwork4) {
 
     EXPECT_TRUE(network->getDdnsQualifyingSuffix().unspecified());
     EXPECT_TRUE(network->getDdnsQualifyingSuffix().empty());
+
+    EXPECT_TRUE(network->getStoreExtendedInfo().unspecified());
+    EXPECT_FALSE(network->getStoreExtendedInfo().get());
+
+    EXPECT_TRUE(network->getDdnsUpdateOnRenew().unspecified());
+    EXPECT_FALSE(network->getDdnsUpdateOnRenew().get());
+
+    EXPECT_TRUE(network->getDdnsUseConflictResolution().unspecified());
+    EXPECT_FALSE(network->getDdnsUseConflictResolution().get());
 }
 
 // This test verifies that it is possible to parse an IPv6 shared network
@@ -2973,8 +3017,14 @@ TEST_F(ParseConfigTest, defaultSharedNetwork6) {
     EXPECT_TRUE(network->getT2().unspecified());
     EXPECT_EQ(0, network->getT2().get());
 
-    EXPECT_TRUE(network->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, network->getHostReservationMode().get());
+    EXPECT_TRUE(network->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(network->getReservationsGlobal().get());
+
+    EXPECT_TRUE(network->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(network->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(network->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(network->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(network->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(network->getCalculateTeeTimes().get());
@@ -3008,6 +3058,15 @@ TEST_F(ParseConfigTest, defaultSharedNetwork6) {
 
     EXPECT_TRUE(network->getDdnsQualifyingSuffix().unspecified());
     EXPECT_TRUE(network->getDdnsQualifyingSuffix().empty());
+
+    EXPECT_TRUE(network->getStoreExtendedInfo().unspecified());
+    EXPECT_FALSE(network->getStoreExtendedInfo().get());
+
+    EXPECT_TRUE(network->getDdnsUpdateOnRenew().unspecified());
+    EXPECT_FALSE(network->getDdnsUpdateOnRenew().get());
+
+    EXPECT_TRUE(network->getDdnsUseConflictResolution().unspecified());
+    EXPECT_FALSE(network->getDdnsUseConflictResolution().get());
 }
 
 // There's no test for ControlSocketParser, as it is tested in the DHCPv4 code

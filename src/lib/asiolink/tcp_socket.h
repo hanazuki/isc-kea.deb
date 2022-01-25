@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,10 +16,8 @@
 #include <unistd.h>             // for some IPC/network system calls
 
 #include <algorithm>
-#include <cassert>
 #include <cstddef>
 
-#include <boost/bind.hpp>
 #include <boost/numeric/conversion/cast.hpp>
 
 #include <util/buffer.h>
@@ -29,6 +27,8 @@
 #include <asiolink/io_endpoint.h>
 #include <asiolink/io_service.h>
 #include <asiolink/tcp_endpoint.h>
+
+#include <exceptions/isc_assert.h>
 
 namespace isc {
 namespace asiolink {
@@ -222,33 +222,39 @@ public:
     }
 
 private:
-    // Two variables to hold the socket - a socket and a pointer to it.  This
-    // handles the case where a socket is passed to the TCPSocket on
-    // construction, or where it is asked to manage its own socket.
-    boost::asio::ip::tcp::socket*      socket_ptr_;    ///< Pointer to own socket
-    boost::asio::ip::tcp::socket&      socket_;        ///< Socket
+    /// Two variables to hold the socket - a socket and a pointer to it.  This
+    /// handles the case where a socket is passed to the TCPSocket on
+    /// construction, or where it is asked to manage its own socket.
 
-    // TODO: Remove temporary buffer
-    // The current implementation copies the buffer passed to asyncSend() into
-    // a temporary buffer and precedes it with a two-byte count field.  As
-    // ASIO should really be just about sending and receiving data, the TCP
-    // code should not do this.  If the protocol using this requires a two-byte
-    // count, it should add it before calling this code.  (This may be best
-    // achieved by altering isc::dns::buffer to have pairs of methods:
-    // getLength()/getTCPLength(), getData()/getTCPData(), with the getTCPXxx()
-    // methods taking into account a two-byte count field.)
-    //
-    // The option of sending the data in two operations, the count followed by
-    // the data was discounted as that would lead to two callbacks which would
-    // cause problems with the stackless coroutine code.
-    isc::util::OutputBufferPtr   send_buffer_;   ///< Send buffer
+    /// Pointer to own socket
+    std::unique_ptr<boost::asio::ip::tcp::socket> socket_ptr_;
+
+    /// Socket
+    boost::asio::ip::tcp::socket& socket_;
+
+    /// @todo Remove temporary buffer
+    /// The current implementation copies the buffer passed to asyncSend() into
+    /// a temporary buffer and precedes it with a two-byte count field.  As
+    /// ASIO should really be just about sending and receiving data, the TCP
+    /// code should not do this.  If the protocol using this requires a two-byte
+    /// count, it should add it before calling this code.  (This may be best
+    /// achieved by altering isc::dns::buffer to have pairs of methods:
+    /// getLength()/getTCPLength(), getData()/getTCPData(), with the getTCPXxx()
+    /// methods taking into account a two-byte count field.)
+    ///
+    /// The option of sending the data in two operations, the count followed by
+    /// the data was discounted as that would lead to two callbacks which would
+    /// cause problems with the stackless coroutine code.
+
+    /// Send buffer
+    isc::util::OutputBufferPtr send_buffer_;
 };
 
 // Constructor - caller manages socket
 
 template <typename C>
 TCPSocket<C>::TCPSocket(boost::asio::ip::tcp::socket& socket) :
-    socket_ptr_(NULL), socket_(socket), send_buffer_()
+    socket_ptr_(), socket_(socket), send_buffer_()
 {
 }
 
@@ -261,12 +267,11 @@ TCPSocket<C>::TCPSocket(IOService& service) :
 {
 }
 
-// Destructor.  Only delete the socket if we are managing it.
+// Destructor.
 
 template <typename C>
 TCPSocket<C>::~TCPSocket()
 {
-    delete socket_ptr_;
 }
 
 // Open the socket.
@@ -279,8 +284,8 @@ TCPSocket<C>::open(const IOEndpoint* endpoint, C& callback) {
         close();
     }
     // Ignore opens on already-open socket.  Don't throw a failure because
-    // of uncertainties as to what precedes whan when using asynchronous I/O.
-    // At also allows us a treat a passed-in socket as a self-managed socket.
+    // of uncertainties as to what precedes when using asynchronous I/O.
+    // Also allows us a treat a passed-in socket as a self-managed socket.
     if (!socket_.is_open()) {
         if (endpoint->getFamily() == AF_INET) {
             socket_.open(boost::asio::ip::tcp::v4());
@@ -300,7 +305,7 @@ TCPSocket<C>::open(const IOEndpoint* endpoint, C& callback) {
     // IOEndpoint is the base class of UDPEndpoint and TCPEndpoint, it does not
     // contain a method for getting at the underlying endpoint type - that is in
     /// the derived class and the two classes differ on return type.
-    assert(endpoint->getProtocol() == IPPROTO_TCP);
+    isc_throw_assert(endpoint->getProtocol() == IPPROTO_TCP);
     const TCPEndpoint* tcp_endpoint =
         static_cast<const TCPEndpoint*>(endpoint);
 
@@ -326,7 +331,7 @@ TCPSocket<C>::asyncSend(const void* data, size_t length, C& callback)
             socket_.async_send(boost::asio::buffer(send_buffer_->getData(),
                                                    send_buffer_->getLength()),
                                callback);
-        } catch (boost::numeric::bad_numeric_cast&) {
+        } catch (const boost::numeric::bad_numeric_cast&) {
             isc_throw(BufferTooLarge,
                       "attempt to send buffer larger than 64kB");
         }
@@ -343,22 +348,22 @@ TCPSocket<C>::asyncSend(const void* data, size_t length,
 {
     if (socket_.is_open()) {
 
-        // Need to copy the data into a temporary buffer and precede it with
-        // a two-byte count field.
-        // TODO: arrange for the buffer passed to be preceded by the count
+        /// Need to copy the data into a temporary buffer and precede it with
+        /// a two-byte count field.
+        /// @todo arrange for the buffer passed to be preceded by the count
         try {
-            // Ensure it fits into 16 bits
+            /// Ensure it fits into 16 bits
             uint16_t count = boost::numeric_cast<uint16_t>(length);
 
-            // Copy data into a buffer preceded by the count field.
+            /// Copy data into a buffer preceded by the count field.
             send_buffer_.reset(new isc::util::OutputBuffer(length + 2));
             send_buffer_->writeUint16(count);
             send_buffer_->writeData(data, length);
 
-            // ... and send it
+            /// ... and send it
             socket_.async_send(boost::asio::buffer(send_buffer_->getData(),
                                send_buffer_->getLength()), callback);
-        } catch (boost::numeric::bad_numeric_cast&) {
+        } catch (const boost::numeric::bad_numeric_cast&) {
             isc_throw(BufferTooLarge,
                       "attempt to send buffer larger than 64kB");
         }
@@ -382,7 +387,7 @@ TCPSocket<C>::asyncReceive(void* data, size_t length, size_t offset,
         // does not contain a method for getting at the underlying endpoint
         // type - that is in the derived class and the two classes differ on
         // return type.
-        assert(endpoint->getProtocol() == IPPROTO_TCP);
+        isc_throw_assert(endpoint->getProtocol() == IPPROTO_TCP);
         TCPEndpoint* tcp_endpoint = static_cast<TCPEndpoint*>(endpoint);
 
         // Write the endpoint details from the communications link.  Ideally

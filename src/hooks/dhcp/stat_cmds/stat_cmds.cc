@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,7 +12,6 @@
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease_mgr.h>
 #include <dhcpsrv/lease_mgr_factory.h>
-#include <dhcpsrv/multi_threading_utils.h>
 #include <dhcpsrv/subnet_id.h>
 #include <hooks/hooks.h>
 #include <exceptions/exceptions.h>
@@ -20,6 +19,7 @@
 #include <stat_cmds_log.h>
 #include <stats/stats_mgr.h>
 #include <util/boost_time_utils.h>
+#include <util/multi_threading_mgr.h>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <string>
@@ -30,6 +30,7 @@ using namespace isc::config;
 using namespace isc::asiolink;
 using namespace isc::hooks;
 using namespace isc::stats;
+using namespace isc::util;
 using namespace std;
 
 namespace isc {
@@ -88,7 +89,7 @@ public:
     /// @ref isc::stat_cmds::StatCmds::statLease4GetHandler
     ///
     /// It parses the command arguments, and then invokes makeResult4()
-    /// to fulfull the lease4 statistics fetch. It then constructs the outbound
+    /// to fulfil the lease4 statistics fetch. It then constructs the outbound
     /// response based on those results.  If a NotFound exception is caught,
     /// a CONTROL_RESULT_EMTPY response is generated.
     ///
@@ -102,7 +103,7 @@ public:
     /// @ref isc::stat_cmds::StatCmds::statLease6GetHandler
     ///
     /// It parses the command arguments, and then invokes makeResult6()
-    /// to fulfull the lease6 statistics fetch. It then constructs the outbound
+    /// to fulfil the lease6 statistics fetch. It then constructs the outbound
     /// response based on those results.  If a NotFound exception is caught,
     /// a CONTROL_RESULT_EMTPY response is generated.
     ///
@@ -437,8 +438,10 @@ LeaseStatCmdsImpl::makeResultSet4(const ElementPtr& result_wrapper,
     }
 
     // Create the empty result-set.
-    std::vector<std::string>column_labels = { "subnet-id", "total-addreses",
-                                              "assigned-addreses","declined-addreses"};
+    std::vector<std::string>column_labels = { "subnet-id", "total-addresses",
+                                              "cumulative-assigned-addresses",
+                                              "assigned-addresses",
+                                              "declined-addresses" };
     ElementPtr value_rows = createResultSet(result_wrapper, column_labels);
 
     // Get the first query row
@@ -530,8 +533,12 @@ LeaseStatCmdsImpl::makeResultSet6(const ElementPtr& result_wrapper,
 
     // Create the result-set map.
     // labels could be class statics?
-    std::vector<std::string>column_labels = { "subnet-id", "total-nas", "assigned-nas",
-                                              "declined-nas", "total-pds", "assigned-pds"};
+    std::vector<std::string>column_labels = { "subnet-id", "total-nas",
+                                              "cumulative-assigned-nas",
+                                              "assigned-nas",
+                                              "declined-nas", "total-pds",
+                                              "cumulative-assigned-pds",
+                                              "assigned-pds" };
     ElementPtr value_rows = createResultSet(result_wrapper, column_labels);
 
     // Now we can run the stats query.
@@ -633,6 +640,7 @@ LeaseStatCmdsImpl::addValueRow4(ElementPtr value_rows, const SubnetID &subnet_id
     ElementPtr row = Element::createList();
     row->add(Element::create(static_cast<int64_t>(subnet_id)));
     row->add(Element::create(getSubnetStat(subnet_id, "total-addresses")));
+    row->add(Element::create(getSubnetStat(subnet_id, "cumulative-assigned-addresses")));
     row->add(Element::create(assigned));
     row->add(Element::create(declined));
     value_rows->add(row);
@@ -644,9 +652,11 @@ LeaseStatCmdsImpl::addValueRow6(ElementPtr value_rows, const SubnetID &subnet_id
     ElementPtr row = Element::createList();
     row->add(Element::create(static_cast<int64_t>(subnet_id)));
     row->add(Element::create(getSubnetStat(subnet_id, "total-nas")));
+    row->add(Element::create(getSubnetStat(subnet_id, "cumulative-assigned-nas")));
     row->add(Element::create(assigned));
     row->add(Element::create(declined));
     row->add(Element::create(getSubnetStat(subnet_id, "total-pds")));
+    row->add(Element::create(getSubnetStat(subnet_id, "cumulative-assigned-pds")));
     row->add(Element::create(assigned_pds));
     value_rows->add(row);
 }
@@ -666,16 +676,30 @@ LeaseStatCmdsImpl::getSubnetStat(const SubnetID& subnet_id, const std::string& n
 
 int
 StatCmds::statLease4GetHandler(CalloutHandle& handle) {
-    LeaseStatCmdsImpl impl;
-    MultiThreadingCriticalSection sc;
-    return(impl.statLease4GetHandler(handle));
+    try {
+        LeaseStatCmdsImpl impl;
+        MultiThreadingCriticalSection cs;
+        return (impl.statLease4GetHandler(handle));
+    } catch (const std::exception& ex) {
+
+        LOG_ERROR(stat_cmds_logger, STAT_CMDS_LEASE4_FAILED)
+                  .arg(ex.what());
+    }
+    return (1);
 }
 
 int
 StatCmds::statLease6GetHandler(CalloutHandle& handle) {
-    LeaseStatCmdsImpl impl;
-    MultiThreadingCriticalSection sc;
-    return(impl.statLease6GetHandler(handle));
+    try {
+        LeaseStatCmdsImpl impl;
+        MultiThreadingCriticalSection cs;
+        return (impl.statLease6GetHandler(handle));
+    } catch (const std::exception& ex) {
+
+        LOG_ERROR(stat_cmds_logger, STAT_CMDS_LEASE6_FAILED)
+                  .arg(ex.what());
+    }
+    return (1);
 }
 
 };

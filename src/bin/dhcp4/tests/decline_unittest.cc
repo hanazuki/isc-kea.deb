@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -106,7 +106,7 @@ Dhcpv4SrvTest::acquireAndDecline(Dhcp4Client& client,
         CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
     ASSERT_EQ(1, subnets->size());
     std::stringstream name;
-    name << "subnet[" << subnets->at(0)->getID() << "].declined-addresses";
+    name << "subnet[" << (*subnets->begin())->getID() << "].declined-addresses";
 
     // Set the subnet specific statistic explicitly to zero.
     isc::stats::StatsMgr::instance().setValue(name.str(), static_cast<int64_t>(0));
@@ -184,7 +184,6 @@ public:
     DeclineTest()
         : Dhcpv4SrvTest(),
           iface_mgr_test_config_(true) {
-        IfaceMgr::instance().openSockets4();
     }
 
     /// @brief Interface Manager's fake configuration control.

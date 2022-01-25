@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -107,10 +107,27 @@ public:
     ///
     /// @param parameters A data structure relating keywords and values
     /// concerned with the database.
-    explicit MySqlConfigBackendImpl(const db::DatabaseConnection::ParameterMap& parameters);
+    /// @param db_reconnect_callback The connection recovery callback.
+    explicit MySqlConfigBackendImpl(const db::DatabaseConnection::ParameterMap& parameters,
+                                    const db::DbCallback db_reconnect_callback);
 
     /// @brief Destructor.
     virtual ~MySqlConfigBackendImpl();
+
+    /// @brief Creates MySQL binding from an @c Optional of integer type.
+    ///
+    /// @tparam T Numeric type corresponding to the binding type, e.g.
+    /// @c uint8_t, @c uint16_t etc.
+    /// @param value Optional integer of type T.
+    /// @return Pointer to a null binding if the value is "unspecified" or
+    /// a pointer to a binding representing integer value.
+    template<typename T>
+    static db::MySqlBindingPtr condCreateInteger(const util::Optional<T>& value) {
+        if (value.unspecified()) {
+            return (db::MySqlBinding::createNull());
+        }
+        return (db::MySqlBinding::createInteger(value));
+    }
 
     /// @brief Creates MySQL binding from a @c Triplet.
     ///
@@ -218,7 +235,7 @@ public:
     /// revision.
     /// @param log_message log message to be used for the audit revision.
     /// @param cascade_transaction Boolean value indicating whether the
-    /// configuration modification is performed as part of the ownining
+    /// configuration modification is performed as part of the owning
     /// element modification, e.g. subnet is modified resulting in
     /// modification of the DHCP options it owns. In that case only the
     /// audit entry for the owning element should be created.
@@ -239,11 +256,15 @@ public:
     /// @param server_selector Server selector.
     /// @param modification_time Timestamp being a lower limit for the returned
     /// result set, i.e. entries later than specified time are returned.
+    /// @param modification_id Identifier being a lower limit for the returned
+    /// result set, used when two (or more) revisions have the same
+    /// modification_time.
     /// @param [out] audit_entries Reference to the container where fetched audit
     /// entries will be inserted.
     void getRecentAuditEntries(const int index,
                                const db::ServerSelector& server_selector,
                                const boost::posix_time::ptime& modification_time,
+                               const uint64_t& modification_id,
                                db::AuditEntryCollection& audit_entries);
 
     /// @brief Sends query to delete rows from a table.
@@ -400,6 +421,9 @@ public:
     /// @param create_audit_revision Statement creating audit revision.
     /// @param insert_option_def_server Statement associating option
     /// definition with a server.
+    /// @param client_class_name Optional client class name to which
+    /// the option definition belongs. If this value is not specified,
+    /// it is a global option definition.
     /// @throw NotImplemented if server selector is "unassigned".
     void createUpdateOptionDef(const db::ServerSelector& server_selector,
                                const OptionDefinitionPtr& option_def,
@@ -408,7 +432,8 @@ public:
                                const int& insert_option_def,
                                const int& update_option_def,
                                const int& create_audit_revision,
-                               const int& insert_option_def_server);
+                               const int& insert_option_def_server,
+                               const std::string& client_class_name = "");
 
     /// @brief Sends query to retrieve single global option by code and
     /// option space.
@@ -551,6 +576,27 @@ public:
     OptionDescriptorPtr
     processOptionRow(const Option::Universe& universe,
                      db::MySqlBindingCollection::iterator first_binding);
+
+    /// @brief Returns DHCP option definition instance from output bindings.
+    ///
+    /// The following is the expected order of columns specified in the SELECT
+    /// query:
+    /// - id,
+    /// - code,
+    /// - name,
+    /// - space,
+    /// - type,
+    /// - modification_ts,
+    /// - is_array,
+    /// - encapsulate,
+    /// - record_types,
+    /// - user_context
+    ///
+    /// @param first_binding Iterator of the output binding containing
+    /// option definition id.
+    /// @return Pointer to the option definition.
+    OptionDefinitionPtr
+    processOptionDefRow(db::MySqlBindingCollection::iterator first_binding);
 
     /// @brief Associates a configuration element with multiple servers.
     ///
@@ -780,12 +826,45 @@ public:
     /// @return Port number on which database service is available.
     uint16_t getPort() const;
 
+    /// @brief Return backend parameters
+    ///
+    /// Returns the backend parameters
+    ///
+    /// @return Parameters of the backend.
+    const isc::db::DatabaseConnection::ParameterMap& getParameters() {
+        return (parameters_);
+    }
+
+    /// @brief Sets IO service to be used by the MySql config backend.
+    ///
+    /// @param IOService object, used for all ASIO operations.
+    static void setIOService(const isc::asiolink::IOServicePtr& io_service) {
+        io_service_ = io_service;
+    }
+
+    /// @brief Returns pointer to the IO service.
+    static isc::asiolink::IOServicePtr& getIOService() {
+        return (io_service_);
+    }
+
     /// @brief Represents connection to the MySQL database.
     db::MySqlConnection conn_;
 
-    /// @brief Boolean flag indicating if audit revision has been created
-    /// using @c ScopedAuditRevision object.
-    bool audit_revision_created_;
+protected:
+
+    /// @brief Timer name used to register database reconnect timer.
+    std::string timer_name_;
+
+private:
+
+    /// @brief Reference counter for @ScopedAuditRevision instances.
+    int audit_revision_ref_count_;
+
+    /// @brief Connection parameters
+    isc::db::DatabaseConnection::ParameterMap parameters_;
+
+    /// The IOService object, used for all ASIO operations.
+    static isc::asiolink::IOServicePtr io_service_;
 };
 
 } // end of namespace isc::dhcp

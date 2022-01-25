@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,8 +10,7 @@
 #include <cc/data.h>
 #include <exceptions/exceptions.h>
 #include <boost/shared_ptr.hpp>
-#include <boost/date_time/time_duration.hpp>
-#include <boost/date_time/posix_time/posix_time_types.hpp>
+#include <chrono>
 #include <list>
 #include <stdint.h>
 
@@ -28,9 +27,24 @@ public:
         isc::Exception(file, line, what) {}
 };
 
-/// @brief Defines duration resolution
+/// @brief Define clock type.
 ///
-typedef boost::posix_time::time_duration StatsDuration;
+/// @note: we use the system clock i.e. the wall clock because this
+/// clock can be converted from and to standard Unix time (time_t).
+typedef std::chrono::system_clock SampleClock;
+
+/// @brief Defines duration type.
+///
+/// @note: the precision depends on the system,
+typedef std::chrono::system_clock::duration StatsDuration;
+
+/// @brief Returns the number of seconds in a duration.
+///
+/// @param dur The duration.
+/// @return The number of seconds in the given duration.
+inline long toSeconds(const StatsDuration& dur) {
+    return ((std::chrono::duration_cast<std::chrono::seconds>(dur)).count());
+}
 
 /// @defgroup stat_samples Specifies supported observation types.
 ///
@@ -39,16 +53,16 @@ typedef boost::posix_time::time_duration StatsDuration;
 /// @{
 
 /// @brief Integer (implemented as signed 64-bit integer)
-typedef std::pair<int64_t, boost::posix_time::ptime> IntegerSample;
+typedef std::pair<int64_t, SampleClock::time_point> IntegerSample;
 
 /// @brief Float (implemented as double precision)
-typedef std::pair<double, boost::posix_time::ptime> FloatSample;
+typedef std::pair<double, SampleClock::time_point> FloatSample;
 
 /// @brief Time Duration
-typedef std::pair<StatsDuration, boost::posix_time::ptime> DurationSample;
+typedef std::pair<StatsDuration, SampleClock::time_point> DurationSample;
 
 /// @brief String
-typedef std::pair<std::string, boost::posix_time::ptime> StringSample;
+typedef std::pair<std::string, SampleClock::time_point> StringSample;
 
 /// @}
 
@@ -68,7 +82,7 @@ typedef std::pair<std::string, boost::posix_time::ptime> StringSample;
 ///
 /// Since Kea 1.6 multiple samples are stored for the same observation.
 class Observation {
- public:
+public:
 
     /// @brief Type of available statistics
     ///
@@ -121,9 +135,9 @@ class Observation {
     /// @param duration determines maximum age of samples
     /// Example:
     /// To set a statistic to keep observations for the last 5 minutes, call:
-    /// setMaxSampleAge(time_duration(0, 5, 0, 0));
+    /// setMaxSampleAge(std::chrono::minutes(5));
     /// To revert statistic to a single value, call:
-    /// setMaxSampleAge(time_duration(0, 0, 0, 0));
+    /// setMaxSampleAge(StatsDuration::zero());
     void setMaxSampleAge(const StatsDuration& duration);
 
     /// @brief Determines how many samples of a given statistic should be kept.
@@ -139,6 +153,30 @@ class Observation {
     /// To set a statistic to keep the last 100 observations, call:
     /// setMaxSampleCount(100);
     void setMaxSampleCount(uint32_t max_samples);
+
+    /// @brief Determines default maximum age of samples.
+    ///
+    /// @param duration default maximum age of samples to keep.
+    static void setMaxSampleAgeDefault(const StatsDuration& duration);
+
+    /// @brief Determines default maximum count of samples.
+    ///
+    /// @param max_samples default maximum count of samples to keep.
+    /// (0 means to disable count limit and enable age limit)
+    static void setMaxSampleCountDefault(uint32_t max_samples);
+
+    /// @brief Get default maximum age of samples.
+    ///
+    /// @return default maximum age of samples to keep.
+    static const StatsDuration& getMaxSampleAgeDefault();
+
+    /// @brief Get default maximum count of samples.
+    ///
+    /// @return max_samples default maximum count of samples to keep.
+    /// (0 means that count limit was disabled)
+    static uint32_t getMaxSampleCountDefault();
+
+    /// @
 
     /// @brief Records absolute integer observation
     ///
@@ -354,21 +392,28 @@ private:
     /// The bool value informs which limit
     /// is available
     /// True means active limit, false means inactive limit
+    std::pair<bool, uint32_t> max_sample_count_;
+
+    /// @brief Default maximum number of samples
+    ///
     /// By default the MaxSampleCount is set to 20
     /// and MaxSampleAge is disabled
-    std::pair<bool, uint32_t> max_sample_count_ = std::make_pair(true, 20);
+    static std::pair<bool, uint32_t> default_max_sample_count_;
 
     /// @brief Maximum timespan of samples
     /// The limit is represented as a pair
-    /// of bool value and StatsDuration(boost::posix_time::time_duration)
+    /// of bool value and StatsDuration
     /// Only one kind of limit can be active
     /// The bool value informs which limit
     /// is available
     /// True means active limit, false means inactive limit
+    std::pair<bool, StatsDuration> max_sample_age_;
+
+    /// @brief Default maximum timespan of samples
+    ///
     /// By default the MaxSampleCount is set to 20
     /// and MaxSampleAge is disabled
-    std::pair<bool, StatsDuration> max_sample_age_ = std::make_pair(false,
-            boost::posix_time::time_duration(0, 0, 0, 0));
+    static std::pair<bool, StatsDuration> default_max_sample_age_;
 
     /// @defgroup samples_storage Storage for supported observations
     ///
@@ -394,7 +439,7 @@ private:
 /// @brief Observation pointer
 typedef boost::shared_ptr<Observation> ObservationPtr;
 
-};
-};
+}
+}
 
 #endif // OBSERVATION_H

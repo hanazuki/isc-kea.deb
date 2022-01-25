@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2015,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -366,7 +366,7 @@ public:
     virtual void handle(MasterLexer& lexer) const {
         // We've just seen '\r'.  If this is part of a sequence of '\r\n',
         // we combine them as a single END-OF-LINE.  Otherwise we treat the
-        // single '\r' as an EOL and continue tokeniziation from the character
+        // single '\r' as an EOL and continue tokenization from the character
         // immediately after '\r'.  One tricky case is that there's a comment
         // between '\r' and '\n'.  This implementation combines these
         // characters and treats them as a single EOL (the behavior derived

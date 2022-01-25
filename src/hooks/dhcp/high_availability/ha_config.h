@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,8 +7,12 @@
 #ifndef HA_CONFIG_H
 #define HA_CONFIG_H
 
+#include <asiolink/crypto_tls.h>
 #include <exceptions/exceptions.h>
+#include <http/basic_auth.h>
+#include <http/post_request_json.h>
 #include <http/url.h>
+#include <util/optional.h>
 #include <util/state_model.h>
 #include <boost/shared_ptr.hpp>
 #include <cstdint>
@@ -32,11 +36,13 @@ public:
     /// @brief Mode of operation.
     ///
     /// Currently supported modes are:
-    /// - load balancing
-    /// - hot standby
+    /// - load-balancing
+    /// - hot-standby
+    /// - passive-backup
     enum HAMode {
         LOAD_BALANCING,
         HOT_STANDBY,
+        PASSIVE_BACKUP
     };
 
     /// @brief HA peer configuration.
@@ -50,9 +56,9 @@ public:
         /// @brief Server's role in the High Availability setup.
         ///
         /// The following roles are supported:
-        /// - primary - server taking part in load balancing or hot standby setup,
-        ///   taking leadership over other servers. There must be exactly one primary
-        ///   server.
+        /// - primary - server taking part in load balancing, hot standby or
+        ///   passive-backup setup, taking leadership over other servers.
+        ///   There must be exactly one primary server.
         /// - secondary - server taking part in the load balancing setup. It is a slave
         ///   server to primary. There must be exactly one secondary server in the
         ///   load balancing setup.
@@ -92,6 +98,47 @@ public:
         /// @param url URL value.
         void setUrl(const http::Url& url) {
             url_ = url;
+        }
+
+        /// @brief Returns server's trust-anchor.
+        util::Optional<std::string> getTrustAnchor() const {
+            return (trust_anchor_);
+        }
+
+        /// @brief Sets server's trust-anchor.
+        ///
+        /// @param ca Trust anchor aka Certificate Authority.
+        void setTrustAnchor(const util::Optional<std::string>& ca) {
+            trust_anchor_ = ca;
+        }
+
+        /// @brief Returns server's cert-file.
+        util::Optional<std::string> getCertFile() const {
+            return (cert_file_);
+        }
+
+        /// @brief Sets server's cert-file.
+        ///
+        /// @param cert Certificate file name.
+        void setCertFile(const util::Optional<std::string>& cert) {
+            cert_file_ = cert;
+        }
+
+        /// @brief Returns server's key-file.
+        util::Optional<std::string> getKeyFile() const {
+            return (key_file_);
+        }
+
+        /// @brief Sets server's key-file.
+        ///
+        /// @param key Private key file name.
+        void setKeyFile(const util::Optional<std::string>& key) {
+            key_file_ = key;
+        }
+
+        /// @brief Returns a pointer to the server's TLS context.
+        asiolink::TlsContextPtr getTlsContext() const {
+            return (tls_context_);
         }
 
         /// @brief Returns a string identifying a server used in logging.
@@ -146,13 +193,36 @@ public:
             auto_failover_ = auto_failover;
         }
 
+        /// @brief Returns non-const basic HTTP authentication.
+        http::BasicHttpAuthPtr& getBasicAuth() {
+            return (basic_auth_);
+        }
+
+        /// @brief Returns const basic HTTP authentication.
+        const http::BasicHttpAuthPtr& getBasicAuth() const {
+            return (basic_auth_);
+        }
+
+        /// @brief Adds a basic HTTP authentication header to a request
+        /// when credentials are specified.
+        void addBasicAuthHttpHeader(http::PostHttpRequestJsonPtr request) const;
+
+        /// @brief Server TLS context.
+        ///
+        /// @note: if you make it protected or private please make
+        /// @ref validate a friend so it may configure it.
+        asiolink::TlsContextPtr tls_context_;
+
     private:
 
-        std::string name_;   ///< Server name.
-        http::Url url_;      ///< Server URL.
-        Role role_;          ///< Server role.
-        bool auto_failover_; ///< Auto failover state.
-
+        std::string name_;                          ///< Server name.
+        http::Url url_;                             ///< Server URL.
+        util::Optional<std::string> trust_anchor_;  ///< Server trust anchor.
+        util::Optional<std::string> cert_file_;     ///< Server cert file.
+        util::Optional<std::string> key_file_;      ///< Server key file.
+        Role role_;                                 ///< Server role.
+        bool auto_failover_;                        ///< Auto failover state.
+        http::BasicHttpAuthPtr basic_auth_;         ///< Basic HTTP authentication.
     };
 
     /// @brief Pointer to the server's configuration.
@@ -160,7 +230,6 @@ public:
 
     /// @brief Map of the servers' configurations.
     typedef std::map<std::string, PeerConfigPtr> PeerConfigMap;
-
 
     /// @brief Configuration specific to a single HA state.
     class StateConfig {
@@ -181,7 +250,7 @@ public:
             return (pausing_);
         }
 
-        /// @brief Sets pausing mode for the gievn state.
+        /// @brief Sets pausing mode for the given state.
         ///
         /// @param pausing new pausing mode in the textual form. Supported
         /// values are: always, never, once.
@@ -200,7 +269,7 @@ public:
 
     private:
 
-        /// @brief Idenitifier of state for which configuration is held.
+        /// @brief Identifier of state for which configuration is held.
         int state_;
 
         /// @brief Pausing mode in the given state.
@@ -343,7 +412,7 @@ public:
 
     /// @brief Sets new lease database syncing timeout in milliseconds.
     ///
-    /// @param sync_timeout new timeout for lease database synchornization.
+    /// @param sync_timeout new timeout for lease database synchronization.
     void setSyncTimeout(const uint32_t sync_timeout) {
         sync_timeout_ = sync_timeout;
     }
@@ -362,6 +431,49 @@ public:
     /// @param sync_page_limit New page limit value.
     void setSyncPageLimit(const uint32_t sync_page_limit) {
         sync_page_limit_ = sync_page_limit;
+    }
+
+    /// @brief Returns the maximum number of lease updates which can be held
+    /// unsent in the communication-recovery state.
+    ///
+    /// If the server is in the communication-recovery state it is unable to
+    /// send lease updates to the partner. Instead it keeps lease updates,
+    /// hoping to send them when the communication is resumed. This value
+    /// designates a limit of how many such updates can be held. If this
+    /// number is exceeded the server continues to respond to the clients
+    /// but will have to go through regular lease database synchronization
+    /// when the communication is resumed.
+    ///
+    /// @return Limit of the lease backlog size in communication-recovery.
+    uint32_t getDelayedUpdatesLimit() const {
+        return (delayed_updates_limit_);
+    }
+
+    /// @brief Sets new limit for the number of lease updates to be held
+    /// unsent in the communication-recovery state.
+    ///
+    /// If the server is in the communication-recovery state it is unable to
+    /// send lease updates to the partner. Instead it keeps lease updates,
+    /// hoping to send them when the communication is resumed. This value
+    /// designates a limit of how many such updates can be held. If this
+    /// number is exceeded the server continues to respond to the clients
+    /// but will have to go through regular lease database synchronization
+    /// when the communication is resumed.
+    ///
+    /// @param delayed_updates_limit new limit.
+    void setDelayedUpdatesLimit(const uint32_t delayed_updates_limit) {
+        delayed_updates_limit_ = delayed_updates_limit;
+    }
+
+    /// @brief Convenience function checking if communication recovery is allowed.
+    ///
+    /// Communication recovery is only allowed in load-balancing configurations.
+    /// It is enabled by setting delayed-updates-limit to a value greater
+    /// than 0.
+    ///
+    /// @return true if communication recovery is enabled, false otherwise.
+    bool amAllowingCommRecovery() const {
+        return (delayed_updates_limit_ > 0);
     }
 
     /// @brief Returns heartbeat delay in milliseconds.
@@ -438,6 +550,124 @@ public:
         max_unacked_clients_ = max_unacked_clients;
     }
 
+    /// @brief Configures the server to wait/not wait for the lease update
+    /// acknowledgments from the backup servers.
+    ///
+    /// @param wait_backup_ack indicates that the server should wait for the
+    /// lease update acknowledgments from the backup servers (if true) or
+    /// that it should not (if false).
+    void setWaitBackupAck(const bool wait_backup_ack) {
+        wait_backup_ack_ = wait_backup_ack;
+    }
+
+    /// @brief Checks if the server is configured to wait for the acknowledgments
+    /// to the lease updates from the backup server or not.
+    ///
+    /// @return true if the server is configured to wait for the acknowledgments
+    /// or false otherwise.
+    bool amWaitingBackupAck() const {
+        return (wait_backup_ack_);
+    }
+
+    /// @brief Checks if the server is configured for multi-threaded operation.
+    ///
+    /// @return true if the server is configured for multi-threaded operation
+    bool getEnableMultiThreading() {
+        return (enable_multi_threading_);
+    }
+
+    /// @brief Sets whether or not server is configured for multi-threaded operation.
+    ///
+    /// @param enable_multi_threading boolean flag that enables multi-threaded operation
+    /// when true.
+    void setEnableMultiThreading(bool enable_multi_threading) {
+        enable_multi_threading_ = enable_multi_threading;
+    }
+
+    /// @brief Checks if the server is configured to use its own HTTP listener.
+    ///
+    /// When this is true, the server should instantiate an HTTP listener instance
+    /// which listens on this server's URL.  If false, this server will rely on
+    /// a kea-control-agent.
+    ///
+    /// @return true if the server is configured to use its own HTTP listener.
+    bool getHttpDedicatedListener() {
+        return (http_dedicated_listener_);
+    }
+
+    /// @brief Sets whether or not the server is configured to use its own HTTP
+    /// listener.
+    ///
+    /// @param http_dedicated_listener flag that enables the use of a dedicated
+    /// listener when true.
+    void setHttpDedicatedListener(bool http_dedicated_listener) {
+        http_dedicated_listener_ = http_dedicated_listener;
+    }
+
+    /// @brief Fetches the number of threads the HTTP listener should use.
+    ///
+    /// @return number of threads the listener is configured to use.
+    uint32_t getHttpListenerThreads() {
+        return (http_listener_threads_);
+    }
+
+    /// @brief Sets the number of threads the HTTP listener should use.
+    ///
+    /// @param http_listener_threads number of threads the listener should use.
+    void setHttpListenerThreads(uint32_t http_listener_threads) {
+        http_listener_threads_ = http_listener_threads;
+    }
+
+    /// @brief Fetches the number of threads the HTTP client should use.
+    ///
+    /// @return number of threads the client is configured to use.
+    uint32_t getHttpClientThreads() {
+        return (http_client_threads_);
+    }
+
+    /// @brief Sets the number of threads the HTTP client should use.
+    ///
+    /// @param http_client_threads number of threads the client should use.
+    void setHttpClientThreads(uint32_t http_client_threads) {
+        http_client_threads_ = http_client_threads;
+    }
+
+    /// @brief Returns global trust-anchor.
+    util::Optional<std::string> getTrustAnchor() const {
+        return (trust_anchor_);
+    }
+
+    /// @brief Sets global trust-anchor.
+    ///
+    /// @param ca Trust anchor aka Certificate Authority.
+    void setTrustAnchor(const util::Optional<std::string>& ca) {
+        trust_anchor_ = ca;
+    }
+
+    /// @brief Returns global cert-file.
+    util::Optional<std::string> getCertFile() const {
+        return (cert_file_);
+    }
+
+    /// @brief Sets global cert-file.
+    ///
+    /// @param cert Certificate file name.
+    void setCertFile(const util::Optional<std::string>& cert) {
+        cert_file_ = cert;
+    }
+
+    /// @brief Returns global key-file.
+    util::Optional<std::string> getKeyFile() const {
+        return (key_file_);
+    }
+
+    /// @brief Sets global key-file.
+    ///
+    /// @param key Private key file name.
+    void setKeyFile(const util::Optional<std::string>& key) {
+        key_file_ = key;
+    }
+
     /// @brief Returns configuration of the specified server.
     ///
     /// @param name Server name.
@@ -487,22 +717,43 @@ public:
 
     /// @brief Validates configuration.
     ///
+    /// In addition to sanity checking the configuration, it will
+    /// check HA+MT configuration against Core multi-threading
+    /// configuration add adjust HA+MT values as follows:
+    /// 1. If DHCP multi-threading is disabled, HA+MT will be disabled.
+    /// 2. If http-listener-threads is 0, it will be replaced with
+    /// the number of DHCP threads
+    /// 3. If http-client-threads is 0, it will be replaced with
+    /// the number of DHCP threads
+    ///
+    /// As a side effect it fills the TLS context of peers when TLS is enabled.
+    ///
     /// @throw HAConfigValidationError if configuration is invalid.
-    void validate() const;
+    void validate();
 
-    std::string this_server_name_;        ///< This server name.
-    HAMode ha_mode_;                      ///< Mode of operation.
-    bool send_lease_updates_;             ///< Send lease updates to partner?
-    bool sync_leases_;                    ///< Synchronize databases on startup?
-    uint32_t sync_timeout_;               ///< Timeout for syncing lease database (ms)
-    uint32_t sync_page_limit_;            ///< Page size limit while synchronizing
-                                          ///< leases.
-    uint32_t heartbeat_delay_;            ///< Heartbeat delay in milliseconds.
-    uint32_t max_response_delay_;         ///< Max delay in response to heartbeats.
-    uint32_t max_ack_delay_;              ///< Maximum DHCP message ack delay.
-    uint32_t max_unacked_clients_;        ///< Maximum number of unacked clients.
-    PeerConfigMap peers_;                 ///< Map of peers' configurations.
-    StateMachineConfigPtr state_machine_; ///< State machine configuration.
+    std::string this_server_name_;            ///< This server name.
+    HAMode ha_mode_;                          ///< Mode of operation.
+    bool send_lease_updates_;                 ///< Send lease updates to partner?
+    bool sync_leases_;                        ///< Synchronize databases on startup?
+    uint32_t sync_timeout_;                   ///< Timeout for syncing lease database (ms)
+    uint32_t sync_page_limit_;                ///< Page size limit while
+                                              ///< synchronizing leases.
+    uint32_t delayed_updates_limit_;          ///< Maximum number of lease updates held
+                                              ///< for later send in communication-recovery.
+    uint32_t heartbeat_delay_;                ///< Heartbeat delay in milliseconds.
+    uint32_t max_response_delay_;             ///< Max delay in response to heartbeats.
+    uint32_t max_ack_delay_;                  ///< Maximum DHCP message ack delay.
+    uint32_t max_unacked_clients_;            ///< Maximum number of unacked clients.
+    bool wait_backup_ack_;                    ///< Wait for lease update ack from backup?
+    bool enable_multi_threading_;             ///< Enable multi-threading.
+    bool http_dedicated_listener_;            ///< Enable use of own HTTP listener.
+    uint32_t http_listener_threads_;          ///< Number of HTTP listener threads.
+    uint32_t http_client_threads_;            ///< Number of HTTP client threads.
+    util::Optional<std::string> trust_anchor_; ///< Trust anchor.
+    util::Optional<std::string> cert_file_;    ///< Certificate file.
+    util::Optional<std::string> key_file_;     ///< Private key file.
+    PeerConfigMap peers_;                      ///< Map of peers' configurations.
+    StateMachineConfigPtr state_machine_;      ///< State machine configuration.
 };
 
 /// @brief Pointer to the High Availability configuration structure.

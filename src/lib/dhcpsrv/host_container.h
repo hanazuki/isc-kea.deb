@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -167,7 +167,7 @@ struct HostResrv6Tuple {
     /// @param resrv IPv6 address/prefix reservation
     /// @param host pointer to the host object
     HostResrv6Tuple(const IPv6Resrv& resrv, const HostPtr& host)
-    :resrv_(resrv), host_(host), subnet_id_(host ? host->getIPv6SubnetID() : 0) {
+    : resrv_(resrv), host_(host), subnet_id_(host ? host->getIPv6SubnetID() : SUBNET_ID_GLOBAL) {
     }
 
     /// @brief Address or prefix reservation.
@@ -209,7 +209,7 @@ typedef boost::multi_index_container<
 
         // Second index is used to search by (subnet_id, address) pair.
         // This is
-        boost::multi_index::ordered_unique<
+        boost::multi_index::ordered_non_unique<
 
             /// This is a composite key. It uses two keys: subnet-id and
             /// IPv6 address reservation.

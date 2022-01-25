@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -48,7 +48,7 @@ public:
     ~Sandbox() {
         // Delete content of path_ recursively.
         if (nftw(path_.c_str(), Sandbox::rmFile, 10, FTW_DEPTH | FTW_MOUNT | FTW_PHYS) < 0) {
-            auto msg = "Some error occured while deleting unit test sandbox " + path_;
+            auto msg = "Some error occurred while deleting unit test sandbox " + path_;
             std::perror(msg.c_str());
             exit(1);
         }

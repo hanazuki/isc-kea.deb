@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,7 @@
 #include <process/d_log.h>
 #include <process/d_cfg_mgr.h>
 #include <process/daemon.h>
+#include <process/redact_config.h>
 #include <util/encode/hex.h>
 #include <util/strutil.h>
 
@@ -56,6 +57,20 @@ DCfgMgrBase::setContext(ConfigPtr& context) {
     context_ = context;
 }
 
+ConstElementPtr
+DCfgMgrBase::redactConfig(ConstElementPtr const& config) const {
+    ConstElementPtr result(config);
+    for (std::list<std::string>& json_path : jsonPathsToRedact()) {
+        result = isc::process::redactConfig(result, json_path);
+    }
+    return result;
+}
+
+list<list<string>> DCfgMgrBase::jsonPathsToRedact() const {
+    static list<list<string>> const list;
+    return list;
+}
+
 isc::data::ConstElementPtr
 DCfgMgrBase::simpleParseConfig(isc::data::ConstElementPtr config_set,
                                bool check_only,
@@ -64,8 +79,8 @@ DCfgMgrBase::simpleParseConfig(isc::data::ConstElementPtr config_set,
         return (isc::config::createAnswer(1,
                                     std::string("Can't parse NULL config")));
     }
-    LOG_DEBUG(dctl_logger, isc::log::DBGLVL_COMMAND,
-                DCTL_CONFIG_START).arg(config_set->str());
+    LOG_DEBUG(dctl_logger, isc::log::DBGLVL_COMMAND, DCTL_CONFIG_START)
+        .arg(redactConfig(config_set)->str());
 
     // The parsers implement data inheritance by directly accessing
     // configuration context. For this reason the data parsers must store
@@ -144,5 +159,5 @@ DCfgMgrBase::parse(isc::data::ConstElementPtr, bool) {
     isc_throw(DCfgMgrBaseError, "This class does not implement simple parser paradigm yet");
 }
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace

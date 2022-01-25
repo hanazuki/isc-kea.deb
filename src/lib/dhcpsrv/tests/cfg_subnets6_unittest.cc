@@ -1,21 +1,26 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <dhcp/classify.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/option.h>
 #include <dhcp/option_string.h>
 #include <dhcp/tests/iface_mgr_test_config.h>
+#include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/cfg_shared_networks.h>
 #include <dhcpsrv/cfg_subnets6.h>
+#include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/parsers/dhcp_parsers.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/subnet_id.h>
 #include <dhcpsrv/subnet_selector.h>
+#include <dhcpsrv/cfg_hosts.h>
+#include <stats/stats_mgr.h>
 #include <testutils/gtest_utils.h>
 #include <testutils/test_to_element.h>
 #include <util/doubles.h>
@@ -27,6 +32,7 @@ using namespace isc;
 using namespace isc::asiolink;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
+using namespace isc::stats;
 using namespace isc::test;
 
 namespace {
@@ -42,7 +48,7 @@ generateInterfaceId(const std::string& text) {
 
 /// @brief Verifies that a set of subnets contains a given a subnet
 ///
-/// @param cfg_subnets set of sunbets in which to look
+/// @param cfg_subnets set of subnets in which to look
 /// @param exp_subnet_id expected id of the target subnet
 /// @param prefix prefix of the target subnet
 /// @param exp_valid expected valid lifetime of the subnet
@@ -183,7 +189,7 @@ TEST(CfgSubnets6Test, replaceSubnet) {
     ASSERT_TRUE(replaced);
     EXPECT_TRUE(replaced == subnet2);
     ASSERT_EQ(3, cfg.getAll()->size());
-    Subnet6Ptr returned = cfg.getAll()->at(1);
+    Subnet6Ptr returned = cfg.getSubnet(SubnetID(2));
     ASSERT_TRUE(returned);
     EXPECT_TRUE(returned == subnet);
 
@@ -192,7 +198,7 @@ TEST(CfgSubnets6Test, replaceSubnet) {
     ASSERT_TRUE(replaced);
     EXPECT_TRUE(replaced == subnet);
     ASSERT_EQ(3, cfg.getAll()->size());
-    returned = cfg.getAll()->at(1);
+    returned = cfg.getSubnet(SubnetID(2));
     ASSERT_TRUE(returned);
     EXPECT_TRUE(returned == subnet2);
 
@@ -201,7 +207,7 @@ TEST(CfgSubnets6Test, replaceSubnet) {
                              48, 10, 20, 30, 1000,  SubnetID(2)));
     replaced = cfg.replace(subnet);
     EXPECT_FALSE(replaced);
-    returned = cfg.getAll()->at(1);
+    returned = cfg.getSubnet(SubnetID(2));
     ASSERT_TRUE(returned);
     EXPECT_TRUE(returned == subnet2);
 
@@ -211,7 +217,7 @@ TEST(CfgSubnets6Test, replaceSubnet) {
     replaced = cfg.replace(subnet);
     ASSERT_TRUE(replaced);
     EXPECT_TRUE(replaced == subnet2);
-    returned = cfg.getAll()->at(1);
+    returned = cfg.getSubnet(SubnetID(2));
     ASSERT_TRUE(returned);
     EXPECT_TRUE(returned == subnet);
 }
@@ -619,16 +625,21 @@ TEST(CfgSubnets6Test, unparseSubnet) {
 
     subnet1->setT1Percent(0.45);
     subnet1->setT2Percent(0.70);
+    subnet1->setCacheThreshold(0.20);
 
     subnet2->setIface("lo");
     subnet2->addRelayAddress(IOAddress("2001:db8:ff::2"));
     subnet2->setValid(Triplet<uint32_t>(200));
     subnet2->setPreferred(Triplet<uint32_t>(100));
+    subnet2->setStoreExtendedInfo(true);
+    subnet2->setCacheMaxAge(80);
 
     subnet3->setIface("eth1");
     subnet3->requireClientClass("foo");
     subnet3->requireClientClass("bar");
-    subnet3->setHostReservationMode(Network::HR_ALL);
+    subnet3->setReservationsGlobal(false);
+    subnet3->setReservationsInSubnet(true);
+    subnet3->setReservationsOutOfPool(false);
     subnet3->setRapidCommit(false);
     subnet3->setCalculateTeeTimes(true);
     subnet3->setT1Percent(0.50);
@@ -656,11 +667,11 @@ TEST(CfgSubnets6Test, unparseSubnet) {
     // Unparse
     std::string expected = "[\n"
         "{\n"
-        "    \"comment\": \"foo\",\n"
         "    \"id\": 123,\n"
         "    \"subnet\": \"2001:db8:1::/48\",\n"
         "    \"t1-percent\": 0.45,"
         "    \"t2-percent\": 0.7,"
+        "    \"cache-threshold\": .20,\n"
         "    \"interface-id\": \"relay.eth0\",\n"
         "    \"renew-timer\": 1,\n"
         "    \"rebind-timer\": 2,\n"
@@ -670,7 +681,8 @@ TEST(CfgSubnets6Test, unparseSubnet) {
         "    \"client-class\": \"foo\",\n"
         "    \"pools\": [ ],\n"
         "    \"pd-pools\": [ ],\n"
-        "    \"option-data\": [ ]\n"
+        "    \"option-data\": [ ],\n"
+        "    \"user-context\": { \"comment\": \"foo\" }\n"
         "},{\n"
         "    \"id\": 124,\n"
         "    \"subnet\": \"2001:db8:2::/48\",\n"
@@ -683,7 +695,9 @@ TEST(CfgSubnets6Test, unparseSubnet) {
         "    \"user-context\": { },\n"
         "    \"pools\": [ ],\n"
         "    \"pd-pools\": [ ],\n"
-        "    \"option-data\": [ ]\n"
+        "    \"option-data\": [ ],\n"
+        "    \"store-extended-info\": true,\n"
+        "    \"cache-max-age\": 80\n"
         "},{\n"
         "    \"id\": 125,\n"
         "    \"subnet\": \"2001:db8:3::/48\",\n"
@@ -698,7 +712,9 @@ TEST(CfgSubnets6Test, unparseSubnet) {
         "    \"min-valid-lifetime\": 100,\n"
         "    \"max-valid-lifetime\": 300,\n"
         "    \"rapid-commit\": false,\n"
-        "    \"reservation-mode\": \"all\",\n"
+        "    \"reservations-global\": false,\n"
+        "    \"reservations-in-subnet\": true,\n"
+        "    \"reservations-out-of-pool\": false,\n"
         "    \"pools\": [ ],\n"
         "    \"pd-pools\": [ ],\n"
         "    \"option-data\": [ ],\n"
@@ -755,9 +771,9 @@ TEST(CfgSubnets6Test, unparsePool) {
         "    \"valid-lifetime\": 4,\n"
         "    \"pools\": [\n"
         "        {\n"
-        "            \"comment\": \"foo\",\n"
         "            \"pool\": \"2001:db8:1::100-2001:db8:1::199\",\n"
-        "            \"user-context\": { \"version\": 1 },\n"
+        "            \"user-context\": { \"version\": 1,\n"
+        "                                \"comment\": \"foo\" },\n"
         "            \"option-data\": [ ]\n"
         "        },{\n"
         "            \"pool\": \"2001:db8:1:1::/64\",\n"
@@ -853,7 +869,7 @@ TEST(CfgSubnets6Test, mergeSubnets) {
     // Create custom options dictionary for testing merge. We're keeping it
     // simple because they are more rigorous tests elsewhere.
     CfgOptionDefPtr cfg_def(new CfgOptionDef());
-    cfg_def->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "string"))), "isc");
+    cfg_def->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "isc", "string"))));
 
     Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:1::"),
                                    64, 1, 2, 100, 100, SubnetID(1)));
@@ -1067,7 +1083,9 @@ TEST(CfgSubnets6Test, teeTimePercentValidation) {
         "            \"valid-lifetime\": 300, \n"
         "            \"client-class\": \"\", \n"
         "            \"require-client-classes\": [] \n,"
-        "            \"reservation-mode\": \"all\" \n"
+        "            \"reservations-global\": false, \n"
+        "            \"reservations-in-subnet\": true, \n"
+        "            \"reservations-out-of-pool\": false \n"
         "        }";
 
 
@@ -1130,7 +1148,9 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
         "            \"valid-lifetime\": 300, \n"
         "            \"client-class\": \"\", \n"
         "            \"require-client-classes\": [] \n,"
-        "            \"reservation-mode\": \"all\" \n"
+        "            \"reservations-global\": false, \n"
+        "            \"reservations-in-subnet\": true, \n"
+        "            \"reservations-out-of-pool\": false \n"
         "        }";
 
 
@@ -1365,7 +1385,9 @@ TEST(CfgSubnets6Test, hostnameSanitizierValidation) {
         "            \"valid-lifetime\": 300, \n"
         "            \"client-class\": \"\", \n"
         "            \"require-client-classes\": [] \n,"
-        "            \"reservation-mode\": \"all\" \n"
+        "            \"reservations-global\": false, \n"
+        "            \"reservations-in-subnet\": true, \n"
+        "            \"reservations-out-of-pool\": false \n"
         "        }";
 
     data::ElementPtr elems;
@@ -1396,6 +1418,84 @@ TEST(CfgSubnets6Test, hostnameSanitizierValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         EXPECT_EQ("^[A-Z]", subnet->getHostnameCharSet().get());
         EXPECT_EQ("x", subnet->getHostnameCharReplacement().get());
+    }
+}
+
+// This test verifies the Subnet6 parser's validation logic for
+// lease cache parameters.
+TEST(CfgSubnets6Test, cacheParamValidation) {
+
+    // Describes a single test scenario.
+    struct Scenario {
+        std::string label;         // label used for logging test failures
+        double threshold;          // value of cache-threshold
+        std::string error_message; // expected error message is parsing should fail
+    };
+
+    // Test Scenarios.
+    std::vector<Scenario> tests = {
+        {"valid", .25, ""},
+        {"negative", -.25,
+         "subnet configuration failed: cache-threshold:"
+         " -0.25 is invalid, it must be greater than 0.0 and less than 1.0"
+        },
+        {"too big", 1.05,
+         "subnet configuration failed: cache-threshold:"
+         " 1.05 is invalid, it must be greater than 0.0 and less than 1.0"
+        }
+    };
+
+    // First we create a set of elements that provides all
+    // required for a Subnet6.
+    std::string json =
+        "        {"
+        "            \"id\": 1,\n"
+        "            \"subnet\": \"2001:db8:1::/64\", \n"
+        "            \"interface\": \"\", \n"
+        "            \"renew-timer\": 100, \n"
+        "            \"rebind-timer\": 200, \n"
+        "            \"valid-lifetime\": 300, \n"
+        "            \"client-class\": \"\", \n"
+        "            \"require-client-classes\": [] \n,"
+        "            \"reservations-global\": false, \n"
+        "            \"reservations-in-subnet\": true, \n"
+        "            \"reservations-out-of-pool\": false \n"
+        "        }";
+
+    data::ElementPtr elems;
+    ASSERT_NO_THROW(elems = data::Element::fromJSON(json))
+                    << "invalid JSON:" << json << "\n test is broken";
+
+    // Iterate over the test scenarios, verifying each prescribed
+    // outcome.
+    for (auto test = tests.begin(); test != tests.end(); ++test) {
+        {
+            SCOPED_TRACE("test: " + (*test).label);
+
+            // Set this scenario's configuration parameters
+            elems->set("cache-threshold", data::Element::create((*test).threshold));
+
+            Subnet6Ptr subnet;
+            try {
+                // Attempt to parse the configuration.
+                Subnet6ConfigParser parser;
+                subnet = parser.parse(elems);
+            } catch (const std::exception& ex) {
+                if (!(*test).error_message.empty()) {
+                    // We expected a failure, did we fail the correct way?
+                    EXPECT_EQ((*test).error_message, ex.what());
+                } else {
+                    // Should not have failed.
+                    ADD_FAILURE() << "Scenario should not have failed: " << ex.what();
+                }
+
+                // Either way we're done with this scenario.
+                continue;
+            }
+
+            // We parsed correctly, make sure the values are right.
+            EXPECT_TRUE(util::areDoublesEquivalent((*test).threshold, subnet->getCacheThreshold()));
+        }
     }
 }
 
@@ -1437,6 +1537,437 @@ TEST(CfgSubnets6Test, iface) {
     ASSERT_TRUE(subnet);
     EXPECT_FALSE(subnet->getIface().unspecified());
     EXPECT_EQ("eth1", subnet->getIface().get());
+}
+
+// This test verifies that update statistics works as expected.
+TEST(CfgSubnets6Test, updateStatistics) {
+    CfgMgr::instance().clear();
+
+    CfgSubnets6Ptr cfg = CfgMgr::instance().getCurrentCfg()->getCfgSubnets6();
+    ObservationPtr observation;
+    SubnetID subnet_id = 100;
+
+    LeaseMgrFactory::create("type=memfile universe=6 persist=false");
+
+    // remove all statistics
+    StatsMgr::instance().removeAll();
+
+    // Create subnet.
+    Subnet6Ptr subnet(new Subnet6(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4, 100));
+
+    // Add subnet.
+    cfg->add(subnet);
+
+    observation = StatsMgr::instance().getObservation(
+        "cumulative-assigned-nas");
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        "cumulative-assigned-pds");
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        "declined-addresses");
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        "reclaimed-declined-addresses");
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        "reclaimed-leases");
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-nas"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-pds"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-nas"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-pds"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-nas"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-pds"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "declined-addresses"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-declined-addresses"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-leases"));
+    ASSERT_FALSE(observation);
+
+    cfg->updateStatistics();
+
+    observation = StatsMgr::instance().getObservation(
+        "cumulative-assigned-nas");
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        "cumulative-assigned-pds");
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        "declined-addresses");
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        "reclaimed-declined-addresses");
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        "reclaimed-leases");
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-nas"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-pds"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-nas"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-pds"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-nas"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-pds"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "declined-addresses"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-declined-addresses"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-leases"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+}
+
+// This test verifies that remove statistics works as expected.
+TEST(CfgSubnets6Test, removeStatistics) {
+    CfgSubnets6 cfg;
+    ObservationPtr observation;
+    SubnetID subnet_id = 100;
+
+    // remove all statistics and then set them all to 0
+    StatsMgr::instance().removeAll();
+
+    // Create subnet.
+    Subnet6Ptr subnet(new Subnet6(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4, 100));
+
+    // Add subnet.
+    cfg.add(subnet);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-nas"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-nas"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-pds"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-pds"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-nas"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-nas"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-pds"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-pds"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-nas"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-nas"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-pds"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-pds"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "declined-addresses"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "declined-addresses"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-declined-addresses"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-declined-addresses"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    StatsMgr::instance().setValue(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-leases"),
+        int64_t(0));
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-leases"));
+    ASSERT_TRUE(observation);
+    ASSERT_EQ(0, observation->getInteger().first);
+
+    // remove all statistics
+    cfg.removeStatistics();
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-nas"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "total-pds"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-nas"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "assigned-pds"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-nas"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "cumulative-assigned-pds"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "declined-addresses"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-declined-addresses"));
+    ASSERT_FALSE(observation);
+
+    observation = StatsMgr::instance().getObservation(
+        StatsMgr::generateName("subnet", subnet_id,
+                               "reclaimed-leases"));
+    ASSERT_FALSE(observation);
+}
+
+// This test verifies that in range host reservation works as expected.
+TEST(CfgSubnets6Test, hostNA) {
+    // Create a configuration.
+    std::string json =
+        "        {"
+        "            \"id\": 1,\n"
+        "            \"subnet\": \"2001:db8:1::/48\", \n"
+        "            \"reservations\": [ {\n"
+        "                \"hw-address\": \"aa:bb:cc:dd:ee:ff\", \n"
+        "                \"ip-addresses\": [\"2001:db8:1::1\"] } ]\n"
+        "        }";
+
+    data::ElementPtr elems;
+    ASSERT_NO_THROW(elems = data::Element::fromJSON(json))
+        << "invalid JSON:" << json << "\n test is broken";
+
+    Subnet6ConfigParser parser;
+    Subnet6Ptr subnet;
+    EXPECT_NO_THROW(subnet = parser.parse(elems));
+    ASSERT_TRUE(subnet);
+    CfgHostsPtr cfg_hosts = CfgMgr::instance().getStagingCfg()->getCfgHosts();
+    ASSERT_TRUE(cfg_hosts);
+    HostCollection hosts = cfg_hosts->getAll6(SubnetID(1));
+    ASSERT_EQ(1, hosts.size());
+    ConstHostPtr host = hosts[0];
+    ASSERT_TRUE(host);
+    EXPECT_EQ(1, host->getIPv6SubnetID());
+    EXPECT_EQ("hwaddr=AABBCCDDEEFF", host->getIdentifierAsText());
+    IPv6ResrvRange addresses = host->getIPv6Reservations(IPv6Resrv::TYPE_NA);
+    ASSERT_EQ(1, std::distance(addresses.first, addresses.second));
+    EXPECT_EQ("2001:db8:1::1", addresses.first->second.getPrefix().toText());
+
+    CfgMgr::instance().clear();
+}
+
+// This test verifies that an out of range host reservation is rejected.
+TEST(CfgSubnets6Test, outOfRangeHost) {
+    // Create a configuration.
+    std::string json =
+        "        {"
+        "            \"id\": 1,\n"
+        "            \"subnet\": \"2001:db8:1::/48\", \n"
+        "            \"reservations\": [ {\n"
+        "                \"hw-address\": \"aa:bb:cc:dd:ee:ff\", \n"
+        "                \"ip-addresses\": [\"2001:db8:1::1\", \n"
+        "                                   \"2001:db8:2::1\"] } ]\n"
+        "        }";
+
+    data::ElementPtr elems;
+    ASSERT_NO_THROW(elems = data::Element::fromJSON(json))
+        << "invalid JSON:" << json << "\n test is broken";
+
+    Subnet6ConfigParser parser;
+    std::string msg = "specified reservation '2001:db8:2::1' is ";
+    msg += "not within the IPv6 subnet '2001:db8:1::/48'";
+    EXPECT_THROW_MSG(parser.parse(elems), DhcpConfigError, msg);
+}
+
+// This test verifies that in range validation does not applies to prefixes.
+TEST(CfgSubnets6Test, hostPD) {
+    // Create a configuration.
+    std::string json =
+        "        {"
+        "            \"id\": 1,\n"
+        "            \"subnet\": \"2001:db8:1::/48\", \n"
+        "            \"reservations\": [ {\n"
+        "                \"hw-address\": \"aa:bb:cc:dd:ee:ff\", \n"
+        "                \"prefixes\": [\"2001:db8:2::/64\"] } ]\n"
+        "        }";
+
+    data::ElementPtr elems;
+    ASSERT_NO_THROW(elems = data::Element::fromJSON(json))
+        << "invalid JSON:" << json << "\n test is broken";
+
+    Subnet6ConfigParser parser;
+    Subnet6Ptr subnet;
+    try {
+        subnet = parser.parse(elems);
+    } catch (const std::exception& ex) {
+        std::cerr << "parse fail with " << ex.what() << std::endl;
+    }
+    //EXPECT_NO_THROW(subnet = parser.parse(elems));
+    ASSERT_TRUE(subnet);
+    CfgHostsPtr cfg_hosts = CfgMgr::instance().getStagingCfg()->getCfgHosts();
+    ASSERT_TRUE(cfg_hosts);
+    HostCollection hosts = cfg_hosts->getAll6(SubnetID(1));
+    ASSERT_EQ(1, hosts.size());
+    ConstHostPtr host = hosts[0];
+    ASSERT_TRUE(host);
+    EXPECT_EQ(1, host->getIPv6SubnetID());
+    EXPECT_EQ("hwaddr=AABBCCDDEEFF", host->getIdentifierAsText());
+    IPv6ResrvRange prefixes = host->getIPv6Reservations(IPv6Resrv::TYPE_PD);
+    ASSERT_EQ(1, std::distance(prefixes.first, prefixes.second));
+    EXPECT_EQ("2001:db8:2::", prefixes.first->second.getPrefix().toText());
+    EXPECT_EQ(64, prefixes.first->second.getPrefixLen());
+
+    // Verify the prefix is not in the subnet range.
+    EXPECT_FALSE(subnet->inRange(prefixes.first->second.getPrefix()));
+
+    CfgMgr::instance().clear();
 }
 
 } // end of anonymous namespace

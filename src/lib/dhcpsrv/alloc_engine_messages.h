@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/dhcpsrv/alloc_engine_messages.mes on Mon Oct 28 2019 01:43
+// File created from ../../../src/lib/dhcpsrv/alloc_engine_messages.mes
 
 #ifndef ALLOC_ENGINE_MESSAGES_H
 #define ALLOC_ENGINE_MESSAGES_H
@@ -13,6 +13,9 @@ extern const isc::log::MessageID ALLOC_ENGINE_REMOVAL_NCR_FAILED;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_ERROR;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_CLASSES;
+extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_NO_POOLS;
+extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_SHARED_NETWORK;
+extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_FAIL_SUBNET;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DECLINED_RECOVERED;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_HR;
@@ -41,6 +44,9 @@ extern const isc::log::MessageID ALLOC_ENGINE_V4_REQUEST_USE_HR;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_REUSE_EXPIRED_LEASE_DATA;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_ERROR;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL;
+extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL_NO_POOLS;
+extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL_SHARED_NETWORK;
+extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_FAIL_SUBNET;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_HR_LEASE_EXISTS;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_LEASES_HR;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_ALLOC_LEASES_NO_HR;
@@ -73,6 +79,8 @@ extern const isc::log::MessageID ALLOC_ENGINE_V6_RENEW_REMOVE_UNRESERVED;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_REUSE_EXPIRED_LEASE_DATA;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_ADDR_LEASE;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_PREFIX_LEASE;
+extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_SHARED_ADDR_LEASE;
+extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_SHARED_PREFIX_LEASE;
 
 } // namespace dhcp
 } // namespace isc

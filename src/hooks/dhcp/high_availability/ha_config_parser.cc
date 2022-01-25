@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,16 +18,31 @@ using namespace isc::http;
 
 namespace {
 
+/// @brief Default values for HA load balancing.
+const SimpleDefaults HA_CONFIG_LB_DEFAULTS = {
+    { "delayed-updates-limit", Element::integer, "100" },
+};
+
 /// @brief Default values for HA configuration.
 const SimpleDefaults HA_CONFIG_DEFAULTS = {
-    { "send-lease-updates", Element::boolean, "true" },
-    { "sync-leases", Element::boolean, "true" },
-    { "sync-timeout", Element::integer, "60000" },
-    { "sync-page-limit", Element::integer, "10000" },
-    { "heartbeat-delay", Element::integer, "10000" },
-    { "max-response-delay", Element::integer, "60000" },
-    { "max-ack-delay", Element::integer, "10000" },
-    { "max-unacked-clients", Element::integer, "10" }
+    { "delayed-updates-limit",   Element::integer, "0" },
+    { "heartbeat-delay",         Element::integer, "10000" },
+    { "max-ack-delay",           Element::integer, "10000" },
+    { "max-response-delay",      Element::integer, "60000" },
+    { "max-unacked-clients",     Element::integer, "10" },
+    { "send-lease-updates",      Element::boolean, "true" },
+    { "sync-leases",             Element::boolean, "true" },
+    { "sync-timeout",            Element::integer, "60000" },
+    { "sync-page-limit",         Element::integer, "10000" },
+    { "wait-backup-ack",         Element::boolean, "false" }
+};
+
+/// @brief Default values for HA multi-threading configuration.
+const SimpleDefaults HA_CONFIG_MT_DEFAULTS = {
+    { "enable-multi-threading",    Element::boolean, "false" },
+    { "http-client-threads",       Element::integer, "0" },
+    { "http-dedicated-listener",   Element::boolean, "false" },
+    { "http-listener-threads",     Element::integer, "0" }
 };
 
 /// @brief Default values for HA peer configuration.
@@ -85,7 +100,15 @@ HAConfigParser::parseInternal(const HAConfigPtr& config_storage,
     // Get the HA configuration.
     ElementPtr c = config_vec[0];
 
-    // Set default values.
+    // Get 'mode'. That's the first thing to gather because the defaults we
+    // apply to the configuration depend on the mode.
+    config_storage->setHAMode(getString(c, "mode"));
+
+    // Set load-balancing specific defaults.
+    if (config_storage->getHAMode() == HAConfig::LOAD_BALANCING) {
+        setDefaults(c, HA_CONFIG_LB_DEFAULTS);
+    }
+    // Set general defaults.
     setDefaults(c, HA_CONFIG_DEFAULTS);
 
     // HA configuration must be a map.
@@ -93,7 +116,7 @@ HAConfigParser::parseInternal(const HAConfigPtr& config_storage,
         isc_throw(ConfigError, "expected list of maps in the HA configuration");
     }
 
-    // It must contains peers section.
+    // It must contain peers section.
     if (!c->contains("peers")) {
         isc_throw(ConfigError, "'peers' parameter missing in HA configuration");
     }
@@ -118,14 +141,10 @@ HAConfigParser::parseInternal(const HAConfigPtr& config_storage,
         }
     }
 
-
     // We have made major sanity checks, so let's try to gather some values.
 
     // Get 'this-server-name'.
     config_storage->setThisServerName(getString(c, "this-server-name"));
-
-    // Get 'mode'.
-    config_storage->setHAMode(getString(c, "mode"));
 
     // Get 'send-lease-updates'.
     config_storage->setSendLeaseUpdates(getBoolean(c, "send-lease-updates"));
@@ -140,6 +159,10 @@ HAConfigParser::parseInternal(const HAConfigPtr& config_storage,
     // Get 'sync-page-limit'.
     uint32_t sync_page_limit = getAndValidateInteger<uint32_t>(c, "sync-page-limit");
     config_storage->setSyncPageLimit(sync_page_limit);
+
+    // Get 'delayed-updates-limit'.
+    uint32_t delayed_updates_limit = getAndValidateInteger<uint32_t>(c, "delayed-updates-limit");
+    config_storage->setDelayedUpdatesLimit(delayed_updates_limit);
 
     // Get 'heartbeat-delay'.
     uint16_t heartbeat_delay = getAndValidateInteger<uint16_t>(c, "heartbeat-delay");
@@ -157,14 +180,56 @@ HAConfigParser::parseInternal(const HAConfigPtr& config_storage,
     uint32_t max_unacked_clients = getAndValidateInteger<uint32_t>(c, "max-unacked-clients");
     config_storage->setMaxUnackedClients(max_unacked_clients);
 
+    // Get 'wait-backup-ack'.
+    config_storage->setWaitBackupAck(getBoolean(c, "wait-backup-ack"));
+
+    // Get multi-threading map.
+    ElementPtr mt_config = boost::const_pointer_cast<Element>(c->get("multi-threading"));
+    if (!mt_config) {
+        // Not there, make an empty one.
+        mt_config = Element::createMap();
+        c->set("multi-threading", mt_config);
+    } else if (mt_config->getType() != Element::map) {
+        isc_throw(ConfigError, "multi-threading configuration must be a map");
+    }
+
+    // Backfill the MT defaults.
+    setDefaults(mt_config, HA_CONFIG_MT_DEFAULTS);
+
+    // Get 'enable-multi-threading'.
+    config_storage->setEnableMultiThreading(getBoolean(mt_config, "enable-multi-threading"));
+
+    // Get 'http-dedicated-listener'.
+    config_storage->setHttpDedicatedListener(getBoolean(mt_config, "http-dedicated-listener"));
+
+    // Get 'http-listener-threads'.
+    uint32_t threads = getAndValidateInteger<uint32_t>(mt_config, "http-listener-threads");
+    config_storage->setHttpListenerThreads(threads);
+
+    // Get 'http-client-threads'.
+    threads = getAndValidateInteger<uint32_t>(mt_config, "http-client-threads");
+    config_storage->setHttpClientThreads(threads);
+
+    // Get optional 'trust-anchor'.
+    ConstElementPtr ca = c->get("trust-anchor");
+    if (ca) {
+        config_storage->setTrustAnchor(getString(c, ("trust-anchor")));
+    }
+
+    // Get optional 'cert-file'.
+    ConstElementPtr cert = c->get("cert-file");
+    if (cert) {
+        config_storage->setCertFile(getString(c, ("cert-file")));
+    }
+
+    // Get optional 'key-file'.
+    ConstElementPtr key = c->get("key-file");
+    if (key) {
+        config_storage->setKeyFile(getString(c, ("key-file")));
+    }
+
     // Peers configuration parsing.
     const auto& peers_vec = peers->listValue();
-
-    // There must be at least two peers specified.
-    if (peers_vec.size() < 2) {
-        isc_throw(ConfigError, "peers configuration requires at least two peers"
-                  " to be specified");
-    }
 
     // Go over configuration of each peer.
     for (auto p = peers_vec.begin(); p != peers_vec.end(); ++p) {
@@ -182,11 +247,47 @@ HAConfigParser::parseInternal(const HAConfigPtr& config_storage,
         // URL.
         cfg->setUrl(Url(getString((*p), "url")));
 
+        // Optional trust anchor.
+        if ((*p)->contains("trust-anchor")) {
+            cfg->setTrustAnchor(getString(*p, ("trust-anchor")));
+        }
+
+        // Optional certificate file.
+        if ((*p)->contains("cert-file")) {
+            cfg->setCertFile(getString(*p, ("cert-file")));
+        }
+
+        // Optional private key file.
+        if ((*p)->contains("key-file")) {
+            cfg->setKeyFile(getString(*p, ("key-file")));
+        }
+
         // Role.
         cfg->setRole(getString(*p, "role"));
 
         // Auto failover configuration.
         cfg->setAutoFailover(getBoolean(*p, "auto-failover"));
+
+        // Basic HTTP authentication password.
+        std::string password;
+        if ((*p)->contains("basic-auth-password")) {
+            password = getString((*p), "basic-auth-password");
+        }
+
+        // Basic HTTP authentication user.
+        if ((*p)->contains("basic-auth-user")) {
+            std::string user = getString((*p), "basic-auth-user");
+            BasicHttpAuthPtr& auth = cfg->getBasicAuth();
+            try {
+                if (!user.empty()) {
+                    // Validate the user id value.
+                    auth.reset(new BasicHttpAuth(user, password));
+                }
+            } catch (const std::exception& ex) {
+                isc_throw(dhcp::DhcpConfigError, ex.what() << " in peer '"
+                          << cfg->getName() << "'");
+            }
+        }
     }
 
     // Per state configuration is optional.
@@ -236,7 +337,7 @@ T HAConfigParser::getAndValidateInteger(const ConstElementPtr& config,
 
     } else if (value > std::numeric_limits<T>::max()) {
         isc_throw(ConfigError, "'" << parameter_name << "' must not be greater than "
-                  << std::numeric_limits<T>::max());
+                                   << +std::numeric_limits<T>::max());
     }
 
     return (static_cast<T>(value));
@@ -267,7 +368,7 @@ HAConfigParser::logConfigStatus(const HAConfigPtr& config_storage) const {
     }
 
     // With this setting the server will not take ownership of the partner's
-    // scope in case of partner's failure. This setting is ok if the
+    // scope in case of partner's failure. This setting is OK if the
     // administrator desires to have more control over scopes selection.
     // The administrator will need to send ha-scopes command to instruct
     // the server to take ownership of the scope. In some cases he may

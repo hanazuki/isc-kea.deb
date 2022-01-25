@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,10 +18,8 @@
 #include <hooks/callout_handle.h>
 #include <stats/stats_mgr.h>
 
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <dhcpsrv/tests/alloc_engine_utils.h>
-
-#include <hooks/hooks_manager.h>
 
 #include <boost/shared_ptr.hpp>
 #include <boost/scoped_ptr.hpp>
@@ -51,9 +49,9 @@ bool testStatistics(const std::string& stat_name, const int64_t exp_value,
             if (observation->getInteger().first != exp_value) {
                 ADD_FAILURE()
                     << "value of the observed statistics '"
-                    << name << "' " << "("
+                    << name << "' ("
                     << observation->getInteger().first << ") "
-                    <<  "doesn't match expected value (" << exp_value << ")";
+                    << "doesn't match expected value (" << exp_value << ")";
             }
             return (observation->getInteger().first == exp_value);
         } else {
@@ -65,6 +63,20 @@ bool testStatistics(const std::string& stat_name, const int64_t exp_value,
         ;
     }
     return (false);
+}
+
+int64_t getStatistics(const std::string& stat_name, const SubnetID subnet_id) {
+    try {
+        std::string name = (subnet_id == SUBNET_ID_UNUSED ? stat_name :
+                            StatsMgr::generateName("subnet", subnet_id, stat_name));
+        ObservationPtr observation = StatsMgr::instance().getObservation(name);
+        if (observation) {
+            return (observation->getInteger().first);
+        }
+    } catch (...) {
+        ;
+    }
+    return (0);
 }
 
 void
@@ -80,7 +92,7 @@ AllocEngine4Test::testReuseLease4(const AllocEnginePtr& engine,
         // If an existing lease was specified, we need to add it to the
         // database. Let's wipe any leases for that address (if any). We
         // ignore any errors (previous lease may not exist)
-        LeaseMgrFactory::instance().deleteLease(existing_lease);
+        (void) LeaseMgrFactory::instance().deleteLease(existing_lease);
 
         // Let's add it.
         ASSERT_TRUE(LeaseMgrFactory::instance().addLease(existing_lease));
@@ -149,6 +161,8 @@ AllocEngine6Test::AllocEngine6Test() {
                64, 80);
 
     initFqdn("", false, false);
+
+    StatsMgr::instance().resetAll();
 }
 
 void
@@ -534,7 +548,7 @@ AllocEngine6Test::testReuseLease6(const AllocEnginePtr& engine,
         // If an existing lease was specified, we need to add it to the
         // database. Let's wipe any leases for that address (if any). We
         // ignore any errors (previous lease may not exist)
-        LeaseMgrFactory::instance().deleteLease(existing_lease);
+        (void) LeaseMgrFactory::instance().deleteLease(existing_lease);
 
         // Let's add it.
         ASSERT_TRUE(LeaseMgrFactory::instance().addLease(existing_lease));
@@ -630,6 +644,8 @@ AllocEngine4Test::AllocEngine4Test() {
     ctx_.hwaddr_ = hwaddr_;
     ctx_.callout_handle_ = HooksManager::createCalloutHandle();
     ctx_.query_.reset(new Pkt4(DHCPREQUEST, 1234));
+
+    StatsMgr::instance().resetAll();
 }
 
 }  // namespace test

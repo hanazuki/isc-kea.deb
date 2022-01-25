@@ -63,7 +63,7 @@ form: [**runstatedir**]/kea/[**conf name**].kea-dhcp6.pid where:
 -  ``runstatedir``: The value as passed into the build configure
    script; it defaults to "/usr/local/var/run". Note that this value may be
    overridden at runtime by setting the environment variable
-   KEA_PIDFILE_DIR, although this is intended primarily for testing
+   ``KEA_PIDFILE_DIR``, although this is intended primarily for testing
    purposes.
 
 -  ``conf name``: The configuration file name used to start the server,
@@ -149,12 +149,9 @@ above this object is called ``Dhcp6``.
 
    In the current Kea release it is possible to specify configurations
    of multiple modules within a single configuration file, but this is
-   not recommended and support for it will be removed in a future
-   release. The only object, besides the one specifying module
-   configuration, which can be (and usually was) included in the same file
-   is ``Logging``. However, we don't include this object in the example
-   above for clarity; its content, the list of loggers, should now be
-   inside the ``Dhcp6`` object instead of this deprecated object.
+   not recommended and support for it was removed in 1.7.10 release,
+   including the ``Logging`` object: its previous content, the list
+   of loggers, must now be inside the ``Dhcp6`` object.
 
 The Dhcp6 configuration starts with the ``"Dhcp6": {`` line and ends
 with the corresponding closing brace (in the above example, the brace
@@ -243,7 +240,7 @@ syntax would be used:
    ]
 
 Note that indentation is optional and is used for aesthetic purposes
-only. In some cases in may be preferable to use more compact notation.
+only. In some cases it may be preferable to use more compact notation.
 
 After all the parameters are specified, we have two contexts open: global
 and Dhcp6; thus, we need two closing curly brackets to close them.
@@ -297,7 +294,7 @@ can be used to configure the memfile backend.
    disables the LFC.
 
 -  ``max-row-errors``: when the server loads a lease file, it is processed
-   row by row, each row contaning a single lease. If a row is flawed and
+   row by row, each row containing a single lease. If a row is flawed and
    cannot be processed correctly the server will log it, discard the row,
    and go on to the next row. This parameter can be used to set a limit on
    the number of such discards that may occur after which the server will
@@ -380,6 +377,12 @@ Lease Database Configuration
    server, even if it has already been configured for the DHCPv4 server.
    The servers store their information independently, so each server can
    use a separate database or both servers can use the same database.
+
+.. note::
+
+   Kea requires the database timezone to match the system timezone.
+   For more details, see :ref:`mysql-database-create` and
+   :ref:`pgsql-database-create`.
 
 Lease database configuration is controlled through the
 Dhcp6/lease-database parameters. The database type must be set to
@@ -476,16 +479,37 @@ The default value for MySQL and PostgreSQL is 0, which disables automatic
 recovery and causes the server to exit immediately upon detecting the
 loss of connectivity. The default value for Cassandra is 2000 ms.
 
+::
+
+   "Dhcp6": { "lease-database": { "on-fail" : "stop-retry-exit", ... }, ... }
+
+The possible values are:
+
+-  ``stop-retry-exit`` disables the DHCP service while trying to automatically
+   recover lost connections. Shuts down the server on failure after exhausting
+   ``max-reconnect-tries``. This is the default value for MySQL and PostgreSQL.
+
+-  ``serve-retry-exit`` DHCP service continues while trying to automatically
+   recover lost connections. Shuts down the server on failure after exhausting
+   ``max-reconnect-tries``.
+
+-  ``serve-retry-continue`` DHCP service continues and does not shut down the
+   server even if the recovery fails.
+
 .. note::
 
-   Automatic reconnection to database backends is configured
-   individually per backend. This allows users to tailor the recovery
-   parameters to each backend they use. We do suggest that users enable it
-   either for all backends or none, so behavior is consistent.
-   Losing connectivity to a backend for which reconnect is
-   disabled will result in the server shutting itself down. This
-   includes cases when the lease database backend and the hosts database
-   backend are connected to the same database instance.
+   Automatic reconnection to database backends is configured individually per
+   backend. This allows users to tailor the recovery parameters to each backend
+   they use. We do suggest that users enable it either for all backends or none,
+   so behavior is consistent.
+   Losing connectivity to a backend for which reconnect is disabled will result
+   (if configured) in the server shutting itself down. This includes cases when
+   the lease database backend and the hosts database backend are connected to
+   the same database instance.
+   It is highly recommended to not change the ``stop-retry-exit`` default
+   setting for the lease manager as it is critical for the connection to be
+   active while processing DHCP traffic. Change this only if the server is used
+   exclusively as a configuration tool.
 
 ..
 
@@ -568,6 +592,12 @@ the case of a host reservation addition; read-only stores must be
 configured after a (required) read-write store, or the addition will
 fail.
 
+.. note::
+
+   Kea requires the database timezone to match the system timezone.
+   For more details, see :ref:`mysql-database-create` and
+   :ref:`pgsql-database-create`.
+
 .. _hosts-databases-configuration6:
 
 DHCPv6 Hosts Database Configuration
@@ -616,7 +646,7 @@ specified:
 
 ::
 
-   "Dhcp6": { "host-database": { "max-reconnect-tries" : number-of-tries, ... }, ... }
+   "Dhcp6": { "hosts-database": { "max-reconnect-tries" : number-of-tries, ... }, ... }
 
 If the server is unable to reconnect to the database after making the
 maximum number of attempts, the server will exit. A value of zero (the
@@ -638,16 +668,33 @@ The default value for MySQL and PostgreSQL is 0, which disables automatic
 recovery and causes the server to exit immediately upon detecting the
 loss of connectivity. The default value for Cassandra is 2000 ms.
 
+::
+
+   "Dhcp6": { "hosts-database": { "on-fail" : "stop-retry-exit", ... }, ... }
+
+The possible values are:
+
+-  ``stop-retry-exit`` disables the DHCP service while trying to automatically
+   recover lost connections. Shuts down the server on failure after exhausting
+   ``max-reconnect-tries``. This is the default value for MySQL and PostgreSQL.
+
+-  ``serve-retry-exit`` DHCP service continues while trying to automatically
+   recover lost connections. Shuts down the server on failure after exhausting
+   ``max-reconnect-tries``.
+
+-  ``serve-retry-continue`` DHCP service continues and does not shut down the
+   server even if the recovery fails.
+
 .. note::
 
-   Automatic reconnection to database backends is configured
-   individually per backend. This allows users to tailor the recovery
-   parameters to each backend they use. We do suggest that users enable it
-   either for all backends or none, so behavior is consistent.
-   Losing connectivity to a backend for which reconnect is
-   disabled will result in the server shutting itself down. This
-   includes cases when the lease database backend and the hosts database
-   backend are connected to the same database instance.
+   Automatic reconnection to database backends is configured individually per
+   backend. This allows users to tailor the recovery parameters to each backend
+   they use. We do suggest that users enable it either for all backends or none,
+   so behavior is consistent.
+   Losing connectivity to a backend for which reconnect is disabled will result
+   (if configured) in the server shutting itself down. This includes cases when
+   the lease database backend and the hosts database backend are connected to
+   the same database instance.
 
 Finally, the credentials of the account under which the server will
 access the database should be set:
@@ -672,6 +719,11 @@ entry, as in:
 
 For additional Cassandra-specific parameters, see
 :ref:`cassandra-database-configuration4`.
+
+If the same host is configured both in-file and in-database, Kea does not issue a warning,
+as it would if both were specified in the same data source.
+Instead, the host configured in-file has priority over the one configured
+in-database.
 
 .. _read-only-database-configuration6:
 
@@ -1016,6 +1068,8 @@ can use a given pool, it will also be able to allocate the first
 (typically a network address) address from that pool. For example, for
 pool 2001:db8:2::/64, the 2001:db8:2:: address may be assigned as well.
 To avoid this, use the "min-max" notation.
+
+.. _dhcp6-prefix-config:
 
 Subnet and Prefix Delegation Pools
 ----------------------------------
@@ -1401,7 +1455,7 @@ currently has no means to validate it.
 
 .. _dhcp6-std-options-list:
 
-.. table:: List of Standard DHCPv6 Options
+.. table:: List of Standard DHCPv6 Options configurable by an administrator
 
    +--------------------------+-----------------+-----------------+-----------------+
    | Name                     | Code            | Type            | Array?          |
@@ -1409,8 +1463,6 @@ currently has no means to validate it.
    | preference               | 7               | uint8           | false           |
    +--------------------------+-----------------+-----------------+-----------------+
    | unicast                  | 12              | ipv6-address    | false           |
-   +--------------------------+-----------------+-----------------+-----------------+
-   | vendor-opts              | 17              | uint32          | false           |
    +--------------------------+-----------------+-----------------+-----------------+
    | sip-server-dns           | 21              | fqdn            | true            |
    +--------------------------+-----------------+-----------------+-----------------+
@@ -1543,6 +1595,72 @@ so, but not what to do with them. Since the related RFCs require certain
 processing, the support for those options is non-functional. However, it
 may be useful in some limited lab testing; hence the definition formats
 are listed here.
+
+Kea supports more options than the listed above. The following list is mostly useful for readers who
+want to understand whether Kea is able to support certain options. The following options are
+returned by the Kea engine itself and in general should not be configured manually.
+
+.. table:: List of standard DHCPv6 options managed by Kea on its own and not directly configurable by an administrator
+
+   +--------------+------+------------------------------------------------------------------------+
+   | Name         | Code | Description                                                            |
+   +==============+======+========================================================================+
+   | client-id    | 1    | sent by the client and Kea uses it to distinguish between clients.     |
+   +--------------+------+------------------------------------------------------------------------+
+   | server-id    | 2    | sent by clients to request action from a specific server and by the    |
+   |              |      | server to identify itself. See :ref:`dhcp6-serverid` for details.      |
+   +--------------+------+------------------------------------------------------------------------+
+   | ia-na        | 3    | a container option that conveys IPv6 addresses (``iaddr`` options). Kea|
+   |              |      | receives and sends those options using its allocation engine.          |
+   +--------------+------+------------------------------------------------------------------------+
+   | ia-ta        | 4    | conveys temporary addresses. Deprecated feature, not supported.        |
+   +--------------+------+------------------------------------------------------------------------+
+   | iaaddr       | 5    | conveys addresses with lifetimes in ``ia-na`` and ``ia-ta`` options.   |
+   +--------------+------+------------------------------------------------------------------------+
+   | oro          | 6    | ORO (or Option Request Option) is used by the clients to request a list|
+   |              |      | of options they are interested in. Kea supports it and will send the   |
+   |              |      | requested options back if configured with required options.            |
+   +--------------+------+------------------------------------------------------------------------+
+   | elapsed-time | 8    | sent by the clients to identify how long they're trying to obtain a    |
+   |              |      | configuration. Kea uses high values sent by clients as an indicator    |
+   |              |      | that something is wrong and this is one of the aspects used in HA to   |
+   |              |      | determine if the partner is healthy or not.                            |
+   +--------------+------+------------------------------------------------------------------------+
+   | relay-msg    | 9    | used by relays to encapsulate the original client message. Kea uses it |
+   |              |      | when sending back relayed responses to the relay agent.                |
+   +--------------+------+------------------------------------------------------------------------+
+   | auth         | 10   | used to pass authentication information between clients and server. The|
+   |              |      | support for this option is very limited.                               |
+   +--------------+------+------------------------------------------------------------------------+
+   | status-code  | 13   | an option that the server can attach in case of various failures, such |
+   |              |      | as running out of addresses or not being configured to assign prefixes.|
+   +--------------+------+------------------------------------------------------------------------+
+   | rapid-commit | 14   | used to signal client's willingness to support ``rapid-commit`` and    |
+   |              |      | server's acceptance for this configuration. See                        |
+   |              |      | :ref:`dhcp6-rapid-commit` for details.                                 |
+   +--------------+------+------------------------------------------------------------------------+
+   | user-class   | 15   | sent by the client to self-identify what kind of device type it is. Kea|
+   |              |      | can use this for client classification.                                |
+   +--------------+------+------------------------------------------------------------------------+
+   | vendor-class | 16   | similar to ``user-class``, but it is vendor specific.                  |
+   +--------------+------+------------------------------------------------------------------------+
+   | vendor-opts  | 17   | a vendor specific container that is used by both the client and the    |
+   |              |      | server to exchange vendor specific options. The logic behind those     |
+   |              |      | options vary between vendors. The vendor options are explained in      |
+   |              |      | :ref:`dhcp6-vendor-opts`.                                              |
+   +--------------+------+------------------------------------------------------------------------+
+   | interface-id | 18   | may be inserted by the relay agent to identify the interface that the  |
+   |              |      | original client message was received on. Kea may be told to use this   |
+   |              |      | information to select specific subnets. Also, if specified, Kea will   |
+   |              |      | echo this option back, so the relay will know which interface to use to|
+   |              |      | reach the client.                                                      |
+   +--------------+------+------------------------------------------------------------------------+
+   | ia-pd        | 25   | a container for conveying PDs (Prefix Delegation) that are being       |
+   |              |      | delegated to clients. See :ref:`dhcp6-prefix-config` for details.      |
+   +--------------+------+------------------------------------------------------------------------+
+   | iaprefix     | 26   | conveys IPv6 prefix in ``ia-pd`` option. See :ref:`dhcp6-prefix-config`|
+   |              |      | for details.                                                           |
+   +--------------+------+------------------------------------------------------------------------+
 
 .. _s46-options:
 
@@ -1856,15 +1974,13 @@ unsigned integers.
 DHCPv6 Vendor-Specific Options
 ------------------------------
 
-Currently there are two option spaces defined for the DHCPv6 daemon:
-"dhcp6" (for the top-level DHCPv6 options) and "vendor-opts-space", which is
-empty by default but in which options can be defined. Those options are
-carried in the Vendor-Specific Information option (code 17). The
-following examples show how to define an option "foo" with code 1 that
-consists of an IPv6 address, an unsigned 16-bit integer, and a string.
-The "foo" option is conveyed in a Vendor-Specific Information option,
-which comprises a single uint32 value that is set to "12345". The
-sub-option "foo" follows the data field holding this value.
+Vendor options in DHCPv6 are carried in the Vendor-Specific
+Information option (code 17). The following examples show how to
+define an option "foo" with code 1 that consists of an IPv6 address,
+an unsigned 16-bit integer, and a string.  The "foo" option is
+conveyed in a Vendor-Specific Information option, which comprises a
+single uint32 value that is set to "12345". The sub-option "foo"
+follows the data field holding this value.
 
 The first step is to define the format of the option:
 
@@ -1875,7 +1991,7 @@ The first step is to define the format of the option:
            {
                "name": "foo",
                "code": 1,
-               "space": "vendor-opts-space",
+               "space": "vendor-12345",
                "type": "record",
                "array": false,
                "record-types": "ipv6-address, uint16, string",
@@ -1885,7 +2001,7 @@ The first step is to define the format of the option:
        ...
    }
 
-(Note that the option space is set to ``vendor-opts-space``.) Once the
+(Note that the option space is set to ``vendor-12345``.) Once the
 option format is defined, the next step is to define actual values for
 that option:
 
@@ -1895,7 +2011,7 @@ that option:
        "option-data": [
            {
                "name": "foo",
-               "space": "vendor-opts-space",
+               "space": "vendor-12345",
                "data": "2001:db8:1::10, 123, Hello World"
            },
            ...
@@ -1933,6 +2049,16 @@ Alternatively, the option can be specified using its code.
        ],
        ...
    }
+
+A common configuration is to set the always-send flag to true so the
+vendor option is sent even when the client did not specify it in the query.
+
+.. note::
+
+   Currently only a single instance of the vendor-class (code 16) and
+   a single instance of the vendor-opts (code 17) options can be
+   specified.  Specifying multiple options with different enterprise
+   numbers is currently not supported by Kea.
 
 .. _dhcp6-option-spaces:
 
@@ -2058,14 +2184,14 @@ as it may result in configuration errors. The list below explains the
 behavior of the server when a particular parameter is not explicitly
 specified:
 
--  ``name`` - the server requires an option name or an option code to
+-  ``name`` - the server requires either an option name or an option code to
    identify an option. If this parameter is unspecified, the option code
    must be specified.
 
 -  ``code`` - the server requires either an option name or an option code to
    identify an option. This parameter may be left unspecified if the
    ``name`` parameter is specified. However, this also requires that the
-   particular option have a definition (either as a standard option or
+   particular option has a definition (either as a standard option or
    an administrator-created definition for the option using an
    'option-def' structure), as the option definition associates an
    option with a particular name. It is possible to configure an option
@@ -2114,11 +2240,13 @@ single values to triplets with minimum, default and maximum values using:
 
 - ``max-valid-lifetime`` - specifies the maximum valid lifetime (optional).
 
+As of Kea 1.9.11, these values may be specified within client classes.
+
 When the client does not specify lifetimes the default is used. When
-it specifies a lifetime using IAADDR or IAPREFIX sub option with not
-zero values these values are used when they are between configured
-minimum (lower values are round up) and maximal (larger values are
-round down) bounds.
+it specifies a lifetime using IAADDR or IAPREFIX sub option with
+non-zero values, these values are used when they are between configured
+minimum (lower values are round up) and maximum (larger values are
+rounded down) bounds.
 
 To send specific, fixed values use the following two parameters:
 
@@ -2268,7 +2396,7 @@ The second mechanism is based on interface-id options. While forwarding
 a client's message, relays may insert an interface-id option into the
 message that identifies the interface on the relay that received the
 message. (Some relays allow configuration of that parameter, but it is
-sometimes hardcoded and may range from the very simple (e.g. "vlan100")
+sometimes hard-coded and may range from the very simple (e.g. "vlan100")
 to the very cryptic; one example seen on real hardware was
 "ISAM144|299|ipv6|nt:vp:1:110"). The server can use this information to
 select the appropriate subnet. The information is also returned to the
@@ -2399,7 +2527,7 @@ The process of classification is conducted in five steps. The first step
 is to assess an incoming packet and assign it to zero or more classes.
 The second step is to choose a subnet, possibly based on the class
 information. When the incoming packet is in the special class, "DROP,
-it is dropped and an debug message logged.
+it is dropped and a debug message logged.
 The next step is to evaluate class expressions depending on the built-in
 "KNOWN"/"UNKNOWN" classes after host reservation lookup, using them for
 pool/pd-pool selection and assigning classes from host reservations. The
@@ -2537,8 +2665,8 @@ specified subnet is used:
 
 Required evaluation can be used to express complex dependencies like
 subnet membership. It can also be used to reverse the
-precedence; if an option-data is set in a subnet it takes precedence
-over an option-data in a class. When option-data is moved to a
+precedence; if an option-data is set in a subnet, it takes precedence
+over an option-data in a class. If the option-data is moved to a
 required class and required in the subnet, a class evaluated earlier
 may take precedence.
 
@@ -2570,6 +2698,7 @@ global ``dhcp-ddns`` section of the kea-dhcp6.  Beginning with Kea 1.7.1
 DDNS related parameters were split into two groups:
 
 1. Connectivity Parameters
+
     These are parameters which specify where and how kea-dhcp6 connects to
     and communicates with D2.  These parameters can only be specified
     within the top-level ``dhcp-ddns`` section in the kea-dhcp6
@@ -2585,6 +2714,7 @@ DDNS related parameters were split into two groups:
     -  ``ncr-format"``
 
 2. Behavioral Parameters
+
     These parameters influence behavior such as how client host names and
     FQDN options are handled.  They have been moved out of the ``dhcp-ddns``
     section so that they may be specified at the global, shared-network,
@@ -2599,6 +2729,8 @@ DDNS related parameters were split into two groups:
     -  ``ddns-replace-client-name"``
     -  ``ddns-generated-prefix``
     -  ``ddns-qualifying-suffix``
+    -  ``ddns-update-on-renew``
+    -  ``ddns-use-conflict-resolution``
     -  ``hostname-char-set``
     -  ``hostname-char-replacement``
 
@@ -2636,24 +2768,26 @@ The default configuration and values would appear as follows:
         "ddns-replace-client-name": "never",
         "ddns-generated-prefix": "myhost",
         "ddns-qualifying-suffix": "",
+        "ddns-update-on-renew": false,
+        "ddns-use-conflict-resolution": true,
         "hostname-char-set": "",
         "hostname-char-replacement": ""
         ...
    }
 
 As of Kea 1.7.1, there are two parameters which determine if kea-dhcp6
-can generate DDNS requests to D2.  The existing, ``dhcp-ddns:enable-updates``
-parameter which now only controls whether kea-dhcp6 connects to D2.
-And the new behavioral parameter, ``ddns-send-updates``, which determines
-if DDNS updates are enabled at a given level (i.e global, shared-network,
-or subnet).  The following table shows how the two parameters function
+can generate DDNS requests to D2: the existing ``dhcp-ddns:enable-updates``
+parameter, which now only controls whether kea-dhcp6 connects to D2;
+and the new behavioral parameter, ``ddns-send-updates``, which determines
+whether DDNS updates are enabled at a given level (i.e. global, shared-network,
+or subnet). The following table shows how the two parameters function
 together:
 
 .. table:: Enabling and Disabling DDNS Updates
 
    +-----------------+--------------------+-------------------------------+
    | dhcp-ddns:      | Global             | Outcome                       |
-   | enable-updates  | ddns-send-udpates  |                               |
+   | enable-updates  | ddns-send-updates  |                               |
    +=================+====================+===============================+
    | false (default) | false              | no updates at any scope       |
    +-----------------+--------------------+-------------------------------+
@@ -2668,6 +2802,68 @@ together:
    |                 |                    | false for ddns-enable-updates |
    +-----------------+--------------------+-------------------------------+
 
+Kea 1.9.1 adds two new parameters. The first new parameter is ``ddns-update-on-renew``.
+Normally, when leases are renewed the server only updates DNS if the DNS
+information for the lease (e.g. FQDN, DNS update direction flags) has changed.
+Setting ``ddns-update-on-renew`` to true instructs the server to always update
+the DNS information when a lease is renewed even if its DNS information has not
+changed. This allows Kea to "self-heal" if it was previously unable
+to add DNS entries or they were somehow lost by the DNS server.
+
+.. note::
+
+    Setting ``ddns-update-on-renew`` to true may impact performance, especially
+    for servers with numerous clients who renew often.
+
+The second parameter added in Kea 1.9.1 is ``ddns-use-conflict-resolution``.
+The value of this parameter is passed by kea-dhcp6 to D2 with each DNS update
+request.  When true, (the default value), D2 will employ conflict resolution,
+as described in `RFC 4703 <https://tools.ietf.org/html/rfc4703>`__, when
+attempting to fulfill the update request.  When false, D2 will simply attempt
+to update the DNS entries per the request, regardless of whether or not they
+conflict with existing entries owned by other DHCP6 clients.
+
+.. note::
+
+    Setting ``ddns-use-conflict-resolution`` to false disables the overwrite
+    safeguards that the rules of conflict resolution (
+    `RFC 4703 <https://tools.ietf.org/html/rfc4703>`__) are intended to
+    prevent.  This means that existing entries for a FQDN or an
+    IP address made for Client-A can be deleted or replaced by entries
+    for Client-B.  Furthermore, there are two scenarios by which entries
+    for multiple clients for the same key (e.g. FQDN or IP) can be created.
+
+    1. Client-B uses the same FQDN as Client-A but a different IP address.
+    In this case the forward DNS entries (AAAA, and DHCID RRs) for
+    Client-A will be deleted as they match the FQDN and new entries for
+    Client-B will be added.  The reverse DNS entries (PTR and DHCID RRs)
+    for Client-A, however, will not be deleted as they belong to a different
+    IP address while new entries for Client-B will still be added.
+
+    2. Client-B uses the same IP address as Client-A but a different FQDN.
+    In this case the reverse DNS entries (PTR and DHCID RRs) for Client-A
+    will be deleted as they match the IP address and new entries for
+    Client-B will be added.  The forward DNS entries (AAAA and DHCID RRs)
+    for Client-A, however, will not be deleted as they belong to a different
+    FQDN while new entries for Client-B will still be added.
+
+    Disabling conflict resolution should be done only after careful review of
+    specific use cases. The best way to avoid unwanted DNS entries is to
+    always ensure lease changes are processed through Kea, whether they are
+    released, expire, or are deleted via the lease-del6 command, prior to
+    reassigning either FQDNs or IP addresses. Doing so causes kea-dhcp6
+    to generate DNS removal requests to D2.
+
+.. note::
+
+    The DNS entries Kea creates contain a value for TTL (time to live).  As of
+    Kea 1.9.3, kea-dhcp6 calculates that value based on
+    `RFC 4702, Section 5 <https://tools.ietf.org/html/rfc4702#section-5>`__
+    which suggests that the TTL value be 1/3 of the lease's lifetime with
+    a minimum value of 10 minutes.  Prior to this the server set the TTL value
+    equal to the lease's valid lifetime.  Future releases may add one or
+    more parameters to customize this value.
+
 .. _dhcpv6-d2-io-config:
 
 DHCP-DDNS Server Connectivity
@@ -2678,9 +2874,9 @@ with it. kea-dhcp6 uses the following configuration parameters to
 control this communication:
 
 -  ``enable-updates`` - As of Kea 1.7.1, this parameter only enables
-    connectivity to kea-dhcp-ddns such that DDNS updates can be constructed
-    and sent.  It must be true for NCRs to be generated and sent to D2.
-    It defaults to false.
+   connectivity to kea-dhcp-ddns such that DDNS updates can be constructed
+   and sent.  It must be true for NCRs to be generated and sent to D2.
+   It defaults to false.
 
 -  ``server-ip`` - IP address on which D2 listens for requests. The
    default is the local loopback interface at address 127.0.0.1.
@@ -2898,7 +3094,7 @@ follows:
 
     "Dhcp6": {
         ...
-        "ddsn-replace-client-name": "always",
+        "ddns-replace-client-name": "always",
         ...
     }
 
@@ -2927,14 +3123,14 @@ are enabled. To set its value simply set it to the desired string:
         ...
     }
 
-When qualifying a partial name, kea-dhcp6 will construct the name in the
+When qualifying a partial name, kea-dhcp6 constructs the name in the
 format:
 
 [**candidate-name**].[**ddns-qualifying-suffix**].
 
 where **candidate-name** is the partial name supplied in the DHCPREQUEST.
 For example, if the FQDN domain name value is "some-computer" and the
-``ddsn-qualifying-suffix`` "example.com", the generated FQDN is:
+``ddns-qualifying-suffix`` "example.com", the generated FQDN is:
 
 **some-computer.example.com.**
 
@@ -2964,12 +3160,12 @@ accomplished with the following two parameters:
 
 -  ``hostname-char-set`` - a regular expression describing the invalid
    character set. This can be any valid, regular expression using POSIX
-   extended expression syntax.  Embedded nuls (0x00) will always be
+   extended expression syntax.  Embedded nulls (0x00) are always
    considered an invalid character to be replaced (or omitted).
 
 -  ``hostname-char-replacement`` - a string of zero or more characters
-   with which to replace each invalid character in the host name.  An empty
-   string and will cause invalid characters to be OMITTED rather than replaced.
+   with which to replace each invalid character in the host name. An empty
+   string causes invalid characters to be OMITTED rather than replaced.
 
 .. note::
 
@@ -2978,10 +3174,10 @@ accomplished with the following two parameters:
     - "hostname-char-set": "[^A-Za-z0-9.-]",
     - "hostname-char-replacement": ""
 
-    This enables sanitizing and will omit any character that is not
-    a letter,digit, hyphen, dot or nul.
+    This enables sanitizing and omits any character that is not
+    a letter, digit, hyphen, dot, or null.
 
-The following configuration will replace anything other than a letter,
+The following configuration replaces anything other than a letter,
 digit, hyphen, or dot with the letter 'x':
 ::
 
@@ -3027,11 +3223,11 @@ qualifying suffix (if one is defined and needed).
 
 .. note::
 
-   Since the 1.6.0 Kea release it is possible to specify hostname-char-set
+   Since the 1.6.0 Kea release, it is possible to specify hostname-char-set
    and/or hostname-char-replacement at the global scope. This allows
-   to sanitize host names without requiring a dhcp-ddns entry. When
+   sanitizing of host names without requiring a dhcp-ddns entry. When
    a hostname-char parameter is defined at the global scope and
-   in a dhcp-ddns entry the second (local) value is used.
+   in a dhcp-ddns entry, the second (local) value is used.
 
 .. _dhcp6-dhcp4o6-config:
 
@@ -3174,7 +3370,9 @@ There are five levels which are supported:
 -  ``del`` - this is the strictest mode. If any inconsistency is
    detected, reject the lease. Use with care.
 
-This feature is currently implemented for the memfile backend.
+This feature is currently implemented for the memfile backend. Note the
+sanity check applies to the lease database in memory, not to the lease file,
+i.e. inconsistent leases will stay in the lease file.
 
 An example configuration that sets this parameter looks as follows:
 
@@ -3186,6 +3384,198 @@ An example configuration that sets this parameter looks as follows:
        },
        ...
    }
+
+.. _store-extended-info-v6:
+
+Storing Extended Lease Information
+----------------------------------
+In order to support such features as DHCPv6 Reconfigure
+(`RFC 3315 <https://tools.ietf.org/html/rfc3315>`__) and LeaseQuery
+(`RFC 5007 <https://tools.ietf.org/html/rfc5007>`__) it is necessary to
+store additional information with each lease.  Because the amount
+of information stored for each lease has ramifications in terms of
+performance and system resource consumption, storing this additional
+information is configurable through the "store-extended-info" parameter.
+It defaults to false and may be set at the global, shared-network, and
+subnet levels.
+
+::
+
+   "Dhcp6": {
+       "store-extended-info": true,
+       ...
+   }
+
+When enabled, information relevant to the DHCPv6 query (e.g. REQUEST, RENEW,
+or REBIND) asking for the lease is added into the lease's user-context as a
+map element labeled "ISC".  Currently the information contained in the map
+will be a list of relays, one for each relay message layer that encloses the
+client query. Other values may be added at a future date. The lease's
+user-context for a two-hop query might look something like this (shown
+pretty-printed for clarity):
+
+::
+
+    {
+        "ISC": {
+            "relays": [
+            {
+                "hop": 2,
+                "link": "2001:db8::1",
+                "peer": "2001:db8::2"
+            },
+            {
+                "hop": 1,
+                "link": "2001:db8::3",
+                "options": "0x00C800080102030405060708",
+                "peer": "2001:db8::4"
+            }]
+        }
+    }
+
+
+.. note::
+    This feature is intended to be used in conjunction with an upcoming
+    LeaseQuery hook library and at this time there is other use for this
+    information within Kea.
+
+.. note::
+    It is possible that other hook libraries are already using
+    user-context. Enabling store-extended-info should not interfere with
+    any other user-context content, as long as it does not also use an element
+    labeled "ISC". In other words, user-context is intended to be a flexible
+    container serving multiple purposes. As long as no other purpose also
+    writes an "ISC" element to user-context there should not be a conflict.
+
+.. _dhcp6-multi-threading-settings:
+
+Multi-Threading Settings
+------------------------
+
+The Kea server can be configured to process packets in parallel using multiple
+threads. These settings can be found under ``multi-threading`` structure and are
+represented by:
+
+-  ``enable-multi-threading`` - use multiple threads to process packets in
+   parallel (default false).
+
+-  ``thread-pool-size`` - specify the number of threads to process packets in
+   parallel.  Supported values are: 0 (auto detect), any positive number sets
+   thread count explicitly (default 0).
+
+-  ``packet-queue-size`` - specify the size of the queue used by the thread
+   pool to process packets.  Supported values are: 0 (unlimited), any positive
+   number sets queue size explicitly (default 64).
+
+An example configuration that sets these parameter looks as follows:
+
+::
+
+   "Dhcp6": {
+       "multi-threading": {
+          "enable-multi-threading": true,
+          "thread-pool-size": 4,
+          "packet-queue-size": 16
+       }
+       ...
+   }
+
+Multi-Threading Settings in Different Backends
+----------------------------------------------
+
+Both kea-dhcp4 and kea-dhcp6 are tested internally to determine which settings
+give the best performance. Although this section describes our results, they are merely
+recommendations and are very dependent on the particular hardware that was used
+for testing. We strongly advise that administrators run their own performance tests.
+
+A full report of performance results for the latest stable Kea can be found
+`here <https://reports.kea.isc.org/>`_.
+This includes hardware and test scenario descriptions, as well as
+current results.
+
+After enabling multi-threading, the number of threads is set by ``thread-pool-size``
+parameter, and results from our tests show that best configurations for
+kea-dhcp6 are:
+
+-  ``thread-pool-size``: 4 when using ``memfile`` for storing leases.
+
+-  ``thread-pool-size``: 12 or more when using ``mysql`` for storing leases.
+
+-  ``thread-pool-size``: 6 when using ``postgresql``.
+
+Another very important parameter is ``packet-queue-size`` and in our tests we
+used it as multiplier of ``thread-pool-size``. So actual setting strongly depends
+on ``thread-pool-size``.
+
+Our tests reported best results when:
+
+-  ``packet-queue-size``: 150 * ``thread-pool-size`` when using ``memfile`` for
+   storing leases. In our case it's 150 * 4 = 600. This means that at any given
+   time, up to 600 packets could be queued.
+
+-  ``packet-queue-size``: 200 * ``thread-pool-size`` when using ``mysql`` for
+   storing leases. In our case it's 200 * 12 = 2400. This means that up to
+   2400 packets could be queued.
+
+-  ``packet-queue-size``: 11 * ``thread-pool-size`` when using ``postgresql`` for
+   storing leases. In our case it's 11 * 6 = 66.
+
+
+Lease Caching
+-------------
+
+Clients that attempt renewal frequently can cause the server to update
+and write to the database frequently resulting in a performance impact
+on the server. The cache parameters instruct the DHCP server to avoid
+updating leases too frequently thus avoiding this behavior. Instead
+the server assigns the same lease (i.e. reuses it) with no
+modifications except for CLTT (Client Last Transmission Time) which
+does not require disk operations.
+
+The two parameters are the ``cache-threshold`` double and the
+``cache-max-age`` integer and have no default, i.e. the lease caching
+feature must be explicitly enabled. These parameters can be configured
+at the global, shared network and subnet levels. The subnet level has
+the precedence on the shared network level, the global level is used
+as last resort. For example:
+
+::
+
+    "subnet6": [
+        {
+            "subnet": "2001:db8:1:1::/64",
+            "pools": [ { "pool": "2001:db8:1:1::1:0/112" } ],
+            "cache-threshold": .25,
+            "cache-max-age": 600,
+            "valid-lifetime": 2000,
+            ...
+        }
+    ],
+
+When an already assigned lease can fulfill a client query:
+
+  - any important change e.g. for DDNS parameter, hostname, or
+    preferred or valid lifetime reduction makes the lease not reusable
+
+  - lease age i.e. the difference between the creation or last modification
+    time and the current time is computed (elapsed duration)
+
+  - if ``cache-max-age`` is explicitly configured, it is compared with the age
+    and leases that are too old are not reusable (this means that the value 0
+    for ``cache-max-age`` disables the lease cache feature)
+
+  - if ``cache-threshold`` is explicitly configured and is between 0.0 and 1.0,
+    it expresses the percentage of the lease valid lifetime which is
+    allowed for the lease age. Values below and including 0.0 and
+    values greater than 1.0 disable the lease cache feature.
+
+In the example a lease with a valid lifetime of 2000 seconds can be
+reused if it was committed less than 500 seconds ago. With a lifetime
+of 3000 seconds the maximum age of 600 seconds applies.
+
+In outbound client responses (e.g. DHCPV6_REPLY messages) used
+preferred and valid lifetimes are the reusable values i.e. the
+expiration dates do not change.
 
 .. _host-reservation-v6:
 
@@ -3219,6 +3609,12 @@ uniquely identifies a host. In the DHCPv6 context, the identifier is
 usually a DUID, but it can also be a hardware or MAC address. One or more
 addresses or prefixes may also be specified, and it is possible to
 specify a hostname and DHCPv6 options for a given host.
+
+.. note::
+
+   Kea requires that reserved addresses must be within the subnet.
+   Kea 1.7.10 is the last release that does not enforce this.
+   This does not apply to reserved prefixes.
 
 The following example shows how to reserve addresses and prefixes for
 specific hosts:
@@ -3333,8 +3729,17 @@ another.
 .. note::
 
    Global reservations, while useful in certain circumstances, have aspects
-   that must be given due consideration. Please see
+   that must be given due consideration when using them. Please see
    :ref:`reservation6-conflict` for more details.
+
+.. note::
+
+   Beginning with Kea 1.9.1 reservation mode was replaced by three
+   boolean flags ``"reservations-global"``, ``"reservations-in-subnet"``
+   and ``"reservations-out-of-pool"`` which allows the configuration of
+   host reservations both globally and in a subnet. In such cases a subnet
+   host reservation has preference over a global reservation
+   when both exist for the same client.
 
 .. _reservation6-conflict:
 
@@ -3379,7 +3784,7 @@ reservation is made, the server will propose a different address.
 
 This recovery mechanism allows the server to fully recover from a case
 where reservations conflict with existing leases; however, this procedure
-will take roughly take as long as the value set for renew-timer. The
+will take roughly as long as the value set for renew-timer. The
 best way to avoid such recovery is not to define new reservations that
 conflict with existing leases. Another recommendation is to use
 out-of-pool reservations. If the reserved address does not belong to a
@@ -3525,11 +3930,11 @@ Reserving Client Classes in DHCPv6
 the server to assign classes to a client, based on the content of the
 options that this client sends to the server. Host reservations
 mechanisms also allow for the static assignment of classes to clients.
-The definitions of these classes are placed in the Kea configuration.
-The following configuration snippet shows how to specify that the client
-belongs to classes ``reserved-class1`` and ``reserved-class2``. Those
-classes are associated with specific options that are sent to the clients
-which belong to them.
+The definitions of these classes are placed in the Kea configuration or
+a database. The following configuration snippet shows how to specify that
+a client belongs to classes ``reserved-class1`` and ``reserved-class2``. Those
+classes are associated with specific options sent to the clients which belong
+to them.
 
 ::
 
@@ -3543,8 +3948,8 @@ which belong to them.
               "data": "2001:db8:1::50"
           }
           ]
-      },
-      {
+       },
+       {
           "name": "reserved-class2",
           "option-data": [
           {
@@ -3563,34 +3968,56 @@ which belong to them.
 
                "client-classes": [ "reserved-class1", "reserved-class2" ]
 
-            } ]
-        } ]
+           }
+           ]
+       } ]
     }
 
-Static class assignments, as shown above, can be used in conjunction
-with classification, using expressions. The "KNOWN" or "UNKNOWN" built-in
-class is added to the packet and any class depending on it (directly or
-indirectly) and not only-if-required is evaluated.
+In some cases the host reservations can be used in conjunction with client
+classes specified within the Kea configuration. In particular, when a
+host reservation exists for a client within a given subnet, the "KNOWN"
+built-in class is assigned to the client. Conversely, when there is no
+static assignment for the client, the "UNKNOWN" class is assigned to the
+client. Class expressions within the Kea configuration file can
+refer to "KNOWN" or "UNKNOWN" classes using the "member" operator.
+For example:
+
+::
+
+    {
+        "client-classes": [
+            {
+                "name": "dependent-class",
+                "test": "member('KNOWN')",
+                "only-if-required": true
+            }
+        ]
+    }
+
+Note that the ``only-if-required`` parameter is needed here to force
+evaluation of the class after the lease has been allocated and thus the
+reserved class has been also assigned.
 
 .. note::
-
-   To force the evaluation of a class expression after the
-   host reservation lookup, for instance because of a dependency on
-   "reserved-class1" from the previous example, add a
-   "member('KNOWN')" statement in the expression.
+   Be aware that the classes specified in non-global host reservations
+   are assigned to the processed packet after all classes with the
+   ``only-if-required`` parameter set to ``false`` have been evaluated.
+   This has an implication that these classes must not depend on the
+   statically assigned classes from the host reservations. If there
+   is a need to create such dependency, the ``only-if-required`` must
+   be set to ``true`` for the dependent classes. Such classes are
+   evaluated after the static classes have been assigned to the packet.
+   This, however, imposes additional configuration overhead, because
+   all classes marked as ``only-if-required`` must be listed in the
+   ``require-client-classes`` list for every subnet where they are used.
 
 .. note::
-   Beware that the reserved classes are assigned to the processed
-   packet after all classes with the ``only-if-required`` parameter
-   set to ``false`` have been evaluated. This has an implication that
-   these classes must not depend on the statically assigned classes
-   from the host reservations. If there is a need to create such
-   dependency, the ``only-if-required`` must be set to ``true`` for
-   the dependent classes. Such classes are evaluated after the static
-   classes have been assigned to the packet. This, however, imposes
-   additional configuration overhead, because all classes marked as
-   ``only-if-required`` must be listed in the ``require-client-classes``
-   list for every subnet where they are used.
+   Client classes specified within the Kea configuration file may
+   depend on the classes specified within the global host reservations.
+   In such a case the ``only-if-required`` parameter is not needed.
+   Refer to the :ref:`pool-selection-with-class-reservations6` and
+   :ref:`subnet-selection-with-class-reservations6`
+   for the specific use cases.
 
 .. _reservations6-mysql-pgsql-cql:
 
@@ -3639,8 +4066,8 @@ allocating or renewing a lease for the client. Allowed values are:
 
 -  ``all`` - enables both in-pool and out-of-pool host reservation
    types. This setting is the default value, and is the safest and most
-   flexible. However, as all checks are conducted, it is also the
-   slowest. It does not check against global reservations.
+   flexible. However, as all checks are conducted, it is also the slowest.
+   It does not check against global reservations.
 
 -  ``out-of-pool`` - allows only out-of-pool host reservations. With
    this setting in place, the server may assume that all host
@@ -3654,8 +4081,8 @@ allocating or renewing a lease for the client. Allowed values are:
 -  ``global`` - allows only global host reservations. With this setting
    in place, the server searches for reservations for a client only
    among the defined global reservations. If an address is specified,
-   the server skips the reservation checks carried out when dealing
-   in other modes, thus improving performance. Caution is advised when
+   the server skips the reservation checks carried out when dealing in
+   other modes, thus improving performance. Caution is advised when
    using this setting; Kea does not sanity-check the reservations when
    ``global`` and misconfiguration may cause problems.
 
@@ -3664,50 +4091,277 @@ allocating or renewing a lease for the client. Allowed values are:
    defined will be completely ignored. As the checks are skipped, the
    server may operate faster in this mode.
 
-The parameter can be specified at global, subnet, and shared-network
-levels.
+Since Kea 1.9.1, the ``reservation-mode`` is replaced by the
+``reservations-global``, ``reservations-in-subnet`` and
+``reservations-out-of-pool`` flags.
+The flags can be activated independently and can produce various combinations,
+some of them being unsupported by the deprecated ``reservation-mode``.
 
-An example configuration that disables reservation looks as follows:
+The ``reservation-mode`` parameter can be specified at:
+
+- global level: ``.Dhcp6["reservation-mode"]`` (lowest priority: gets overridden
+  by all others)
+
+- subnet level: ``.Dhcp6.subnet6[]["reservation-mode"]`` (low priority)
+
+- shared-network level: ``.Dhcp6["shared-networks"][]["reservation-mode"]``
+  (high priority)
+
+- shared-network subnet-level:
+  ``.Dhcp6["shared-networks"][].subnet6[]["reservation-mode"]`` (highest
+  priority: overrides all others)
+
+To decide which ``"reservation-mode"`` to choose, the
+following decision diagram may be useful:
 
 ::
 
-   "Dhcp6": {
-       "subnet6": [
-           {
-           "subnet": "2001:db8:1::/64",
-           "reservation-mode": "disabled",
-           ...
-           }
-       ]
-   }
+                                  O
+                                  |
+                                  v
+    +-----------------------------+------------------------------+
+    |         Is per-host configuration needed, such as          |
+    |                reserving specific addresses,               |
+    |               assigning specific options or                |
+    | assigning packets to specific classes on per-device basis? |
+    +-+-----------------+----------------------------------------+
+      |                 |
+    no|              yes|
+      |                 |   +--------------------------------------+
+      |                 |   |         For all given hosts,         |
+      +--> "disabled"   +-->+      can the reserved resources      |
+                            |  be used in all configured subnets?  |
+                            +--------+---------------------------+-+
+                                     |                           |
+    +----------------------------+   |no                         |yes
+    |             Is             |   |                           |
+    |  at least one reservation  +<--+               "global" <--+
+    | used to reserve addresses  |
+    |        or prefixes?        |
+    +-+------------------------+-+
+      |                        |
+    no|                     yes|   +---------------------------+
+      |                        |   | Is high leases-per-second |
+      +--> "out-of-pool"       +-->+ performance or efficient  |
+            ^                      |      resource usage       |
+            |                      |  (CPU ticks, RAM usage,   |
+            |                      |   database roundtrips)    |
+            |                      | important to your setup?  |
+            |                      +-+----------------+--------+
+            |                        |                |
+            |                     yes|              no|
+            |                        |                |
+            |          +-------------+                |
+            |          |                              |
+            |          |   +----------------------+   |
+            |          |   | Can it be guaranteed |   |
+            |          +-->+  that the reserved   |   |
+            |              |  addresses/prefixes  |   |
+            |              |  aren't part of the  |   |
+            |              |   pools configured   |   |
+            |              |  in the respective   |   |
+            |              |       subnet?        |   |
+            |              +-+------------------+-+   |
+            |                |                  |     |
+            |             yes|                no|     |
+            |                |                  |     V
+            +----------------+                  +--> "all"
 
+An example configuration that disables reservations looks as follows:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "subnet6": [
+          {
+            "pools": [
+              {
+                "pool": "2001:db8:1::-2001:db8:1::100"
+              }
+            ],
+            "reservation-mode": "disabled",
+            "subnet": "2001:db8:1::/64"
+          }
+        ]
+      }
+    }
 
 An example configuration using global reservations is shown below:
 
-::
+.. code-block:: json
 
-   "Dhcp6": {
-
-
-       "reservation-mode": "global",
-       "reservations": [
+    {
+      "Dhcp6": {
+        "reservation-mode": "global",
+        "reservations": [
           {
-           "duid": "00:03:00:01:11:22:33:44:55:66",
-           "hostname": "host-one"
+            "duid": "00:03:00:01:11:22:33:44:55:66",
+            "hostname": "host-one"
           },
           {
-           "duid": "00:03:00:01:99:88:77:66:55:44",
-           "hostname": "host-two"
+            "duid": "00:03:00:01:99:88:77:66:55:44",
+            "hostname": "host-two"
           }
-       ],
+        ],
+        "subnet6": [
+          {
+            "pools": [
+              {
+                "pool": "2001:db8:1::-2001:db8:1::100"
+              }
+            ],
+            "subnet": "2001:db8:1::/64"
+          }
+        ]
+      }
+    }
 
-       "subnet6": [
-       {
-           "subnet": "2001:db8:1::/64",
-           ...
-       }
-       ]
-   }
+The meaning of the reservation flags are:
+
+- ``reservations-global``: fetch global reservations.
+
+- ``reservations-in-subnet``: fetch subnet reservations. For a shared network
+  this includes all subnet members of the shared network.
+
+- ``reservations-out-of-pool``: this makes sense only when the
+  ``reservations-in-subnet`` flag is true. When ``reservations-out-of-pool``
+  is true the server may assume that all host reservations are for addresses
+  that do not belong to the dynamic pool. Therefore, it can skip the reservation
+  checks when dealing with in-pool addresses, thus improving performance.
+  Also the server will not assign reserved addresses that are inside the dynamic
+  pools to the respective clients. This also means that the addresses matching
+  the respective reservations from inside the dynamic pools (if any) can be
+  dynamically assigned to any client.
+
+The ``reservation-mode`` will be deprecated in a future Kea version.
+
+The correspondence of old values are:
+
+``disabled``:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "reservations-global": false,
+        "reservations-in-subnet": false
+      }
+    }
+
+``global``:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "reservations-global": true,
+        "reservations-in-subnet": false
+      }
+    }
+
+``out-of-pool``:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "reservations-global": false,
+        "reservations-in-subnet": true,
+        "reservations-out-of-pool": true
+      }
+    }
+
+``all``:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "reservations-global": false,
+        "reservations-in-subnet": true,
+        "reservations-out-of-pool": false
+      }
+    }
+
+To activate both ``global`` and ``all``, the following combination can be used:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "reservations-global": true,
+        "reservations-in-subnet": true,
+        "reservations-out-of-pool": false
+      }
+    }
+
+To activate both ``global`` and ``out-of-pool``, the following combination can
+be used:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "reservations-global": true,
+        "reservations-in-subnet": true,
+        "reservations-out-of-pool": true
+      }
+    }
+
+Note that enabling ``out-of-pool`` and disabling ``in-subnet`` at the same time
+is not recommended because ``out-of-pool`` is about host reservations in a
+subnet which are fetched only when the ``in-subnet`` flag is true.
+
+The parameter can be specified at global, subnet, and shared-network
+levels.
+
+An example configuration that disables reservations looks as follows:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "subnet6": [
+          {
+            "reservations-global": false,
+            "reservations-in-subnet": false,
+            "subnet": "2001:db8:1::/64"
+          }
+        ]
+      }
+    }
+
+An example configuration using global reservations is shown below:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "reservations": [
+          {
+            "duid": "00:03:00:01:11:22:33:44:55:66",
+            "hostname": "host-one"
+          },
+          {
+            "duid": "00:03:00:01:99:88:77:66:55:44",
+            "hostname": "host-two"
+          }
+        ],
+        "reservations-global": true,
+        "reservations-in-subnet": false,
+        "subnet6": [
+          {
+            "pools": [
+              {
+                "pool": "2001:db8:1::-2001:db8:1::100"
+              }
+            ],
+            "subnet": "2001:db8:1::/64"
+          }
+        ]
+      }
+    }
 
 For more details regarding global reservations, see :ref:`global-reservations6`.
 
@@ -3796,7 +4450,7 @@ following can be used:
           "hw-address": "01:02:03:04:05:06",
           "hostname": "hw-host-fixed",
 
-          # Use of IP address in global reservation is risky.
+          # Use of IP addresses in global reservations is risky.
           # If used outside of matching subnet, such as 3001::/64,
           # it will result in a broken configuration being handed
           # to the client.
@@ -3810,7 +4464,18 @@ following can be used:
        "valid-lifetime": 600,
        "subnet4": [ {
            "subnet": "2001:db8:1::/64",
-           "reservation-mode": "global",
+           # It is replaced by the "reservations-global"
+           # "reservations-in-subnet" and "reservations-out-of-pool"
+           # parameters.
+           # "reservation-mode": "global",
+           # Specify if the server should lookup global reservations.
+           "reservations-global": true,
+           # Specify if the server should lookup in-subnet reservations.
+           "reservations-in-subnet": false,
+           # Specify if the server can assume that all reserved addresses
+           # are out-of-pool. It can be ignored because "reservations-in-subnet"
+           # is false.
+           # "reservations-out-of-pool": false,
            "pools": [ { "pool": "2001:db8:1::-2001:db8:1::100" } ]
        } ]
    }
@@ -3818,6 +4483,247 @@ following can be used:
 When using database backends, the global host reservations are
 distinguished from regular reservations by using subnet-id value of
 zero.
+
+.. _pool-selection-with-class-reservations6:
+
+Pool Selection with Client Class Reservations
+---------------------------------------------
+
+Client classes can be specified both in the Kea configuration file and/or
+host reservations. The classes specified in the Kea configuration file are
+evaluated immediately after receiving the DHCP packet and therefore can be
+used to influence subnet selection using the ``client-class`` parameter
+specified in the subnet scope. The classes specified within the host
+reservations are fetched and assigned to the packet after the server has
+already selected a subnet for the client. This means that the client
+class specified within a host reservation cannot be used to influence
+subnet assignment for this client, unless the subnet belongs to a
+shared network. If the subnet belongs to a shared network, the server may
+dynamically change the subnet assignment while trying to allocate a lease.
+If the subnet does not belong to a shared network, once selected, the subnet
+is not changed.
+
+If the subnet does not belong to a shared network, it is possible to
+use host reservation based client classification to select an address pool
+within the subnet as follows:
+
+::
+
+    "Dhcp6": {
+        "client-classes": [
+            {
+                "name": "reserved_class"
+            },
+            {
+                "name": "unreserved_class",
+                "test": "not member('reserved_class')"
+            }
+        ],
+        "subnet6": [
+            {
+                "subnet": "2001:db8:1::/64",
+                "reservations": [{"
+                    "hw-address": "aa:bb:cc:dd:ee:fe",
+                    "client-classes": [ "reserved_class" ]
+                 }],
+                "pools": [
+                    {
+                        "pool": "2001:db8:1::10-2001:db8:1::20",
+                        "client-class": "reserved_class"
+                    },
+                    {
+                        "pool": "2001:db8:1::30-2001:db8:1::40",
+                        "client-class": "unreserved_class"
+                    }
+                ]
+            }
+        ]
+    }
+
+The ``reserved_class`` is declared without the ``test`` parameter because
+it may be only assigned to the client via host reservation mechanism. The
+second class, ``unreserved_class``, is assigned to the clients which do not
+belong to the ``reserved_class``.  The first pool within the subnet is only
+used for the clients having a reservation for the ``reserved_class``. The
+second pool is used for the clients not having such reservation. The
+configuration snippet includes one host reservation which causes the client
+having the MAC address of aa:bb:cc:dd:ee:fe to be assigned to the
+``reserved_class``. Thus, this client will be given an IP address from the
+first address pool.
+
+.. _subnet-selection-with-class-reservations6:
+
+Subnet Selection with Client Class Reservations
+-----------------------------------------------
+
+There is one specific use case when subnet selection may be influenced by
+client classes specified within host reservations. This is the case when the
+client belongs to a shared network. In such a case it is possible to use
+classification to select a subnet within this shared network. Consider the
+following example:
+
+::
+
+    "Dhcp6": {
+        "client-classes": [
+            {
+                "name": "reserved_class"
+            },
+            {
+                "name: "unreserved_class",
+                "test": "not member('reserved_class')"
+            }
+        ],
+        "reservations": [{"
+            "hw-address": "aa:bb:cc:dd:ee:fe",
+            "client-classes": [ "reserved_class" ]
+        }],
+        # It is replaced by the "reservations-global"
+        # "reservations-in-subnet" and "reservations-out-of-pool" parameters.
+        # Specify if the server should lookup global reservations.
+        "reservations-global": true,
+        # Specify if the server should lookup in-subnet reservations.
+        "reservations-in-subnet": false,
+        # Specify if the server can assume that all reserved addresses
+        # are out-of-pool. It can be ignored because "reservations-in-subnet"
+        # is false, but if specified, it is inherited by "shared-networks"
+        # and "subnet6" levels.
+        # "reservations-out-of-pool": false,
+        "shared-networks": [{
+            "subnet6": [
+                {
+                    "subnet": "2001:db8:1::/64",
+                    "pools": [
+                        {
+                            "pool": "2001:db8:1::10-2001:db8:1::20",
+                            "client-class": "reserved_class"
+                        }
+                    ]
+                },
+                {
+                    "subnet": "2001:db8:2::/64",
+                    "pools": [
+                        {
+                            "pool": "2001:db8:2::10-2001:db8:2::20",
+                            "client-class": "unreserved_class"
+                        }
+                    ]
+                }
+            ]
+        }]
+    }
+
+This is similar to the example described in the
+:ref:`pool-selection-with-class-reservations6`. This time, however, there
+are two subnets, each of them having a pool associated with a different
+class. The clients which don't have a reservation for the ``reserved_class``
+will be assigned an address from the subnet 2001:db8:2::/64. Clients having
+a reservation for the ``reserved_class`` will be assigned an address from
+the subnet 2001:db8:1::/64. The subnets must belong to the same shared network.
+In addition, the reservation for the client class must be specified at the
+global scope (global reservation) and the ``reservations-global`` must be
+set to true.
+
+In the example above the ``client-class`` could also be specified at the
+subnet level rather than pool level yielding the same effect.
+
+.. _multiple-reservations-same-ip6:
+
+Multiple Reservations for the Same IP
+-------------------------------------
+
+Host Reservations were designed to preclude creation of multiple
+reservations for the same IP address or delegated prefix within a
+particular subnet to avoid the situation when two different clients
+compete for the same lease. When using the default settings, the server
+returns a configuration error when it finds two or more reservations for
+the same lease within a subnet in the Kea configuration file. The
+:ref:`host-cmds` hooks library returns an error in response to the
+``reservation-add`` command when it detects that the reservation exists
+in the database for the lease for which the new reservation is being added.
+
+Similar to DHCPv4 (see :ref:`multiple-reservations-same-ip4`), the DHCPv6
+server can also be configured to allow creating multiple reservations
+for the same IPv6 address and/or delegated prefix in a given subnet. This
+is supported beginning with Kea release 1.9.1 as an optional mode of operation
+enabled with the ``ip-reservations-unique`` global parameter.
+
+The ``ip-reservations-unique`` is a boolean parameter, which defaults to
+``true``, which forbids the specification of more than one reservation
+for the same lease in a given subnet. Setting this parameter to ``false``
+allows for creating such reservations both in the Kea configuration
+file and in the host database backends via ``host-cmds`` hooks library.
+
+This setting is currently supported by the most popular host database
+backends, i.e. MySQL and PostgreSQL. It is not supported for Cassandra,
+Host Cache (see :ref:`hooks-host-cache`) or Radius backend
+(see :ref:`hooks-radius`). An attempt to set ``ip-reservations-unique``
+to ``false`` when any of these three backends is in use yields a
+configuration error.
+
+.. note::
+
+   When ``ip-reservations-unique`` is set to ``true`` (the default value)
+   the server ensures that IP reservations are unique for a subnet within
+   a single host backend and/or Kea configuration file. It does not
+   guarantee that the reservations are unique across multiple backends.
+
+
+The following is the example configuration with two reservations for
+the same IPv6 address and for different MAC addresses:
+
+::
+
+   "Dhcp6": {
+       "ip-reservations-unique": false,
+       "subnet6": [
+           {
+               "subnet": "2001:db8:1::/64",
+               "reservations": [
+                   {
+                       "hw-address": "1a:1b:1c:1d:1e:1f",
+                       "ip-address": "2001:db8:1::11"
+                   },
+                   {
+                       "hw-address": "2a:2b:2c:2d:2e:2f",
+                       "ip-address": "2001:db8:1::11"
+                   }
+               ]
+           }
+       ]
+   }
+
+It is possible to control the ``ip-reservations-unique`` via the
+:ref:`dhcp6-cb`. If the new setting of this parameter conflicts with
+the currently used backends (backends do not support the new setting),
+the new setting is ignored and the warning log message is output.
+The backends continue to use the default setting, i.e. expecting that
+IP reservations are unique within each subnet. To allow the
+creation of non-unique IP reservations, the administrator must remove
+the backends which lack support for them from the configuration file.
+
+Administrators must be careful when they have been using multiple
+reservations for the same IP address and/or delegated prefix and later
+decide to return to the default mode in which this is no longer allowed.
+The administrators must make sure that at most one reservation for
+the given IP address or delegated prefix exists within a subnet prior
+to switching back to the default mode. If such duplicates are left in
+the configuration file, the server reports a configuration error.
+Leaving such reservations in the host databases does not cause
+configuration errors but may lead to lease allocation errors during
+the server operation, when it unexpectedly finds multiple reservations
+for the same IP address or delegated prefix.
+
+.. note::
+
+   Currently the server does not verify whether multiple reservations for
+   the same IP address and/or delegated prefix exist in the host
+   databases (MySQL and/or PostgreSQL) when ``ip-reservations-unique``
+   is updated from ``true`` to ``false``. This may cause issues with
+   lease allocations. The administrator must ensure that there is at
+   most one reservation for each IP address and/or delegated prefix
+   within each subnet prior to this configuration update.
+
 
 .. _shared-network6:
 
@@ -3861,7 +4767,7 @@ or prefix) from any of the pools defined within the subnets belonging to
 the shared network. Internally, the server selects one of the subnets
 belonging to a shared network and tries to allocate a lease from this
 subnet. If the server is unable to allocate a lease from the selected
-subnet (e.g., due to pools exhaustion), it will use another subnet from
+subnet (e.g., due to pool exhaustion), it will use another subnet from
 the same shared network and will try to allocate a lease from this subnet,
 etc. Therefore, the server will typically allocate all leases
 available in a given subnet before it starts allocating leases from
@@ -4010,6 +4916,27 @@ network. This restriction applies to the ``interface`` and
 the shared network scope, but they can be specified for each subnet.
 However, care should be taken for each subnet to have the same value.
 
+.. note::
+
+    There is an inherent ambiguity when using clients that send multiple IA
+    options in a single request and shared-networks whose subnets have
+    different values for options and configuration parameters.  The server
+    sequentially processes IA options in the order that they occur in the
+    client's query.  If the leases requested in the IA options end up being
+    fulfilled from different subnets then which parameters and options should
+    apply?  Currently, the code will use the values from the last subnet of
+    the last IA option fulfilled.
+
+    We view this largely as a site configuration issue.  A shared-network
+    generally means the same physical link, so services configured by options
+    from subnet A should be as easily reachable from subnet B and vice versa.
+    There are a number of ways to avoid this situation:
+
+    - Use the same values for options and parameters for subnets within the shared-network.
+    - Use subnet selectors or client class guards that ensure that for a single client's query, the same subnet will be used for all IA options in that query.
+    - Avoid using shared-networks with clients that send multiple IA options per query
+
+
 Local and Relayed Traffic in Shared Networks
 --------------------------------------------
 
@@ -4075,7 +5002,7 @@ shown in the example below.
 In case of the relayed traffic, the subnets are typically selected using
 the relay agents' addresses. If the subnets are used independently (not
 grouped within a shared network) it is allowed to specify different relay
-address for each of these subnets. When multiple subnets belong to a
+addresses for each of these subnets. When multiple subnets belong to a
 shared network they must be selected via the same relay address and,
 similarly to the case of the local traffic described above, it is a
 configuration error to specify different relay addresses for the respective
@@ -4095,15 +5022,15 @@ subnets in the shared network. The following configuration is wrong.
                    "pools": [ { "pool":  "2001:db8::1 - 2001:db8::ffff" } ]
                },
                {
-                    "subnet": "3ffe:abcd::/64",
-                    "pools": [ { "pool":  "3ffe:abcd::1 - 3ffe:abcd::ffff" } ],
-                    "relay": {
+                   "subnet": "3ffe:abcd::/64",
+                   "pools": [ { "pool":  "3ffe:abcd::1 - 3ffe:abcd::ffff" } ],
+                   "relay": {
                        # Specifying a different relay address for this
                        # subnet is a configuration error. In this case
                        # it should be 2001:db8::1234 or the relay address
                        # in the previous subnet should be 3ffe:abcd::cafe.
                        "ip-addresses": [ "3ffe:abcd::cafe" ]
-                    }
+                   }
                }
            ]
        }
@@ -4139,14 +5066,14 @@ Even though it is technically possible to configure two (or more) subnets
 within the shared network to use different relay addresses, this will almost
 always lead to a different behavior than what the user would expect. In this
 case, the Kea server will initially select one of the subnets by matching
-the relay address in the client's packet with the subnet's conifguration.
+the relay address in the client's packet with the subnet's configuration.
 However, it MAY end up using the other subnet (even though it does not match
 the relay address) if the client already has a lease in this subnet, has a
 host reservation in this subnet or simply the initially selected subnet has no
 more addresses available. Therefore, it is strongly recommended to always
 specify subnet selectors (interface or a relay address) at shared network
 level if the subnets belong to a shared network, as it is rarely useful to
-specify them at the subnet level and it may lead to the configurtion errors
+specify them at the subnet level and it may lead to the configuration errors
 described above.
 
 Client Classification in Shared Networks
@@ -4329,8 +5256,8 @@ shared network.
 While not strictly mandatory, it is strongly recommended to use explicit
 "id" values for subnets if database storage will be used for host
 reservations. If an ID is not specified, the values for it are
-autogenerated, i.e. it assigns increasing integer values starting from
-1. Thus, the autogenerated IDs are not stable across configuration
+auto generated, i.e. it assigns increasing integer values starting from
+1. Thus, the auto generated IDs are not stable across configuration
 changes.
 
 .. _dhcp6-serverid:
@@ -4548,7 +5475,7 @@ specified in the configuration.
 
 .. _data-directory:
 
-DHCPv6 data directory
+DHCPv6 Data Directory
 =====================
 
 The Kea DHCPv6 server puts the server identifier file and the default
@@ -4672,6 +5599,17 @@ DHCPv6 server:
 Using a Specific Relay Agent for a Subnet
 =========================================
 
+The DHCPv6 server follows the same principles as the DHCPv4 server to
+select a subnet for the client, with noticeable differences mainly for
+relays.
+
+.. note::
+
+   Starting with Kea 1.7.9, the order used to find a subnet which matches
+   required conditions to be selected is the ascending subnet identifier
+   order. When the selected subnet is a member of a shared network the
+   whole shared network is selected.
+
 The relay must have an interface connected to the link on which the
 clients are being configured. Typically the relay has a global IPv6
 address configured on that interface, which belongs to the subnet from
@@ -4682,8 +5620,8 @@ RELAY-FORW message) to select the appropriate subnet.
 However, that is not always the case. The relay address may not match
 the subnet in certain deployments. This usually means that there is more
 than one subnet allocated for a given link. The two most common examples
-where this is the case are long-lasting network renumbering (where both
-old and new address space is still being used) and a cable network. In a
+where this is the case are long-lasting network renumbering (where both the
+old and new address spaces are still being used) and a cable network. In a
 cable network, both cable modems and the devices behind them are
 physically connected to the same link, yet they use distinct addressing.
 In such a case, the DHCPv6 server needs additional information (like the
@@ -4707,10 +5645,10 @@ selects that subnet for a relay with address 3000::1.
                     {
                         "pool": "2001:db8:1::1-2001:db8:1::ffff"
                     }
-                ],
-                "relay": {
-                    "ip-addresses": [ "3000::1" ]
-                }
+               ],
+               "relay": {
+                   "ip-addresses": [ "3000::1" ]
+               }
            }
        ]
    }
@@ -4755,17 +5693,16 @@ The following configuration can serve that configuration:
                    "ip-addresses": [ "3000::1" ]
                }
            },
-
            {
                "subnet": "2001:db8:1::/64",
                "pools": [
                     {
                         "pool": "2001:db8:1::1-2001:db8:1::ffff"
                     }
-                ],
-                "relay": {
-                    "ip-addresses": [ "3000::1" ]
-                }
+               ],
+               "relay": {
+                   "ip-addresses": [ "3000::1" ]
+               }
            }
        ]
    }
@@ -4883,7 +5820,7 @@ Supported methods are:
    vendor-id=4491. This vendor option is extracted from the original
    client's message, not from any relay options.
 
-Empty mac-sources is not allowed. Administrators who do not want to specify it
+Empty mac-sources are not allowed. Administrators who do not want to specify it
 should either simply omit the mac-sources definition or specify it with the
 "any" value, which is the default.
 
@@ -4932,7 +5869,7 @@ default, the following syntax can be used:
 The parameter is expressed in seconds, so the example above will
 instruct the server to recycle declined leases after one hour.
 
-There are several statistics and hook points associated with the Decline
+There are several statistics and hook points associated with the decline
 handling procedure. The lease6_decline hook is triggered after the
 incoming DHCPDECLINE message has been sanitized and the server is about
 to decline the lease. The declined-addresses statistic is increased
@@ -4948,14 +5885,14 @@ reclaimed-declined-addresses statistics (again in two variants, global
 and subnet-specific) are increased.
 
 A note about statistics: The server does not decrease the
-assigned-addresses statistics when a DHCPDECLINE message is received and
+assigned-nas statistics when a DHCPDECLINE message is received and
 processed successfully. While technically a declined address is no
-longer assigned, the primary usage of the assigned-addresses statistic
+longer assigned, the primary usage of the assigned-nas statistic
 is to monitor pool utilization. Most people would forget to include
 declined-addresses in the calculation, and simply use
-assigned-addresses/total-addresses. This would cause a bias towards
+assigned-nas/total-nas. This would cause a bias towards
 under-representing pool utilization. As this has a potential for major
-issues, ISC decided not to decrease assigned-addresses immediately after
+issues, ISC decided not to decrease assigned-nas immediately after
 receiving DHCPDECLINE, but to do it later when Kea recovers the address
 back to the available pool.
 
@@ -4963,11 +5900,6 @@ back to the available pool.
 
 Statistics in the DHCPv6 Server
 ===============================
-
-.. note::
-
-   This section describes DHCPv6-specific statistics. For a general
-   overview and usage of statistics, see :ref:`stats`.
 
 The DHCPv6 server supports the following statistics:
 
@@ -5248,7 +6180,7 @@ The DHCPv6 server supports the following statistics:
    |                                         |                       | (e.g. server           |
    |                                         |                       | receiving a REQUEST    |
    |                                         |                       | with server-id         |
-   |                                         |                       | matching other         |
+   |                                         |                       | matching another       |
    |                                         |                       | server), so do not     |
    |                                         |                       | worry if it is less    |
    |                                         |                       | than pkt6-received.    |
@@ -5320,6 +6252,36 @@ The DHCPv6 server supports the following statistics:
    |                                         |                       | reconfiguration        |
    |                                         |                       | event.                 |
    +-----------------------------------------+-----------------------+------------------------+
+   | cumulative-assigned-nas                 | integer               | Cumulative number of   |
+   |                                         |                       | NA addresses that      |
+   |                                         |                       | have been assigned     |
+   |                                         |                       | since server startup.  |
+   |                                         |                       | It is incremented      |
+   |                                         |                       | each time a NA address |
+   |                                         |                       | is assigned and is not |
+   |                                         |                       | reset when the server  |
+   |                                         |                       | is reconfigured.       |
+   +-----------------------------------------+-----------------------+------------------------+
+   | subnet[id].cumulative-assigned-nas      | integer               | Cumulative number of   |
+   |                                         |                       | NA addresses in a      |
+   |                                         |                       | given subnet that      |
+   |                                         |                       | were assigned. It      |
+   |                                         |                       | increases every time   |
+   |                                         |                       | a new lease is         |
+   |                                         |                       | allocated (as a        |
+   |                                         |                       | result of receiving a  |
+   |                                         |                       | REQUEST message) and   |
+   |                                         |                       | is never decreased.    |
+   |                                         |                       | The *id* is the        |
+   |                                         |                       | subnet-id of a given   |
+   |                                         |                       | subnet. This           |
+   |                                         |                       | statistic is exposed   |
+   |                                         |                       | for each subnet        |
+   |                                         |                       | separately, and is     |
+   |                                         |                       | reset during a         |
+   |                                         |                       | reconfiguration        |
+   |                                         |                       | event.                 |
+   +-----------------------------------------+-----------------------+------------------------+
    | subnet[id].assigned-nas                 | integer               | Number of NA           |
    |                                         |                       | addresses in a given   |
    |                                         |                       | subnet that are        |
@@ -5368,6 +6330,36 @@ The DHCPv6 server supports the following statistics:
    |                                         |                       | reconfiguration        |
    |                                         |                       | event.                 |
    +-----------------------------------------+-----------------------+------------------------+
+   | cumulative-assigned-pds                 | integer               | Cumulative number of   |
+   |                                         |                       | PD prefixes that       |
+   |                                         |                       | have been assigned     |
+   |                                         |                       | since server startup.  |
+   |                                         |                       | It is incremented      |
+   |                                         |                       | each time a PD prefix  |
+   |                                         |                       | is assigned and is not |
+   |                                         |                       | reset when the server  |
+   |                                         |                       | is reconfigured.       |
+   +-----------------------------------------+-----------------------+------------------------+
+   | subnet[id].cumulative-assigned-pds      | integer               | Cumulative number of   |
+   |                                         |                       | PD prefixes in a       |
+   |                                         |                       | given subnet that      |
+   |                                         |                       | were assigned. It      |
+   |                                         |                       | increases every time   |
+   |                                         |                       | a new lease is         |
+   |                                         |                       | allocated (as a        |
+   |                                         |                       | result of receiving a  |
+   |                                         |                       | REQUEST message) and   |
+   |                                         |                       | is never decreased.    |
+   |                                         |                       | The *id* is the        |
+   |                                         |                       | subnet-id of a given   |
+   |                                         |                       | subnet. This           |
+   |                                         |                       | statistic is exposed   |
+   |                                         |                       | for each subnet        |
+   |                                         |                       | separately, and is     |
+   |                                         |                       | reset during a         |
+   |                                         |                       | reconfiguration        |
+   |                                         |                       | event.                 |
+   +-----------------------------------------+-----------------------+------------------------+
    | subnet[id].assigned-pds                 | integer               | Number of PD prefixes  |
    |                                         |                       | in a given subnet      |
    |                                         |                       | that are assigned. It  |
@@ -5398,9 +6390,16 @@ The DHCPv6 server supports the following statistics:
    |                                         |                       | an expired lease is    |
    |                                         |                       | reclaimed (counting    |
    |                                         |                       | both NA and PD         |
-   |                                         |                       | reclamations) and is   |
-   |                                         |                       | reset when the server  |
-   |                                         |                       | is reconfigured.       |
+   |                                         |                       | reclamations).         |
+   |                                         |                       | This statistic never   |
+   |                                         |                       | decreases. It can be   |
+   |                                         |                       | used as a long-term    |
+   |                                         |                       | indicator of how many  |
+   |                                         |                       | actual leases have been|
+   |                                         |                       | reclaimed.             |
+   |                                         |                       | This is a global       |
+   |                                         |                       | statistic that covers  |
+   |                                         |                       | all subnets.           |
    +-----------------------------------------+-----------------------+------------------------+
    | subnet[id].reclaimed-leases             | integer               | Number of expired      |
    |                                         |                       | leases associated      |
@@ -5413,9 +6412,13 @@ The DHCPv6 server supports the following statistics:
    |                                         |                       | an expired lease is    |
    |                                         |                       | reclaimed (counting    |
    |                                         |                       | both NA and PD         |
-   |                                         |                       | reclamations) and is   |
-   |                                         |                       | reset when the server  |
-   |                                         |                       | is reconfigured.       |
+   |                                         |                       | reclamations).         |
+   |                                         |                       | The *id* is the        |
+   |                                         |                       | subnet-id of a         |
+   |                                         |                       | given subnet. This     |
+   |                                         |                       | statistic is exposed   |
+   |                                         |                       | for each subnet        |
+   |                                         |                       | separately.            |
    +-----------------------------------------+-----------------------+------------------------+
    | declined-addresses                      | integer               | Number of IPv6         |
    |                                         |                       | addresses that are     |
@@ -5503,6 +6506,36 @@ The DHCPv6 server supports the following statistics:
    |                                         |                       | subnet separately.     |
    +-----------------------------------------+-----------------------+------------------------+
 
+.. note::
+
+   This section describes DHCPv6-specific statistics. For a general
+   overview and usage of statistics, see :ref:`stats`.
+
+Beginning with Kea 1.7.7, the DHCPv6 server provides two global
+parameters to control statistics default sample limits:
+
+- ``statistic-default-sample-count`` - determines the default maximum
+  number of samples which are kept. The special value of zero
+  indicates that a default maximum age should be used.
+
+- ``statistic-default-sample-age`` - determines the default maximum
+  age in seconds of samples which are kept.
+
+For instance, to reduce the statistic-keeping overhead, set
+the default maximum sample count to 1 so that only one sample is kept:
+
+::
+
+     "Dhcp6": {
+       "statistic-default-sample-count": 1,
+       "subnet6": [ ... ],
+       ...
+   }
+
+Statistics can be retrieved periodically to gain more insight into Kea operations. One tool that
+leverages that capability is ISC Stork. See :ref:`stork` for details.
+
+
 .. _dhcp6-ctrl-channel:
 
 Management API for the DHCPv6 Server
@@ -5539,7 +6572,7 @@ values are 107 on Linux and 103 on FreeBSD.
 Communication over the control channel is conducted using JSON
 structures. See the
 `Control Channel section in the Kea Developer's Guide
-<https://jenkins.isc.org/job/Kea_doc/doxygen/d2/d96/ctrlSocket.html>`__
+<https://reports.kea.isc.org/dev_guide/d2/d96/ctrlSocket.html>`__
 for more details.
 
 The DHCPv6 server supports the following operational commands:
@@ -5639,8 +6672,7 @@ option is actually needed. An example configuration looks as follows:
                "billing-department": 42,
                "contact-points": [ "Alice", "Bob" ]
            }
-       } ],
-       ...
+       } ]
    }
 
 Kea does not interpret or use the user context information; it simply
@@ -5759,7 +6791,7 @@ treated as “not implemented yet”, rather than actual limitations.
 
 .. _dhcp6-srv-examples:
 
-Kea DHCPv6 server examples
+Kea DHCPv6 Server Examples
 ==========================
 
 A collection of simple-to-use examples for the DHCPv6 component of Kea
@@ -5786,22 +6818,22 @@ Supported Parameters
 
 The ultimate goal for the CB is to serve as a central configuration
 repository for one or multiple Kea servers connected to the database. In
-the future it will be possible to store most of the server's
+the future, it will be possible to store most of the server's
 configuration in the database and reduce the configuration file to a bare
 minimum; the only mandatory parameter will be the
 ``config-control``, which includes the necessary information to connect
-to the database. In the Kea 1.6.0 release, however, only a subset of
+to the database. In the present release, however, only a subset of
 the DHCPv4 server parameters can be stored in the database. All other
 parameters must be specified in the JSON configuration file, if
 required.
 
-The following table lists DHCPv6-specific parameters supported by the
+The following table lists DHCPv6 specific parameters supported by the
 Configuration Backend, with an indication on which level of the hierarchy
-it is currently supported. "n/a" is used in cases when a
-particular parameter is not applicable on a particular level of the
-hierarchy, or in cases when the parameter is not supported by the server
-at this level of the hierarchy. "no" is used when the parameter is
-supported by the server on the given level of the hierarchy, but is not
+it is currently supported. The "n/a" marks cases when a
+given parameter is not applicable at the particular level of the
+hierarchy or in cases when the server does not support the parameter
+at this level of the hierarchy. "no" is used when a parameter is
+supported at the given level of the hierarchy but is not
 configurable via the Configuration Backend.
 
 All supported parameters can be configured via ``cb_cmds`` hooks library
@@ -5813,79 +6845,99 @@ parameters are set using ``remote-subnet6-set``. Whenever
 there is an exception to this general rule, it is highlighted in the
 table. The non-scalar global parameters have dedicated commands; for example,
 the global DHCPv6 options (``option-data``) are modified using
-``remote-option6-global-set``.
+``remote-option6-global-set``. Client classes together with class specific
+option definitions and DHCPv6 options are configured using the
+``remote-class6-set`` command.
 
 .. table:: List of DHCPv6 Parameters Supported by the Configuration Backend
 
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | Parameter                   | Global                     | Shared    | Subnet    | Pool      | Prefix     |
-   |                             |                            | Network   |           |           | Delegation |
-   |                             |                            |           |           |           | Pool       |
-   +=============================+============================+===========+===========+===========+============+
-   | calculate-tee-times         | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | client-class                | n/a                        | yes       | yes       | yes       | yes        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | ddns-send-update            | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | ddns-override-no-update     | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | ddns-override-client-update | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | ddns-replace-client-name    | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | ddns-generated-prefix       | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | ddns-qualifying-suffix      | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | decline-probation-period    | yes                        | n/a       | n/a       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | delegated-len               | n/a                        | n/a       | n/a       | n/a       | yes        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | dhcp4o6-port                | yes                        | n/a       | n/a       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | excluded-prefix             | n/a                        | n/a       | n/a       | n/a       | yes        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | excluded-prefix-len         | n/a                        | n/a       | n/a       | n/a       | yes        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | hostname-char-set           | no                         | no        | no        | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | hostname-char-replacement   | no                         | no        | no        | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | interface                   | n/a                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | interface-id                | n/a                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | option-data                 | yes (via                   | yes       | yes       | yes       | yes        |
-   |                             | remote-option6-global-set) |           |           |           |            |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | option-def                  | yes (via                   | n/a       | n/a       | n/a       | n/a        |
-   |                             | remote-option-def6-set)    |           |           |           |            |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | preferred-lifetime          | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | prefix                      | n/a                        | n/a       | n/a       | n/a       | yes        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | prefix-len                  | n/a                        | n/a       | n/a       | n/a       | yes        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | rapid-commit                | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | rebind-timer                | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | relay                       | n/a                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | renew-timer                 | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | require-client-classes      | n/a                        | yes       | yes       | yes       | yes        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | reservation-mode            | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | t1-percent                  | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | t2-percent                  | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
-   | valid-lifetime              | yes                        | yes       | yes       | n/a       | n/a        |
-   +-----------------------------+----------------------------+-----------+-----------+-----------+------------+
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | Parameter                   | Global                     | Client    | Shared    | Subnet    | Pool      | Prefix     |
+   |                             |                            | Class     | Network   |           |           | Delegation |
+   |                             |                            |           |           |           |           | Pool       |
+   +=============================+============================+===========+===========+===========+===========+============+
+   | cache-max-age               | yes                        | n/a       | todo      | todo      | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | cache-threshold             | yes                        | n/a       | todo      | todo      | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | calculate-tee-times         | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | client-class                | n/a                        | n/a       | yes       | yes       | yes       | yes        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | ddns-send-update            | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | ddns-override-no-update     | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | ddns-override-client-update | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | ddns-replace-client-name    | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | ddns-generated-prefix       | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | ddns-qualifying-suffix      | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | decline-probation-period    | yes                        | n/a       | n/a       | n/a       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | delegated-len               | n/a                        | n/a       | n/a       | n/a       | n/a       | yes        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | dhcp4o6-port                | yes                        | n/a       | n/a       | n/a       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | excluded-prefix             | n/a                        | n/a       | n/a       | n/a       | n/a       | yes        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | excluded-prefix-len         | n/a                        | n/a       | n/a       | n/a       | n/a       | yes        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | hostname-char-set           | no                         | n/a       | no        | no        | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | hostname-char-replacement   | no                         | n/a       | no        | no        | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | interface                   | n/a                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | interface-id                | n/a                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | max-preferred-lifetime      | yes                        | yes       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | max-valid-lifetime          | yes                        | yes       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | min-preferred-lifetime      | yes                        | yes       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | min-valid-lifetime          | yes                        | yes       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | option-data                 | yes (via                   | yes       | yes       | yes       | yes       | yes        |
+   |                             | remote-option6-global-set) |           |           |           |           |            |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | option-def                  | yes (via                   | yes       | n/a       | n/a       | n/a       | n/a        |
+   |                             | remote-option-def6-set)    |           |           |           |           |            |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | preferred-lifetime          | yes                        | yes       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | prefix                      | n/a                        | n/a       | n/a       | n/a       | n/a       | yes        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | prefix-len                  | n/a                        | n/a       | n/a       | n/a       | n/a       | yes        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | rapid-commit                | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | rebind-timer                | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | relay                       | n/a                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | renew-timer                 | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | require-client-classes      | n/a                        | n/a       | yes       | yes       | yes       | yes        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | reservation-mode            | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | reservations-global         | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | reservations-in-subnet      | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | reservations-out-of-pool    | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | t1-percent                  | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | t2-percent                  | yes                        | n/a       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
+   | valid-lifetime              | yes                        | yes       | yes       | yes       | n/a       | n/a        |
+   +-----------------------------+----------------------------+-----------+-----------+-----------+-----------+------------+
 
 .. _dhcp6-cb-json:
 
@@ -5927,3 +6979,49 @@ Configuration Backend for the DHCPv6 server:
 
 The configuration structure is almost identical to that of the DHCPv4 server
 (see :ref:`dhcp4-cb-json` for the detailed description).
+
+.. _dhcp6-compatibility:
+
+Kea DHCPv6 Compatibility Configuration Parameters
+=================================================
+
+By default, Kea aims to follow the RFC documents to promote better standards
+compliance. However, there are buggy implementations out there that cannot be
+easily fixed or upgraded. Therefore Kea provides an easy to use compatibility
+mode for broken or non-compliant clients. In that purpose, flags have to be
+enabled in order to enable uncommon practices:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "compatibility": {
+        }
+      }
+    }
+
+
+Lenient Option Parsing
+----------------------
+
+By default, DHCPv6 option 16's vendor-class-data field is parsed as a set of
+length-value pairs. Same for tuple fields defined in custom options.
+
+With ``lenient-option-parsing: "true"``, if a length ever exceeds the rest of
+the option's buffer, Kea no longer complains with the log message ``unable to
+parse the opaque data tuple, the buffer length is x, but the tuple length is y``
+with ``x < y``. Instead, the value is considered to be the rest of the buffer,
+or in terms of the log message above, the tuple length ``y`` becomes ``x``.
+
+Enabling this flag is expected to improve compatibility with devices such as RAD
+MiNID.
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "compatibility": {
+          "lenient-option-parsing": true
+        }
+      }
+    }

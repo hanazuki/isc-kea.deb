@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,8 +27,6 @@ class PostHttpRequestJson;
 
 /// @brief Pointer to @ref PostHttpRequestJson.
 typedef boost::shared_ptr<PostHttpRequestJson> PostHttpRequestJsonPtr;
-/// @brief Pointer to const @ref PostHttpRequestJson.
-typedef boost::shared_ptr<const PostHttpRequestJson> ConstPostHttpRequestJsonPtr;
 
 /// @brief Represents HTTP POST request with JSON body.
 ///
@@ -52,9 +50,12 @@ public:
     /// @param version HTTP version.
     /// @param host_header Host header to be included in the request. The default
     /// is the empty Host header.
+    /// @param basic_auth Basic HTTP authentication credential. The default
+    /// is no authentication.
     explicit PostHttpRequestJson(const Method& method, const std::string& uri,
                                  const HttpVersion& version,
-                                 const HostHttpHeader& host_header = HostHttpHeader());
+                                 const HostHttpHeader& host_header = HostHttpHeader(),
+                                 const BasicHttpAuthPtr& basic_auth = BasicHttpAuthPtr());
 
     /// @brief Complete parsing of the HTTP request.
     ///

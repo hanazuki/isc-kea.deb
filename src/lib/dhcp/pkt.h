@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -480,7 +480,7 @@ public:
     /// @brief Sets interface index.
     ///
     /// @param ifindex specifies interface index.
-    void setIndex(uint32_t ifindex) {
+    void setIndex(int ifindex) {
         ifindex_ = ifindex;
     };
 
@@ -492,7 +492,7 @@ public:
     /// @brief Returns interface index.
     ///
     /// @return interface index
-    uint32_t getIndex() const {
+    int getIndex() const {
         return (ifindex_);
     };
 

@@ -1,0 +1,92 @@
+#!/bin/sh
+
+# Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
+#
+# This Source Code Form is subject to the terms of the Mozilla Public
+# License, v. 2.0. If a copy of the MPL was not distributed with this
+# file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+# Get BNF grammars from bison files
+#
+# This script takes 1 or 2 parameters:
+#
+# Basic usage:
+# ./extract_bnf.sh <bison-file-base-name> - will generate BNF notation in plain text
+#
+# Markdown:
+# ./extract_bnf.sh <bison-file-base-name> --markdown
+
+# Check if there are one or two arguments
+if [ $# -lt 1 ]; then
+    echo "extract_bnf.sh <bison-file-base-name> [--markdown <name>]"
+    exit 1
+fi
+
+markdown=0
+if [ $# -eq 3 ] && [ "$2" = "--markdown" ]; then
+    markdown=1
+    md_name=$3
+fi
+
+# Get the output file
+base=$1
+output=
+now=$(date +"%Y-%m-%-d %H:%m")
+
+header="Grammar generated on $now. See Chapter $md_name for an explanation."
+
+if [ -f "${base}.yy" ]; then
+    # We want to explicitly set the language to English. Otherwise
+    # bison may produce language specific wording (like "symbole terminalne"
+    # if you system is set to Polish, rather than "Terminals") and this will
+    # confuse our script.
+    LANG=en_US LANGUAGE=en_US @YACC@ -v "${base}.yy" -o output
+    rm -f output output.h *.hh
+    mv output.output /tmp/output
+    output=/tmp/output
+else
+    echo "cannot find ${base}.yy"
+    exit 1
+fi
+
+# Process the output file
+#  - extract the grammar part
+#  - remove line numbers
+#  - remove intermediate productions
+#  - remove intermediate non-terminals
+#  - replace standard tokens
+#  - replace : by BNF ::=
+#  - squeeze multiple blank lines
+
+cat $output |\
+@AWK@ '/^Terminal/ { exit }; // { print }' |\
+@AWK@ '// { gsub("^ +[0-9]+ ", ""); print }' |\
+@AWK@ '/^\$@[0-9]+:/ { next }; // { print }' |\
+@AWK@ '// { gsub(" \\$@[0-9]+ ", " ") ; print }' |\
+@AWK@ '// { gsub("\"constant string\"", "STRING"); print }' |\
+@AWK@ '// { gsub("\"integer\"", "INTEGER"); print }' |\
+@AWK@ '// { gsub("\"floating point\"", "FLOAT"); print }' |\
+@AWK@ '// { gsub("\"boolean\"", "BOOLEAN"); print }' |\
+@AWK@ '// { gsub("\"null\"", "NULL"); print }' |\
+@AWK@ '// { gsub("\"constant hexstring\"", "HEXSTRING"); print }' |\
+@AWK@ '// { gsub("\"option name\"", "OPTION_NAME"); print }' |\
+@AWK@ '// { gsub("\"ip address\"", "IP_ADDRESS"); print }' |\
+@AWK@ '// { gsub("\"end of file\"", "EOF"); print }' |\
+@AWK@ '// { gsub("%empty", ""); print }' |\
+@AWK@ '// { gsub(": ", " ::= "); print }' |\
+cat -s > $output.2
+
+if [ "$markdown" -eq 1 ]; then
+    cat > $output.3 << EOF
+
+$header
+
+.. code-block:: BNF
+   :linenos:
+
+EOF
+    cat $output.2 | @AWK@ '/^.+$/ { print "    ",$0 }; /^$/ { print } ' >> $output.3
+    cat $output.3
+else
+    cat $output.2
+fi

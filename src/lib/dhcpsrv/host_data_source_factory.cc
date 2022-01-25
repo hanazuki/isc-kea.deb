@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -74,7 +74,7 @@ HostDataSourceFactory::add(HostDataSourceList& sources,
     }
 
     // Call the factory and push the pointer on sources.
-    sources.push_back(boost::shared_ptr<BaseHostDataSource>(index->second(parameters)));
+    sources.push_back(index->second(parameters));
 
     // Check the factory did not return NULL.
     if (!sources.back()) {
@@ -97,6 +97,34 @@ HostDataSourceFactory::del(HostDataSourceList& sources,
         return (true);
     }
     return (false);
+}
+
+bool
+HostDataSourceFactory::del(HostDataSourceList& sources,
+                           const string& db_type,
+                           const string& dbaccess,
+                           bool if_unusable) {
+    DatabaseConnection::ParameterMap parameters =
+            DatabaseConnection::parse(dbaccess);
+    bool deleted = false;
+    if (if_unusable) {
+        deleted = true;
+    }
+
+    for (auto it = sources.begin(); it != sources.end(); ++it) {
+        if ((*it)->getType() != db_type || (*it)->getParameters() != parameters) {
+            continue;
+        }
+        if (if_unusable && (!(*it)->isUnusable())) {
+            deleted = false;
+            continue;
+        }
+        LOG_DEBUG(hosts_logger, DHCPSRV_DBG_TRACE, HOSTS_CFG_CLOSE_HOST_DATA_SOURCE)
+            .arg((*it)->getType());
+        sources.erase(it);
+        return (true);
+    }
+    return (deleted);
 }
 
 bool

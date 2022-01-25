@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,10 +8,13 @@
 
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/client_class_def.h>
 #include <dhcpsrv/srv_config.h>
 #include <dhcpsrv/subnet.h>
 #include <process/logging_info.h>
+#include <testutils/gtest_utils.h>
 #include <testutils/test_to_element.h>
+
 #include <gtest/gtest.h>
 
 using namespace isc::asiolink;
@@ -58,7 +61,7 @@ public:
             Subnet4Ptr subnet(new Subnet4(IOAddress(0xC0000000 | (i << 2)),
                                           24, def_triplet, def_triplet,
                                           4000));
-            test_subnets4_.push_back(subnet);
+            test_subnets4_.insert(subnet);
         }
         // Create IPv6 subnets.
         IOAddress prefix("2001:db8:1::");
@@ -71,7 +74,7 @@ public:
             ++prefix_bytes[5];
             prefix = IOAddress::fromBytes(prefix.getFamily(), &prefix_bytes[0]);
             Subnet6Ptr subnet(new Subnet6(prefix, 64, 1000, 2000, 3000, 4000));
-            test_subnets6_.push_back(subnet);
+            test_subnets6_.insert(subnet);
         }
 
         // Build our reference dictionary of client classes
@@ -139,18 +142,28 @@ void
 SrvConfigTest::addSubnet4(const unsigned int index) {
     if (index >= TEST_SUBNETS_NUM) {
         FAIL() << "Subnet index " << index << "out of range (0.."
-               << TEST_SUBNETS_NUM << "): " << "unable to add IPv4 subnet";
+               << TEST_SUBNETS_NUM << "): unable to add IPv4 subnet";
     }
-    conf_.getCfgSubnets4()->add(test_subnets4_[index]);
+    // std::advance is not available for this iterator.
+    auto it = test_subnets4_.begin();
+    for (unsigned int i = 0; i < index; ++i, ++it) {
+        ASSERT_FALSE(it == test_subnets4_.end());
+    }
+    conf_.getCfgSubnets4()->add(*it);
 }
 
 void
 SrvConfigTest::addSubnet6(const unsigned int index) {
     if (index >= TEST_SUBNETS_NUM) {
         FAIL() << "Subnet index " << index << "out of range (0.."
-               << TEST_SUBNETS_NUM << "): " << "unable to add IPv6 subnet";
+               << TEST_SUBNETS_NUM << "): unable to add IPv6 subnet";
     }
-    conf_.getCfgSubnets6()->add(test_subnets6_[index]);
+    // std::advance is not available for this iterator.
+    auto it = test_subnets6_.begin();
+    for (unsigned int i = 0; i < index; ++i, ++it) {
+        ASSERT_FALSE(it == test_subnets6_.end());
+    }
+    conf_.getCfgSubnets6()->add(*it);
 }
 
 void
@@ -314,8 +327,8 @@ TEST_F(SrvConfigTest, copy) {
     conf1.addLoggingInfo(info);
 
     // Add option definition.
-    OptionDefinitionPtr def(new OptionDefinition("option-foo", 5, "string"));
-    conf1.getCfgOptionDef()->add(def, "isc");
+    OptionDefinitionPtr def(new OptionDefinition("option-foo", 5, "isc", "string"));
+    conf1.getCfgOptionDef()->add(def);
 
     // Add an option.
     OptionPtr option(new Option(Option::V6, 1000, OptionBuffer(10, 0xFF)));
@@ -378,15 +391,15 @@ TEST_F(SrvConfigTest, equality) {
 
     // Differ by option definitions.
     conf1.getCfgOptionDef()->
-        add(OptionDefinitionPtr(new OptionDefinition("option-foo", 123,
-                                                     "uint16_t")), "isc");
+        add(OptionDefinitionPtr(new OptionDefinition("option-foo", 123, "isc",
+                                                     "uint16_t")));
 
     EXPECT_FALSE(conf1 == conf2);
     EXPECT_TRUE(conf1 != conf2);
 
     conf2.getCfgOptionDef()->
-        add(OptionDefinitionPtr(new OptionDefinition("option-foo", 123,
-                                                     "uint16_t")), "isc");
+        add(OptionDefinitionPtr(new OptionDefinition("option-foo", 123, "isc",
+                                                     "uint16_t")));
     EXPECT_TRUE(conf1 == conf2);
     EXPECT_FALSE(conf1 != conf2);
 
@@ -517,7 +530,6 @@ TEST_F(SrvConfigTest, unparse) {
     std::string header6 = "{\n\"Dhcp6\": {\n";
 
     std::string defaults = "\"decline-probation-period\": 0,\n";
-    defaults += "\"dhcp4o6-port\": 0,\n";
     defaults += "\"interfaces-config\": { \"interfaces\": [ ],\n";
     defaults += " \"re-detect\": false },\n";
     defaults += "\"option-def\": [ ],\n";
@@ -533,8 +545,7 @@ TEST_F(SrvConfigTest, unparse) {
 
     defaults += conf.getD2ClientConfig()->toElement()->str() + ",\n";
 
-    std::string defaults4 = "\"echo-client-id\": true,\n";
-    defaults4 += "\"shared-networks\": [ ],\n";
+    std::string defaults4 = "\"shared-networks\": [ ],\n";
     defaults4 += "\"subnet4\": [ ],\n";
     defaults4 += "\"host-reservation-identifiers\": ";
     defaults4 += "[ \"hw-address\", \"duid\", \"circuit-id\", \"client-id\" ],\n";
@@ -1018,6 +1029,10 @@ TEST_F(SrvConfigTest, mergeGlobals4) {
     cfg_from.setDhcp4o6Port(888);
     cfg_from.setServerTag("nor_this_server");
 
+    // Add a configured global ip-reservations-unique. It should be populated
+    // to the CfgDbAccess and CfgHosts.
+    cfg_from.addConfiguredGlobal("ip-reservations-unique", Element::create(false));
+
     // Add some configured globals:
     cfg_to.addConfiguredGlobal("dhcp4o6-port", Element::create(999));
     cfg_to.addConfiguredGlobal("server-tag", Element::create("use_this_server"));
@@ -1039,6 +1054,9 @@ TEST_F(SrvConfigTest, mergeGlobals4) {
     //  server-tag port should be the "from" configured value.
     EXPECT_EQ("use_this_server", cfg_to.getServerTag().get());
 
+    // ip-reservations-unique
+    EXPECT_FALSE(cfg_to.getCfgDbAccess()->getIPReservationsUnique());
+
     // Next we check the explicitly "configured" globals.
     // The list should be all of the "to" + "from", with the
     // latter overwriting the former.
@@ -1046,6 +1064,7 @@ TEST_F(SrvConfigTest, mergeGlobals4) {
         "{ \n"
         "   \"decline-probation-period\": 300,  \n"
         "   \"dhcp4o6-port\": 999,  \n"
+        "   \"ip-reservations-unique\": false,  \n"
         "   \"server-tag\": \"use_this_server\"  \n"
         "} \n";
 
@@ -1086,6 +1105,10 @@ TEST_F(SrvConfigTest, mergeGlobals6) {
     cfg_from.setDhcp4o6Port(888);
     cfg_from.setServerTag("nor_this_server");
 
+    // Add a configured global ip-reservations-unique. It should be populated
+    // to the CfgDbAccess and CfgHosts.
+    cfg_from.addConfiguredGlobal("ip-reservations-unique", Element::create(false));
+
     // Add some configured globals:
     cfg_to.addConfiguredGlobal("dhcp4o6-port", Element::create(999));
     cfg_to.addConfiguredGlobal("server-tag", Element::create("use_this_server"));
@@ -1104,6 +1127,9 @@ TEST_F(SrvConfigTest, mergeGlobals6) {
     //  server-tag port should be the "from" configured value.
     EXPECT_EQ("use_this_server", cfg_to.getServerTag().get());
 
+    // ip-reservations-unique
+    EXPECT_FALSE(cfg_to.getCfgDbAccess()->getIPReservationsUnique());
+
     // Next we check the explicitly "configured" globals.
     // The list should be all of the "to" + "from", with the
     // latter overwriting the former.
@@ -1111,6 +1137,7 @@ TEST_F(SrvConfigTest, mergeGlobals6) {
         "{ \n"
         "   \"decline-probation-period\": 300,  \n"
         "   \"dhcp4o6-port\": 999,  \n"
+        "   \"ip-reservations-unique\": false,  \n"
         "   \"server-tag\": \"use_this_server\"  \n"
         "} \n";
 
@@ -1120,6 +1147,59 @@ TEST_F(SrvConfigTest, mergeGlobals6) {
 
     EXPECT_TRUE(isEquivalent(expected_globals, cfg_to.getConfiguredGlobals()));
 
+}
+
+// This test verifies that new list of client classes replaces and old list
+// when server configuration is merged.
+TEST_F(SrvConfigTest, mergeClientClasses) {
+    // Let's create the "existing" config we will merge into.
+    SrvConfig cfg_to;
+
+    auto expression = boost::make_shared<Expression>();
+    auto client_class = boost::make_shared<ClientClassDef>("foo", expression);
+    cfg_to.getClientClassDictionary()->addClass(client_class);
+
+    client_class = boost::make_shared<ClientClassDef>("bar", expression);
+    cfg_to.getClientClassDictionary()->addClass(client_class);
+
+    // Now we'll create the config we'll merge from.
+    SrvConfig cfg_from;
+    client_class = boost::make_shared<ClientClassDef>("baz", expression);
+    cfg_from.getClientClassDictionary()->addClass(client_class);
+
+    client_class = boost::make_shared<ClientClassDef>("abc", expression);
+    cfg_from.getClientClassDictionary()->addClass(client_class);
+
+    ASSERT_NO_THROW(cfg_to.merge(cfg_from));
+
+    // The old classes should be replaced with new classes.
+    EXPECT_FALSE(cfg_to.getClientClassDictionary()->findClass("foo"));
+    EXPECT_FALSE(cfg_to.getClientClassDictionary()->findClass("bar"));
+    EXPECT_TRUE(cfg_to.getClientClassDictionary()->findClass("baz"));
+    EXPECT_TRUE(cfg_to.getClientClassDictionary()->findClass("abc"));
+}
+
+// This test verifies that client classes are not modified if the merged
+// list of classes is empty.
+TEST_F(SrvConfigTest, mergeEmptyClientClasses) {
+    // Let's create the "existing" config we will merge into.
+    SrvConfig cfg_to;
+
+    auto expression = boost::make_shared<Expression>();
+    auto client_class = boost::make_shared<ClientClassDef>("foo", expression);
+    cfg_to.getClientClassDictionary()->addClass(client_class);
+
+    client_class = boost::make_shared<ClientClassDef>("bar", expression);
+    cfg_to.getClientClassDictionary()->addClass(client_class);
+
+    // Now we'll create the config we'll merge from.
+    SrvConfig cfg_from;
+
+    ASSERT_NO_THROW(cfg_to.merge(cfg_from));
+
+    // Empty list of classes should not replace an existing list.
+    EXPECT_TRUE(cfg_to.getClientClassDictionary()->findClass("foo"));
+    EXPECT_TRUE(cfg_to.getClientClassDictionary()->findClass("bar"));
 }
 
 // Validates SrvConfig::moveDdnsParams by ensuring that deprecated dhcp-ddns
@@ -1283,6 +1363,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     // Configure global host sanitizing.
     conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+    // Enable conflict resolution globally.
+    conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(true));
 
     // Add a plain subnet
     Triplet<uint32_t> def_triplet;
@@ -1320,6 +1402,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     subnet2->setDdnsGeneratedPrefix("prefix");
     subnet2->setDdnsQualifyingSuffix("example.com.");
     subnet2->setHostnameCharSet("");
+    subnet2->setDdnsUpdateOnRenew(true);
+    subnet2->setDdnsUseConflictResolution(false);
 
     // Get DDNS params for subnet1.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
@@ -1333,6 +1417,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     EXPECT_TRUE(params->getQualifyingSuffix().empty());
     EXPECT_EQ("[^A-Z]", params->getHostnameCharSet());
     EXPECT_EQ("x", params->getHostnameCharReplacement());
+    EXPECT_FALSE(params->getUpdateOnRenew());
+    EXPECT_TRUE(params->getUseConflictResolution());
 
     // We inherited a non-blank hostname_char_set so we
     // should get a sanitizer instance.
@@ -1353,6 +1439,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     EXPECT_EQ("example.com.", params->getQualifyingSuffix());
     EXPECT_EQ("", params->getHostnameCharSet());
     EXPECT_EQ("x", params->getHostnameCharReplacement());
+    EXPECT_TRUE(params->getUpdateOnRenew());
+    EXPECT_FALSE(params->getUseConflictResolution());
 
     // We have a blank hostname-char-set so we should not get a sanitizer instance.
     ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
@@ -1361,18 +1449,18 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     // Enable D2Client.
     enableD2Client(true);
 
-    // Make sure subnet1 udpates are still disabled.
+    // Make sure subnet1 updates are still disabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
     EXPECT_FALSE(params->getEnableUpdates());
 
-    // Make sure subnet2 udpates are now enabled.
+    // Make sure subnet2 updates are now enabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet2));
     EXPECT_TRUE(params->getEnableUpdates());
 
     // Enable sending updates globally.  This should inherit down subnet1.
     conf.addConfiguredGlobal("ddns-send-updates", Element::create(true));
 
-    // Make sure subnet1 udpates are now enabled.
+    // Make sure subnet1 updates are now enabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
     EXPECT_TRUE(params->getEnableUpdates());
 }
@@ -1398,6 +1486,8 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest4) {
     conf.addConfiguredGlobal("ddns-qualifying-suffix", Element::create("example.com"));
     conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+    conf.addConfiguredGlobal("ddns-update-on-renew", Element::create(true));
+    conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(false));
 
     // Get DDNS params for no subnet.
     Subnet4Ptr subnet4;
@@ -1412,6 +1502,8 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest4) {
     EXPECT_TRUE(params->getQualifyingSuffix().empty());
     EXPECT_TRUE(params->getHostnameCharSet().empty());
     EXPECT_TRUE(params->getHostnameCharReplacement().empty());
+    EXPECT_FALSE(params->getUpdateOnRenew());
+    EXPECT_TRUE(params->getUseConflictResolution());
 }
 
 // Verifies that the scoped values for DDNS parameters can be fetched
@@ -1431,6 +1523,9 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     // Configure global host sanitizing.
     conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+    // Enable conflict resolution globally.
+    conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(true));
+
     // Add a plain subnet
     Triplet<uint32_t> def_triplet;
     Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 64,
@@ -1467,6 +1562,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     subnet2->setDdnsGeneratedPrefix("prefix");
     subnet2->setDdnsQualifyingSuffix("example.com.");
     subnet2->setHostnameCharSet("");
+    subnet2->setDdnsUpdateOnRenew(true);
+    subnet2->setDdnsUseConflictResolution(false);
 
     // Get DDNS params for subnet1.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
@@ -1480,6 +1577,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     EXPECT_TRUE(params->getQualifyingSuffix().empty());
     EXPECT_EQ("[^A-Z]", params->getHostnameCharSet());
     EXPECT_EQ("x", params->getHostnameCharReplacement());
+    EXPECT_FALSE(params->getUpdateOnRenew());
+    EXPECT_TRUE(params->getUseConflictResolution());
 
     // We inherited a non-blank hostname_char_set so we
     // should get a sanitizer instance.
@@ -1490,7 +1589,7 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     // Get DDNS params for subnet2.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet2));
 
-    // Verify subnet1 values are right. Note, updates should be disabled,
+    // Verify subnet2 values are right. Note, updates should be disabled,
     // because D2Client is disabled.
     EXPECT_FALSE(params->getEnableUpdates());
     EXPECT_TRUE(params->getOverrideNoUpdate());
@@ -1500,6 +1599,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     EXPECT_EQ("example.com.", params->getQualifyingSuffix());
     EXPECT_EQ("", params->getHostnameCharSet());
     EXPECT_EQ("x", params->getHostnameCharReplacement());
+    EXPECT_TRUE(params->getUpdateOnRenew());
+    EXPECT_FALSE(params->getUseConflictResolution());
 
     // We have a blank hostname-char-set so we should not get a sanitizer instance.
     ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
@@ -1508,18 +1609,18 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     // Enable D2Client.
     enableD2Client(true);
 
-    // Make sure subnet1 udpates are still disabled.
+    // Make sure subnet1 updates are still disabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
     EXPECT_FALSE(params->getEnableUpdates());
 
-    // Make sure subnet2 udpates are now enabled.
+    // Make sure subnet2 updates are now enabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet2));
     EXPECT_TRUE(params->getEnableUpdates());
 
     // Enable sending updates globally.  This should inherit down subnet1.
     conf.addConfiguredGlobal("ddns-send-updates", Element::create(true));
 
-    // Make sure subnet1 udpates are now enabled.
+    // Make sure subnet1 updates are now enabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
     EXPECT_TRUE(params->getEnableUpdates());
 }
@@ -1545,6 +1646,8 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest6) {
     conf.addConfiguredGlobal("ddns-qualifying-suffix", Element::create("example.com"));
     conf.addConfiguredGlobal("hostname-char-set", Element::create("[^A-Z]"));
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
+    conf.addConfiguredGlobal("ddns-update-on-renew", Element::create(true));
+    conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(false));
 
     // Get DDNS params for no subnet.
     Subnet6Ptr subnet6;
@@ -1561,5 +1664,369 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest6) {
     EXPECT_TRUE(params->getHostnameCharReplacement().empty());
 }
 
+// Verifies that adding multi threading settings works
+TEST_F(SrvConfigTest, multiThreadingSettings) {
+    SrvConfig conf(32);
+    ElementPtr param = Element::createMap();
+    param->set("enable-multi-threading", Element::create(true));
+    conf.setDHCPMultiThreading(param);
+    EXPECT_TRUE(isEquivalent(param, conf.getDHCPMultiThreading()));
+}
+
+// Verifies that sanityChecksLifetime works as expected.
+TEST_F(SrvConfigTest, sanityChecksLifetime) {
+    // First the overload checking the current config.
+    // Note that lifetimes have a default so some cases here should not happen.
+    {
+        SCOPED_TRACE("no lifetime");
+
+        SrvConfig conf(32);
+        EXPECT_NO_THROW(conf.sanityChecksLifetime("lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("lifetime only");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("lifetime", Element::create(1000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime("lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime only");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime("lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("max-lifetime only");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("max-lifetime", Element::create(1000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime("lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime and max-lifetime but no lifetime");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(2000));
+        std::string msg = "have min-lifetime and max-lifetime but no ";
+        msg += "lifetime (default)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime("lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("all lifetime parameters");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        conf.addConfiguredGlobal("lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(3000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime("lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime > max-lifetime");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(1000));
+        std::string msg = "the value of min-lifetime (2000) is not less ";
+        msg += "than max-lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime("lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime > lifetime");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("lifetime", Element::create(1000));
+        std::string msg = "the value of min-lifetime (2000) is not less ";
+        msg += "than (default) lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime("lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime > max-lifetime");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(1000));
+        std::string msg = "the value of (default) lifetime (2000) is not ";
+        msg += "less than max-lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime("lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime not between min-lifetime and max-lifetime (too small)");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        conf.addConfiguredGlobal("lifetime", Element::create(500));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(2000));
+        std::string msg = "the value of (default) lifetime (500) is not ";
+        msg += "between min-lifetime (1000) and max-lifetime (2000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime("lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime not between min-lifetime and max-lifetime (too large)");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        conf.addConfiguredGlobal("lifetime", Element::create(3000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(2000));
+        std::string msg = "the value of (default) lifetime (3000) is not ";
+        msg += "between min-lifetime (1000) and max-lifetime (2000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime("lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    // Second the overload checking an external config before merging.
+    // We assume that the target config is correct as this was the case
+    // when this overload is used, and this lowers the number of cases...
+
+    SrvConfig target(10);
+    target.addConfiguredGlobal("min-lifetime", Element::create(1000));
+    target.addConfiguredGlobal("lifetime", Element::create(2000));
+    target.addConfiguredGlobal("max-lifetime", Element::create(3000));
+
+    {
+        SCOPED_TRACE("no lifetime");
+
+        SrvConfig conf(32);
+        EXPECT_NO_THROW(conf.sanityChecksLifetime(target, "lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("lifetime only");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("lifetime", Element::create(1000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime(target, "lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime only");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime(target, "lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("max-lifetime only");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("max-lifetime", Element::create(3000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime(target, "lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime and max-lifetime but no lifetime");
+
+        SrvConfig empty(10);
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(3000));
+        std::string msg = "have min-lifetime and max-lifetime but no ";
+        msg += "lifetime (default)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(empty, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("all lifetime parameters");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(1000));
+        conf.addConfiguredGlobal("lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(3000));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime(target, "lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("overwrite all lifetime parameters");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(100));
+        conf.addConfiguredGlobal("lifetime", Element::create(200));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(300));
+        EXPECT_NO_THROW(conf.sanityChecksLifetime(target, "lifetime"));
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime > max-lifetime");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(1000));
+        std::string msg = "the value of new min-lifetime (2000) is not less ";
+        msg += "than new max-lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("target min-lifetime > max-lifetime");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("max-lifetime", Element::create(500));
+        std::string msg = "the value of previous min-lifetime (1000) is not ";
+        msg += "less than new max-lifetime (500)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime > target max-lifetime");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(4000));
+        std::string msg = "the value of new min-lifetime (4000) is not less ";
+        msg += "than previous max-lifetime (3000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime > lifetime");
+
+        SrvConfig empty(10);
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("lifetime", Element::create(1000));
+        std::string msg = "the value of new min-lifetime (2000) is not less ";
+        msg += "than new (default) lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(empty, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("target min-lifetime > lifetime");
+
+        SrvConfig conf(32);
+        SrvConfig target2(20);
+        conf.addConfiguredGlobal("lifetime", Element::create(1000));
+        target2.addConfiguredGlobal("min-lifetime", Element::create(2000));
+        std::string msg = "the value of previous min-lifetime (2000) is not ";
+        msg += "less than new (default) lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target2, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("min-lifetime > target lifetime");
+
+        SrvConfig conf(32);
+        SrvConfig target2(20);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(2000));
+        target2.addConfiguredGlobal("lifetime", Element::create(1000));
+        std::string msg = "the value of new min-lifetime (2000) is not less ";
+        msg += "than previous (default) lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target2, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime > max-lifetime");
+
+        SrvConfig empty(10);
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("lifetime", Element::create(2000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(1000));
+        std::string msg = "the value of new (default) lifetime (2000) is not ";
+        msg += "less than new max-lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(empty, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("target lifetime > max-lifetime");
+
+        SrvConfig conf(32);
+        SrvConfig target2(20);
+        conf.addConfiguredGlobal("max-lifetime", Element::create(1000));
+        target2.addConfiguredGlobal("lifetime", Element::create(2000));
+        std::string msg = "the value of previous (default) lifetime (2000) ";
+        msg += "is not less than new max-lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target2, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime > target max-lifetime");
+
+        SrvConfig conf(32);
+        SrvConfig target2(20);
+        conf.addConfiguredGlobal("lifetime", Element::create(2000));
+        target2.addConfiguredGlobal("max-lifetime", Element::create(1000));
+        std::string msg = "the value of new (default) lifetime (2000) is not ";
+        msg += "less than previous max-lifetime (1000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target2, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime not between min-lifetime and max-lifetime (too small)");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("lifetime", Element::create(500));
+        std::string msg = "the value of new (default) lifetime (500) is not ";
+        msg += "between previous min-lifetime (1000) and ";
+        msg += "previous max-lifetime (3000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime not between min-lifetime and max-lifetime (too large)");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("lifetime", Element::create(4000));
+        std::string msg = "the value of new (default) lifetime (4000) is not ";
+        msg += "between previous min-lifetime (1000) and ";
+        msg += "previous max-lifetime (3000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime not between min-lifetime and max-lifetime (too low)");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(100));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(300));
+        std::string msg = "the value of previous (default) lifetime (2000) ";
+        msg += "is not between new min-lifetime (100) and ";
+        msg += "new max-lifetime (300)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target, "lifetime"),
+                         isc::BadValue, msg);
+    }
+
+    {
+        SCOPED_TRACE("lifetime not between min-lifetime and max-lifetime (too high)");
+
+        SrvConfig conf(32);
+        conf.addConfiguredGlobal("min-lifetime", Element::create(10000));
+        conf.addConfiguredGlobal("max-lifetime", Element::create(30000));
+        std::string msg = "the value of previous (default) lifetime (2000) ";
+        msg += "is not between new min-lifetime (10000) and ";
+        msg += "new max-lifetime (30000)";
+        EXPECT_THROW_MSG(conf.sanityChecksLifetime(target, "lifetime"),
+                         isc::BadValue, msg);
+    }
+}
 
 } // end of anonymous namespace

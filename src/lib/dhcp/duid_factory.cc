@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,7 +12,6 @@
 #include <util/io_utilities.h>
 #include <util/range_utilities.h>
 #include <util/strutil.h>
-#include <boost/foreach.hpp>
 #include <ctime>
 #include <fstream>
 #include <stdlib.h>
@@ -124,7 +123,7 @@ DUIDFactory::createEN(const uint32_t enterprise_id,
     // We'll need DUID stored in the file to compare it against the
     // new configuration. If the new configuration indicates that some
     // bits of the DUID should be generated we'll first try to use the
-    // values stored in the file to prvent DUID from changing if possible.
+    // values stored in the file to prevent DUID from changing if possible.
     readFromFile();
 
     uint32_t enterprise_id_current = 0;
@@ -191,7 +190,7 @@ DUIDFactory::createLL(const uint16_t htype,
     // We'll need DUID stored in the file to compare it against the
     // new configuration. If the new configuration indicates that some
     // bits of the DUID should be generated we'll first try to use the
-    // values stored in the file to prvent DUID from changing if possible.
+    // values stored in the file to prevent DUID from changing if possible.
     readFromFile();
 
     uint16_t htype_current = 0;
@@ -244,10 +243,8 @@ DUIDFactory::createLL(const uint16_t htype,
 void
 DUIDFactory::createLinkLayerId(std::vector<uint8_t>& identifier,
                                uint16_t& htype) const {
-    const IfaceMgr::IfaceCollection& ifaces = IfaceMgr::instance().getIfaces();
-
     // Let's find suitable interface.
-    BOOST_FOREACH(IfacePtr iface, ifaces) {
+    for (IfacePtr iface : IfaceMgr::instance().getIfaces()) {
         // All the following checks could be merged into one multi-condition
         // statement, but let's keep them separated as perhaps one day
         // we will grow knobs to selectively turn them on or off. Also,

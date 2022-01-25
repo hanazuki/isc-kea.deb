@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -36,12 +36,15 @@ This debug message is issued when all IPv4 reservations are deleted for
 the specified subnet. The first argument specifies how many reservations
 have been deleted. The second argument is the subnet identifier.
 
-% HOSTS_CFG_DEL_ALL_SUBNET6 deleted all %1 host(s) including %2 IPv6 reservation(s) for subnet id %3
+% HOSTS_CFG_DEL_ALL_SUBNET6 deleted all %1 host(s) having %2 IPv6 reservation(s) for subnet id %3
 This debug message is issued when all IPv6 reservations are deleted for
 the specified subnet. The first argument specifies how many hosts
 have been deleted. The second argument specifies how many IPv6
 (addresses and prefixes) have been deleted. The third argument is the
 subnet identifier.
+
+% HOSTS_CFG_GET_ALL get all hosts with reservations
+This debug message is issued when starting to retrieve all hosts.
 
 % HOSTS_CFG_GET_ALL_ADDRESS4 get all hosts with reservations for IPv4 address %1
 This debug message is issued when starting to retrieve all hosts, holding the
@@ -72,6 +75,14 @@ of hosts found respectively.
 This debug message is issued when found host with the reservation
 for the specified IPv6 address. The arguments specify the IPv6 address
 and the detailed description of the host found.
+
+% HOSTS_CFG_GET_ALL_COUNT found %1 host(s)
+This debug message include the details of the host found. The argument
+specifies the number of hosts found.
+
+% HOSTS_CFG_GET_ALL_HOST found host: %1
+This debug message includes the details of the host found. The argument
+specifies found host details.
 
 % HOSTS_CFG_GET_ALL_HOSTNAME get all hosts with reservations for hostname %1
 This debug message is issued when starting to retrieve all hosts with
@@ -157,6 +168,25 @@ respectively.
 This debug message includes the details of the host found using the DHCPv6
 subnet id. The arguments specify subnet id and found host details respectively.
 
+% HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4 get all hosts with reservations for subnet id %1 and IPv4 address %2
+This debug message is issued when starting to retrieve all hosts having
+the reservation for the given IPv4 address within the given subnet. The
+first argument specifies subnet identifier. The second argument specifies
+the IPv4 address for which the reservation is to be returned.
+
+% HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4_COUNT using IPv4 subnet %1 and IPv4 address %2, found %3 host(s)
+This debug message logs the number of hosts found having the reservation
+for the specified IPv4 address within the specified subnet. The first
+argument specifies the subnet identifier. The second argument specifies
+the reserved IPv4 address. The third argument specifies the number of
+hosts found.
+
+% HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4_HOST using IPv4 subnet %1 and IPv4 address %2, found host: %3
+This debug message is issued when found host having the reservation for
+the specified IPv4 address in the specified subnet.  The first argument
+specifies the subnet identifier. The second argument specifies the reserved
+IPv4 address. The third argument specifies host details.
+
 % HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS6 get all hosts with reservations for subnet id %1 and IPv6 address %2
 This debug message is issued when starting to retrieve all hosts connected to
 the specific subnet and having the specific IPv6 address reserved.
@@ -200,7 +230,7 @@ subnet id and IPv4 address.
 This debug message is issued when no host was found for the specified
 subnet id and IPv4 address.
 
-% HOSTS_CFG_GET_ONE_SUBNET_ID_ADDRESS6 get one host with reservation for subnet id %1 and including IPv6 address %2
+% HOSTS_CFG_GET_ONE_SUBNET_ID_ADDRESS6 get one host with reservation for subnet id %1 and having IPv6 address %2
 This debug message is issued when starting to retrieve a host connected to the
 specific subnet and having the specific IPv6 address reserved. The
 arguments specify subnet id and IPv6 address respectively.
@@ -272,3 +302,19 @@ identifier.
 % HOSTS_MGR_ALTERNATE_GET6_SUBNET_ID_IDENTIFIER_NULL host not found using subnet id %1 and identifier %2
 This debug message is issued when no host was found using the specified
 subnet id and host identifier.
+
+% HOSTS_MGR_ALTERNATE_GET_ALL_SUBNET_ID_ADDRESS4 trying alternate sources for hosts using subnet id %1 and address %2
+This debug message is issued when the Host Manager is starting to search
+for hosts in alternate host data sources by subnet ID and IPv4 address.
+
+% HOSTS_MGR_ALTERNATE_GET_ALL_SUBNET_ID_ADDRESS6 trying alternate sources for hosts using subnet id %1 and address %2
+This debug message is issued when the Host Manager is starting to search
+for hosts in alternate host data sources by subnet ID and IPv6 address.
+
+% HOSTS_MGR_NON_UNIQUE_IP_UNSUPPORTED host data source %1 does not support the mode in which IP reservations are non-unique
+This warning message is issued when an administrator attempted to configure the
+server to allow multiple host reservations for the same IP address or prefix.
+Some host database backends may not support this mode of operation. In this
+case the administrator should stop using these backends or fall back to the
+default setting which requires that IP addresses are unique within a subnet.
+This setting is guaranteed to work for MySQL and Postgres host backends.

@@ -1,5 +1,6 @@
 #!/bin/sh
-# Copyright (C) 2012-2016 Internet Systems Consortium, Inc. ("ISC")
+
+# Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,20 +9,19 @@
 # Checks that the locker interprocess sync locks are acquired and
 # released correctly.
 
-failcount=0
-tempfile=@abs_builddir@/logger_lock_test_tempfile_$$
-destfile=@abs_builddir@/logger_lock_test_destfile_$$
+# Exit with error if commands exit with non-zero and if undefined variables are
+# used.
+set -eu
 
-passfail() {
-    if [ $1 -eq 0 ]; then
-        echo " pass"
-    else
-        echo " FAIL"
-        failcount=`expr $failcount + $1`
-    fi
-}
+# Include common test library.
+# shellcheck disable=SC1091
+# SC1091: Not following: ... was not specified as input (see shellcheck -x).
+. "@abs_top_builddir@/src/lib/testutils/dhcp_test_lib.sh"
 
-echo -n  "Testing that logger acquires and releases locks correctly:"
+tempfile="@abs_builddir@/logger_lock_test_tempfile_$$"
+destfile="@abs_builddir@/logger_lock_test_destfile_$$"
+
+test_start 'logger_lock'
 cat > $tempfile << .
 LOGGER_LOCK_TEST: MUTEXLOCK
 LOGGER_LOCK_TEST: LOCK
@@ -30,11 +30,9 @@ LOGGER_LOCK_TEST: UNLOCK
 .
 rm -f $destfile
 KEA_LOGGER_SEVERITY=INFO KEA_LOGGER_DESTINATION=stdout ./logger_lock_test | \
-    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\]/[\1]/' > $destfile
+    sed -e 's/\[\([a-z0-9\.]\{1,\}\)\/\([0-9]\{1,\}\)\.\(0x\)\{0,1\}\([0-9A-Fa-f]\{1,\}\)\]/[\1]/' > $destfile
 cut -d' ' -f3- $destfile | diff $tempfile -
-passfail $?
+test_finish $?
 
 # Tidy up.
 rm -f $tempfile $destfile
-
-exit $failcount

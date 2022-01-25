@@ -14,24 +14,24 @@ interface for managing Kea servers. The daemon can receive control
 commands over HTTP and either forward these commands to the respective
 Kea servers or handle these commands on its own. The determination
 whether the command should be handled by the CA or forwarded is made by
-checking the value of the "service" parameter, which may be included in
+checking the value of the `service` parameter, which may be included in
 the command from the controlling client. The details of the supported
 commands, as well as their structures, are provided in
 :ref:`ctrl-channel`.
 
 The CA can use hook libraries to provide support for additional commands
-or custom behavior of existing commands. Such hook libraries must
-implement callouts for the "control_command_receive" hook point. Details
+or to program custom behavior of existing commands. Such hook libraries must
+implement callouts for the ``control_command_receive`` hook point. Details
 about creating new hook libraries and supported hook points can be found
 in the `Kea Developer's
-Guide <https://jenkins.isc.org/job/Kea_doc/doxygen/>`__.
+Guide <https://reports.kea.isc.org/dev_guide/>`__.
 
 The CA processes received commands according to the following algorithm:
 
 -  Pass command into any installed hooks (regardless of service
    value(s)). If the command is handled by a hook, return the response.
 
--  If the service specifies one more or services, forward the command to
+-  If the service specifies one or more services, forward the command to
    the specified services and return the accumulated responses.
 
 -  If the service is not specified or is an empty list, handle the
@@ -50,6 +50,19 @@ The following example demonstrates the basic CA configuration.
        "Control-agent": {
            "http-host": "10.20.30.40",
            "http-port": 8000,
+           "trust-anchor": "/path/to/the/ca-cert.pem",
+           "cert-file": "/path/to/the/agent-cert.pem",
+           "key-file": "/path/to/the/agent-key.pem",
+           "cert-required": true,
+           "authentication": {
+               "type": "basic",
+               "realm": "kea-control-agent",
+               "clients": [
+               {
+                   "user": "admin",
+                   "password": "1234"
+               } ]
+           },
 
            "control-sockets": {
                "dhcp4": {
@@ -85,9 +98,20 @@ The following example demonstrates the basic CA configuration.
 
 The ``http-host`` and ``http-port`` parameters specify an IP address and
 port to which HTTP service will be bound. In the example configuration
-provided above, the RESTful service will be available under the URL of
-``http://10.20.30.40:8000/``. If these parameters are not specified, the
+provided above, the RESTful service will be available at the URL
+``https://10.20.30.40:8000/``. If these parameters are not specified, the
 default URL is ``http://127.0.0.1:8000/``.
+
+When using Kea's HA hook library with multi-threading, make sure
+that the address:port combination used for CA is
+different from the HA peer URLs, which are strictly
+for internal HA traffic between the peers. User commands should
+still be sent via CA.
+
+The ``trust-anchor``, ``cert-file``, ```key-file``, and ``cert-required``
+parameters specify the TLS setup for HTTP, i.e. HTTPS. If these parameters
+are not specified, HTTP is used. The TLS/HTTPS support in Kea is
+described in :ref:`tls`.
 
 As mentioned in :ref:`agent-overview`, the CA can forward
 received commands to the Kea servers for processing. For example,
@@ -102,20 +126,20 @@ found in :ref:`ctrl-channel`.
 The CA uses UNIX domain sockets to forward control commands and receive
 responses from other Kea services. The ``dhcp4``, ``dhcp6``, and ``d2``
 maps specify the files to which UNIX domain sockets are bound. In the
-configuration above, the CA will connect to the DHCPv4 server via
+configuration above, the CA connects to the DHCPv4 server via
 ``/path/to/the/unix/socket-v4`` to forward the commands to it.
 Obviously, the DHCPv4 server must be configured to listen to connections
-via this same socket. In other words, the command socket configuration
-for the DHCPv4 server and the CA (for this server) must match. Consult
-:ref:`dhcp4-ctrl-channel`, :ref:`dhcp6-ctrl-channel` and
+via this same socket. In other words, the command-socket configuration
+for the DHCPv4 server and the CA (for that server) must match. Consult
+:ref:`dhcp4-ctrl-channel`, :ref:`dhcp6-ctrl-channel`, and
 :ref:`d2-ctrl-channel` to learn how the socket configuration is
 specified for the DHCPv4, DHCPv6, and D2 services.
 
 .. warning::
 
-   "dhcp4-server", "dhcp6-server", and "d2-server" were renamed to
-   "dhcp4", "dhcp6", and "d2" respectively in Kea 1.2. If you are
-   migrating from Kea 1.2, you must modify your CA configuration to use
+   ``dhcp4-server``, ``dhcp6-server``, and ``d2-server`` were renamed to
+   ``dhcp4``, ``dhcp6``, and ``d2`` respectively in Kea 1.2. If
+   migrating from Kea 1.2, be sure to modify the CA configuration to use
    this new naming convention.
 
 User contexts can store arbitrary data as long as they are in valid JSON
@@ -125,33 +149,61 @@ formatting; please consult the relevant hook library documentation for
 details.
 
 User contexts can be specified on either global scope, control socket,
-or loggers. One other useful feature is the ability to store comments or
-descriptions; the parser translates a "comment" entry into a user
-context with the entry, which allows a comment to be attached within the
-configuration itself.
+basic authentication, or loggers. One other useful feature is the
+ability to store comments or descriptions; the parser translates a
+"comment" entry into a user context with the entry, which allows a
+comment to be attached within the configuration itself.
 
-Hooks libraries can be loaded by the Control Agent in the same way as
+Basic HTTP authentication was added in Kea 1.9.0; it protects
+against unauthorized uses of the control agent by local users. For
+protection against remote attackers, HTTPS and reverse proxy of
+:ref:`agent-secure-connection` provide stronger security.
+
+The authentication is described in the ``authentication`` block
+with the mandatory ``type`` parameter, which selects the authentication.
+Currently only the basic HTTP authentication (type basic) is supported.
+
+The ``realm`` authentication parameter is used for error messages when
+the basic HTTP authentication is required but the client is not
+authorized.
+
+When the ``clients`` authentication list is configured and not empty,
+basic HTTP authentication is required. Each element of the list
+specifies a user ID and a password. The user ID is mandatory, must
+be not empty, and must not contain the colon (:) character. The
+password is optional; when it is not specified an empty password
+is used.
+
+.. note::
+
+   The basic HTTP authentication user ID and password are encoded
+   in UTF-8, but the current Kea JSON syntax only supports the Latin-1
+   (i.e. 0x00..0xff) Unicode subset.
+
+Hook libraries can be loaded by the Control Agent in the same way as
 they are loaded by the DHCPv4 and DHCPv6 servers. The CA currently
-supports one hook point - "control_command_receive" - which makes it
-possible to delegate processing of some commands to the hooks library.
-The ``hooks-libraries`` list contains the list of hooks libraries that
+supports one hook point - ``control_command_receive`` - which makes it
+possible to delegate processing of some commands to the hook library.
+The ``hooks-libraries`` list contains the list of hook libraries that
 should be loaded by the CA, along with their configuration information
 specified with ``parameters``.
 
-Please consult :ref:`logging` for the details how to configure
+Please consult :ref:`logging` for the details on how to configure
 logging. The CA's root logger's name is ``kea-ctrl-agent``, as given in
 the example above.
 
 .. _agent-secure-connection:
 
-Secure Connections
-==================
+Secure Connections (in Versions Prior to Kea 1.9.6)
+===================================================
 
-The Control Agent does not natively support secure HTTP connections like
-SSL or TLS. In order to setup a secure connection, please use one of the
+The Control Agent does not natively support secure HTTP connections, like
+SSL or TLS, before Kea 1.9.6.
+
+To set up a secure connection, please use one of the
 available third-party HTTP servers and configure it to run as a reverse
 proxy to the Control Agent. Kea has been tested with two major HTTP
-server implentations working as a reverse proxy: Apache2 and nginx.
+server implementations working as a reverse proxy: Apache2 and nginx.
 Example configurations, including extensive comments, are provided in
 the ``doc/examples/https/`` directory.
 
@@ -205,6 +257,7 @@ server enables authentication of the clients using certificates.
    #        -H Content-Type:application/json -d '{ "command": "list-commands" }' \
    #         https://kea.example.org/kea
    #
+   #   curl syntax for basic authentication is -u user:password
    #
    #
    #   nginx configuration starts here.
@@ -224,7 +277,7 @@ server enables authentication of the clients using certificates.
            ssl_certificate /path/to/kea-proxy.crt;
            ssl_certificate_key /path/to/kea-proxy.key;
 
-           #   Certificate Authority. Client certificate must be signed by the CA.
+           #   Certificate Authority. Client certificates must be signed by the CA.
            ssl_client_certificate /path/to/ca.crt;
 
            # Enable verification of the client certificate.
@@ -244,12 +297,55 @@ server enables authentication of the clients using certificates.
 
    Note that the configuration snippet provided above is for testing
    purposes only. It should be modified according to the security
-   policies and best practices of your organization.
+   policies and best practices of the administrator's organization.
 
-When you use an HTTP client without TLS support as ``kea-shell``, you
-can use an HTTP/HTTPS translator such as stunnel in client mode. A
+When using an HTTP client without TLS support, such as ``kea-shell``, it
+is possible to use an HTTP/HTTPS translator such as ``stunnel`` in client mode. A
 sample configuration is provided in the ``doc/examples/https/shell/``
 directory.
+
+Secure Connections (in Kea 1.9.6 and Newer)
+===========================================
+
+Since Kea 1.9.6, the Control Agent natively supports secure
+HTTP connections using TLS. This allows protection against users from
+the node where the agent runs, something that a reverse proxy cannot
+provide. More about TLS/HTTPS support in Kea can be found in :ref:`tls`.
+
+TLS is configured using three string parameters, giving file names and
+a boolean parameter:
+
+-  The ``trust-anchor`` specifies the Certification Authority file name or
+   directory path.
+
+-  The ``cert-file`` specifies the server certificate file name.
+
+-  The ``key-file`` specifies the private key file name. The file must not
+   be encrypted.
+
+-  The ``cert-required`` specifies whether client certificates are required
+   or optional. The default is to require them and to perform mutual
+   authentication.
+
+The file format is PEM. Either all the string parameters are specified and
+HTTP over TLS aka HTTPS is used, or none is specified and plain HTTP is used.
+Configuring only one or two string parameters results in an error.
+
+.. note::
+
+   When client certificates are not required, only the server side is
+   authenticated, i.e. the communication is encrypted with an unknown
+   client. This protects only against passive attacks; active
+   attacks, such as "Man in the Middle," are still possible.
+
+.. note::
+
+   No standard HTTP authentication scheme cryptographically binds its end
+   entity with TLS. This means that the TLS client and server can be
+   mutually authenticated, but there is no proof they are the same as
+   for the HTTP authentication.
+
+Since Kea 1.9.6, the ``kea-shell`` tool supports TLS.
 
 .. _agent-launch:
 

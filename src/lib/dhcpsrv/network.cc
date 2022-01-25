@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -99,27 +99,11 @@ Network::getRequiredClasses() const {
     return (required_classes_);
 }
 
-Network::HRMode
-Network::hrModeFromString(const std::string& hr_mode_name) {
-    if ( (hr_mode_name.compare("disabled") == 0) ||
-         (hr_mode_name.compare("off") == 0) )  {
-        return (Network::HR_DISABLED);
-    } else if (hr_mode_name.compare("out-of-pool") == 0) {
-        return (Network::HR_OUT_OF_POOL);
-    } else if (hr_mode_name.compare("global") == 0) {
-        return (Network::HR_GLOBAL);
-    } else if (hr_mode_name.compare("all") == 0) {
-        return (Network::HR_ALL);
-    } else {
-        // Should never happen...
-        isc_throw(BadValue, "Can't convert '" << hr_mode_name
-                  << "' into any valid reservation-mode values");
-    }
-}
-
 Optional<IOAddress>
 Network::getGlobalProperty(Optional<IOAddress> property,
-                           const std::string& global_name) const {
+                           const std::string& global_name,
+                           const std::string& /*min_name*/,
+                           const std::string& /*max_name*/) const {
     if (!global_name.empty() && fetch_globals_fn_) {
         ConstElementPtr globals = fetch_globals_fn_();
         if (globals && (globals->getType() == Element::map)) {
@@ -201,28 +185,22 @@ Network::toElement() const {
         }
     }
 
-    // Set reservation mode
-    Optional<Network::HRMode> hrmode = host_reservation_mode_;
-    if (!hrmode.unspecified()) {
-        std::string mode;
-        switch (hrmode.get()) {
-        case HR_DISABLED:
-            mode = "disabled";
-            break;
-        case HR_OUT_OF_POOL:
-            mode = "out-of-pool";
-            break;
-        case HR_GLOBAL:
-            mode = "global";
-            break;
-        case HR_ALL:
-            mode = "all";
-            break;
-        default:
-            isc_throw(ToElementError,
-                      "invalid host reservation mode: " << hrmode.get());
-        }
-        map->set("reservation-mode", Element::create(mode));
+    // Set reservations-global
+    if (!reservations_global_.unspecified()) {
+        map->set("reservations-global",
+                 Element::create(reservations_global_.get()));
+    }
+
+    // Set reservations-in-subnet
+    if (!reservations_in_subnet_.unspecified()) {
+        map->set("reservations-in-subnet",
+                 Element::create(reservations_in_subnet_.get()));
+    }
+
+    // Set reservations-out-of-pool
+    if (!reservations_out_of_pool_.unspecified()) {
+        map->set("reservations-out-of-pool",
+                 Element::create(reservations_out_of_pool_.get()));
     }
 
     // Set options
@@ -274,6 +252,27 @@ Network::toElement() const {
 
     if (!hostname_char_replacement_.unspecified()) {
         map->set("hostname-char-replacement", Element::create(hostname_char_replacement_));
+    }
+
+    if (!store_extended_info_.unspecified()) {
+        map->set("store-extended-info", Element::create(store_extended_info_));
+    }
+
+    if (!cache_threshold_.unspecified()) {
+        map->set("cache-threshold", Element::create(cache_threshold_));
+    }
+
+    if (!cache_max_age_.unspecified()) {
+        map->set("cache-max-age",
+                 Element::create(static_cast<long long>(cache_max_age_)));
+    }
+
+    if (!ddns_update_on_renew_.unspecified()) {
+        map->set("ddns-update-on-renew", Element::create(ddns_update_on_renew_));
+    }
+
+    if (!ddns_use_conflict_resolution_.unspecified()) {
+        map->set("ddns-use-conflict-resolution", Element::create(ddns_use_conflict_resolution_));
     }
 
     return (map);
@@ -364,9 +363,8 @@ Network6::toElement() const {
     }
 
     // Set interface-id
-    const OptionPtr& ifaceid = getInterfaceId();
-    if (ifaceid) {
-        std::vector<uint8_t> bin = ifaceid->getData();
+    if (interface_id_) {
+        std::vector<uint8_t> bin = interface_id_->getData();
         std::string ifid;
         ifid.resize(bin.size());
         if (!bin.empty()) {

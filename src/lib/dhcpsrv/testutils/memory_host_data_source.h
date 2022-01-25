@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,8 +24,12 @@ namespace test {
 class MemHostDataSource : public virtual BaseHostDataSource {
 public:
 
+    /// @brief Constructor.
+    MemHostDataSource() : next_host_id_(0) {
+    }
+
     /// @brief Destructor.
-    virtual ~MemHostDataSource() { }
+    virtual ~MemHostDataSource() = default;
 
     /// BaseHostDataSource methods.
 
@@ -34,13 +38,10 @@ public:
     ///
     /// This may return hosts from multiple subnets.
     ///
-    /// Currently not implemented.
-    ///
     /// @param identifier_type Identifier type.
     /// @param identifier_begin Pointer to a beginning of a buffer containing
     /// an identifier.
     /// @param identifier_len Identifier length.
-    /// @return Empty collection of const @c Host objects.
     virtual ConstHostCollection
     getAll(const Host::IdentifierType& identifier_type,
            const uint8_t* identifier_begin,
@@ -104,6 +105,28 @@ public:
              uint64_t lower_host_id,
              const HostPageSize& page_size) const;
 
+    /// @brief Return range of hosts.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    virtual ConstHostCollection
+    getPage4(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
+    /// @brief Return range of hosts.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    virtual ConstHostCollection
+    getPage6(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
     /// @brief Returns a collection of hosts using the specified IPv4 address.
     ///
     /// Currently not implemented.
@@ -139,6 +162,17 @@ public:
     get4(const SubnetID& subnet_id,
          const asiolink::IOAddress& address) const;
 
+    /// @brief Returns all hosts connected to the IPv4 subnet and having
+    /// a reservation for a specified address.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv4 address.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll4(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const;
+
     /// @brief Returns a host connected to the IPv6 subnet.
     ///
     /// @param subnet_id Subnet identifier.
@@ -172,6 +206,17 @@ public:
     /// @return Const @c Host object using a specified IPv6 address/prefix.
     virtual ConstHostPtr
     get6(const SubnetID& subnet_id, const asiolink::IOAddress& address) const;
+
+    /// @brief Returns all hosts connected to the IPv6 subnet and having
+    /// a reservation for a specified address or delegated prefix (lease).
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv6 address/prefix.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll6(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const;
 
     /// @brief Adds a new host to the collection.
     ///
@@ -247,6 +292,28 @@ public:
     ///
     /// @return number of hosts in the store.
     virtual size_t size() const;
+
+    /// @brief Controls whether IP reservations are unique or non-unique.
+    ///
+    /// In a typical case, the IP reservations are unique and backends verify
+    /// prior to adding a host reservation to the database that the reservation
+    /// for a given IP address does not exist. In some cases it may be required
+    /// to allow non-unique IP reservations, e.g. in the case when a host has
+    /// several interfaces and independently of which interface is used by this
+    /// host to communicate with the DHCP server the same IP address should be
+    /// assigned. In this case the @c unique value should be set to false to
+    /// disable the checks for uniqueness on the backend side.
+    ///
+    /// All backends are required to support the case when unique setting is
+    /// @c true and they must use this setting by default.
+    ///
+    /// @param unique boolean flag indicating if the IP reservations must be
+    /// unique or can be non-unique.
+    /// @return true if the new setting was accepted by the backend or false
+    /// otherwise.
+    virtual bool setIPReservationsUnique(const bool) {
+        return (true);
+    }
 
 protected:
     // This is very simple storage.

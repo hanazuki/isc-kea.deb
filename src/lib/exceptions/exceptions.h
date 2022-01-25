@@ -1,4 +1,4 @@
-// Copyright (C) 2009-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2009-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -176,6 +176,14 @@ class NotFound : public Exception {
 public:
     NotFound(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) {}
+};
+
+/// \brief Exception thrown when a worker thread is trying to stop or pause the
+/// respective thread pool (which would result in a dead-lock).
+class MultiThreadingInvalidOperation : public Exception {
+public:
+    MultiThreadingInvalidOperation(const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) {};
 };
 
 ///

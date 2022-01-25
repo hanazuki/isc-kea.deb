@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,68 +9,87 @@
 
 #include <config.h>
 
+#include <testutils/gtest_utils.h>
 #include <yang/translator.h>
+#include <yang/yang_models.h>
+
 #include <gtest/gtest.h>
 
 namespace isc {
 namespace yang {
 namespace test {
 
+/// @brief Wrapper for sysrepo setup actions
+struct SysrepoSetup {
+    /// @brief Cleans shared memory.
+    ///
+    /// If a unit test crashes (mostly when migrating to a new version), it
+    /// leaves behind corrupted shared memory. Let's make sure we can run all
+    /// the following unit tests free of any side effect from said crash. This
+    /// is the equivalent of running "make shm_clean" in sysrepo:
+    /// https://github.com/sysrepo/sysrepo/blob/v1.4.140/CMakeLists.txt#L329-L334
+    static void cleanSharedMemory() {
+        call_system("rm -rf /dev/shm/sr_*");
+        call_system("rm -rf /dev/shm/srsub_*");
+    }
+
+private:
+    /// @brief Wrapper over a system() call that also checks the return value.
+    ///
+    /// @brief command the command to be run
+    static void call_system(char const* command) {
+        int return_value(system(command));
+        if (return_value != 0) {
+            std::cerr << "\"" << command << "\" exited with " << return_value
+                      << ". Unit tests may be influenced by previous abnormally "
+                         "terminated unit tests or sysrepo uses."
+                      << std::endl;
+        }
+    }
+};
+
 /// @brief Test Fixture template for translator tests.
 ///
 /// @tparam Name The name of the translator to test.
 /// @tparam Type The type of the translator to test.
-template<char const* Name, typename Type>
+template<char const* Name, typename translator_t>
 class GenericTranslatorTest : public ::testing::Test {
 public:
+    virtual ~GenericTranslatorTest() = default;
 
-    /// @brief Constructor.
-    GenericTranslatorTest() : conn_(), sess_(), t_obj_() { }
-
-    /// @brief useModel
-    ///
-    /// Open a sysrepo session and create a translator object using
-    /// the given model.
-    ///
-    /// @param model The model to use.
-    void useModel(std::string model) {
-        std::string full_name =
-            "translator " + std::string(Name) + " unittests";
-#ifndef HAVE_PRE_0_7_6_SYSREPO
-        conn_.reset(new sysrepo::Connection(full_name.c_str()));
+    void SetUp() override {
+        SysrepoSetup::cleanSharedMemory();
+        conn_.reset(new sysrepo::Connection());
         sess_.reset(new sysrepo::Session(conn_, SR_DS_CANDIDATE));
-#else
-        conn_.reset(new Connection(full_name.c_str()));
-        sess_.reset(new Session(conn_, SR_DS_CANDIDATE));
-#endif
-        EXPECT_NO_THROW(t_obj_.reset(new Type(sess_, model)));
+        t_obj_.reset(new translator_t(sess_, model_));
+        cleanModelData();
     }
 
-    /// @brief Destructor.
-    ///
-    /// Destroy all objects.
-    virtual ~GenericTranslatorTest() {
+    void TearDown() override {
+        cleanModelData();
         t_obj_.reset();
         sess_.reset();
         conn_.reset();
+        SysrepoSetup::cleanSharedMemory();
+    }
+
+    void cleanModelData() {
+        std::string toplevel_node("config");
+        if (model_ == IETF_DHCPV6_SERVER) {
+            toplevel_node = "server";
+        }
+        t_obj_->delItem("/" + model_ + ":" + toplevel_node);
     }
 
     /// @brief Sysrepo connection.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     sysrepo::S_Connection conn_;
-#else
-    S_Connection conn_;
-#endif
 
     /// @brief Sysrepo session.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     sysrepo::S_Session sess_;
-#else
-    S_Session sess_;
-#endif
 
     /// @brief Shared pointer to the transaction object.
-    boost::shared_ptr<Type> t_obj_;
+    boost::shared_ptr<translator_t> t_obj_;
+    std::string model_;
 };
 
 } // namespace test

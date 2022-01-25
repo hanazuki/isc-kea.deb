@@ -1,7 +1,9 @@
 SUBDIRS = . testutils pretests tests
 
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib
-AM_CPPFLAGS += $(BOOST_INCLUDES) $(SYSREPO_CPPFLAGS)
+AM_CPPFLAGS += $(BOOST_INCLUDES)
+AM_CPPFLAGS += $(SYSREPO_CPPFLAGS)
+AM_CPPFLAGS += $(SYSREPO_INCLUDEDIR)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
 lib_LTLIBRARIES = libkea-yang.la
@@ -38,7 +40,7 @@ libkea_yang_la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_yang_la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_yang_la_LIBADD += $(LOG4CPLUS_LIBS) $(BOOST_LIBS) $(SYSREPO_LIBS)
 
-libkea_yang_la_LDFLAGS = -no-undefined -version-info 2:1:0
+libkea_yang_la_LDFLAGS = -no-undefined -version-info 16:0:0
 
 # Specify the headers for copying into the installation directory tree.
 libkea_yang_includedir = $(pkgincludedir)/yang
@@ -66,6 +68,6 @@ libkea_yang_include_HEADERS = \
 	yang_models.h \
 	yang_revisions.h
 
-EXTRA_DIST = yang.dox
+EXTRA_DIST = yang.dox yang_revisions.h.skel
 
 CLEANFILES = *.gcno *.gcda

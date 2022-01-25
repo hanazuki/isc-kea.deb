@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -76,7 +76,7 @@ protected:
                         }
                     }
 
-                    // Apparently we're looking for one that does not prexist.
+                    // Apparently we're looking for a new one.
                     return (TestConfigBackendDHCPv6Ptr(new TestConfigBackendDHCPv6(params)));
                 });
     }
@@ -256,18 +256,15 @@ TEST_F(Dhcp6CBTest, mergeOptionDefs) {
 
     // Create option one replacement and add it to first backend.
     OptionDefinitionPtr def;
-    def.reset(new OptionDefinition("one", 101, "uint16"));
-    def->setOptionSpaceName("isc");
+    def.reset(new OptionDefinition("one", 101, "isc", "uint16"));
     db1_->createUpdateOptionDef6(ServerSelector::ALL(), def);
 
     // Create option three and add it to first backend.
-    def.reset(new OptionDefinition("three", 3, "string"));
-    def->setOptionSpaceName("isc");
+    def.reset(new OptionDefinition("three", 3, "isc", "string"));
     db1_->createUpdateOptionDef6(ServerSelector::ALL(), def);
 
     // Create option four and add it to second backend.
-    def.reset(new OptionDefinition("four", 4, "string"));
-    def->setOptionSpaceName("isc");
+    def.reset(new OptionDefinition("four", 4, "isc", "string"));
     db2_->createUpdateOptionDef6(ServerSelector::ALL(), def);
 
     // Should parse and merge without error.
@@ -348,14 +345,15 @@ TEST_F(Dhcp6CBTest, mergeOptions) {
 
     // bootfile-url should come from the first config back end.
     // (overwriting the original).
-    OptionDescriptor found_opt = options->get("dhcp6", D6O_BOOTFILE_URL);
+    OptionDescriptor found_opt =
+        options->get(DHCP6_OPTION_SPACE, D6O_BOOTFILE_URL);
     ASSERT_TRUE(found_opt.option_);
     OptionStringPtr opstr = boost::dynamic_pointer_cast<OptionString>(found_opt.option_);
     ASSERT_TRUE(opstr);
     EXPECT_EQ("updated-boot-file", opstr->getValue());
 
     // sol-maxt-rt should come from the original config
-    found_opt = options->get("dhcp6", D6O_SOL_MAX_RT);
+    found_opt = options->get(DHCP6_OPTION_SPACE, D6O_SOL_MAX_RT);
     ASSERT_TRUE(found_opt.option_);
     OptionUint32Ptr opint = boost::dynamic_pointer_cast<OptionUint32>(found_opt.option_);
     ASSERT_TRUE(opint);

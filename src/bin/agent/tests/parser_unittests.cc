@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,12 +6,14 @@
 
 #include <config.h>
 
-#include <gtest/gtest.h>
 #include <cc/data.h>
 #include <agent/parser_context.h>
 #include <cc/dhcp_config_error.h>
 #include <testutils/io_utils.h>
 #include <testutils/user_context_utils.h>
+#include <gtest/gtest.h>
+#include <fstream>
+#include <set>
 
 using namespace isc::data;
 using namespace isc::test;
@@ -118,54 +120,6 @@ TEST(ParserTest, keywordJSON) {
                    "\"user\": \"name\","
                    "\"password\": \"type\" }";
     testParser(txt, ParserContext::PARSER_JSON);
-}
-
-// This test checks that the DhcpDdns configuration is accepted
-// by the parser.
-TEST(ParserTest, keywordDhcpDdns) {
-    string txt =
-        "{ \"DhcpDdns\" : \n"
-           "{ \n"
-            " \"ip-address\": \"192.168.77.1\", \n"
-            " \"port\": 777 , \n "
-            " \"ncr-protocol\": \"UDP\", \n"
-            "\"tsig-keys\": [], \n"
-            "\"forward-ddns\" : {}, \n"
-            "\"reverse-ddns\" : {} \n"
-            "} \n"
-         "} \n";
-     testParser(txt, ParserContext::PARSER_AGENT);
-}
-
-// This test checks that the Dhcp6 configuration is accepted
-// by the parser.
-TEST(ParserTest, keywordDhcp6) {
-     string txt = "{ \"Dhcp6\": { \"interfaces-config\": {"
-                  " \"interfaces\": [ \"type\", \"htype\" ] },\n"
-                  "\"preferred-lifetime\": 3000,\n"
-                  "\"rebind-timer\": 2000, \n"
-                  "\"renew-timer\": 1000, \n"
-                  "\"subnet6\": [ { "
-                  "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ],"
-                  "    \"subnet\": \"2001:db8:1::/48\", "
-                  "    \"interface\": \"test\" } ],\n"
-                   "\"valid-lifetime\": 4000 } }";
-     testParser(txt, ParserContext::PARSER_AGENT);
-}
-
-// This test checks that the Dhcp4 configuration is accepted
-// by the parser.
-TEST(ParserTest, keywordDhcp4) {
-    string txt = "{ \"Dhcp4\": { \"interfaces-config\": {"
-                  " \"interfaces\": [ \"type\", \"htype\" ] },\n"
-                  "\"rebind-timer\": 2000, \n"
-                  "\"renew-timer\": 1000, \n"
-                  "\"subnet4\": [ { "
-                  "  \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ],"
-                  "  \"subnet\": \"192.0.2.0/24\", "
-                  "  \"interface\": \"test\" } ],\n"
-                   "\"valid-lifetime\": 4000 } }";
-     testParser(txt, ParserContext::PARSER_AGENT);
 }
 
 // This test checks if full config (with top level and Control-agent objects) can
@@ -366,6 +320,7 @@ void testFile(const std::string& fname) {
 TEST(ParserTest, file) {
     vector<string> configs;
     configs.push_back("comments.json");
+    configs.push_back("https.json");
     configs.push_back("simple.json");
 
     for (int i = 0; i<configs.size(); i++) {
@@ -518,23 +473,43 @@ TEST(ParserTest, errors) {
               "<string>:1.3: Invalid character: e");
     testError("\"a\n\tb\"",
               ParserContext::PARSER_JSON,
-              "<string>:1.1-6: Invalid control in \"a\n\tb\"");
+              "<string>:1.1-6 (near 2): Invalid control in \"a\n\tb\"");
+    testError("\"a\n\\u12\"",
+              ParserContext::PARSER_JSON,
+              "<string>:1.1-8 (near 2): Invalid control in \"a\n\\u12\"");
     testError("\"a\\n\\tb\"",
               ParserContext::PARSER_AGENT,
               "<string>:1.1-8: syntax error, unexpected constant string, "
               "expecting {");
     testError("\"a\\x01b\"",
               ParserContext::PARSER_JSON,
-              "<string>:1.1-8: Bad escape in \"a\\x01b\"");
+              "<string>:1.1-8 (near 3): Bad escape in \"a\\x01b\"");
     testError("\"a\\u0162\"",
               ParserContext::PARSER_JSON,
-              "<string>:1.1-9: Unsupported unicode escape in \"a\\u0162\"");
+              "<string>:1.1-9 (near 4): Unsupported unicode escape "
+              "in \"a\\u0162\"");
     testError("\"a\\u062z\"",
               ParserContext::PARSER_JSON,
-              "<string>:1.1-9: Bad escape in \"a\\u062z\"");
+              "<string>:1.1-9 (near 3): Bad escape in \"a\\u062z\"");
     testError("\"abc\\\"",
               ParserContext::PARSER_JSON,
-              "<string>:1.1-6: Overflow escape in \"abc\\\"");
+              "<string>:1.1-6 (near 6): Overflow escape in \"abc\\\"");
+    testError("\"a\\u006\"",
+              ParserContext::PARSER_JSON,
+              "<string>:1.1-8 (near 3): Overflow unicode escape "
+              "in \"a\\u006\"");
+    testError("\"\\u\"",
+              ParserContext::PARSER_JSON,
+              "<string>:1.1-4 (near 2): Overflow unicode escape in \"\\u\"");
+    testError("\"\\u\x02\"",
+              ParserContext::PARSER_JSON,
+              "<string>:1.1-5 (near 2): Bad escape in \"\\u\x02\"");
+    testError("\"\\u\\\"foo\"",
+              ParserContext::PARSER_JSON,
+              "<string>:1.1-5 (near 2): Bad escape in \"\\u\\\"...");
+    testError("\"\x02\\u\"",
+              ParserContext::PARSER_JSON,
+              "<string>:1.1-5 (near 1): Invalid control in \"\x02\\u\"");
 
     // from data_unittest.c
     testError("\\a",
@@ -562,18 +537,24 @@ TEST(ParserTest, errors) {
               "expecting }");
     testError("{ 123 }\n",
               ParserContext::PARSER_AGENT,
-              "<string>:1.3-5: syntax error, unexpected integer");
+              "<string>:1.3-5: syntax error, unexpected integer, "
+              "expecting Control-agent");
     testError("{ \"foo\" }\n",
               ParserContext::PARSER_JSON,
               "<string>:1.9: syntax error, unexpected }, "
               "expecting :");
     testError("{ \"foo\" }\n",
               ParserContext::PARSER_AGENT,
-              "<string>:1.9: syntax error, unexpected }, expecting :");
+              "<string>:1.3-7: syntax error, unexpected constant string, "
+              "expecting Control-agent");
     testError("{ \"foo\":null }\n",
               ParserContext::PARSER_AGENT,
-              "<string>:1.3-7: got unexpected keyword "
-              "\"foo\" in toplevel map.");
+              "<string>:1.3-7: syntax error, unexpected constant string, "
+              "expecting Control-agent");
+    testError("{ \"Logging\":null }\n",
+              ParserContext::PARSER_AGENT,
+              "<string>:1.3-11: syntax error, unexpected constant string, "
+              "expecting Control-agent");
     testError("{ \"Control-agent\" }\n",
               ParserContext::PARSER_AGENT,
               "<string>:1.19: syntax error, unexpected }, "
@@ -586,6 +567,12 @@ TEST(ParserTest, errors) {
               ParserContext::PARSER_JSON,
               "<string>:1.3: syntax error, unexpected {, "
               "expecting end of file");
+
+    // duplicate in map
+    testError("{ \"foo\": 1, \"foo\": true }\n",
+              ParserContext::PARSER_JSON,
+              "<string>:1:13: duplicate foo entries in "
+              "JSON map (previous at <string>:1:10)");
 
     // bad commas
     testError("{ , }\n",
@@ -610,7 +597,7 @@ TEST(ParserTest, errors) {
 
     // unknown keyword
     testError("{ \"Control-agent\":{\n"
-              " \"topping\": \"Mozarella\" }}\n",
+              " \"topping\": \"Mozzarella\" }}\n",
               ParserContext::PARSER_AGENT,
               "<string>:2.2-10: got unexpected keyword "
               "\"topping\" in Control-agent map.");
@@ -653,6 +640,30 @@ TEST(ParserTest, errors) {
               ParserContext::PARSER_AGENT,
               "<string>:3.3-11: duplicate user-context/comment entries "
               "(previous at <string>:2:19)");
+
+    // duplicate Control-agent entries
+    testError("{ \"Control-agent\":{\n"
+              "  \"comment\": \"first\" },\n"
+              "  \"Control-agent\":{\n"
+              "  \"comment\": \"second\" }}\n",
+              ParserContext::PARSER_AGENT,
+              "<string>:2.23: syntax error, unexpected \",\", expecting }");
+
+    // duplicate of not string entries
+    testError("{ \"Control-agent\":{\n"
+              " \"http-port\": 8000,\n"
+              " \"http-port\": 8001 }}\n",
+              ParserContext::PARSER_AGENT,
+              "<string>:3:2: duplicate http-port entries in "
+              "Control-agent map (previous at <string>:2:15)");
+
+    // duplicate of string entries
+    testError("{ \"Control-agent\":{\n"
+              " \"http-host\": \"127.0.0.1\",\n"
+              " \"http-host\": \"::1\" }}\n",
+              ParserContext::PARSER_AGENT,
+              "<string>:3:2: duplicate http-host entries in "
+              "Control-agent map (previous at <string>:2:15)");
 }
 
 // Check unicode escapes
@@ -696,6 +707,154 @@ TEST(ParserTest, unicodeSlash) {
     EXPECT_EQ("////", result->stringValue());
 }
 
-};
-};
-};
+/// @brief Load a file into a JSON element.
+///
+/// @param fname The name of the file to load.
+/// @param list The JSON element list to add the parsing result to.
+void loadFile(const string& fname, ElementPtr list) {
+    ParserContext ctx;
+    ElementPtr json;
+    EXPECT_NO_THROW(json = ctx.parseFile(fname, ParserContext::PARSER_AGENT));
+    ASSERT_TRUE(json);
+    list->add(json);
+}
+
+// This test checks that all map entries are in the sample file.
+TEST(ParserTest, mapEntries) {
+    // Type of keyword set.
+    typedef set<string> KeywordSet;
+
+    // Get keywords from the syntax file (agent_parser.yy).
+    ifstream syntax_file(SYNTAX_FILE);
+    EXPECT_TRUE(syntax_file.is_open());
+    string line;
+    KeywordSet syntax_keys = { "user-context" };
+    // Code setting the map entry.
+    const string pattern = "ctx.stack_.back()->set(\"";
+    while (getline(syntax_file, line)) {
+        // Skip comments.
+        size_t comment = line.find("//");
+        if (comment <= pattern.size()) {
+            continue;
+        }
+        if (comment != string::npos) {
+            line.resize(comment);
+        }
+        // Search for the code pattern.
+        size_t key_begin = line.find(pattern);
+        if (key_begin == string::npos) {
+            continue;
+        }
+        // Extract keywords.
+        line = line.substr(key_begin + pattern.size());
+        size_t key_end = line.find_first_of('"');
+        EXPECT_NE(string::npos, key_end);
+        string keyword = line.substr(0, key_end);
+        // Ignore result when adding the keyword to the syntax keyword set.
+        static_cast<void>(syntax_keys.insert(keyword));
+    }
+    syntax_file.close();
+
+    // Get keywords from the sample files
+    string sample_dir(CFG_EXAMPLES);
+    sample_dir += "/";
+    ElementPtr sample_json = Element::createList();
+    loadFile(sample_dir + "https.json", sample_json);
+    loadFile(sample_dir + "simple.json", sample_json);
+    KeywordSet sample_keys;
+    // Recursively extract keywords.
+    static void (*extract)(ConstElementPtr, KeywordSet&) =
+        [] (ConstElementPtr json, KeywordSet& set) {
+            if (json->getType() == Element::list) {
+                // Handle lists.
+                for (auto elem : json->listValue()) {
+                    extract(elem, set);
+                }
+            } else if (json->getType() == Element::map) {
+                // Handle maps.
+                for (auto elem : json->mapValue()) {
+                    static_cast<void>(set.insert(elem.first));
+                    // Skip entries with free content.
+                    if ((elem.first != "user-context") &&
+                        (elem.first != "parameters")) {
+                        extract(elem.second, set);
+                    }
+                }
+            }
+        };
+    extract(sample_json, sample_keys);
+
+    // Compare.
+    EXPECT_EQ(syntax_keys, sample_keys);
+}
+
+/// @brief Tests a duplicate entry.
+///
+/// The entry was duplicated by adding a new <name>DDDD entry.
+/// An error is expected, usually it is a duplicate but there are
+/// a few syntax errors when the syntax allows only one parameter.
+///
+/// @param json the JSON configuration with the duplicate entry.
+void testDuplicate(ConstElementPtr json) {
+    string config = json->str();
+    size_t where = config.find("DDDD");
+    ASSERT_NE(string::npos, where);
+    string before = config.substr(0, where);
+    string after = config.substr(where + 4, string::npos);
+    ParserContext ctx;
+    EXPECT_THROW(ctx.parseString(before + after,
+                                 ParserContext::PARSER_AGENT),
+                 ParseError) << "config: " << config;
+}
+
+// This test checks that duplicate entries make parsing to fail.
+TEST(ParserTest, duplicateMapEntries) {
+    // Get the config to work with from the sample file.
+    string sample_fname(CFG_EXAMPLES);
+    sample_fname += "/simple.json";
+    ParserContext ctx;
+    ElementPtr sample_json;
+    EXPECT_NO_THROW(sample_json =
+        ctx.parseFile(sample_fname, ParserContext::PARSER_AGENT));
+    ASSERT_TRUE(sample_json);
+
+    // Recursively check duplicates.
+    static void (*test)(ElementPtr, ElementPtr, size_t&) =
+        [] (ElementPtr config, ElementPtr json, size_t& cnt) {
+            if (json->getType() == Element::list) {
+                // Handle lists.
+                for (auto elem : json->listValue()) {
+                    test(config, elem, cnt);
+                }
+            } else if (json->getType() == Element::map) {
+                // Handle maps.
+                for (auto elem : json->mapValue()) {
+                    // Skip entries with free content.
+                    if ((elem.first == "user-context") ||
+                        (elem.first == "parameters")) {
+                        continue;
+                    }
+
+                    // Perform tests.
+                    string dup = elem.first + "DDDD";
+                    json->set(dup, elem.second);
+                    testDuplicate(config);
+                    json->remove(dup);
+                    ++cnt;
+
+                    // Recursive call.
+                    ElementPtr mutable_json =
+                        boost::const_pointer_cast<Element>(elem.second);
+                    ASSERT_TRUE(mutable_json);
+                    test(config, mutable_json, cnt);
+                }
+            }
+        };
+    size_t cnt = 0;
+    test(sample_json, sample_json, cnt);
+    cout << "checked " << cnt << " duplicated map entries\n";
+}
+
+}
+}
+}

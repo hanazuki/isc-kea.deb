@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015,2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2015,2017,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -241,7 +241,7 @@ public:
     /// to the NOT_INITTED state.  This is provided to support reconfiguring
     /// a new listener without losing queued requests.
     ///
-    /// @throw D2QueMgrError if called when the manager state is RUNNING.
+    /// @throw D2QueueMgrError if called when the manager state is RUNNING.
     void removeListener();
 
     /// @brief Returns the number of entries in the queue.
@@ -276,7 +276,7 @@ public:
     ///
     /// @return Pointer reference to the queue entry.
     ///
-    /// @throw D2QueueMgrQueEmpty if there are no entries in the queue.
+    /// @throw D2QueueMgrQueueEmpty if there are no entries in the queue.
     const dhcp_ddns::NameChangeRequestPtr& peek() const;
 
     /// @brief Returns the entry at a given position in the queue.
@@ -302,7 +302,7 @@ public:
 
     /// @brief Removes the entry at the front of the queue.
     ///
-    /// @throw D2QueueMgrQueEmpty if there are no entries in the queue.
+    /// @throw D2QueueMgrQueueEmpty if there are no entries in the queue.
     void dequeue();
 
     /// @brief Adds a request to the end of the queue.

@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -49,7 +49,7 @@ public:
 
 protected:
     CommandOptions& options_; ///< Reference to commandline options.
-    TestControl tc_;  ///< Object for controling sending and receiving packets.
+    TestControl tc_;  ///< Object for controlling sending and receiving packets.
 
     // Helper fields to avoid checking IP version each time an exchange type
     // is needed.

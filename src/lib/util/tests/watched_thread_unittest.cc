@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,11 +8,12 @@
 
 #include <util/watched_thread.h>
 
-#include <boost/bind.hpp>
 #include <gtest/gtest.h>
 
-#include <unistd.h>
 #include <atomic>
+#include <functional>
+#include <signal.h>
+#include <unistd.h>
 
 using namespace std;
 using namespace isc;
@@ -49,6 +50,12 @@ public:
     ///
     /// @param watch_type type of event that should occur
     void worker(WatchedThread::WatchType watch_type) {
+        sigset_t nsset;
+        pthread_sigmask(SIG_SETMASK, 0, &nsset);
+        EXPECT_EQ(1, sigismember(&nsset, SIGCHLD));
+        EXPECT_EQ(1, sigismember(&nsset, SIGINT));
+        EXPECT_EQ(1, sigismember(&nsset, SIGHUP));
+        EXPECT_EQ(1, sigismember(&nsset, SIGTERM));
         for (passes_ = 1; passes_ < WORKER_MAX_PASSES; ++passes_) {
 
             // Stop if we're told to do it.
@@ -100,7 +107,7 @@ TEST_F(WatchedThreadTest, watchedThreadClassBasics) {
     /// our other tests as to why threads have finished are sound.
     wthread_.reset(new WatchedThread());
     ASSERT_FALSE(wthread_->isRunning());
-    wthread_->start(boost::bind(&WatchedThreadTest::worker, this, WatchedThread::TERMINATE));
+    wthread_->start(std::bind(&WatchedThreadTest::worker, this, WatchedThread::TERMINATE));
     ASSERT_TRUE(wthread_->isRunning());
 
     // Wait more long enough (we hope) for the thread to expire.
@@ -122,7 +129,7 @@ TEST_F(WatchedThreadTest, watchedThreadClassBasics) {
 
     /// Now we'll test stopping a thread.
     /// Start the WatchedThread, let it run a little and then tell it to stop.
-    wthread_->start(boost::bind(&WatchedThreadTest::worker, this, WatchedThread::TERMINATE));
+    wthread_->start(std::bind(&WatchedThreadTest::worker, this, WatchedThread::TERMINATE));
     ASSERT_TRUE(wthread_->isRunning());
 
     // No watches should be ready.
@@ -149,7 +156,7 @@ TEST_F(WatchedThreadTest, watchedThreadClassBasics) {
 
     // Next we'll test error notification.
     // Start the WatchedThread with a thread that sets an error on the second pass.
-    wthread_->start(boost::bind(&WatchedThreadTest::worker, this, WatchedThread::ERROR));
+    wthread_->start(std::bind(&WatchedThreadTest::worker, this, WatchedThread::ERROR));
     ASSERT_TRUE(wthread_->isRunning());
 
     // No watches should be ready.
@@ -180,7 +187,7 @@ TEST_F(WatchedThreadTest, watchedThreadClassBasics) {
 
     // Finally, we'll test data ready notification.
     // We'll start the WatchedThread with a thread that indicates data ready on its second pass.
-    wthread_->start(boost::bind(&WatchedThreadTest::worker, this, WatchedThread::READY));
+    wthread_->start(std::bind(&WatchedThreadTest::worker, this, WatchedThread::READY));
     ASSERT_TRUE(wthread_->isRunning());
 
     // No watches should be ready.

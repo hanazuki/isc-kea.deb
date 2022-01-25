@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -114,11 +114,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorDatabase(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorDatabase(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorDatabase();
@@ -154,7 +150,7 @@ protected:
     /// @param xpath The xpath of the database access.
     /// @param elem The JSON element.
     /// @param skip The skip type field flag.
-    /// @throw BadValue on database without tyoe,
+    /// @throw BadValue on database without type,
     void setDatabaseKea(const std::string& xpath,
                         isc::data::ConstElementPtr elem,
                         bool skip);
@@ -171,11 +167,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorDatabases(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorDatabases(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorDatabases();
@@ -208,12 +200,12 @@ protected:
     ///
     /// @param xpath The xpath of databases including the list name.
     /// @param elem The JSON element.
-    /// @throw BadValue on database without tyoe,
+    /// @throw BadValue on database without type,
     void setDatabasesKea(const std::string& xpath,
                          isc::data::ConstElementPtr elem);
 };
 
-}; // end of namespace isc::yang
-}; // end of namespace isc
+}  // namespace yang
+}  // namespace isc
 
 #endif // ISC_TRANSLATOR_DATABASE_H

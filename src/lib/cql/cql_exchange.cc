@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2017 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -275,8 +275,9 @@ CqlBindUdt(const boost::any& value,
         } catch (const boost::bad_any_cast& exception) {
             isc_throw(DbOperationError,
                       "CqlCommon::udtSetData(): "
-                          << exception.what() << " when binding parameter "
-                          << " of type " << element.type().name()
+                          << exception.what()
+                          << " when binding parameter of type "
+                          << element.type().name()
                           << "in UDT with function CQL_FUNCTIONS["
                           << exchangeType(element) << "].cqlUdtSetFunction_");
         }

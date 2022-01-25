@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,11 +33,19 @@ enum class ExchangeType {
     DO,  ///< DHCPv4 DISCOVER-OFFER
     RA,  ///< DHCPv4 REQUEST-ACK
     RNA, ///< DHCPv4 REQUEST-ACK (renewal)
+    RLA, ///< DHCPv4 RELEASE
     SA,  ///< DHCPv6 SOLICIT-ADVERTISE
     RR,  ///< DHCPv6 REQUEST-REPLY
     RN,  ///< DHCPv6 RENEW-REPLY
     RL   ///< DHCPv6 RELEASE-REPLY
 };
+
+/// \brief Get the DHCP version that fits the exchange type.
+///
+/// \param exchange_type exchange type that will determine the version
+/// \throw isc::BadValue exchange type is unrecognized
+/// \return DHCP version: 4 or 6
+int dhcpVersion(ExchangeType const exchange_type);
 
 /// \brief Return name of the exchange.
 ///
@@ -65,7 +73,8 @@ public:
     /// \param name name of the counter used in log file.
     CustomCounter(const std::string& name) :
         counter_(0),
-        name_(name) { };
+        name_(name) {
+    }
 
     /// \brief Increment operator.
     const CustomCounter& operator++() {
@@ -89,22 +98,28 @@ public:
     ///
     /// Method returns counter value.
     ///
-        /// \return counter value.
-    uint64_t getValue() const { return(counter_); }
+    /// \return counter value.
+    uint64_t getValue() const {
+        return (counter_);
+    }
 
     /// \brief Return counter name.
     ///
     /// Method returns counter name.
     ///
-        /// \return counter name.
-    const std::string& getName() const { return(name_); }
+    /// \return counter name.
+    const std::string& getName() const {
+        return (name_);
+    }
+
 private:
     /// \brief Default constructor.
     ///
     /// Default constructor is private because we don't want client
     /// class to call it because we want client class to specify
     /// counter's name.
-    CustomCounter() { };
+    CustomCounter() : counter_(0) {
+    }
 
     uint64_t counter_;  ///< Counter's value.
     std::string name_;  ///< Counter's name.
@@ -554,6 +569,20 @@ public:
         return(std::make_tuple(sent_packets_.begin(), sent_packets_.end()));
     }
 
+    /// \brief Return the list of received leases in CSV format as string.
+    ///
+    /// Depending exchange type, it can apply to
+    /// potential leases received in offers and advertisements,
+    /// committed leases received in acknowledgements and replies,
+    /// renewed or released leases.
+    ///
+    /// \return multiline string of received leases in CSV format
+    std::string receivedLeases() const;
+
+    /// \brief Print the list of received leases.
+    void printLeases() const;
+
+    static int malformed_pkts_;
 
 // Private stuff of ExchangeStats class
 private:
@@ -1087,7 +1116,11 @@ public:
     /// Method prints intermediate statistics for all exchanges.
     /// Statistics includes sent, received and dropped packets
     /// counters.
-    void printIntermediateStats() const {
+    ///
+    /// \param clean_report value to generate easy to parse report.
+    /// \param clean_sep string used as separator if clean_report enabled..
+    void
+    printIntermediateStats(bool clean_report, std::string clean_sep) const {
         std::ostringstream stream_sent;
         std::ostringstream stream_rcvd;
         std::ostringstream stream_drops;
@@ -1097,18 +1130,32 @@ public:
              it != exchanges_.end(); ++it) {
 
             if (it != exchanges_.begin()) {
-                sep = "/";
+                if (clean_report) {
+                    sep = clean_sep;
+                } else {
+                    sep = "/";
+                }
             }
             stream_sent << sep << it->second->getSentPacketsNum();
             stream_rcvd << sep << it->second->getRcvdPacketsNum();
             stream_drops << sep << it->second->getDroppedPacketsNum();
             stream_reject << sep << it->second->getRejLeasesNum();
         }
+
+        if (clean_report) {
+        std::cout << stream_sent.str()
+                  << clean_sep << stream_rcvd.str()
+                  << clean_sep << stream_drops.str()
+                  << clean_sep << stream_reject.str()
+                  << std::endl;
+
+        } else {
         std::cout << "sent: " << stream_sent.str()
                   << "; received: " << stream_rcvd.str()
                   << "; drops: " << stream_drops.str()
                   << "; rejected: " << stream_reject.str()
                   << std::endl;
+        }
     }
 
     /// \brief Print timestamps of all packets.
@@ -1138,6 +1185,9 @@ public:
             std::cout << std::endl;
         }
     }
+
+    /// \brief Delegate to all exchanges to print their leases.
+    void printLeases() const;
 
     /// \brief Print names and values of custom counters.
     ///

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,9 +14,8 @@
 #include <dhcp6/tests/dhcp6_test_utils.h>
 #include <dhcp6/tests/dhcp6_client.h>
 #include <boost/algorithm/string/join.hpp>
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
 #include <boost/lexical_cast.hpp>
+#include <functional>
 #include <list>
 #include <sstream>
 
@@ -58,6 +57,7 @@ namespace {
 ///   - Similar to Configuration 6, but one of the addresses reserved to client
 ///     with the DUID 04:03:02:01.
 ///
+/// Descriptions of next configurations are in the comment with the number.
 const char* CONFIGS[] = {
     // Configuration 0:
     "{ "
@@ -351,12 +351,15 @@ const char* CONFIGS[] = {
         "\"mac-sources\": [ \"ipv6-link-local\" ],  \n"
         "\"subnet6\": [  \n"
         " {  \n"
+        "    \"id\": 1, \n"
         "    \"subnet\": \"2001:db8:1::/48\",  \n"
         "    \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ], \n"
         "    \"interface\" : \"eth0\", \n"
-        "    \"reservation-mode\": \"global\" \n"
+        "    \"reservations-global\": true, \n"
+        "    \"reservations-in-subnet\": false \n"
         " },"
         " {  \n"
+        "    \"id\": 2, \n"
         "    \"subnet\": \"2001:db8:2::/48\",  \n"
         "    \"pools\": [ { \"pool\": \"2001:db8:2::/64\" } ], \n"
         "    \"interface\" : \"eth1\", \n"
@@ -393,9 +396,11 @@ const char* CONFIGS[] = {
         "\"mac-sources\": [ \"ipv6-link-local\" ],  \n"
         "\"subnet6\": [  \n"
         " {  \n"
+        "    \"id\": 1, \n"
         "    \"subnet\": \"2001:db8:1::/48\",  \n"
         "    \"interface\" : \"eth0\", \n"
-        "    \"reservation-mode\": \"global\", \n"
+        "    \"reservations-global\": true, \n"
+        "    \"reservations-in-subnet\": false, \n"
         "    \"pd-pools\": [ \n"
         "    { \n"
         "       \"prefix\": \"3000::\", \n"
@@ -404,6 +409,7 @@ const char* CONFIGS[] = {
         "    }] \n"
         " },"
         " {  \n"
+        "    \"id\": 2, \n"
         "    \"subnet\": \"2001:db8:2::/48\",  \n"
         "    \"interface\" : \"eth1\", \n"
         "    \"pd-pools\": [ \n"
@@ -419,7 +425,212 @@ const char* CONFIGS[] = {
         "    }] \n"
         " }"
         " ] \n"
-    "} \n"
+    "} \n",
+
+    // Configuration 10: client-class reservation in global, shared network
+    // and client-class guarded pools.
+    "{ \"interfaces-config\": {\n"
+        "      \"interfaces\": [ \"*\" ]\n"
+        "},\n"
+        "\"host-reservation-identifiers\": [ \"duid\", \"hw-address\" ], \n"
+        "\"client-classes\": ["
+        "{"
+        "     \"name\": \"reserved_class\""
+        "},"
+        "{"
+        "     \"name\": \"unreserved_class\","
+        "     \"test\": \"not member('reserved_class')\""
+        "}"
+        "],\n"
+        "\"reservations-global\": true,\n"
+        "\"reservations-in-subnet\": false,\n"
+        "\"valid-lifetime\": 4000,\n"
+        "\"reservations\": [ \n"
+        "{\n"
+        "   \"duid\": \"01:02:03:05\",\n"
+        "   \"client-classes\": [ \"reserved_class\" ]\n"
+        "}\n"
+        "],\n"
+        "\"shared-networks\": [{"
+        "    \"name\": \"frog\",\n"
+        "    \"subnet6\": [\n"
+        "        {\n"
+        "            \"subnet\": \"2001:db8:1::/64\", \n"
+        "            \"id\": 10,"
+        "            \"pools\": ["
+        "                {"
+        "                    \"pool\": \"2001:db8:1::10-2001:db8:1::11\","
+        "                    \"client-class\": \"reserved_class\""
+        "                }"
+        "            ],\n"
+        "            \"interface\": \"eth0\"\n"
+        "        },\n"
+        "        {\n"
+        "            \"subnet\": \"2001:db8:2::/64\", \n"
+        "            \"id\": 11,"
+        "            \"pools\": ["
+        "                {"
+        "                    \"pool\": \"2001:db8:2::10-2001:db8:2::11\","
+        "                    \"client-class\": \"unreserved_class\""
+        "                }"
+        "            ],\n"
+        "            \"interface\": \"eth0\"\n"
+        "        }\n"
+        "    ]\n"
+        "}]\n"
+    "}",
+
+    // Configuration 11: client-class reservation in global, shared network
+    // and client-class guarded subnets.
+    "{ \"interfaces-config\": {\n"
+        "      \"interfaces\": [ \"*\" ]\n"
+        "},\n"
+        "\"host-reservation-identifiers\": [ \"duid\", \"hw-address\" ], \n"
+        "\"client-classes\": ["
+        "{"
+        "     \"name\": \"reserved_class\""
+        "},"
+        "{"
+        "     \"name\": \"unreserved_class\","
+        "     \"test\": \"not member('reserved_class')\""
+        "}"
+        "],\n"
+        "\"reservations-global\": true,\n"
+        "\"reservations-in-subnet\": false,\n"
+        "\"valid-lifetime\": 4000,\n"
+        "\"reservations\": [ \n"
+        "{\n"
+        "   \"duid\": \"01:02:03:05\",\n"
+        "   \"client-classes\": [ \"reserved_class\" ]\n"
+        "}\n"
+        "],\n"
+        "\"shared-networks\": [{"
+        "    \"name\": \"frog\",\n"
+        "    \"subnet6\": [\n"
+        "        {\n"
+        "            \"subnet\": \"2001:db8:1::/64\", \n"
+        "            \"client-class\": \"reserved_class\","
+        "            \"id\": 10,"
+        "            \"pools\": ["
+        "                {"
+        "                    \"pool\": \"2001:db8:1::10-2001:db8:1::11\""
+        "                }"
+        "            ],\n"
+        "            \"interface\": \"eth0\"\n"
+        "        },\n"
+        "        {\n"
+        "            \"subnet\": \"2001:db8:2::/64\", \n"
+        "            \"client-class\": \"unreserved_class\","
+        "            \"id\": 11,"
+        "            \"pools\": ["
+        "                {"
+        "                    \"pool\": \"2001:db8:2::10-2001:db8:2::11\""
+        "                }"
+        "            ],\n"
+        "            \"interface\": \"eth0\"\n"
+        "        }\n"
+        "    ]\n"
+        "}]\n"
+    "}",
+
+    // Configuration 12 client-class reservation and client-class guarded pools.
+    "{ \"interfaces-config\": {\n"
+        "      \"interfaces\": [ \"*\" ]\n"
+        "},\n"
+        "\"client-classes\": ["
+        "{"
+        "     \"name\": \"reserved_class\""
+        "},"
+        "{"
+        "     \"name\": \"unreserved_class\","
+        "     \"test\": \"not member('reserved_class')\""
+        "}"
+        "],\n"
+        "\"valid-lifetime\": 4000,\n"
+        "\"subnet6\": [\n"
+        "    {\n"
+        "        \"subnet\": \"2001:db8:1::/64\", \n"
+        "        \"id\": 10,"
+        "        \"reservations\": [{ \n"
+        "            \"duid\": \"01:02:03:05\",\n"
+        "            \"client-classes\": [ \"reserved_class\" ]\n"
+        "        }],\n"
+        "        \"pools\": ["
+        "            {"
+        "                \"pool\": \"2001:db8:1::10-2001:db8:1::11\","
+        "                \"client-class\": \"reserved_class\""
+        "            },"
+        "            {"
+        "                \"pool\": \"2001:db8:1::20-2001:db8:1::21\","
+        "                \"client-class\": \"unreserved_class\""
+        "            }"
+        "        ],\n"
+        "        \"interface\": \"eth0\"\n"
+        "    }\n"
+        "]\n"
+    "}",
+
+    // Configuration 13 multiple reservations for the same IP address.
+    "{ \"interfaces-config\": {\n"
+        "      \"interfaces\": [ \"*\" ]\n"
+        "},\n"
+        "\"valid-lifetime\": 4000,\n"
+        "\"ip-reservations-unique\": false,\n"
+        "\"subnet6\": [\n"
+        "    {\n"
+        "        \"subnet\": \"2001:db8:1::/64\",\n"
+        "        \"id\": 10,"
+        "        \"reservations\": [\n"
+        "            {\n"
+        "                \"duid\": \"01:02:03:04\",\n"
+        "                \"ip-addresses\": [ \"2001:db8:1::15\" ]\n"
+        "            },\n"
+        "            {\n"
+        "                \"duid\": \"01:02:03:05\",\n"
+        "                \"ip-addresses\": [ \"2001:db8:1::15\" ]\n"
+        "            }\n"
+        "        ],\n"
+        "        \"pools\": ["
+        "            {\n"
+        "                \"pool\": \"2001:db8:1::10-2001:db8:1::200\""
+        "            }\n"
+        "        ],\n"
+        "        \"interface\": \"eth0\"\n"
+        "    }\n"
+        "]\n"
+    "}",
+
+    // Configuration 14 multiple reservations for the same delegated prefix.
+    "{ \"interfaces-config\": {\n"
+        "      \"interfaces\": [ \"*\" ]\n"
+        "},\n"
+        "\"valid-lifetime\": 4000,\n"
+        "\"ip-reservations-unique\": false,\n"
+        "\"subnet6\": [\n"
+        "    {\n"
+        "        \"subnet\": \"2001:db8:1::/64\",\n"
+        "        \"id\": 10,"
+        "        \"reservations\": [\n"
+        "            {\n"
+        "                \"duid\": \"01:02:03:04\",\n"
+        "                \"prefixes\": [ \"3000::5a:0/112\" ]\n"
+        "            },\n"
+        "            {\n"
+        "                \"duid\": \"01:02:03:05\",\n"
+        "                \"prefixes\": [ \"3000::5a:0/112\" ]\n"
+        "            }\n"
+        "        ],\n"
+        "        \"pd-pools\": ["
+        "            {\n"
+        "                \"prefix\": \"3000::\",\n"
+        "                \"prefix-len\": 64,\n"
+        "                \"delegated-len\": 112\n"
+        "            }\n"
+        "        ],\n"
+        "        \"interface\": \"eth0\"\n"
+        "    }\n"
+        "]\n"
+    "}"
 };
 
 /// @brief Base class representing leases and hints conveyed within IAs.
@@ -583,8 +794,8 @@ public:
         : Dhcpv6SrvTest(),
           iface_mgr_test_config_(true),
           client_(),
-          do_solicit_(boost::bind(&Dhcp6Client::doSolicit, &client_, true)),
-          do_solicit_request_(boost::bind(&Dhcp6Client::doSARR, &client_)) {
+          do_solicit_(std::bind(&Dhcp6Client::doSolicit, &client_, true)),
+          do_solicit_request_(std::bind(&Dhcp6Client::doSARR, &client_)) {
     }
 
     /// @brief Checks that specified option contains a desired address.
@@ -644,7 +855,7 @@ public:
     /// @brief Initiate exchange with DHCPv6 server.
     ///
     /// This method initiates DHCPv6 message exchange between a specified
-    /// client a the server. The msg_type is used to indicate what kind
+    /// client and the server. The msg_type is used to indicate what kind
     /// of exchange should be initiated. If the message type is a Renew
     /// or Rebind, the 4-way handshake is made first. If the message type
     /// is a Request, the Solicit-Advertise is done prior to this.
@@ -747,7 +958,7 @@ public:
     /// @param h4 Hint 4.
     /// @param h5 Hint 5.
     /// @param h6 Hint 6.
-    void testMultipleIAs(const boost::function<void ()>& client_operation,
+    void testMultipleIAs(const std::function<void ()>& client_operation,
                          const Reservation& r1 = Reservation::UNSPEC(),
                          const Reservation& r2 = Reservation::UNSPEC(),
                          const Reservation& r3 = Reservation::UNSPEC(),
@@ -813,6 +1024,40 @@ public:
     /// @param hint Const reference to an object holding the hint.
     static void requestIA(Dhcp6Client& client, const Hint& hint);
 
+    /// @brief Test pool or subnet selection using global class reservation.
+    ///
+    /// Verifies that client class specified in the global reservation
+    /// may be used to influence pool or subnet selection.
+    ///
+    /// @param config_idx Index of the server configuration from the
+    /// @c CONFIGS array.
+    /// @param first_address Address to be allocated from the pool having
+    /// a reservation.
+    /// @param second_address Address to be allocated from the pool not
+    /// having a reservation.
+    void testGlobalClassSubnetPoolSelection(const int config_idx,
+                                            const std::string& first_address = "2001:db8:1::10",
+                                            const std::string& second_address = "2001:db8:2::10");
+
+    /// @brief Test that two clients having reservations for the same IP
+    /// address are offered the reserved lease.
+    ///
+    /// This test verifies the case when two clients have reservations for
+    /// the same IP address. The first client sends Solicit and is offered
+    /// the reserved address. At the same time, the second client having
+    /// the reservation for the same IP address performs 4-way exchange
+    /// using the reserved address as a hint in Solicit.
+    /// The client gets the lease for this address. This test verifies
+    /// that the allocation engine correctly identifies that the second
+    /// client has a reservation for this address.
+    ///
+    /// @param duid1 Hardware address of the first client having the
+    /// reservation.
+    /// @param duid2 Hardware address of the second client having the
+    /// reservation.
+    void testMultipleClientsRace(const std::string& duid1,
+                                 const std::string& duid2);
+
     /// @brief Configures client to include 6 IAs without hints.
     ///
     /// This method configures the client to include 3 IA_NAs and
@@ -828,10 +1073,10 @@ public:
     Dhcp6Client client_;
 
     /// @brief Pointer to the Dhcp6Client::doSolicit method.
-    boost::function<void() > do_solicit_;
+    std::function<void() > do_solicit_;
 
     /// @brief Pointer to the Dhcp6Client::doSARR method.
-    boost::function<void() > do_solicit_request_;
+    std::function<void() > do_solicit_request_;
 };
 
 void
@@ -940,7 +1185,7 @@ HostTest::testLeaseForIA(const Hint& h) {
 }
 
 void
-HostTest::testMultipleIAs(const boost::function<void ()>& client_operation,
+HostTest::testMultipleIAs(const std::function<void ()>& client_operation,
                           const Reservation& r1, const Reservation& r2,
                           const Reservation& r3, const Reservation& r4,
                           const Reservation& r5, const Reservation& r6,
@@ -1156,6 +1401,73 @@ HostTest::testOverrideVendorOptions(const uint16_t msg_type) {
     Option6AddrLst::AddressContainer addrs = tftp->getAddresses();
     ASSERT_EQ(addrs.size(), 1);
     EXPECT_EQ("3000:1::234", addrs[0].toText());
+}
+
+void
+HostTest::testGlobalClassSubnetPoolSelection(const int config_idx,
+                                             const std::string& first_address,
+                                             const std::string& second_address) {
+    Dhcp6Client client_resrv;
+
+    // Use DUID for which we have host reservation including client class.
+    client_resrv.setDUID("01:02:03:05");
+
+    ASSERT_NO_FATAL_FAILURE(configure(CONFIGS[config_idx], *client_resrv.getServer()));
+
+    // This client should be given an address from the 2001:db8:1::/64 subnet.
+    // Let's use the 2001:db8:2::10 as a hint to make sure that the server
+    // refuses allocating it and uses the sole pool available for this
+    // client.
+    client_resrv.requestAddress(1, IOAddress(second_address));
+    ASSERT_NO_THROW(client_resrv.doSARR());
+    ASSERT_EQ(1, client_resrv.getLeaseNum());
+    Lease6 lease_client = client_resrv.getLease(0);
+    EXPECT_EQ(first_address, lease_client.addr_.toText());
+
+    // This client has no reservation and therefore should be
+    // assigned to the unreserved_class and be given an address
+    // from the other pool.
+    Dhcp6Client client_no_resrv(client_resrv.getServer());
+    client_no_resrv.setDUID("01:02:03:04");
+
+    // Let's use the address of 2001:db8:1::10 as a hint to make sure that the
+    // server refuses it in favor of the 2001:db8:2::10.
+    client_no_resrv.requestAddress(1, IOAddress(first_address));
+    ASSERT_NO_THROW(client_no_resrv.doSARR());
+    ASSERT_EQ(1, client_no_resrv.getLeaseNum());
+    lease_client = client_no_resrv.getLease(0);
+    EXPECT_EQ(second_address, lease_client.addr_.toText());
+}
+
+void
+HostTest::testMultipleClientsRace(const std::string& duid1,
+                                  const std::string& duid2) {
+    Dhcp6Client client1;
+    client1.setDUID(duid1);
+    ASSERT_NO_THROW(configure(CONFIGS[13], *client1.getServer()));
+    // client1 performs 4-way exchange to get the reserved lease.
+    requestIA(client1, Hint(IAID(1), "2001:db8:1::15"));
+    ASSERT_NO_THROW(client1.doSARR());
+
+    // Make sure the client has obtained reserved lease.
+    ASSERT_TRUE(client1.hasLeaseForAddress(IOAddress("2001:db8:1::15"), IAID(1)));
+
+    // Create another client that has a reservation for the same
+    // IP address.
+    Dhcp6Client client2(client1.getServer());
+    client2.setDUID(duid2);
+    requestIA(client2, Hint(IAID(1), "2001:db8:1::15"));
+
+    // client2 performs 4-way exchange.
+    ASSERT_NO_THROW(client2.doSARR());
+
+    // Make sure the client didn't get the reserved lease. This lease has been
+    // already taken by the client1.
+    EXPECT_FALSE(client2.hasLeaseForAddress(IOAddress("2001:db8:1::15"), IAID(1)));
+
+    // Make sure the client2 got a lease from the configured pool.
+    EXPECT_TRUE(client2.hasLeaseForAddressRange(IOAddress("2001:db8:1::10"),
+                                                IOAddress("2001:db8:1::200")));
 }
 
 void
@@ -2080,7 +2392,7 @@ TEST_F(HostTest, globalReservationsNA) {
     }
 
     {
-        SCOPED_TRACE("Default subnet mode excludes Global HR");
+        SCOPED_TRACE("Default subnet reservations flags excludes global reservations");
         client.clearConfig();
         client.setInterface("eth1");
         client.setDUID("01:02:03:04");
@@ -2096,6 +2408,22 @@ TEST_F(HostTest, globalReservationsNA) {
         client.setDUID("01:02:03:05");
         client.requestAddress(1234, IOAddress("::"));
         // Should get dynamic address and host name
+        ASSERT_NO_FATAL_FAILURE(sarrTest(client, "2001:db8:2::1", "subnet-duid-host"));
+    }
+
+    {
+        SCOPED_TRACE("Subnet reservation preferred over global");
+        // Patch the second subnet to both global and in-subnet.
+        Subnet6Ptr subnet = CfgMgr::instance().getCurrentCfg()->
+            getCfgSubnets6()->getSubnet(2);
+        ASSERT_TRUE(subnet);
+        subnet->setReservationsGlobal(true);
+        subnet->setReservationsInSubnet(true);
+        client.clearConfig();
+        client.setInterface("eth1");
+        client.setDUID("01:02:03:05");
+        client.requestAddress(1234, IOAddress("::"));
+        // Should get dynamic address and host name because it has preference
         ASSERT_NO_FATAL_FAILURE(sarrTest(client, "2001:db8:2::1", "subnet-duid-host"));
     }
 }
@@ -2127,7 +2455,7 @@ TEST_F(HostTest, globalReservationsPD) {
     }
 
     {
-        SCOPED_TRACE("Default subnet mode excludes Global HR");
+        SCOPED_TRACE("Default subnet reservations flags excludes global reservations");
         client.clearConfig();
         client.setInterface("eth1");
         client.setDUID("01:02:03:04");
@@ -2145,6 +2473,160 @@ TEST_F(HostTest, globalReservationsPD) {
         // Should get dynamic prefix and subnet reserved host name
         ASSERT_NO_FATAL_FAILURE(sarrTest(client, "3001::100", "subnet-duid-host"));
     }
+
+    {
+        SCOPED_TRACE("Subnet reservation preferred over global");
+        // Patch the second subnet to both global and in-subnet.
+        Subnet6Ptr subnet = CfgMgr::instance().getCurrentCfg()->
+            getCfgSubnets6()->getSubnet(2);
+        ASSERT_TRUE(subnet);
+        subnet->setReservationsGlobal(true);
+        subnet->setReservationsInSubnet(true);
+        client.clearConfig();
+        client.setInterface("eth1");
+        client.setDUID("01:02:03:05");
+        client.requestPrefix(1);
+        // Should get dynamic prefix and subnet reserved host name
+        // because it has preference over the global reservation.
+        ASSERT_NO_FATAL_FAILURE(sarrTest(client, "3001::100", "subnet-duid-host"));
+    }
+}
+
+// Verifies that client class specified in the global reservation
+// may be used to influence pool selection.
+TEST_F(HostTest, clientClassGlobalPoolSelection) {
+    ASSERT_NO_FATAL_FAILURE(testGlobalClassSubnetPoolSelection(10));
+}
+
+// Verifies that client class specified in the global reservation
+// may be used to influence subnet selection within shared network.
+TEST_F(HostTest, clientClassGlobalSubnetSelection) {
+    ASSERT_NO_FATAL_FAILURE(testGlobalClassSubnetPoolSelection(11));
+}
+
+// Verifies that client class specified in the reservation may be
+// used to influence pool selection within a subnet.
+TEST_F(HostTest, clientClassPoolSelection) {
+    ASSERT_NO_FATAL_FAILURE(testGlobalClassSubnetPoolSelection(12, "2001:db8:1::10",
+                                                               "2001:db8:1::20"));
+}
+
+// Verifies that if the server is configured to allow for specifying
+// multiple reservations for the same IP address the first client
+// matching the reservation will be given this address. The second
+// client will be given a different lease.
+TEST_F(HostTest, firstClientGetsReservedAddress) {
+    // Create a client which has DUID matching the reservation.
+    Dhcp6Client client1;
+    client1.setDUID("01:02:03:04");
+    ASSERT_NO_THROW(configure(CONFIGS[13], *client1.getServer()));
+    // client1 performs 4-way exchange to get the reserved lease.
+    requestIA(client1, Hint(IAID(1), "2001:db8:1::10"));
+    ASSERT_NO_THROW(client1.doSARR());
+
+    // Make sure the client has obtained reserved lease.
+    ASSERT_TRUE(client1.hasLeaseForAddress(IOAddress("2001:db8:1::15"), IAID(1)));
+
+    // Create another client that has a reservation for the same
+    // IP address.
+    Dhcp6Client client2(client1.getServer());
+    client2.setDUID("01:02:03:05");
+    requestIA(client2, Hint(IAID(1), "2001:db8:1::10"));
+
+    // client2 performs 4-way exchange.
+    ASSERT_NO_THROW(client2.doSARR());
+
+    // Make sure the client didn't get the reserved lease. This lease has been
+    // already taken by the client1.
+    EXPECT_FALSE(client2.hasLeaseForAddress(IOAddress("2001:db8:1::15"), IAID(1)));
+
+    // Make sure the client2 got a lease from the configured pool.
+    auto leases = client2.getLeasesByAddressRange(IOAddress("2001:db8:1::10"),
+                                                  IOAddress("2001:db8:1::200"));
+    EXPECT_EQ(1, leases.size());
+
+    // Verify that the client1 can renew the lease.
+    ASSERT_NO_THROW(client1.doRenew());
+    EXPECT_TRUE(client1.hasLeaseForAddress(IOAddress("2001:db8:1::15"), IAID(1)));
+
+    // The client2 should also renew the lease.
+    ASSERT_NO_THROW(client2.doRenew());
+    EXPECT_FALSE(client2.hasLeaseForAddress(IOAddress("2001:db8:1::15"), IAID(1)));
+    leases = client2.getLeasesByAddressRange(IOAddress("2001:db8:1::10"),
+                                             IOAddress("2001:db8:1::200"));
+    EXPECT_EQ(1, leases.size());
+
+    // If the client1 releases the reserved lease, the client2 should acquire it.
+    ASSERT_NO_THROW(client1.doRelease());
+    ASSERT_NO_THROW(client2.doRenew());
+    EXPECT_TRUE(client2.hasLeaseForAddress(IOAddress("2001:db8:1::15"), IAID(1)));
+}
+
+// Verifies that if the server is configured to allow for specifying
+// multiple reservations for the same delegated prefix the first client
+// matching the reservation will be given this prefix. The second
+// client will be given a different lease.
+TEST_F(HostTest, firstClientGetsReservedPrefix) {
+    // Create a client which has DUID matching the reservation.
+    Dhcp6Client client1;
+    client1.setDUID("01:02:03:04");
+    ASSERT_NO_THROW(configure(CONFIGS[14], *client1.getServer()));
+    // client1 performs 4-way exchange to get the reserved lease.
+    client1.requestPrefix(1);
+    ASSERT_NO_THROW(client1.doSARR());
+
+    // Make sure the client has obtained reserved lease.
+    ASSERT_TRUE(client1.hasLeaseForPrefix(IOAddress("3000::5a:0"), 112, IAID(1)));
+
+    // Create another client that has a reservation for the same
+    // IP address.
+    Dhcp6Client client2(client1.getServer());
+    client2.setDUID("01:02:03:05");
+    client2.requestPrefix(1);
+
+    // client2 performs 4-way exchange.
+    ASSERT_NO_THROW(client2.doSARR());
+
+    // Make sure the client didn't get the reserved lease. This lease has been
+    // already taken by the client1.
+    EXPECT_FALSE(client2.hasLeaseForPrefix(IOAddress("3000::5a:0"), 112, IAID(1)));
+
+    // Make sure the client2 got a lease from the configured pool.
+    EXPECT_TRUE(client2.hasLeaseForPrefixPool(IOAddress("3000::"), 64, 112));
+
+    // Verify that the client1 can renew the lease.
+    ASSERT_NO_THROW(client1.doRenew());
+    EXPECT_TRUE(client1.hasLeaseForPrefix(IOAddress("3000::5a:0"), 112, IAID(1)));
+
+    // The client2 should also renew the lease.
+    ASSERT_NO_THROW(client2.doRenew());
+    EXPECT_TRUE(client2.hasLeaseForPrefixPool(IOAddress("3000::"), 64, 112));
+
+    // If the client1 releases the reserved lease, the client2 should acquire it.
+    ASSERT_NO_THROW(client1.doRelease());
+    ASSERT_NO_THROW(client2.doRenew());
+    EXPECT_TRUE(client2.hasLeaseForPrefix(IOAddress("3000::5a:0"), 112, IAID(1)));
+}
+
+/// This test verifies the case when two clients have reservations for
+/// the same IP address. The first client sends Solicit and is offered
+/// the reserved address. At the same time, the second client having
+/// the reservation for the same IP address performs 4-way exchange
+/// using the reserved address as a hint in Solicit.
+/// The client gets the lease for this address. This test verifies
+/// that the allocation engine correctly identifies that the second
+/// client has a reservation for this address.
+TEST_F(HostTest, multipleClientsRace1) {
+    ASSERT_NO_FATAL_FAILURE(testMultipleClientsRace("01:02:03:04", "01:02:03:05"));
+}
+
+// This is a second variant of the multipleClientsRace1. The test is almost
+// the same but the client matching the second reservation sends Solicit
+// first and then the client having the first reservation performs 4-way
+// exchange. This is to ensure that the order in which reservations are
+// defined does not matter.
+TEST_F(HostTest, multipleClientsRace2) {
+    ASSERT_NO_FATAL_FAILURE(testMultipleClientsRace("01:02:03:05", "01:02:03:04"));
 }
 
 } // end of anonymous namespace

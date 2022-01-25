@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,7 +33,7 @@ public:
     ///
     /// This method currently does the following:
     /// - derives global parameters to subnets (lifetimes for now)
-    /// @param global scope to be modified if needed (subnet4 will be extracted)
+    /// @param global scope to be modified if needed (subnet6 will be extracted)
     /// @return number of default values derived
     static size_t deriveParameters(isc::data::ElementPtr global);
 
@@ -60,10 +60,11 @@ public:
 
     static const isc::data::SimpleDefaults IFACE6_DEFAULTS;
     static const isc::data::SimpleDefaults DHCP_QUEUE_CONTROL6_DEFAULTS;
+    static const isc::data::SimpleDefaults DHCP_MULTI_THREADING6_DEFAULTS;
     static const isc::data::SimpleDefaults SANITY_CHECKS6_DEFAULTS;
 };
 
-};
-};
+}  // namespace dhcp
+}  // namespace isc
 
 #endif

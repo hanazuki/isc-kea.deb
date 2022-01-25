@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,7 +7,7 @@
 #include <config.h>
 
 #include <asiolink/io_address.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <exceptions/exceptions.h>
 #include <dhcpsrv/host.h>
 #include <dhcpsrv/mysql_host_data_source.h>
@@ -17,6 +17,7 @@
 #include <dhcpsrv/host_data_source_factory.h>
 #include <mysql/mysql_connection.h>
 #include <mysql/testutils/mysql_schema.h>
+#include <testutils/multi_threading_utils.h>
 #include <util/multi_threading_mgr.h>
 
 #include <gtest/gtest.h>
@@ -34,6 +35,7 @@ using namespace isc::db::test;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::data;
+using namespace isc::test;
 using namespace isc::util;
 using namespace std;
 
@@ -60,6 +62,7 @@ public:
         }
 
         hdsptr_ = HostMgr::instance().getHostDataSource();
+        hdsptr_->setIPReservationsUnique(true);
 
         MultiThreadingMgr::instance().setMode(false);
     }
@@ -115,7 +118,7 @@ public:
     int countRowsInTable(const std::string& table) {
         string query = "SELECT * FROM " + table;
 
-        MySqlConnection::ParameterMap params;
+        DatabaseConnection::ParameterMap params;
         params["name"] = "keatest";
         params["user"] = "keatest";
         params["password"] = "keatest";
@@ -123,8 +126,8 @@ public:
         MySqlConnection conn(params);
         conn.openDatabase();
 
-        int status = mysql_query(conn.mysql_, query.c_str());
-        if (status !=0) {
+        int status = MysqlQuery(conn.mysql_, query.c_str());
+        if (status != 0) {
             isc_throw(DbOperationError, "Query failed: " << mysql_error(conn.mysql_));
         }
 
@@ -245,7 +248,7 @@ TEST(MySqlHostDataSource, OpenDatabase) {
 /// opened: the fixtures assume that and check basic operations.
 TEST(MySqlHostDataSource, OpenDatabaseMultiThreading) {
     // Enable Multi-Threading.
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
 
     // Schema needs to be created for the test to work.
     destroyMySQLSchema();
@@ -325,6 +328,64 @@ TEST(MySqlHostDataSource, OpenDatabaseMultiThreading) {
     destroyMySQLSchema();
 }
 
+/// @brief Flag used to detect calls to db_lost_callback function
+bool callback_called = false;
+
+/// @brief Callback function used in open database testing
+bool db_lost_callback(ReconnectCtlPtr /* db_conn_retry */) {
+    return (callback_called = true);
+}
+
+/// @brief Make sure open failures do NOT invoke db lost callback
+/// The db lost callback should only be invoked after successfully
+/// opening the DB and then subsequently losing it. Failing to
+/// open should be handled directly by the application layer.
+/// There is simply no good way to break the connection in a
+/// unit test environment.  So testing the callback invocation
+/// in a unit test is next to impossible. That has to be done
+/// as a system test.
+TEST(MySqlHostDataSource, NoCallbackOnOpenFail) {
+    // Schema needs to be created for the test to work.
+    destroyMySQLSchema();
+    createMySQLSchema();
+
+    callback_called = false;
+    DatabaseConnection::db_lost_callback_ = db_lost_callback;
+    HostMgr::create();
+    EXPECT_THROW(HostMgr::addBackend(connectionString(
+        MYSQL_VALID_TYPE, VALID_NAME, INVALID_HOST, VALID_USER, VALID_PASSWORD)),
+                 DbOpenError);
+
+    EXPECT_FALSE(callback_called);
+    destroyMySQLSchema();
+}
+
+/// @brief Make sure open failures do NOT invoke db lost callback
+/// The db lost callback should only be invoked after successfully
+/// opening the DB and then subsequently losing it. Failing to
+/// open should be handled directly by the application layer.
+/// There is simply no good way to break the connection in a
+/// unit test environment.  So testing the callback invocation
+/// in a unit test is next to impossible. That has to be done
+/// as a system test.
+TEST(MySqlHostDataSource, NoCallbackOnOpenFailMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingTest mt(true);
+
+    // Schema needs to be created for the test to work.
+    destroyMySQLSchema();
+    createMySQLSchema();
+
+    callback_called = false;
+    DatabaseConnection::db_lost_callback_ = db_lost_callback;
+    HostMgr::create();
+    EXPECT_THROW(HostMgr::addBackend(connectionString(
+        MYSQL_VALID_TYPE, VALID_NAME, INVALID_HOST, VALID_USER, VALID_PASSWORD)),
+                 DbOpenError);
+
+    EXPECT_FALSE(callback_called);
+    destroyMySQLSchema();
+}
 
 /// @brief Check conversion functions
 ///
@@ -374,7 +435,7 @@ TEST_F(MySqlHostDataSourceTest, testReadOnlyDatabase) {
 
 /// @brief This test verifies that database backend can operate in Read-Only mode.
 TEST_F(MySqlHostDataSourceTest, testReadOnlyDatabaseMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testReadOnlyDatabase(MYSQL_VALID_TYPE);
 }
 
@@ -387,33 +448,33 @@ TEST_F(MySqlHostDataSourceTest, basic4HWAddr) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by IPv4
 /// address. Host uses hw address as identifier.
 TEST_F(MySqlHostDataSourceTest, basic4HWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testBasic4(Host::IDENT_HWADDR);
 }
 
-/// @brief Verifies that IPv4 host reservation with options can have a the global
+/// @brief Verifies that IPv4 host reservation with options can have the global
 /// subnet id value
 TEST_F(MySqlHostDataSourceTest, globalSubnetId4) {
     testGlobalSubnetId4();
 }
 
-/// @brief Verifies that IPv4 host reservation with options can have a the global
+/// @brief Verifies that IPv4 host reservation with options can have the global
 /// subnet id value
 TEST_F(MySqlHostDataSourceTest, globalSubnetId4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGlobalSubnetId4();
 }
 
-/// @brief Verifies that IPv6 host reservation with options can have a the global
+/// @brief Verifies that IPv6 host reservation with options can have the global
 /// subnet id value
 TEST_F(MySqlHostDataSourceTest, globalSubnetId6) {
     testGlobalSubnetId6();
 }
 
-/// @brief Verifies that IPv6 host reservation with options can have a the global
+/// @brief Verifies that IPv6 host reservation with options can have the global
 /// subnet id value
 TEST_F(MySqlHostDataSourceTest, globalSubnetId6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGlobalSubnetId6();
 }
 
@@ -426,7 +487,7 @@ TEST_F(MySqlHostDataSourceTest, maxSubnetId4) {
 /// @brief Verifies that IPv4 host reservation with options can have a max value
 /// for  dhcp4_subnet id
 TEST_F(MySqlHostDataSourceTest, maxSubnetId4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMaxSubnetId4();
 }
 
@@ -439,7 +500,7 @@ TEST_F(MySqlHostDataSourceTest, maxSubnetId6) {
 /// @brief Verifies that IPv6 host reservation with options can have a max value
 /// for  dhcp6_subnet id
 TEST_F(MySqlHostDataSourceTest, maxSubnetId6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMaxSubnetId6();
 }
 
@@ -450,7 +511,7 @@ TEST_F(MySqlHostDataSourceTest, getAll4BySubnet) {
 
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 TEST_F(MySqlHostDataSourceTest, getAll4BySubnetMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAll4();
 }
 
@@ -461,7 +522,7 @@ TEST_F(MySqlHostDataSourceTest, getAll6BySubnet) {
 
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 TEST_F(MySqlHostDataSourceTest, getAll6BySubnetMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAll6();
 }
 
@@ -472,7 +533,7 @@ TEST_F(MySqlHostDataSourceTest, getAllbyHostname) {
 
 /// @brief Verifies that host reservations with the same hostname can be retrieved
 TEST_F(MySqlHostDataSourceTest, getAllbyHostnameMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAllbyHostname();
 }
 
@@ -485,7 +546,7 @@ TEST_F(MySqlHostDataSourceTest, getAllbyHostnameSubnet4) {
 /// @brief Verifies that IPv4 host reservations with the same hostname and in
 /// the same subnet can be retrieved
 TEST_F(MySqlHostDataSourceTest, getAllbyHostnameSubnet4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAllbyHostnameSubnet4();
 }
 
@@ -498,7 +559,7 @@ TEST_F(MySqlHostDataSourceTest, getAllbyHostnameSubnet6) {
 /// @brief Verifies that IPv6 host reservations with the same hostname and in
 /// the same subnet can be retrieved
 TEST_F(MySqlHostDataSourceTest, getAllbyHostnameSubnet6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAllbyHostnameSubnet6();
 }
 
@@ -511,7 +572,7 @@ TEST_F(MySqlHostDataSourceTest, getPage4) {
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 /// by pages.
 TEST_F(MySqlHostDataSourceTest, getPage4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage4();
 }
 
@@ -524,7 +585,7 @@ TEST_F(MySqlHostDataSourceTest, getPage6) {
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 /// by pages.
 TEST_F(MySqlHostDataSourceTest, getPage6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage6();
 }
 
@@ -537,7 +598,7 @@ TEST_F(MySqlHostDataSourceTest, getPageLimit4) {
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 /// by pages without truncation from the limit.
 TEST_F(MySqlHostDataSourceTest, getPageLimit4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPageLimit4(Host::IDENT_DUID);
 }
 
@@ -550,7 +611,7 @@ TEST_F(MySqlHostDataSourceTest, getPageLimit6) {
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 /// by pages without truncation from the limit.
 TEST_F(MySqlHostDataSourceTest, getPageLimit6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPageLimit6(Host::IDENT_HWADDR);
 }
 
@@ -563,7 +624,7 @@ TEST_F(MySqlHostDataSourceTest, getPage4Subnets) {
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 /// by pages even with multiple subnets.
 TEST_F(MySqlHostDataSourceTest, getPage4SubnetsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage4Subnets();
 }
 
@@ -576,8 +637,30 @@ TEST_F(MySqlHostDataSourceTest, getPage6Subnets) {
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 /// by pages even with multiple subnets.
 TEST_F(MySqlHostDataSourceTest, getPage6SubnetsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage6Subnets();
+}
+
+// Verifies that all IPv4 host reservations can be retrieved by pages.
+TEST_F(MySqlHostDataSourceTest, getPage4All) {
+    testGetPage4All();
+}
+
+// Verifies that all IPv4 host reservations can be retrieved by pages.
+TEST_F(MySqlHostDataSourceTest, getPage4AllMultiThreading) {
+    MultiThreadingTest mt(true);
+    testGetPage4All();
+}
+
+// Verifies that all IPv6 host reservations can be retrieved by pages.
+TEST_F(MySqlHostDataSourceTest, getPage6All) {
+    testGetPage6All();
+}
+
+// Verifies that all IPv6 host reservations can be retrieved by pages.
+TEST_F(MySqlHostDataSourceTest, getPage6AllMultiThreading) {
+    MultiThreadingTest mt(true);
+    testGetPage6All();
 }
 
 /// @brief Test verifies if a host reservation can be added and later retrieved by IPv4
@@ -589,7 +672,7 @@ TEST_F(MySqlHostDataSourceTest, basic4ClientId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by IPv4
 /// address. Host uses client-id (DUID) as identifier.
 TEST_F(MySqlHostDataSourceTest, basic4ClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testBasic4(Host::IDENT_DUID);
 }
 
@@ -602,7 +685,7 @@ TEST_F(MySqlHostDataSourceTest, getByIPv4HWaddr) {
 /// @brief Test verifies that multiple hosts can be added and later retrieved by their
 /// reserved IPv4 address. This test uses HW addresses as identifiers.
 TEST_F(MySqlHostDataSourceTest, getByIPv4HWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv4(Host::IDENT_HWADDR);
 }
 
@@ -615,7 +698,7 @@ TEST_F(MySqlHostDataSourceTest, getByIPv4ClientId) {
 /// @brief Test verifies that multiple hosts can be added and later retrieved by their
 /// reserved IPv4 address. This test uses client-id (DUID) as identifiers.
 TEST_F(MySqlHostDataSourceTest, getByIPv4ClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv4(Host::IDENT_DUID);
 }
 
@@ -628,7 +711,7 @@ TEST_F(MySqlHostDataSourceTest, get4ByHWaddr) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// hardware address.
 TEST_F(MySqlHostDataSourceTest, get4ByHWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_HWADDR);
 }
 
@@ -641,7 +724,7 @@ TEST_F(MySqlHostDataSourceTest, get4ByDUID) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// DUID.
 TEST_F(MySqlHostDataSourceTest, get4ByDUIDMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_DUID);
 }
 
@@ -654,7 +737,7 @@ TEST_F(MySqlHostDataSourceTest, get4ByCircuitId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// circuit id.
 TEST_F(MySqlHostDataSourceTest, get4ByCircuitIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_CIRCUIT_ID);
 }
 
@@ -667,7 +750,7 @@ TEST_F(MySqlHostDataSourceTest, get4ByClientId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// client-id.
 TEST_F(MySqlHostDataSourceTest, get4ByClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_CLIENT_ID);
 }
 
@@ -678,7 +761,7 @@ TEST_F(MySqlHostDataSourceTest, hwaddrNotClientId1) {
 
 /// @brief Test verifies if hardware address and client identifier are not confused.
 TEST_F(MySqlHostDataSourceTest, hwaddrNotClientId1MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHWAddrNotClientId();
 }
 
@@ -689,7 +772,7 @@ TEST_F(MySqlHostDataSourceTest, hwaddrNotClientId2) {
 
 /// @brief Test verifies if hardware address and client identifier are not confused.
 TEST_F(MySqlHostDataSourceTest, hwaddrNotClientId2MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testClientIdNotHWAddr();
 }
 
@@ -700,7 +783,7 @@ TEST_F(MySqlHostDataSourceTest, hostnameFQDN) {
 
 /// @brief Test verifies if a host with FQDN hostname can be stored and later retrieved.
 TEST_F(MySqlHostDataSourceTest, hostnameFQDNMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHostname("foo.example.org", 1);
 }
 
@@ -713,7 +796,7 @@ TEST_F(MySqlHostDataSourceTest, hostnameFQDN100) {
 /// @brief Test verifies if 100 hosts with unique FQDN hostnames can be stored and later
 /// retrieved.
 TEST_F(MySqlHostDataSourceTest, hostnameFQDN100MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHostname("foo.example.org", 100);
 }
 
@@ -726,7 +809,7 @@ TEST_F(MySqlHostDataSourceTest, noHostname) {
 /// @brief Test verifies if a host without any hostname specified can be stored and later
 /// retrieved.
 TEST_F(MySqlHostDataSourceTest, noHostnameMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHostname("", 1);
 }
 
@@ -738,7 +821,7 @@ TEST_F(MySqlHostDataSourceTest, usercontext) {
 
 /// @brief Test verifies if a host with user context can be stored and later retrieved.
 TEST_F(MySqlHostDataSourceTest, usercontextMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testUserContext(Element::fromJSON(comment));
 }
@@ -755,7 +838,7 @@ TEST_F(MySqlHostDataSourceTest, DISABLED_hwaddrOrClientId1) {
 
 /// @brief Test verifies if the hardware or client-id query can match hardware address.
 TEST_F(MySqlHostDataSourceTest, DISABLED_hwaddrOrClientId1MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     /// @todo: The logic behind ::get4(subnet_id, hwaddr, duid) call needs to
     /// be discussed.
     ///
@@ -776,7 +859,7 @@ TEST_F(MySqlHostDataSourceTest, DISABLED_hwaddrOrClientId2) {
 
 /// @brief Test verifies if the hardware or client-id query can match client-id.
 TEST_F(MySqlHostDataSourceTest, DISABLED_hwaddrOrClientId2MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     /// @todo: The logic behind ::get4(subnet_id, hwaddr, duid) call needs to
     /// be discussed.
     ///
@@ -794,7 +877,7 @@ TEST_F(MySqlHostDataSourceTest, get6AddrWithDuid) {
 /// @brief Test verifies that host with IPv6 address and DUID can be added and
 /// later retrieved by IPv6 address.
 TEST_F(MySqlHostDataSourceTest, get6AddrWithDuidMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_DUID, false);
 }
 
@@ -807,7 +890,7 @@ TEST_F(MySqlHostDataSourceTest, get6AddrWithHWAddr) {
 /// @brief Test verifies that host with IPv6 address and HWAddr can be added and
 /// later retrieved by IPv6 address.
 TEST_F(MySqlHostDataSourceTest, get6AddrWithHWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_HWADDR, false);
 }
 
@@ -820,7 +903,7 @@ TEST_F(MySqlHostDataSourceTest, get6PrefixWithDuid) {
 /// @brief Test verifies that host with IPv6 prefix and DUID can be added and
 /// later retrieved by IPv6 prefix.
 TEST_F(MySqlHostDataSourceTest, get6PrefixWithDuidMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_DUID, true);
 }
 
@@ -833,7 +916,7 @@ TEST_F(MySqlHostDataSourceTest, get6PrefixWithHWaddr) {
 /// @brief Test verifies that host with IPv6 prefix and HWAddr can be added and
 /// later retrieved by IPv6 prefix.
 TEST_F(MySqlHostDataSourceTest, get6PrefixWithHWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_HWADDR, true);
 }
 
@@ -846,7 +929,7 @@ TEST_F(MySqlHostDataSourceTest, get6SubnetPrefix) {
 /// @brief Test verifies that host with IPv6 prefix reservation can be retrieved
 /// by subnet id and prefix value.
 TEST_F(MySqlHostDataSourceTest, get6SubnetPrefixMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetBySubnetIPv6();
 }
 
@@ -859,7 +942,7 @@ TEST_F(MySqlHostDataSourceTest, get6ByHWaddr) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// hardware address.
 TEST_F(MySqlHostDataSourceTest, get6ByHWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet6ByHWAddr();
 }
 
@@ -872,7 +955,7 @@ TEST_F(MySqlHostDataSourceTest, get6ByClientId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// client identifier.
 TEST_F(MySqlHostDataSourceTest, get6ByClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet6ByClientId();
 }
 
@@ -885,7 +968,7 @@ TEST_F(MySqlHostDataSourceTest, addr6AndPrefix) {
 /// @brief Test verifies if a host reservation can be stored with both IPv6 address and
 /// prefix.
 TEST_F(MySqlHostDataSourceTest, addr6AndPrefixMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testAddr6AndPrefix();
 }
 
@@ -898,7 +981,7 @@ TEST_F(MySqlHostDataSourceTest, multipleReservations) {
 /// @brief Tests if host with multiple IPv6 reservations can be added and then
 /// retrieved correctly. Test checks reservations comparing.
 TEST_F(MySqlHostDataSourceTest, multipleReservationsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleReservations();
 }
 
@@ -911,7 +994,7 @@ TEST_F(MySqlHostDataSourceTest, multipleReservationsDifferentOrder) {
 /// @brief Tests if compareIPv6Reservations() method treats same pool of reservations
 /// but added in different order as equal.
 TEST_F(MySqlHostDataSourceTest, multipleReservationsDifferentOrderMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleReservationsDifferentOrder();
 }
 
@@ -924,7 +1007,7 @@ TEST_F(MySqlHostDataSourceTest, multipleClientClasses4) {
 /// @brief Test that multiple client classes for IPv4 can be inserted and
 /// retrieved for a given host reservation.
 TEST_F(MySqlHostDataSourceTest, multipleClientClasses4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleClientClasses4();
 }
 
@@ -937,7 +1020,7 @@ TEST_F(MySqlHostDataSourceTest, multipleClientClasses6) {
 /// @brief Test that multiple client classes for IPv6 can be inserted and
 /// retrieved for a given host reservation.
 TEST_F(MySqlHostDataSourceTest, multipleClientClasses6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleClientClasses6();
 }
 
@@ -950,7 +1033,7 @@ TEST_F(MySqlHostDataSourceTest, multipleClientClassesBoth) {
 /// @brief Test that multiple client classes for both IPv4 and IPv6 can
 /// be inserted and retrieved for a given host reservation.
 TEST_F(MySqlHostDataSourceTest, multipleClientClassesBothMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleClientClassesBoth();
 }
 
@@ -969,7 +1052,7 @@ TEST_F(MySqlHostDataSourceTest, multipleSubnetsHWAddr) {
 /// hardware address), but for different subnets (different subnet-ids).
 /// Make sure that getAll() returns them all correctly.
 TEST_F(MySqlHostDataSourceTest, multipleSubnetsHWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleSubnets(10, Host::IDENT_HWADDR);
 }
 
@@ -990,7 +1073,7 @@ TEST_F(MySqlHostDataSourceTest, multipleSubnetsClientId) {
 /// client-identifier), but for different subnets (different subnet-ids).
 /// Make sure that getAll() returns them correctly.
 TEST_F(MySqlHostDataSourceTest, multipleSubnetsClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleSubnets(10, Host::IDENT_DUID);
 }
 
@@ -1009,7 +1092,7 @@ TEST_F(MySqlHostDataSourceTest, subnetId6) {
 /// Insert 10 host reservations for different subnets. Make sure that
 /// get6(subnet-id, ...) calls return correct reservation.
 TEST_F(MySqlHostDataSourceTest, subnetId6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testSubnetId6(10, Host::IDENT_HWADDR);
 }
 
@@ -1026,7 +1109,7 @@ TEST_F(MySqlHostDataSourceTest, addDuplicate6WithDUID) {
 /// verify that the second and following attempts will throw exceptions.
 /// Hosts with same DUID.
 TEST_F(MySqlHostDataSourceTest, addDuplicate6WithDUIDMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testAddDuplicate6WithSameDUID();
 }
 
@@ -1043,23 +1126,64 @@ TEST_F(MySqlHostDataSourceTest, addDuplicate6WithHWAddr) {
 /// verify that the second and following attempts will throw exceptions.
 /// Hosts with same HWAddr.
 TEST_F(MySqlHostDataSourceTest, addDuplicate6WithHWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testAddDuplicate6WithSameHWAddr();
 }
 
-/// @brief Test if the duplicate IPv4 host instances can't be inserted. The test logic is as
-/// follows: try to add multiple instances of the same host reservation and
-/// verify that the second and following attempts will throw exceptions.
-TEST_F(MySqlHostDataSourceTest, addDuplicate4) {
-    testAddDuplicate4();
+/// @brief Test if the same IPv6 reservation can't be inserted multiple times.
+TEST_F(MySqlHostDataSourceTest, addDuplicateIPv6) {
+    testAddDuplicateIPv6();
+}
+
+/// @brief Test if the same IPv6 reservation can't be inserted multiple times.
+TEST_F(MySqlHostDataSourceTest, addDuplicateIPv6MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAddDuplicateIPv6();
+}
+
+/// @brief Test if the host reservation for the same IPv6 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(MySqlHostDataSourceTest, allowDuplicateIPv6) {
+    testAllowDuplicateIPv6();
+}
+
+/// @brief Test if the host reservation for the same IPv6 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(MySqlHostDataSourceTest, allowDuplicateIPv6MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAllowDuplicateIPv6();
 }
 
 /// @brief Test if the duplicate IPv4 host instances can't be inserted. The test logic is as
 /// follows: try to add multiple instances of the same host reservation and
 /// verify that the second and following attempts will throw exceptions.
-TEST_F(MySqlHostDataSourceTest, addDuplicate4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
-    testAddDuplicate4();
+TEST_F(MySqlHostDataSourceTest, addDuplicateIPv4) {
+    testAddDuplicateIPv4();
+}
+
+/// @brief Test if the duplicate IPv4 host instances can't be inserted. The test logic is as
+/// follows: try to add multiple instances of the same host reservation and
+/// verify that the second and following attempts will throw exceptions.
+TEST_F(MySqlHostDataSourceTest, addDuplicateIPv4MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAddDuplicateIPv4();
+}
+
+/// @brief Test if the host reservation for the same IPv4 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(MySqlHostDataSourceTest, allowDuplicateIPv4) {
+    testAllowDuplicateIPv4();
+}
+
+/// @brief Test if the host reservation for the same IPv4 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(MySqlHostDataSourceTest, allowDuplicateIPv4MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAllowDuplicateIPv4();
 }
 
 /// @brief This test verifies that DHCPv4 options can be inserted in a binary format
@@ -1072,7 +1196,7 @@ TEST_F(MySqlHostDataSourceTest, optionsReservations4) {
 /// @brief This test verifies that DHCPv4 options can be inserted in a binary format
 /// and retrieved from the MySQL host database.
 TEST_F(MySqlHostDataSourceTest, optionsReservations4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations4(false, Element::fromJSON(comment));
 }
@@ -1087,7 +1211,7 @@ TEST_F(MySqlHostDataSourceTest, optionsReservations6) {
 /// @brief This test verifies that DHCPv6 options can be inserted in a binary format
 /// and retrieved from the MySQL host database.
 TEST_F(MySqlHostDataSourceTest, optionsReservations6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations6(false, Element::fromJSON(comment));
 }
@@ -1101,7 +1225,7 @@ TEST_F(MySqlHostDataSourceTest, optionsReservations46) {
 /// @brief This test verifies that DHCPv4 and DHCPv6 options can be inserted in a
 /// binary format and retrieved with a single query to the database.
 TEST_F(MySqlHostDataSourceTest, optionsReservations46MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testOptionsReservations46(false);
 }
 
@@ -1115,7 +1239,7 @@ TEST_F(MySqlHostDataSourceTest, formattedOptionsReservations4) {
 /// @brief This test verifies that DHCPv4 options can be inserted in a textual format
 /// and retrieved from the MySQL host database.
 TEST_F(MySqlHostDataSourceTest, formattedOptionsReservations4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations4(true, Element::fromJSON(comment));
 }
@@ -1130,7 +1254,7 @@ TEST_F(MySqlHostDataSourceTest, formattedOptionsReservations6) {
 /// @brief This test verifies that DHCPv6 options can be inserted in a textual format
 /// and retrieved from the MySQL host database.
 TEST_F(MySqlHostDataSourceTest, formattedOptionsReservations6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations6(true, Element::fromJSON(comment));
 }
@@ -1144,7 +1268,7 @@ TEST_F(MySqlHostDataSourceTest, formattedOptionsReservations46) {
 /// @brief This test verifies that DHCPv4 and DHCPv6 options can be inserted in a
 /// textual format and retrieved with a single query to the database.
 TEST_F(MySqlHostDataSourceTest, formattedOptionsReservations46MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testOptionsReservations46(true);
 }
 
@@ -1161,15 +1285,15 @@ TEST_F(MySqlHostDataSourceTest, testAddRollback) {
     // when inserting reservations or options. The simplest way to
     // achieve that is to simply drop one of the tables. To do so, we
     // connect to the database and issue a DROP query.
-    MySqlConnection::ParameterMap params;
+    DatabaseConnection::ParameterMap params;
     params["name"] = "keatest";
     params["user"] = "keatest";
     params["password"] = "keatest";
     MySqlConnection conn(params);
     ASSERT_NO_THROW(conn.openDatabase());
 
-    int status = mysql_query(conn.mysql_,
-                             "DROP TABLE IF EXISTS ipv6_reservations");
+    int status = MysqlQuery(conn.mysql_,
+                            "DROP TABLE IF EXISTS ipv6_reservations");
     ASSERT_EQ(0, status) << mysql_error(conn.mysql_);
 
     // Create a host with a reservation.
@@ -1201,7 +1325,7 @@ TEST_F(MySqlHostDataSourceTest, testAddRollback) {
 /// into the database. The failure to insert host information at
 /// any stage should cause the whole transaction to be rolled back.
 TEST_F(MySqlHostDataSourceTest, testAddRollbackMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     // Make sure we have the pointer to the host data source.
     ASSERT_TRUE(hdsptr_);
 
@@ -1211,15 +1335,15 @@ TEST_F(MySqlHostDataSourceTest, testAddRollbackMultiThreading) {
     // when inserting reservations or options. The simplest way to
     // achieve that is to simply drop one of the tables. To do so, we
     // connect to the database and issue a DROP query.
-    MySqlConnection::ParameterMap params;
+    DatabaseConnection::ParameterMap params;
     params["name"] = "keatest";
     params["user"] = "keatest";
     params["password"] = "keatest";
     MySqlConnection conn(params);
     ASSERT_NO_THROW(conn.openDatabase());
 
-    int status = mysql_query(conn.mysql_,
-                             "DROP TABLE IF EXISTS ipv6_reservations");
+    int status = MysqlQuery(conn.mysql_,
+                            "DROP TABLE IF EXISTS ipv6_reservations");
     ASSERT_EQ(0, status) << mysql_error(conn.mysql_);
 
     // Create a host with a reservation.
@@ -1256,7 +1380,7 @@ TEST_F(MySqlHostDataSourceTest, messageFields) {
 /// @brief This test checks that siaddr, sname, file fields can be retrieved
 /// from a database for a host.
 TEST_F(MySqlHostDataSourceTest, messageFieldsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMessageFields4();
 }
 
@@ -1267,7 +1391,7 @@ TEST_F(MySqlHostDataSourceTest, deleteByAddr4) {
 
 /// @brief Check that delete(subnet-id, addr4) works.
 TEST_F(MySqlHostDataSourceTest, deleteByAddr4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteByAddr4();
 }
 
@@ -1278,7 +1402,7 @@ TEST_F(MySqlHostDataSourceTest, deleteById4) {
 
 /// @brief Check that delete(subnet4-id, identifier-type, identifier) works.
 TEST_F(MySqlHostDataSourceTest, deleteById4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById4();
 }
 
@@ -1291,7 +1415,7 @@ TEST_F(MySqlHostDataSourceTest, deleteById4Options) {
 /// @brief Check that delete(subnet4-id, identifier-type, identifier) works,
 /// even when options are present.
 TEST_F(MySqlHostDataSourceTest, deleteById4OptionsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById4Options();
 }
 
@@ -1302,7 +1426,7 @@ TEST_F(MySqlHostDataSourceTest, deleteById6) {
 
 /// @brief Check that delete(subnet6-id, identifier-type, identifier) works.
 TEST_F(MySqlHostDataSourceTest, deleteById6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById6();
 }
 
@@ -1315,7 +1439,7 @@ TEST_F(MySqlHostDataSourceTest, deleteById6Options) {
 /// @brief Check that delete(subnet6-id, identifier-type, identifier) works,
 /// even when options are present.
 TEST_F(MySqlHostDataSourceTest, deleteById6OptionsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById6Options();
 }
 
@@ -1328,7 +1452,7 @@ TEST_F(MySqlHostDataSourceTest, testMultipleHostsNoAddress4) {
 /// @brief Tests that multiple reservations without IPv4 addresses can be
 /// specified within a subnet.
 TEST_F(MySqlHostDataSourceTest, testMultipleHostsNoAddress4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleHostsNoAddress4();
 }
 
@@ -1339,8 +1463,239 @@ TEST_F(MySqlHostDataSourceTest, testMultipleHosts6) {
 
 /// @brief Tests that multiple hosts can be specified within an IPv6 subnet.
 TEST_F(MySqlHostDataSourceTest, testMultipleHosts6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleHosts6();
+}
+
+/// @brief Test fixture class for validating @c HostMgr using
+/// MySQL as alternate host data source.
+class MySQLHostMgrTest : public HostMgrTest {
+protected:
+
+    /// @brief Build MySQL schema for a test.
+    virtual void SetUp();
+
+    /// @brief Rollback and drop MySQL schema after the test.
+    virtual void TearDown();
+};
+
+void
+MySQLHostMgrTest::SetUp() {
+    HostMgrTest::SetUp();
+
+    // Ensure we have the proper schema with no transient data.
+    db::test::createMySQLSchema();
+
+    // Connect to the database
+    try {
+        HostMgr::addBackend(db::test::validMySQLConnectionString());
+    } catch (...) {
+        std::cerr << "*** ERROR: unable to open database. The test\n"
+            "*** environment is broken and must be fixed before\n"
+            "*** the MySQL tests will run correctly.\n"
+            "*** The reason for the problem is described in the\n"
+            "*** accompanying exception output.\n";
+        throw;
+    }
+}
+
+void
+MySQLHostMgrTest::TearDown() {
+    HostMgr::instance().getHostDataSource()->rollback();
+    HostMgr::delBackend("mysql");
+    // If data wipe enabled, delete transient data otherwise destroy the schema
+    db::test::destroyMySQLSchema();
+}
+
+/// @brief Test fixture class for validating @c HostMgr using
+/// MySQL as alternate host data source and MySQL connectivity loss.
+class MySQLHostMgrDbLostCallbackTest : public HostMgrDbLostCallbackTest {
+public:
+    virtual void destroySchema() {
+        // If data wipe enabled, delete transient data otherwise destroy the schema
+        db::test::destroyMySQLSchema();
+    }
+
+    virtual void createSchema() {
+        // Ensure we have the proper schema with no transient data.
+        db::test::createMySQLSchema();
+    }
+
+    virtual std::string validConnectString() {
+        return (db::test::validMySQLConnectionString());
+    }
+
+    virtual std::string invalidConnectString() {
+        return (connectionString(MYSQL_VALID_TYPE, INVALID_NAME, VALID_HOST,
+                                 VALID_USER, VALID_PASSWORD));
+    }
+};
+
+// This test verifies that reservations for a particular client can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(MySQLHostMgrTest, getAll) {
+    testGetAll(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(MySQLHostMgrTest, getAll4BySubnet) {
+    testGetAll4BySubnet(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(MySQLHostMgrTest, getAll6BySubnet) {
+    testGetAll6BySubnet(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that HostMgr returns all reservations for the specified
+// IPv4 subnet and reserved address.
+TEST_F(MySQLHostMgrTest, getAll4BySubnetIP) {
+    testGetAll4BySubnetIP(*getCfgHosts(), *getCfgHosts());
+}
+
+// This test verifies that HostMgr returns all reservations for the specified
+// IPv6 subnet and reserved address.
+TEST_F(MySQLHostMgrTest, getAll6BySubnetIP) {
+    testGetAll6BySubnetIP(*getCfgHosts(), *getCfgHosts());
+}
+
+// This test verifies that reservations for a particular hostname can be
+// retrieved from the configuration file and a database simultaneously.
+TEST_F(MySQLHostMgrTest, getAllbyHostname) {
+    testGetAllbyHostname(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular hostname and
+// DHCPv4 subnet can be retrieved from the configuration file and a
+// database simultaneously.
+TEST_F(MySQLHostMgrTest, getAllbyHostnameSubnet4) {
+    testGetAllbyHostnameSubnet4(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular hostname and
+// DHCPv6 subnet can be retrieved from the configuration file and a
+// database simultaneously.
+TEST_F(MySQLHostMgrTest, getAllbyHostnameSubnet6) {
+    testGetAllbyHostnameSubnet6(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved by pages from the configuration file and a database
+// simultaneously.
+TEST_F(MySQLHostMgrTest, getPage4) {
+    testGetPage4(true);
+}
+
+// This test verifies that all v4 reservations be retrieved by pages
+// from the configuration file and a database simultaneously.
+TEST_F(MySQLHostMgrTest, getPage4All) {
+    testGetPage4All(true);
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved by pages from the configuration file and a database
+// simultaneously.
+TEST_F(MySQLHostMgrTest, getPage6) {
+    testGetPage6(true);
+}
+
+// This test verifies that all v6 reservations be retrieved by pages
+// from the configuration file and a database simultaneously.
+TEST_F(MySQLHostMgrTest, getPage6All) {
+    testGetPage6All(true);
+}
+
+// This test verifies that IPv4 reservations for a particular client can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(MySQLHostMgrTest, getAll4) {
+    testGetAll4(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that the IPv4 reservation can be retrieved from a
+// database.
+TEST_F(MySQLHostMgrTest, get4) {
+    testGet4(HostMgr::instance());
+}
+
+// This test verifies that the IPv6 reservation can be retrieved from a
+// database.
+TEST_F(MySQLHostMgrTest, get6) {
+    testGet6(HostMgr::instance());
+}
+
+// This test verifies that the IPv6 prefix reservation can be retrieved
+// from a configuration file and a database.
+TEST_F(MySQLHostMgrTest, get6ByPrefix) {
+    testGet6ByPrefix(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that it is possible to control whether the reserved
+// IP addresses are unique or non unique via the HostMgr.
+TEST_F(MySQLHostMgrTest, setIPReservationsUnique) {
+    EXPECT_TRUE(HostMgr::instance().setIPReservationsUnique(true));
+    EXPECT_TRUE(HostMgr::instance().setIPReservationsUnique(false));
+}
+
+/// @brief Verifies that db lost callback is not invoked on an open failure
+TEST_F(MySQLHostMgrDbLostCallbackTest, testNoCallbackOnOpenFailure) {
+    MultiThreadingTest mt(false);
+    testNoCallbackOnOpenFailure();
+}
+
+/// @brief Verifies that db lost callback is not invoked on an open failure
+TEST_F(MySQLHostMgrDbLostCallbackTest, testNoCallbackOnOpenFailureMultiThreading) {
+    MultiThreadingTest mt(true);
+    testNoCallbackOnOpenFailure();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndRecoveredCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndRecoveredCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndFailedCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndFailedCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndFailedCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndFailedCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredAfterTimeoutCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndRecoveredAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredAfterTimeoutCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndRecoveredAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndFailedAfterTimeoutCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndFailedAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySQLHostMgrDbLostCallbackTest, testDbLostAndFailedAfterTimeoutCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndFailedAfterTimeoutCallback();
 }
 
 }  // namespace

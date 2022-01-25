@@ -47,6 +47,10 @@ set to a neutral value, typically zero), or even completely remove a
 single statistic or all statistics. See the section :ref:`command-stats`
 for a list of statistics-oriented commands.
 
+Statistics can be used by external tools to monitor Kea. One example of such a tool is Stork.
+See :ref:`stork` for details on how to use it to retrieve statistics periodically (and use
+other data sources) to get better insight into Kea health and operational status.
+
 .. _stats-lifecycle:
 
 Statistics Lifecycle
@@ -89,7 +93,8 @@ There are several commands defined that can be used for accessing
 (-get), resetting to zero or a neutral value (-reset), or removing a
 statistic completely (-remove). We can change the statistics time based
 limit (-sample-age-set) and size based limit (-sample-count-set) which
-control how long or how many samples of the given statistic are retained.
+control how long or how many samples of a given statistic are retained.
+
 The difference between reset and remove is somewhat subtle.
 The reset command sets the value of the statistic to zero or a neutral value,
 so after this operation, the statistic will have a value of 0 (integer),
@@ -216,10 +221,12 @@ An example response returning all collected statistics:
    {
        "command": "statistic-get-all",
        "arguments": {
+           "cumulative-assigned-addresses": [ [ 0, "2019-07-30 10:04:28.386740" ] ],
            "declined-addresses": [ [ 0, "2019-07-30 10:04:28.386733" ] ],
            "reclaimed-declined-addresses": [ [ 0, "2019-07-30 10:04:28.386735" ] ],
            "reclaimed-leases": [ [ 0, "2019-07-30 10:04:28.386736" ] ],
            "subnet[1].assigned-addresses": [ [ 0, "2019-07-30 10:04:28.386740" ] ],
+           "subnet[1].cumulative-assigned-addresses": [ [ 0, "2019-07-30 10:04:28.386740" ] ],
            "subnet[1].declined-addresses": [ [ 0, "2019-07-30 10:04:28.386743" ] ],
            "subnet[1].reclaimed-declined-addresses": [ [ 0, "2019-07-30 10:04:28.386745" ] ],
            "subnet[1].reclaimed-leases": [ [ 0, "2019-07-30 10:04:28.386747" ] ],
@@ -275,9 +282,9 @@ The statistic-sample-age-set Command
 ----------------------------------------
 
 The ``statistic-sample-age-set`` command sets time based limit
-for collecting samples for given statistic. It takes two parameters a string
-called ``name``, which specifies the statistic name and integer value called
-``duration``, which specifies the time limit for given statistic in seconds.
+for collecting samples for a given statistic. It takes two parameters a string
+called ``name``, which specifies the statistic name and an integer value called
+``duration``, which specifies the time limit for the given statistic in seconds.
 An example command may look like this:
 
 ::
@@ -303,8 +310,8 @@ The statistic-sample-age-set-all Command
 --------------------------------------------
 
 The ``statistic-sample-age-set-all`` command sets time based limits
-for collecting samples for all statistics. It takes single-integer parameter
-called ``duration``, which specifies the time limit for given statistic
+for collecting samples for all statistics. It takes a single-integer parameter
+called ``duration``, which specifies the time limit for statistic
 in seconds. An example command may look like this:
 
 ::
@@ -328,7 +335,7 @@ The statistic-sample-count-set Command
 ------------------------------------------
 
 The ``statistic-sample-count-set`` command sets size based limit
-for collecting samples for given statistic. An example command may look
+for collecting samples for a given statistic. An example command may look
 like this:
 
 ::
@@ -374,8 +381,8 @@ a status code of 1 (error) and the text field contains the error description.
 
 .. _time-series:
 
-Time series
-====================
+Time Series
+===========
 
 Previously, by default, each statistic held only a single data point. When Kea
 attempted to record a new value, the existing previous value was overwritten.
@@ -388,13 +395,13 @@ points, perhaps to do some form of statistical analysis afterwards.
 
 
 Since Kea 1.6, by default, each statistic holds 20 data points. Setting such
-limit prevent unlimited memory consumption growth.
-There are two ways to define the limts: time based (e.g. keep samples from
+a limit prevents unlimited memory growth.
+There are two ways to define the limits: time based (e.g. keep samples from
 the last 5 minutes) and size based. It's possible to change the size based
 limit by using one of two commands: ``statistic-sample-count-set``,
 to set size limit for single statistic and ``statistic-sample-count-set-all``
 for setting size based limits for all statistics. To set time based
-limit for single statistic use ``statistic-sample-age-set``, and
+limits for single statistic use ``statistic-sample-age-set``, and
 ``statistic-sample-age-set-all`` to set time based limits for all statistics.
-For given statistic only one type of limit can be active. It means that storage
+For a given statistic only one type of limit can be active. It means that storage
 is limited only by time based limit or size based, never by both of them.

@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -352,7 +352,7 @@ TEST_F(OptionDataTypesTest, writeBool) {
     ASSERT_EQ(2, buf.size());
     // Check that the first value has not changed.
     EXPECT_EQ(buf[0], 1);
-    // Check the the second value is correct.
+    // Check the second value is correct.
     EXPECT_EQ(buf[1], 0);
 }
 
@@ -750,6 +750,18 @@ TEST_F(OptionDataTypesTest, readPsid) {
 
     buf.clear();
 
+    // PSID length is 16 (bits)
+    writeInt<uint8_t>(16, buf);
+    // 0xF000 is represented as 1111000000000000b, which is equivalent
+    // of portset 0xF000.
+    writeInt<uint16_t>(0xF000, buf);
+
+    ASSERT_NO_THROW(psid = OptionDataTypeUtil::readPsid(buf));
+    EXPECT_EQ(16, psid.first.asUnsigned());
+    EXPECT_EQ(0xF000, psid.second.asUint16());
+
+    buf.clear();
+
     // PSID length is 0, in which case PSID should be ignored.
     writeInt<uint8_t>(0, buf);
     // Let's put some junk into the PSID field to make sure it will
@@ -778,11 +790,21 @@ TEST_F(OptionDataTypesTest, readPsid) {
 
     buf.clear();
 
-    // Buffer is truncated -  2 bytes instead of 3.
+    // Buffer is truncated - 2 bytes instead of 3.
     writeInt<uint8_t>(4, buf);
     writeInt<uint8_t>(0xF0, buf);
     EXPECT_THROW(static_cast<void>(OptionDataTypeUtil::readPsid(buf)),
                  BadDataTypeCast);
+
+    // Check for out of range values.
+    for (int i = 1; i < 16; ++i) {
+        buf.clear();
+        writeInt<uint8_t>(i, buf);
+        writeInt<uint16_t>(0xFFFF << (15 - i), buf);
+        EXPECT_THROW(static_cast<void>(OptionDataTypeUtil::readPsid(buf)),
+                     BadDataTypeCast);
+    }
+
 }
 
 // The purpose of this test is to verify that the PSID-len/PSID
@@ -837,11 +859,11 @@ TEST_F(OptionDataTypesTest, writePsid) {
     EXPECT_THROW(OptionDataTypeUtil::writePsid(PSIDLen(17), PSID(1), buf),
                  OutOfRange);
 
-    // PSID length is 1, which allows for coding up to two (2^1)
-    // port sets. These are namely port set 0 and port set 1. The
-    // value of 2 is out of that range.
-    EXPECT_THROW(OptionDataTypeUtil::writePsid(PSIDLen(1), PSID(2), buf),
-                 BadDataTypeCast);
+    // Check for out of range values.
+    for (int i = 1; i < 16; ++i) {
+        EXPECT_THROW(OptionDataTypeUtil::writePsid(PSIDLen(i), PSID(1 << i), buf),
+                     BadDataTypeCast);
+    }
 }
 
 // The purpose of this test is to verify that the string

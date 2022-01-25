@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,7 +21,7 @@
 #include <sstream>
 
 #include "test_data_files_config.h"
-#include "test_libraries.h"
+#include "test_callout_libraries.h"
 
 using namespace isc::agent;
 using namespace isc::config;
@@ -105,7 +105,7 @@ pathReplacer(ConstElementPtr ca_cfg) {
         return;
     }
     ElementPtr first_lib = hooks_libs->getNonConst(0);
-    std::string lib_path(BASIC_CALLOUT_LIBRARY);
+    std::string lib_path(CALLOUT_LIBRARY);
     first_lib->set("library", Element::create(lib_path));
 }
 

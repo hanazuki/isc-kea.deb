@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -45,7 +45,10 @@ const char* const DHCP4_NAME = "kea-dhcp4";
 /// Note: This function never returns. It terminates the process.
 void
 usage() {
-    cerr << "Kea DHCPv4 server, version " << VERSION << endl;
+    cerr << "Kea DHCPv4 server, "
+         << "version " << VERSION
+         << " (" << PACKAGE_VERSION_TYPE << ")"
+         << endl;
     cerr << endl;
     cerr << "Usage: " << DHCP4_NAME
          << " -[v|V|W] [-d] [-{c|t} cfgfile] [-p number] [-P number]" << endl;
@@ -59,8 +62,6 @@ usage() {
          << "(useful for testing only)" << endl;
     cerr << "  -P number: specify non-standard client port number 1-65535 "
          << "(useful for testing only)" << endl;
-    cerr << "  -N number: specify thread count 0-65535 "
-         << "(0 means multi-threading disabled)" << endl;
     exit(EXIT_FAILURE);
 }
 }  // namespace
@@ -72,15 +73,13 @@ main(int argc, char* argv[]) {
     int server_port_number = DHCP4_SERVER_PORT;
     // Not zero values are useful for testing only.
     int client_port_number = 0;
-    // Number of threads. 0 means multi-threading disabled
-    int thread_count = 0;
     bool verbose_mode = false; // Should server be verbose?
     bool check_mode = false;   // Check syntax
 
     // The standard config file
     std::string config_file("");
 
-    while ((ch = getopt(argc, argv, "dvVWc:p:P:N:t:")) != -1) {
+    while ((ch = getopt(argc, argv, "dvVWc:p:P:t:")) != -1) {
         switch (ch) {
         case 'd':
             verbose_mode = true;
@@ -132,21 +131,6 @@ main(int argc, char* argv[]) {
             if (client_port_number <= 0 || client_port_number > 65535) {
                 cerr << "Failed to parse client port number: [" << optarg
                      << "], 1-65535 allowed." << endl;
-                usage();
-            }
-            break;
-
-        case 'N': // number of threads
-            try {
-                thread_count = boost::lexical_cast<int>(optarg);
-            } catch (const boost::bad_lexical_cast &) {
-                cerr << "Failed to parse thread count number: [" << optarg
-                     << "], 0-65535 allowed." << endl;
-                usage();
-            }
-            if (thread_count < 0 || thread_count > 65535) {
-                cerr << "Failed to parse thread count number: [" << optarg
-                     << "], 0-65535 allowed." << endl;
                 usage();
             }
             break;
@@ -232,7 +216,13 @@ main(int argc, char* argv[]) {
             .arg(client_port_number)
             .arg(verbose_mode ? "yes" : "no");
 
-        LOG_INFO(dhcp4_logger, DHCP4_STARTING).arg(VERSION);
+        LOG_INFO(dhcp4_logger, DHCP4_STARTING)
+            .arg(VERSION)
+            .arg(PACKAGE_VERSION_TYPE);
+
+        if (string(PACKAGE_VERSION_TYPE) == "development") {
+            LOG_WARN(dhcp4_logger, DHCP4_DEVELOPMENT_VERSION);
+        }
 
         // Create the server instance.
         ControlledDhcpv4Srv server(server_port_number, client_port_number);
@@ -269,7 +259,7 @@ main(int argc, char* argv[]) {
         LOG_INFO(dhcp4_logger, DHCP4_STARTED).arg(VERSION);
 
         // And run the main loop of the server.
-        server.run();
+        ret = server.run();
 
         LOG_INFO(dhcp4_logger, DHCP4_SHUTDOWN);
 
@@ -301,6 +291,10 @@ main(int argc, char* argv[]) {
         } catch (...) {
             // Already logged so ignore
         }
+        ret = EXIT_FAILURE;
+    } catch (...) {
+        cerr << DHCP4_NAME << ": Fatal error during start up"
+             << endl;
         ret = EXIT_FAILURE;
     }
 

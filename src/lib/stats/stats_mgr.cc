@@ -10,12 +10,12 @@
 #include <stats/stats_mgr.h>
 #include <cc/data.h>
 #include <cc/command_interpreter.h>
-#include <util/boost_time_utils.h>
 #include <util/multi_threading_mgr.h>
-#include <boost/date_time/posix_time/posix_time.hpp>
 #include <boost/make_shared.hpp>
+#include <chrono>
 
 using namespace std;
+using namespace std::chrono;
 using namespace isc::data;
 using namespace isc::config;
 using namespace isc::util;
@@ -234,6 +234,66 @@ StatsMgr::setMaxSampleCountAll(uint32_t max_samples) {
 void
 StatsMgr::setMaxSampleCountAllInternal(uint32_t max_samples) {
     global_->setMaxSampleCountAll(max_samples);
+}
+
+void
+StatsMgr::setMaxSampleAgeDefault(const StatsDuration& duration) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setMaxSampleAgeDefaultInternal(duration);
+    } else {
+        setMaxSampleAgeDefaultInternal(duration);
+    }
+}
+
+void
+StatsMgr::setMaxSampleAgeDefaultInternal(const StatsDuration& duration) {
+    Observation::setMaxSampleAgeDefault(duration);
+}
+
+void
+StatsMgr::setMaxSampleCountDefault(uint32_t max_samples) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        setMaxSampleCountDefaultInternal(max_samples);
+    } else {
+        setMaxSampleCountDefaultInternal(max_samples);
+    }
+}
+
+void
+StatsMgr::setMaxSampleCountDefaultInternal(uint32_t max_samples) {
+    Observation::setMaxSampleCountDefault(max_samples);
+}
+
+const StatsDuration&
+StatsMgr::getMaxSampleAgeDefault() const {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (getMaxSampleAgeDefaultInternal());
+    } else {
+        return (getMaxSampleAgeDefaultInternal());
+    }
+}
+
+const StatsDuration&
+StatsMgr::getMaxSampleAgeDefaultInternal() const {
+    return (Observation::getMaxSampleAgeDefault());
+}
+
+uint32_t
+StatsMgr::getMaxSampleCountDefault() const {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        return (getMaxSampleCountDefaultInternal());
+    } else {
+        return (getMaxSampleCountDefaultInternal());
+    }
+}
+
+uint32_t
+StatsMgr::getMaxSampleCountDefaultInternal() const {
+    return (Observation::getMaxSampleCountDefault());
 }
 
 bool
@@ -459,7 +519,8 @@ StatsMgr::statisticRemoveAllHandler(const string& /*name*/,
                                     const ConstElementPtr& /*params*/) {
     StatsMgr::instance().removeAll();
     return (createAnswer(CONTROL_RESULT_SUCCESS,
-                         "All statistics removed."));
+                         "Warning: statistic-remove-all command is deprecated."
+                         " All statistics removed."));
 }
 
 ConstElementPtr
@@ -478,27 +539,45 @@ StatsMgr::statisticResetAllHandler(const string& /*name*/,
 }
 
 ConstElementPtr
-StatsMgr::statisticSetMaxSampleAgeAllHandler(const string& /*name*/,
-                                             const ConstElementPtr& params) {
+StatsMgr::statisticSetMaxSampleAgeAllHandler(const ConstElementPtr& params) {
     string error;
     StatsDuration duration;
     if (!StatsMgr::getStatDuration(params, duration, error)) {
         return (createAnswer(CONTROL_RESULT_ERROR, error));
     }
-    StatsMgr::instance().setMaxSampleAgeAll(duration);
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        StatsMgr::instance().setMaxSampleCountDefaultInternal(0);
+        StatsMgr::instance().setMaxSampleAgeDefaultInternal(duration);
+        StatsMgr::instance().setMaxSampleAgeAllInternal(duration);
+    } else {
+        StatsMgr::instance().setMaxSampleCountDefaultInternal(0);
+        StatsMgr::instance().setMaxSampleAgeDefaultInternal(duration);
+        StatsMgr::instance().setMaxSampleAgeAllInternal(duration);
+    }
     return (createAnswer(CONTROL_RESULT_SUCCESS,
                          "All statistics duration limit are set."));
 }
 
 ConstElementPtr
-StatsMgr::statisticSetMaxSampleCountAllHandler(const string& /*name*/,
-                                               const ConstElementPtr& params) {
+StatsMgr::statisticSetMaxSampleCountAllHandler(const ConstElementPtr& params) {
     string error;
     uint32_t max_samples;
     if (!StatsMgr::getStatMaxSamples(params, max_samples, error)) {
         return (createAnswer(CONTROL_RESULT_ERROR, error));
     }
-    StatsMgr::instance().setMaxSampleCountAll(max_samples);
+    if (max_samples == 0) {
+        error = "'max-samples' parameter must not be zero";
+        return (createAnswer(CONTROL_RESULT_ERROR, error));
+    }
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_guard<mutex> lock(*mutex_);
+        StatsMgr::instance().setMaxSampleCountDefaultInternal(max_samples);
+        StatsMgr::instance().setMaxSampleCountAllInternal(max_samples);
+    } else {
+        StatsMgr::instance().setMaxSampleCountDefaultInternal(max_samples);
+        StatsMgr::instance().setMaxSampleCountAllInternal(max_samples);
+    }
     return (createAnswer(CONTROL_RESULT_SUCCESS,
                          "All statistics count limit are set."));
 }
@@ -537,13 +616,7 @@ StatsMgr::getStatDuration(const ConstElementPtr& params,
         reason = "Missing mandatory 'duration' parameter.";
         return (false);
     }
-    int64_t time_duration = stat_duration->intValue();
-    int64_t hours = time_duration / 3600;
-    time_duration -= hours * 3600;
-    int64_t minutes = time_duration / 60;
-    time_duration -= minutes * 60;
-    int64_t seconds = time_duration;
-    duration = boost::posix_time::time_duration(hours, minutes, seconds, 0);
+    duration = std::chrono::seconds(stat_duration->intValue());
     return (true);
 }
 
@@ -568,5 +641,5 @@ StatsMgr::getStatMaxSamples(const ConstElementPtr& params,
     return (true);
 }
 
-};
-};
+} // end of namespace stats
+} // end of namespace isc

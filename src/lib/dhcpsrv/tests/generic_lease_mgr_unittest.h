@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,8 +7,13 @@
 #ifndef GENERIC_LEASE_MGR_UNITTEST_H
 #define GENERIC_LEASE_MGR_UNITTEST_H
 
+#include <asiolink/io_service.h>
 #include <dhcpsrv/lease_mgr.h>
+#include <dhcpsrv/timer_mgr.h>
+
 #include <gtest/gtest.h>
+
+#include <boost/make_shared.hpp>
 #include <vector>
 #include <set>
 
@@ -99,7 +104,7 @@ public:
 
     /// @brief Compares a StatsMgr statistic to an expected value
     ///
-    /// Attempt to fetch the named statistic from the StatsMg and if
+    /// Attempt to fetch the named statistic from the StatsMgr and if
     /// found, compare its observed value to the given value.
     /// Fails if the stat is not found or if the values do not match.
     ///
@@ -168,9 +173,6 @@ public:
     /// Adds leases to the database and checks that they can be accessed using
     /// HWAddr information.
     void testGetLease4HWAddr2();
-
-    /// @brief Test lease retrieval using client id, HW address and subnet id.
-    void testGetLease4ClientIdHWAddrSubnetId();
 
     /// @brief Get lease4 by hardware address (2)
     ///
@@ -297,7 +299,7 @@ public:
     /// @brief verifies getLeases6 method by DUID
     ///
     /// Adds 3 leases to backend and retrieves, verifes empty
-    /// retrival of non existent DUID.
+    /// retrieval of non existent DUID.
     void testGetLeases6Duid();
 
     /// @brief Checks that getLease6() works with different DUID sizes
@@ -445,7 +447,7 @@ public:
 
     /// @brief Checks operation of v4 LeaseStatsQuery variants
     ///
-    /// It creates three subnets with leasese in various states in
+    /// It creates three subnets with leases in various states in
     /// each.  It runs and verifies the returned query contents for
     /// each of the v4 startLeaseQuery variants:
     ///
@@ -457,7 +459,7 @@ public:
 
     /// @brief Checks operation of v6 LeaseStatsQuery variants
     ///
-    /// It creates three subnets with leasese in various states in
+    /// It creates three subnets with leases in various states in
     /// each.  It runs and verifies the returned query contents for
     /// each of the v6 startLeaseQuery variants:
     ///
@@ -466,6 +468,26 @@ public:
     /// - startLeaseQuery()
     ///
     void testLeaseStatsQuery6();
+
+    /// @brief Checks if v4 LeaseStatsQuery can get bad attribution.
+    ///
+    /// It creates two subnets with leases and move one from the first
+    /// to the second. If counters are not updated this can lead to
+    /// bad attribution i.e. a lease is counted in a subnet when it
+    /// belongs to another one.
+    ///
+    void testLeaseStatsQueryAttribution4();
+
+    /// @brief Checks if v6 LeaseStatsQuery can get bad attribution.
+    ///
+    /// It creates two subnets with leases and move one from the first
+    /// to the second. If counters are not updated this can lead to
+    /// bad attribution i.e. a lease is counted in a subnet when it
+    /// belongs to another one.
+    ///
+    /// @note We can check the lease type change too but in the real
+    /// world this never happens.
+    void testLeaseStatsQueryAttribution6();
 
     /// @brief Compares LeaseQueryStats content to expected set of rows
     ///
@@ -501,12 +523,23 @@ public:
 
 class LeaseMgrDbLostCallbackTest : public ::testing::Test {
 public:
-    LeaseMgrDbLostCallbackTest() {
-        db::DatabaseConnection::db_lost_callback = 0;
+    LeaseMgrDbLostCallbackTest()
+        : db_lost_callback_called_(0), db_recovered_callback_called_(0),
+          db_failed_callback_called_(0),
+          io_service_(boost::make_shared<isc::asiolink::IOService>()) {
+        db::DatabaseConnection::db_lost_callback_ = 0;
+        db::DatabaseConnection::db_recovered_callback_ = 0;
+        db::DatabaseConnection::db_failed_callback_ = 0;
+        LeaseMgr::setIOService(io_service_);
+        TimerMgr::instance()->setIOService(io_service_);
     }
 
     virtual ~LeaseMgrDbLostCallbackTest() {
-        db::DatabaseConnection::db_lost_callback = 0;
+        db::DatabaseConnection::db_lost_callback_ = 0;
+        db::DatabaseConnection::db_recovered_callback_ = 0;
+        db::DatabaseConnection::db_failed_callback_ = 0;
+        LeaseMgr::setIOService(isc::asiolink::IOServicePtr());
+        TimerMgr::instance()->unregisterTimers();
     }
 
     /// @brief Prepares the class for a test.
@@ -521,10 +554,10 @@ public:
     /// we created and toss our lease manager.
     virtual void TearDown();
 
-    /// @brief Abstract method for destroying the back end specific shcema
+    /// @brief Abstract method for destroying the back end specific schema
     virtual void destroySchema() = 0;
 
-    /// @brief Abstract method for creating the back end specific shcema
+    /// @brief Abstract method for creating the back end specific schema
     virtual void createSchema() = 0;
 
     /// @brief Abstract method which returns the back end specific connection
@@ -542,26 +575,82 @@ public:
     /// open should be handled directly by the application layer.
     void testNoCallbackOnOpenFailure();
 
-    /// @brief Verifies the host manager's behavior if DB connection is lost
+    /// @brief Verifies the lease manager's behavior if DB connection is lost
     ///
-    /// This function creates a lease manager with an back end that
-    /// supports connectivity lost callback (currently only MySQL and
-    /// PostgreSQL currently).  It verifies connectivity by issuing a known
-    /// valid query.  Next it simulates connectivity lost by identifying and
-    /// closing the socket connection to the host backend.  It then reissues
-    /// the query and verifies that:
+    /// This function creates a lease manager with a back end that supports
+    /// connectivity lost callback (currently only MySQL and PostgreSQL). It
+    /// verifies connectivity by issuing a known valid query. Next it simulates
+    /// connectivity lost by identifying and closing the socket connection to
+    /// the CB backend. It then reissues the query and verifies that:
     /// -# The Query throws  DbOperationError (rather than exiting)
     /// -# The registered DbLostCallback was invoked
-    void testDbLostCallback();
+    /// -# The registered DbRecoveredCallback was invoked
+    void testDbLostAndRecoveredCallback();
 
-    /// @brief Callback function registered with the host manager
+    /// @brief Verifies the lease manager's behavior if DB connection is lost
+    ///
+    /// This function creates a lease manager with a back end that supports
+    /// connectivity lost callback (currently only MySQL and PostgreSQL). It
+    /// verifies connectivity by issuing a known valid query. Next it simulates
+    /// connectivity lost by identifying and closing the socket connection to
+    /// the CB backend. It then reissues the query and verifies that:
+    /// -# The Query throws  DbOperationError (rather than exiting)
+    /// -# The registered DbLostCallback was invoked
+    /// -# The registered DbFailedCallback was invoked
+    void testDbLostAndFailedCallback();
+
+    /// @brief Verifies the lease manager's behavior if DB connection is lost
+    ///
+    /// This function creates a lease manager with a back end that supports
+    /// connectivity lost callback (currently only MySQL and PostgreSQL). It
+    /// verifies connectivity by issuing a known valid query. Next it simulates
+    /// connectivity lost by identifying and closing the socket connection to
+    /// the CB backend. It then reissues the query and verifies that:
+    /// -# The Query throws  DbOperationError (rather than exiting)
+    /// -# The registered DbLostCallback was invoked
+    /// -# The registered DbRecoveredCallback was invoked after two reconnect
+    /// attempts (once failing and second triggered by timer)
+    void testDbLostAndRecoveredAfterTimeoutCallback();
+
+    /// @brief Verifies the lease manager's behavior if DB connection is lost
+    ///
+    /// This function creates a lease manager with a back end that supports
+    /// connectivity lost callback (currently only MySQL and PostgreSQL). It
+    /// verifies connectivity by issuing a known valid query. Next it simulates
+    /// connectivity lost by identifying and closing the socket connection to
+    /// the CB backend. It then reissues the query and verifies that:
+    /// -# The Query throws  DbOperationError (rather than exiting)
+    /// -# The registered DbLostCallback was invoked
+    /// -# The registered DbFailedCallback was invoked after two reconnect
+    /// attempts (once failing and second triggered by timer)
+    void testDbLostAndFailedAfterTimeoutCallback();
+
+    /// @brief Callback function registered with the lease manager
     bool db_lost_callback(db::ReconnectCtlPtr /* not_used */) {
-        return (callback_called_ = true);
+        return (++db_lost_callback_called_);
     }
 
     /// @brief Flag used to detect calls to db_lost_callback function
-    bool callback_called_;
+    uint32_t db_lost_callback_called_;
 
+    /// @brief Callback function registered with the lease manager
+    bool db_recovered_callback(db::ReconnectCtlPtr /* not_used */) {
+        return (++db_recovered_callback_called_);
+    }
+
+    /// @brief Flag used to detect calls to db_recovered_callback function
+    uint32_t db_recovered_callback_called_;
+
+    /// @brief Callback function registered with the lease manager
+    bool db_failed_callback(db::ReconnectCtlPtr /* not_used */) {
+        return (++db_failed_callback_called_);
+    }
+
+    /// @brief Flag used to detect calls to db_failed_callback function
+    uint32_t db_failed_callback_called_;
+
+    /// The IOService object, used for all ASIO operations.
+    isc::asiolink::IOServicePtr io_service_;
 };
 
 }  // namespace test

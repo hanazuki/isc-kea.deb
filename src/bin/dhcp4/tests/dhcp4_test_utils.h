@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -25,6 +25,7 @@
 #include <dhcp4/parser_context.h>
 #include <asiolink/io_address.h>
 #include <cc/command_interpreter.h>
+#include <util/multi_threading_mgr.h>
 #include <list>
 
 #include <boost/shared_ptr.hpp>
@@ -124,6 +125,7 @@ public:
         // Create fixed server id.
         server_id_.reset(new Option4AddrLst(DHO_DHCP_SERVER_IDENTIFIER,
                                             asiolink::IOAddress("192.0.3.1")));
+        LeaseMgr::setIOService(getIOService());
     }
 
     /// @brief Returns fixed server identifier assigned to the naked server
@@ -148,6 +150,9 @@ public:
             return (pkt);
         }
 
+        // Make sure the server processed all packets in MT.
+        isc::util::MultiThreadingMgr::instance().getThreadPool().wait(3);
+
         // If not, just trigger shutdown and return immediately
         shutdown();
         return (Pkt4Ptr());
@@ -158,7 +163,42 @@ public:
     /// Pretend to send a packet, but instead just store it in fake_send_ list
     /// where test can later inspect server's response.
     virtual void sendPacket(const Pkt4Ptr& pkt) {
-        fake_sent_.push_back(pkt);
+        if (isc::util::MultiThreadingMgr::instance().getMode()) {
+            std::lock_guard<std::mutex> lk(mutex_);
+            fake_sent_.push_back(pkt);
+        } else {
+            fake_sent_.push_back(pkt);
+        }
+    }
+
+    /// @brief fake receive packet from server
+    ///
+    /// The client uses this packet as a reply from the server.
+    ///
+    /// @return The received packet.
+    Pkt4Ptr receiveOneMsg() {
+        if (isc::util::MultiThreadingMgr::instance().getMode()) {
+            std::lock_guard<std::mutex> lk(mutex_);
+            return (receiveOneMsgInternal());
+        } else {
+            return (receiveOneMsgInternal());
+        }
+    }
+
+    /// @brief fake receive packet from server
+    ///
+    /// The client uses this packet as a reply from the server.
+    /// This function should be called in a thread safe context.
+    ///
+    /// @return The received packet.
+    Pkt4Ptr receiveOneMsgInternal() {
+        // Return empty pointer if server hasn't responded.
+        if (fake_sent_.empty()) {
+            return (Pkt4Ptr());
+        }
+        Pkt4Ptr msg = fake_sent_.front();
+        fake_sent_.pop_front();
+        return (msg);
     }
 
     /// @brief adds a packet to fake receive queue
@@ -188,7 +228,7 @@ public:
         processRelease(release, context);
     }
 
-    /// @brief Runs processing DHCPDECLINE
+    /// @brief Runs processing DHCPDECLINE.
     ///
     /// @param decline message received from client
     void processDecline(Pkt4Ptr& decline) {
@@ -199,7 +239,7 @@ public:
     /// @brief Dummy server identifier option used by various tests.
     OptionPtr server_id_;
 
-    /// @brief packets we pretend to receive
+    /// @brief packets we pretend to receive.
     ///
     /// Instead of setting up sockets on interfaces that change between OSes, it
     /// is much easier to fake packet reception. This is a list of packets that
@@ -207,6 +247,7 @@ public:
     /// using fakeReceive() and NakedDhcpv4Srv::receivePacket() methods.
     std::list<Pkt4Ptr> fake_received_;
 
+    /// @brief packets we pretend to send.
     std::list<Pkt4Ptr> fake_sent_;
 
     using Dhcpv4Srv::adjustIfaceData;
@@ -226,11 +267,15 @@ public:
     using Dhcpv4Srv::accept;
     using Dhcpv4Srv::acceptMessageType;
     using Dhcpv4Srv::selectSubnet;
+    using Dhcpv4Srv::setSendResponsesToSource;
     using Dhcpv4Srv::VENDOR_CLASS_PREFIX;
     using Dhcpv4Srv::shutdown_;
     using Dhcpv4Srv::alloc_engine_;
     using Dhcpv4Srv::server_port_;
     using Dhcpv4Srv::client_port_;
+
+    /// @brief Mutex to protect the packet buffers.
+    std::mutex mutex_;
 };
 
 // We need to pass one reference to the Dhcp4Client, which is defined in
@@ -267,13 +312,26 @@ public:
         SHOULD_FAIL  // fail = reject the decline
     };
 
+    class Dhcpv4SrvMTTestGuard {
+    public:
+        Dhcpv4SrvMTTestGuard(Dhcpv4SrvTest& test, bool mt_enabled) : test_(test) {
+            test_.setMultiThreading(mt_enabled);
+        }
+        ~Dhcpv4SrvMTTestGuard() {
+            test_.setMultiThreading(false);
+        }
+        Dhcpv4SrvTest& test_;
+    };
+
     /// @brief Constructor
     ///
     /// Initializes common objects used in many tests.
     /// Also sets up initial configuration in CfgMgr.
     Dhcpv4SrvTest();
 
-    /// @brief destructor
+    /// @brief Destructor
+    ///
+    /// Removes existing configuration.
     virtual ~Dhcpv4SrvTest();
 
     /// @brief Add 'Parameter Request List' option to the packet.
@@ -298,7 +356,11 @@ public:
     /// the server will not return it.
     void configureRequestedOptions();
 
+    /// @brief Configures server identifier at different levels.
+    void configureServerIdentifier();
+
     /// @brief checks that the response matches request
+    ///
     /// @param q query (client's message)
     /// @param a answer (server's message)
     void messageCheck(const Pkt4Ptr& q, const Pkt4Ptr& a);
@@ -346,6 +408,18 @@ public:
     /// @param pointer to Hardware Address object
     HWAddrPtr generateHWAddr(size_t size = 6);
 
+    /// @brief Convenience method for making a server identifier option instance.
+    ///
+    /// @param address IP address to add to the option
+    ///
+    /// @return Pointer to the newly constructed option.
+    OptionCustomPtr makeServerIdOption(const isc::asiolink::IOAddress& address);
+
+    /// @brief Convenience method for making a fqdn list option instance.
+    ///
+    /// @return Pointer to the newly constructed option.
+    OptionPtr makeFqdnListOption();
+
     /// Check that address was returned from proper range, that its lease
     /// lifetime is correct, that T1 and T2 are returned properly
     /// @param rsp response to be checked
@@ -381,6 +455,7 @@ public:
                          const isc::asiolink::IOAddress& expected_addr);
 
     /// @brief Checks if server response (OFFER, ACK, NAK) includes proper server-id
+    ///
     /// @param rsp response packet to be validated
     /// @param expected_srvid expected value of server-id
     void checkServerId(const Pkt4Ptr& rsp, const OptionPtr& expected_srvid);
@@ -394,6 +469,12 @@ public:
     /// @param rsp response packet to be validated
     /// @param expected_clientid expected value of client-id
     void checkClientId(const Pkt4Ptr& rsp, const OptionPtr& expected_clientid);
+
+    /// @brief Checks the value of the dhcp-server-identifier option in a packet
+    ///
+    /// @param packet packet to test
+    /// @param expected_address IP address the packet's option should contain
+    void checkServerIdOption(const Pkt4Ptr& packet, const isc::asiolink::IOAddress& expected_address);
 
     /// @brief Create packet from output buffer of another packet.
     ///
@@ -434,12 +515,27 @@ public:
     /// @param msg_type DHCPDISCOVER or DHCPREQUEST
     void testDiscoverRequest(const uint8_t msg_type);
 
+    /// @brief Create test which verifies server identifier.
+    ///
+    /// @param expected_server_id expected server identifier
+    /// @param query the query used to get associated client classes
+    /// @param requested the requested address
+    /// @param server_id server identifier
+    void buildCfgOptionTest(isc::asiolink::IOAddress expected_server_id,
+                            Pkt4Ptr& query,
+                            isc::asiolink::IOAddress requested,
+                            isc::asiolink::IOAddress server_id);
+
     /// @brief Runs DHCPv4 configuration from the JSON string.
     ///
     /// @param config String holding server configuration in JSON format.
     /// @param commit A boolean flag indicating if the new configuration
     /// should be committed (if true), or not (if false).
-    void configure(const std::string& config, const bool commit = true);
+    /// @param open_sockets  A boolean flag indicating if sockets should
+    /// be opened (if true), or not (if false).
+    void configure(const std::string& config,
+                   const bool commit = true,
+                   const bool open_sockets = true);
 
     /// @brief Configure specified DHCP server using JSON string.
     ///
@@ -447,8 +543,12 @@ public:
     /// @param srv Instance of the server to be configured.
     /// @param commit A boolean flag indicating if the new configuration
     /// should be committed (if true), or not (if false).
-    void configure(const std::string& config, NakedDhcpv4Srv& srv,
-                   const bool commit = true);
+    /// @param open_sockets  A boolean flag indicating if sockets should
+    /// be opened (if true), or not (if false).
+    void configure(const std::string& config,
+                   NakedDhcpv4Srv& srv,
+                   const bool commit = true,
+                   const bool open_sockets = true);
 
     /// @brief Configure specified DHCP server using JSON string.
     ///
@@ -503,24 +603,48 @@ public:
                            const std::string& client_id_2,
                            ExpectedResult expected_result);
 
+    /// @brief Checks if received relay agent info option is echoed back to the
+    /// client.
+    void relayAgentInfoEcho();
+
+    /// @brief Checks if received bad relay agent info option is not echoed back
+    /// to the client.
+    void badRelayAgentInfoEcho();
+
+    /// @brief Checks if client port can be overridden in packets being sent.
+    void portsClientPort();
+
+    /// @brief  Checks if server port can be overridden in packets being sent.
+    void portsServerPort();
+
     /// @brief This function cleans up after the test.
     virtual void TearDown();
 
-    /// @brief A subnet used in most tests
+    /// @brief Set multi-threading mode.
+    void setMultiThreading(bool enabled) {
+        multi_threading_ = enabled;
+    }
+
+    /// @brief A subnet used in most tests.
     Subnet4Ptr subnet_;
 
-    /// @brief A pool used in most tests
+    /// @brief A pool used in most tests.
     Pool4Ptr pool_;
 
-    /// @brief A client-id used in most tests
+    /// @brief A client-id used in most tests.
     ClientIdPtr client_id_;
 
+    /// @brief Return code
     int rcode_;
 
+    /// @brief Comment received from configuration.
     isc::data::ConstElementPtr comment_;
 
     /// @brief Server object under test.
     NakedDhcpv4Srv srv_;
+
+    /// @brief The multi-threading flag.
+    bool multi_threading_;
 };
 
 /// @brief Patch the server config to add interface-config/re-detect=false
@@ -535,13 +659,35 @@ disableIfacesReDetect(isc::data::ConstElementPtr json) {
     }
 }
 
+/// @brief Patch the server config to add multi-threading/enable-multi-threading
+/// @param json the server config
+inline void
+configureMultiThreading(bool enabled, isc::data::ConstElementPtr json) {
+    isc::data::ConstElementPtr multi_threading = json->get("multi-threading");
+    if (!multi_threading) {
+        isc::data::ElementPtr mutable_cfg =
+                boost::const_pointer_cast<isc::data::Element>(json);
+        multi_threading = isc::data::Element::createMap();
+        mutable_cfg->set("multi-threading", multi_threading);
+    }
+
+    isc::data::ElementPtr mutable_cfg =
+        boost::const_pointer_cast<isc::data::Element>(multi_threading);
+    if (enabled) {
+        mutable_cfg->set("enable-multi-threading", isc::data::Element::create(true));
+        mutable_cfg->set("thread-pool-size", isc::data::Element::create(4));
+        mutable_cfg->set("packet-queue-size", isc::data::Element::create(4));
+    } else {
+        mutable_cfg->set("enable-multi-threading", isc::data::Element::create(false));
+    }
+}
+
 /// @brief Runs parser in JSON mode, useful for parser testing
 ///
 /// @param in string to be parsed
 /// @return ElementPtr structure representing parsed JSON
 inline isc::data::ElementPtr
-parseJSON(const std::string& in)
-{
+parseJSON(const std::string& in) {
     isc::dhcp::Parser4Context ctx;
     return (ctx.parseString(in, isc::dhcp::Parser4Context::PARSER_JSON));
 }
@@ -555,8 +701,7 @@ parseJSON(const std::string& in)
 /// @param verbose display the exception message when it fails
 /// @return ElementPtr structure representing parsed JSON
 inline isc::data::ElementPtr
-parseDHCP4(const std::string& in, bool verbose = false)
-{
+parseDHCP4(const std::string& in, bool verbose = false) {
     try {
         isc::dhcp::Parser4Context ctx;
         isc::data::ElementPtr json;
@@ -580,8 +725,7 @@ parseDHCP4(const std::string& in, bool verbose = false)
 /// @param verbose display the exception message when it fails
 /// @return ElementPtr structure representing parsed JSON
 inline isc::data::ElementPtr
-parseOPTION_DEFS(const std::string& in, bool verbose = false)
-{
+parseOPTION_DEFS(const std::string& in, bool verbose = false) {
     try {
         isc::dhcp::Parser4Context ctx;
         return (ctx.parseString(in, isc::dhcp::Parser4Context::PARSER_OPTION_DEFS));
@@ -594,8 +738,8 @@ parseOPTION_DEFS(const std::string& in, bool verbose = false)
     }
 }
 
-}; // end of isc::dhcp::test namespace
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp::test namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace
 
 #endif // DHCP4_TEST_UTILS_H

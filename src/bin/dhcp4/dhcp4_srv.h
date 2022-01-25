@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -73,8 +73,9 @@ public:
     /// used by the server.
     /// @param query Pointer to the client message.
     /// @param subnet Pointer to the subnet to which the client belongs.
+    /// @param drop if it is true the packet will be dropped.
     Dhcpv4Exchange(const AllocEnginePtr& alloc_engine, const Pkt4Ptr& query,
-                   const Subnet4Ptr& subnet);
+                   const Subnet4Ptr& subnet, bool& drop);
 
     /// @brief Initializes the instance of the response message.
     ///
@@ -126,9 +127,52 @@ public:
     void setReservedMessageFields();
 
     /// @brief Assigns classes retrieved from host reservation database.
-    void setReservedClientClasses();
+    ///
+    /// @param context pointer to the context.
+    static void setReservedClientClasses(AllocEngine::ClientContext4Ptr context);
+
+    /// @brief Assigns classes retrieved from host reservation database
+    /// if they haven't been yet set.
+    ///
+    /// This function sets reserved client classes in case they haven't
+    /// been set after fetching host reservations from the database.
+    /// This is the case when the client has non-global host reservation
+    /// and the selected subnet belongs to a shared network.
+    void conditionallySetReservedClientClasses();
+
+    /// @brief Assigns incoming packet to zero or more classes.
+    ///
+    /// @note This is done in two phases: first the content of the
+    /// vendor-class-identifier option is used as a class, by
+    /// calling @ref classifyByVendor(). Second, the classification match
+    /// expressions are evaluated. The resulting classes will be stored
+    /// in the packet (see @ref isc::dhcp::Pkt4::classes_ and
+    /// @ref isc::dhcp::Pkt4::inClass).
+    ///
+    /// @param pkt packet to be classified
+    static void classifyPacket(const Pkt4Ptr& pkt);
 
 private:
+
+    /// @public
+    /// @brief Assign class using vendor-class-identifier option
+    ///
+    /// @note This is the first part of @ref classifyPacket
+    ///
+    /// @param pkt packet to be classified
+    static void classifyByVendor(const Pkt4Ptr& pkt);
+
+    /// @brief Evaluate classes.
+    ///
+    /// @note Second part of the classification.
+    ///
+    /// Evaluate expressions of client classes: if it returns true the class
+    /// is added to the incoming packet.
+    ///
+    /// @param pkt packet to be classified.
+    /// @param depend_on_known if false classes depending on the KNOWN or
+    /// UNKNOWN classes are skipped, if true only these classes are evaluated.
+    static void evaluateClasses(const Pkt4Ptr& pkt, bool depend_on_known);
 
     /// @brief Copies default parameters from client's to server's message
     ///
@@ -272,8 +316,8 @@ public:
     /// Main server processing loop. Call the processing step routine
     /// until shut down.
     ///
-    /// @return true, if being shut down gracefully, never fail.
-    bool run();
+    /// @return The value returned by @c Daemon::getExitValue().
+    int run();
 
     /// @brief Main server processing step.
     ///
@@ -284,44 +328,62 @@ public:
 
     /// @brief Process a single incoming DHCPv4 packet and sends the response.
     ///
-    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// It verifies correctness of the passed packet, calls per-type processXXX
     /// methods, generates appropriate answer, sends the answer to the client.
     ///
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
-    void processPacketAndSendResponse(Pkt4Ptr& query, Pkt4Ptr& rsp);
+    void processPacketAndSendResponse(Pkt4Ptr& query);
 
     /// @brief Process a single incoming DHCPv4 packet and sends the response.
     ///
-    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// It verifies correctness of the passed packet, calls per-type processXXX
     /// methods, generates appropriate answer, sends the answer to the client.
     ///
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
-    void processPacketAndSendResponseNoThrow(Pkt4Ptr& query, Pkt4Ptr& rsp);
+    void processPacketAndSendResponseNoThrow(Pkt4Ptr& query);
 
     /// @brief Process an unparked DHCPv4 packet and sends the response.
     ///
     /// @param callout_handle pointer to the callout handle.
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
+    /// @param rsp A pointer to the response.
     void sendResponseNoThrow(hooks::CalloutHandlePtr& callout_handle,
                              Pkt4Ptr& query, Pkt4Ptr& rsp);
 
     /// @brief Process a single incoming DHCPv4 packet.
     ///
-    /// It verifies correctness of the passed packet, call per-type processXXX
+    /// It verifies correctness of the passed packet, calls per-type processXXX
     /// methods, generates appropriate answer.
     ///
     /// @param query A pointer to the packet to be processed.
-    /// @param rsp A pointer to the response
+    /// @param rsp A pointer to the response.
     /// @param allow_packet_park Indicates if parking a packet is allowed.
     void processPacket(Pkt4Ptr& query, Pkt4Ptr& rsp,
                        bool allow_packet_park = true);
 
+    /// @brief Process a single incoming DHCPv4 query.
+    ///
+    /// It calls per-type processXXX methods, generates appropriate answer.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response.
+    /// @param allow_packet_park Indicates if parking a packet is allowed.
+    void processDhcp4Query(Pkt4Ptr& query, Pkt4Ptr& rsp,
+                           bool allow_packet_park);
+
+    /// @brief Process a single incoming DHCPv4 query.
+    ///
+    /// It calls per-type processXXX methods, generates appropriate answer,
+    /// sends the answer to the client.
+    ///
+    /// @param query A pointer to the packet to be processed.
+    /// @param rsp A pointer to the response.
+    /// @param allow_packet_park Indicates if parking a packet is allowed.
+    void processDhcp4QueryAndSendResponse(Pkt4Ptr& query, Pkt4Ptr& rsp,
+                                          bool allow_packet_park);
 
     /// @brief Instructs the server to shut down.
-    void shutdown();
+    void shutdown() override;
 
     ///
     /// @name Public accessors returning values required to (re)open sockets.
@@ -379,10 +441,17 @@ public:
                                       NameChangeSender::Result result,
                                       dhcp_ddns::NameChangeRequestPtr& ncr);
 
-    /// @brief Discards cached and parked packets
-    /// Clears the call_handle store and packet parking lots
-    /// of all packets.  Called during reconfigure and shutdown.
+    /// @brief Discards parked packets
+    /// Clears the packet parking lots of all packets.
+    /// Called during reconfigure and shutdown.
     void discardPackets();
+
+    /// @brief Returns value of the test_send_responses_to_source_ flag.
+    ///
+    /// @return value of the test_send_responses_to_source_ flag.
+    bool getSendResponsesToSource() const {
+        return (test_send_responses_to_source_);
+    }
 
 protected:
 
@@ -590,6 +659,27 @@ protected:
     /// @param ex DHCPv4 exchange holding the client's message to be checked.
     void assignLease(Dhcpv4Exchange& ex);
 
+    /// @brief Update client name and DNS flags in the lease and response
+    ///
+    /// There are two cases when the client name (FQDN or hostname) and DNS
+    /// flags need to updated after the lease has been allocated:
+    /// 1. If the name is being generated from the lease address
+    /// 2. If the allocation changed the chosen subnet
+    ///
+    /// In the first case this function will generate the name from the
+    /// lease address.  In either case, the name and DNS flags are updated
+    /// in the lease and in the response packet.
+    ///
+    /// @param ctx reference to the client context
+    /// @param lease reference to the client lease
+    /// @param query reference to the client query
+    /// @param resp reference to the client response
+    /// @param client_name_changed - true if the new values are already in
+    /// the lease
+    void postAllocateNameUpdate(const AllocEngine::ClientContext4Ptr& ctx,
+                                const Lease4Ptr& lease, const Pkt4Ptr& query,
+                                const Pkt4Ptr& resp, bool client_name_changed);
+
     /// @brief Adds the T1 and T2 timers to the outbound response as appropriate
     ///
     /// This method determines if either of the timers T1 (option 58) and T2
@@ -690,6 +780,15 @@ protected:
     /// constructor.
     void setPacketStatisticsDefaults();
 
+    /// @brief Sets value of the test_send_responses_to_source_ flag.
+    ///
+    /// @param value new value of the test_send_responses_to_source_ flag.
+    void setSendResponsesToSource(bool value) {
+        test_send_responses_to_source_ = value;
+    }
+
+public:
+
     /// @brief this is a prefix added to the content of vendor-class option
     ///
     /// If incoming packet has a vendor class option, its content is
@@ -773,11 +872,13 @@ protected:
     ///
     /// @param lease A pointer to the new lease which has been acquired.
     /// @param old_lease A pointer to the instance of the old lease which has
+    /// @param ddns_params DDNS configuration parameters
     /// been replaced by the new lease passed in the first argument. The NULL
     /// value indicates that the new lease has been allocated, rather than
     /// lease being renewed.
     void createNameChangeRequests(const Lease4Ptr& lease,
-                                  const Lease4Ptr& old_lease);
+                                  const Lease4Ptr& old_lease,
+                                  const DdnsParams& ddns_params);
 
     /// @brief Attempts to renew received addresses
     ///
@@ -864,12 +965,9 @@ protected:
     /// are valid. Make sure that pointers are correct before calling this
     /// function.
     ///
-    /// @note This method is static because it is not dependent on the class
-    /// state.
-    ///
     /// @param ex The exchange holding both the client's message and the
     /// server's response.
-    static void adjustRemoteAddr(Dhcpv4Exchange& ex);
+    void adjustRemoteAddr(Dhcpv4Exchange& ex);
 
     /// @brief converts server-id to text
     /// Converts content of server-id option to a text representation, e.g.
@@ -933,20 +1031,6 @@ protected:
     /// @param pkt packet to be classified
     void classifyPacket(const Pkt4Ptr& pkt);
 
-public:
-
-    /// @brief Evaluate classes.
-    ///
-    /// @note Second part of the classification.
-    ///
-    /// Evaluate expressions of client classes: if it returns true the class
-    /// is added to the incoming packet.
-    ///
-    /// @param pkt packet to be classified.
-    /// @param depend_on_known if false classes depending on the KNOWN or
-    /// UNKNOWN classes are skipped, if true only these classes are evaluated.
-    static void evaluateClasses(const Pkt4Ptr& pkt, bool depend_on_known);
-
 protected:
 
     /// @brief Assigns incoming packet to zero or more classes (required pass).
@@ -958,7 +1042,7 @@ protected:
     /// @note The only-if-required flag is related because it avoids
     /// double evaluation (which is not forbidden).
     ///
-    /// @param ex The exchange holding needed informations.
+    /// @param ex The exchange holding needed information.
     void requiredClassify(Dhcpv4Exchange& ex);
 
     /// @brief Perform deferred option unpacking.
@@ -1032,7 +1116,14 @@ protected:
     /// @brief Controls access to the configuration backends.
     CBControlDHCPv4Ptr cb_control_;
 
+private:
+
+    /// @brief store value that defines if kea will send responses
+    /// to a source address of incoming packet. Only for testing.
+    bool test_send_responses_to_source_;
+
 public:
+
     /// Class methods for DHCPv4-over-DHCPv6 handler
 
     /// @brief Updates statistics for received packets
@@ -1070,6 +1161,13 @@ public:
     /// @brief Returns the index for "lease4_decline" hook point
     /// @return the index for "lease4_decline" hook point
     static int getHookIndexLease4Decline();
+
+    /// @brief Return a list of all paths that contain passwords or secrets for
+    /// kea-dhcp4.
+    ///
+    /// @return the list of lists of sequential JSON map keys needed to reach
+    /// the passwords and secrets.
+    std::list<std::list<std::string>> jsonPathsToRedact() const final override;
 };
 
 }  // namespace dhcp

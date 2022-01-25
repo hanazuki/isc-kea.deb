@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,7 +21,6 @@
 #include <dns/master_loader.h>
 
 #include <boost/scoped_ptr.hpp>
-#include <boost/bind.hpp>
 
 using namespace std;
 using namespace isc::dns;

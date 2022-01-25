@@ -51,6 +51,10 @@ Control connections over both HTTP and UNIX domain sockets are guarded
 with timeouts. The default timeout value is set to 10 seconds and is not
 configurable.
 
+This API can be used by external tools to manage and monitor Kea operation.
+An example of such a monitoring tool is ISC Stork. For details, see
+:ref:`stork`.
+
 .. _ctrl-channel-syntax:
 
 Data Syntax
@@ -172,6 +176,25 @@ that depends on the specific command.
    command to each service individually. Thus, the CA response to the
    controlling client contains an array of individual responses.
 
+.. note::
+
+   Since Kea 1.9.7 it is possible to put comments in the commands as
+   in the configuration file, for instance:
+
+::
+
+   {
+       "command": "foo",
+       // service is a list
+       "service": [ "dhcp4" ]
+       # command arguments are here.
+       "arguments": {
+           "param1": "value1"/*,
+           "param2": "value2",
+           ...*/
+       }
+   }
+
 .. _ctrl-channel-client:
 
 Using the Control Channel
@@ -203,7 +226,7 @@ the specific server directly and bypasses the Control Agent.
 It is also easy to open a UNIX socket programmatically. An example of a
 simple client written in C is available in the Kea Developer's Guide, in
 the Control Channel Overview chapter, in the
-`Using Control Channel <https://jenkins.isc.org/job/Kea_doc/doxygen/d2/d96/ctrlSocket.html#ctrlSocketClient>`__
+`Using Control Channel <https://reports.kea.isc.org/dev_guide/d2/d96/ctrlSocket.html#ctrlSocketClient>`__
 section.
 
 To use Kea's RESTful API with ``curl``, use the following:
@@ -288,6 +311,10 @@ invocation looks like this:
    {
        "command": "config-reload"
    }
+
+If the configuration file is incorrect reloading it can raise an error
+which leaves the server in an unusable state. Look at :ref:`command-config-set`
+what to do to recover a working server.
 
 .. _command-config-test:
 
@@ -467,7 +494,13 @@ as "Dhcp4" or "Dhcp6". For example:
    }
 
 If the new configuration proves to be invalid, the server retains its
-current configuration. Please note that the new configuration is
+current configuration but in some cases a fatal error message is logged
+indicating that the server no longer provides any service: a working
+configuration must be loaded as soon as possible. If the control channel
+is dead the configuration file can still be reloaded using the SIGHUP
+signal. Of course a last chance solution is to restart the server.
+
+Please note that the new configuration is
 retained in memory only; if the server is restarted or a configuration
 reload is triggered via a signal, the server uses the configuration
 stored in its configuration file. The server's response contains a
@@ -496,10 +529,38 @@ may look like this:
 
    {
        "command": "shutdown"
+       "arguments": {
+           "exit-value": 3
+       }
    }
 
 The server responds with a confirmation that the shutdown procedure has
-been initiated.
+been initiated.  The optional parameter, "exit-value", specifies the
+numeric value with which the server process will exit to the system.
+The default value is zero.
+
+The DDNS daemon supports an extra parameter "type" which controls the way
+the process cleans up on exit. The supported shutdown types are:
+
+ -  "normal" - Stops the queue manager and finishes all current transactions
+    before exiting. This is the default.
+
+ -  "drain_first" - Stops the queue manager but continues processing requests
+    from the queue until it is empty.
+
+ -  "now" - Exits immediately.
+
+An example command may look like this:
+
+::
+
+   {
+       "command": "shutdown"
+       "arguments": {
+           "exit-value": 3,
+           "type": "drain_first"
+       }
+   }
 
 .. _command-dhcp-disable:
 
@@ -516,12 +577,23 @@ failure. The optional parameter "max-period" specifies the time in
 seconds after which the DHCP service should be automatically re-enabled,
 if the ``dhcp-enable`` command is not sent before this time elapses.
 
+Since Kea 1.9.4 there is an additional "origin" parameter that specifies the
+command source. A server administrator should typically omit this parameter
+because the default value "user" indicates that the administrator sent the
+command. This command can also be sent by the partner server running HA hooks
+library. In that case, the partner server sets the parameter to "ha-partner".
+This value is reserved for the communication between HA partners and should not
+be specified in the administrator's commands because it may interfere with the
+HA operation. The administrator should either omit this parameter or set it to
+"user".
+
 ::
 
    {
        "command": "dhcp-disable",
        "arguments": {
-           "max-period": 20
+           "max-period": 20,
+           "origin": "user"
        }
    }
 
@@ -532,10 +604,23 @@ The dhcp-enable Command
 
 The ``dhcp-enable`` command globally enables the DHCP service.
 
+Since Kea 1.9.4 there is an additional "origin" parameter that specifies the
+command source. A server administrator should typically omit this parameter
+because the default value "user" indicates that the administrator sent the
+command. This command can also be sent by the partner server running HA hooks
+library. In that case, the partner server sets the parameter to "ha-partner".
+This value is reserved for the communication between HA partners and should not
+be specified in the administrator's commands because it may interfere with the
+HA operation. The administrator should either omit this parameter or set it to
+"user".
+
 ::
 
    {
-       "command": "dhcp-enable"
+       "command": "dhcp-enable",
+       "arguments": {
+           "origin": "user"
+       }
    }
 
 .. _command-status-get:
@@ -551,7 +636,7 @@ The ``status-get`` command returns server's runtime information:
 
  - reload: number of seconds since the last configuration (re)load.
 
- - ha-servers: HA specific status information about the DHCP servers
+ - high-availability: HA specific status information about the DHCP servers
    configured to use HA hooks library:
 
      * local: for the local server the state, the role (primary,
@@ -559,15 +644,33 @@ The ``status-get`` command returns server's runtime information:
        processing).
 
      * remote: for the remote server the last known state, served
-       HA scopes and the role of the server in HA relationship.
+       HA scopes and the role of the server in the HA relationship.
 
-The ``ha-servers`` information is only returned when the command is
+ - multi-threading-enabled: flag indicating if multi-threading is enabled.
+
+ - thread-pool-size: number of dhcp service threads.
+
+ - packet-queue-size: maximum size of the packet queue. There is one queue,
+   regardless of how many threads are running.
+
+ - packet-queue-statistics: average queue size for last 10, 100 and 1000
+   packets. Statistics using an approach similar to the Unix ``top`` command.
+   The averaged queue size for the last 10 packets can be considered an
+   instantaneous value, while the average for the last 1000 packets shows
+   a longer term trend.
+
+The ``high-availability`` information is returned only when the command is
 sent to the DHCP servers being in the HA setup. This parameter is
 never returned when the ``status-get`` command is sent to the
-Control Agent or DDNS deamon.
+Control Agent or DDNS daemon.
+
+The ``thread-pool-size`` and ``packet-queue-size`` parameters are returned only
+when the command is sent to DHCP servers with multi-threading enabled. These two
+parameters and ``multi-threading-enabled`` are never returned when the
+``status-get`` command is sent to the Control Agent or DDNS daemon.
 
 To learn more about the HA status information returned by the
-``status-get`` command please refer to the the :ref:`command-ha-status-get`
+``status-get`` command please refer to the :ref:`command-ha-status-get`
 section.
 
 

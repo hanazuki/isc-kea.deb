@@ -1,6 +1,6 @@
 #!@PYTHON@
 
-# Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,10 +17,10 @@ Text client for Control Agent process
 # that's a stand alone package that requires separate installation. One of
 # the design requirements was to not require any additional packages, so
 # the code uses standard libraries available in python. Hence two versions.
-import os
 import sys
 import signal
 import argparse
+from base64 import b64encode
 
 sys.path.append('@PKGPYTHONDIR@')
 
@@ -29,9 +29,13 @@ from kea_conn import CARequest # CAResponse
 if sys.version_info[0] == 2:
     # This is Python 2.x
     import kea_connector2 as kea_connector
+    def auth8(string):
+        """Convert str into unicode"""
+        return unicode(string, 'utf-8')
 elif sys.version_info[0] == 3:
     # This is Python 3.x
     import kea_connector3 as kea_connector
+    auth8 = str
 else:
     # This is... have no idea what it is.
     raise SystemExit("Unknown python version:" + str(sys.version_info[0]))
@@ -63,12 +67,25 @@ def shell_body():
     parser.add_argument('--path', type=str, default='',
                         help='Path of the URL to connect to '
                         '(default: "")')
+    parser.add_argument('--ca', type=str, default='',
+                        help='File or directory name of the CA '
+                        '(default: "" i.e. do not use HTTPS)')
+    parser.add_argument('--cert', type=str, default='',
+                        help='File name of the client certificate '
+                        '(default: "")')
+    parser.add_argument('--key', type=str, default='',
+                        help='File name of the client private key '
+                        '(default: "")')
     parser.add_argument('--timeout', type=int, default='10',
                         help='Timeout (in seconds) when attempting to '
                         'connect to CA (default: 10)')
     parser.add_argument('--service', nargs="?", action="append",
-                        help='target spcified service. If not specified,'
+                        help='target specified service. If not specified,'
                         'control agent will receive command.')
+    parser.add_argument('--auth-user', type=auth8, default='',
+                        help='Basic HTTP authentication user')
+    parser.add_argument('--auth-password', type=auth8, default='',
+                        help='Basic HTTP authentication password')
     parser.add_argument('command', type=str, nargs="?",
                         default='list-commands',
                         help='command to be executed. If not specified, '
@@ -78,7 +95,7 @@ def shell_body():
 
     if cmd_args.v:
         print(VERSION)
-        exit(0)
+        sys.exit(0)
 
     # Ok, now it's time to put the parameters parsed into the structure to be
     # used by the connection.
@@ -88,6 +105,29 @@ def shell_body():
     params.http_host = cmd_args.host
     params.http_port = cmd_args.port
     params.path += cmd_args.path
+    if cmd_args.ca:
+        params.ca = cmd_args.ca
+        params.scheme = 'https'
+    if (cmd_args.cert != '' and cmd_args.key == '') or \
+       (cmd_args.cert == '' and cmd_args.key != ''):
+        print("--cert and --key must be used together")
+        sys.exit(1)
+    if cmd_args.cert:
+        if cmd_args.ca == '':
+            print("--cert and --key with HTTPS disabled (no --ca)")
+            sys.exit(1)
+        params.cert = cmd_args.cert
+    if cmd_args.key:
+        # HTTPS check already done for the cert
+        params.key = cmd_args.key
+    if cmd_args.auth_user != '':
+        user = cmd_args.auth_user
+        password = cmd_args.auth_password
+        secret = b':'.join((user.encode('utf-8'), password.encode('utf-8')))
+        if sys.version_info[0] == 3:
+            params.auth = b64encode(secret).strip().decode('ascii')
+        else:
+            params.auth = b64encode(secret).strip().encode('ascii')
     params.timeout = cmd_args.timeout
     params.version = VERSION
 

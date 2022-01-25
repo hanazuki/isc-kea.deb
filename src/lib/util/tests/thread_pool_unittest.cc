@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,13 +11,16 @@
 #include <exceptions/exceptions.h>
 #include <util/thread_pool.h>
 
-#include <boost/function.hpp>
+#include <signal.h>
 
 using namespace isc;
 using namespace isc::util;
 using namespace std;
 
 namespace {
+
+/// @brief define CallBack type
+typedef function<void()> CallBack;
 
 /// @brief Test Fixture for testing isc::dhcp::ThreadPool
 class ThreadPoolTest : public ::testing::Test {
@@ -54,6 +57,22 @@ public:
         cv_.notify_all();
     }
 
+    /// @brief task function which tries to stop the thread pool and then calls
+    /// @ref runAndWait
+    void runStopResetAndWait(ThreadPool<CallBack>* thread_pool) {
+        EXPECT_THROW(thread_pool->stop(), MultiThreadingInvalidOperation);
+        EXPECT_THROW(thread_pool->reset(), MultiThreadingInvalidOperation);
+        EXPECT_THROW(thread_pool->wait(), MultiThreadingInvalidOperation);
+        EXPECT_THROW(thread_pool->wait(0), MultiThreadingInvalidOperation);
+        sigset_t nsset;
+        pthread_sigmask(SIG_SETMASK, 0, &nsset);
+        EXPECT_EQ(1, sigismember(&nsset, SIGCHLD));
+        EXPECT_EQ(1, sigismember(&nsset, SIGINT));
+        EXPECT_EQ(1, sigismember(&nsset, SIGHUP));
+        EXPECT_EQ(1, sigismember(&nsset, SIGTERM));
+        EXPECT_NO_THROW(runAndWait());
+    }
+
     /// @brief reset all counters and internal test state
     void reset(uint32_t thread_count) {
         // stop test threads
@@ -62,6 +81,7 @@ public:
         thread_count_ = thread_count;
         count_ = 0;
         wait_ = true;
+        ids_.clear();
         history_.clear();
     }
 
@@ -192,11 +212,8 @@ private:
     list<boost::shared_ptr<std::thread>> threads_;
 };
 
-/// @brief define CallBack type
-typedef function<void()> CallBack;
-
 /// @brief test ThreadPool add and count
-TEST_F(ThreadPoolTest, testAddAndCount) {
+TEST_F(ThreadPoolTest, addAndCount) {
     uint32_t items_count;
     CallBack call_back;
     ThreadPool<CallBack> thread_pool;
@@ -211,7 +228,9 @@ TEST_F(ThreadPoolTest, testAddAndCount) {
 
     // add items to stopped thread pool
     for (uint32_t i = 0; i < items_count; ++i) {
-        EXPECT_NO_THROW(thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        bool ret = true;
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
     }
 
     // the item count should match
@@ -226,7 +245,7 @@ TEST_F(ThreadPoolTest, testAddAndCount) {
 }
 
 /// @brief test ThreadPool start and stop
-TEST_F(ThreadPoolTest, testStartAndStop) {
+TEST_F(ThreadPoolTest, startAndStop) {
     uint32_t items_count;
     uint32_t thread_count;
     CallBack call_back;
@@ -277,7 +296,9 @@ TEST_F(ThreadPoolTest, testStartAndStop) {
 
     // add items to stopped thread pool
     for (uint32_t i = 0; i < items_count; ++i) {
-        EXPECT_NO_THROW(thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        bool ret = true;
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
     }
 
     // the item count should match
@@ -310,12 +331,14 @@ TEST_F(ThreadPoolTest, testStartAndStop) {
     EXPECT_NO_THROW(thread_pool.start(thread_count));
     // the item count should be 0
     ASSERT_EQ(thread_pool.count(), 0);
-    // the thread count should be 0
+    // the thread count should match
     ASSERT_EQ(thread_pool.size(), thread_count);
 
     // add items to running thread pool
     for (uint32_t i = 0; i < items_count; ++i) {
-        EXPECT_NO_THROW(thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        bool ret = true;
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
     }
 
     // wait for all items to be processed
@@ -355,7 +378,9 @@ TEST_F(ThreadPoolTest, testStartAndStop) {
 
     // add items to stopped thread pool
     for (uint32_t i = 0; i < items_count; ++i) {
-        EXPECT_NO_THROW(thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        bool ret = true;
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
     }
 
     // the item count should match
@@ -386,6 +411,251 @@ TEST_F(ThreadPoolTest, testStartAndStop) {
     ASSERT_EQ(thread_pool.count(), 0);
     // the thread count should be 0
     ASSERT_EQ(thread_pool.size(), 0);
+
+    items_count = 16;
+    thread_count = 16;
+    // prepare setup
+    reset(thread_count);
+
+    // create tasks which try to stop the thread pool and then block thread pool
+    // threads until signaled by main thread to force all threads of the thread
+    // pool to run exactly one task
+    call_back = std::bind(&ThreadPoolTest::runStopResetAndWait, this, &thread_pool);
+
+    // calling start should create the threads and should keep the queued items
+    EXPECT_NO_THROW(thread_pool.start(thread_count));
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should match
+    ASSERT_EQ(thread_pool.size(), thread_count);
+
+    // add items to running thread pool
+    for (uint32_t i = 0; i < items_count; ++i) {
+        bool ret = true;
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
+    }
+
+    // wait for all items to be processed
+    waitTasks(thread_count, items_count);
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should match
+    ASSERT_EQ(thread_pool.size(), thread_count);
+    // as each thread pool thread is still waiting on main to unblock, each
+    // thread should have been registered in ids list
+    checkIds(items_count);
+    // all items should have been processed
+    ASSERT_EQ(count(), items_count);
+
+    // check that the number of processed tasks matches the number of items
+    checkRunHistory(items_count);
+
+    // signal thread pool tasks to continue
+    signalThreads();
+
+    // calling stop should clear all threads and should keep queued items
+    EXPECT_NO_THROW(thread_pool.stop());
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should be 0
+    ASSERT_EQ(thread_pool.size(), 0);
+
+    /// statistics
+    std::cout << "stat10: " << thread_pool.getQueueStat(10) << std::endl;
+    std::cout << "stat100: " << thread_pool.getQueueStat(100) << std::endl;
+    std::cout << "stat1000: " << thread_pool.getQueueStat(1000) << std::endl;
+}
+
+/// @brief test ThreadPool wait
+TEST_F(ThreadPoolTest, wait) {
+    uint32_t items_count;
+    uint32_t thread_count;
+    CallBack call_back;
+    ThreadPool<CallBack> thread_pool;
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should be 0
+    ASSERT_EQ(thread_pool.size(), 0);
+
+    items_count = 16;
+    thread_count = 16;
+    // prepare setup
+    reset(thread_count);
+
+    // create tasks which block thread pool threads until signaled by main
+    // thread to force all threads of the thread pool to run exactly one task
+    call_back = std::bind(&ThreadPoolTest::runAndWait, this);
+
+    // add items to stopped thread pool
+    for (uint32_t i = 0; i < items_count; ++i) {
+        bool ret = true;
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
+    }
+
+    // the item count should match
+    ASSERT_EQ(thread_pool.count(), items_count);
+    // the thread count should be 0
+    ASSERT_EQ(thread_pool.size(), 0);
+
+    // calling start should create the threads and should keep the queued items
+    EXPECT_NO_THROW(thread_pool.start(thread_count));
+    // the thread count should match
+    ASSERT_EQ(thread_pool.size(), thread_count);
+
+    // wait for all items to be processed
+    waitTasks(thread_count, items_count);
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should match
+    ASSERT_EQ(thread_pool.size(), thread_count);
+    // as each thread pool thread is still waiting on main to unblock, each
+    // thread should have been registered in ids list
+    checkIds(items_count);
+    // all items should have been processed
+    ASSERT_EQ(count(), items_count);
+
+    // check that the number of processed tasks matches the number of items
+    checkRunHistory(items_count);
+
+    // check that waiting on tasks does timeout
+    ASSERT_FALSE(thread_pool.wait(1));
+
+    // signal thread pool tasks to continue
+    signalThreads();
+
+    // calling stop should clear all threads and should keep queued items
+    EXPECT_NO_THROW(thread_pool.stop());
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should be 0
+    ASSERT_EQ(thread_pool.size(), 0);
+
+    items_count = 64;
+    thread_count = 16;
+    // prepare setup
+    reset(thread_count);
+
+    // create tasks which do not block the thread pool threads so that several
+    // tasks can be run on the same thread and some of the threads never even
+    // having a chance to run
+    call_back = std::bind(&ThreadPoolTest::run, this);
+
+    // add items to stopped thread pool
+    for (uint32_t i = 0; i < items_count; ++i) {
+        bool ret = true;
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
+    }
+
+    // the item count should match
+    ASSERT_EQ(thread_pool.count(), items_count);
+    // the thread count should be 0
+    ASSERT_EQ(thread_pool.size(), 0);
+
+    // calling start should create the threads and should keep the queued items
+    EXPECT_NO_THROW(thread_pool.start(thread_count));
+    // the thread count should match
+    ASSERT_EQ(thread_pool.size(), thread_count);
+
+    // wait for all items to be processed
+    thread_pool.wait();
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should match
+    ASSERT_EQ(thread_pool.size(), thread_count);
+    // all items should have been processed
+    ASSERT_EQ(count(), items_count);
+
+    // check that the number of processed tasks matches the number of items
+    checkRunHistory(items_count);
+}
+
+/// @brief test ThreadPool max queue size
+TEST_F(ThreadPoolTest, maxQueueSize) {
+    uint32_t items_count;
+    CallBack call_back;
+    ThreadPool<CallBack> thread_pool;
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should be 0
+    ASSERT_EQ(thread_pool.size(), 0);
+
+    items_count = 20;
+
+    call_back = std::bind(&ThreadPoolTest::run, this);
+
+    // add items to stopped thread pool
+    bool ret = true;
+    for (uint32_t i = 0; i < items_count; ++i) {
+        EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
+    }
+
+    // the item count should match
+    ASSERT_EQ(thread_pool.count(), items_count);
+
+    // change the max count
+    ASSERT_EQ(thread_pool.getMaxQueueSize(), 0);
+    size_t max_queue_size = 10;
+    thread_pool.setMaxQueueSize(max_queue_size);
+    EXPECT_EQ(thread_pool.getMaxQueueSize(), max_queue_size);
+
+    // adding an item should squeeze the queue
+    EXPECT_EQ(thread_pool.count(), items_count);
+    EXPECT_NO_THROW(ret = thread_pool.add(boost::make_shared<CallBack>(call_back)));
+    EXPECT_FALSE(ret);
+    EXPECT_EQ(thread_pool.count(), max_queue_size);
+}
+
+/// @brief test ThreadPool add front.
+TEST_F(ThreadPoolTest, addFront) {
+    uint32_t items_count;
+    CallBack call_back;
+    ThreadPool<CallBack> thread_pool;
+    // the item count should be 0
+    ASSERT_EQ(thread_pool.count(), 0);
+    // the thread count should be 0
+    ASSERT_EQ(thread_pool.size(), 0);
+
+    items_count = 20;
+
+    call_back = std::bind(&ThreadPoolTest::run, this);
+
+    // add items to stopped thread pool
+    bool ret = true;
+    for (uint32_t i = 0; i < items_count; ++i) {
+        EXPECT_NO_THROW(ret = thread_pool.addFront(boost::make_shared<CallBack>(call_back)));
+        EXPECT_TRUE(ret);
+    }
+
+    // the item count should match
+    ASSERT_EQ(thread_pool.count(), items_count);
+
+    // change the max count
+    ASSERT_EQ(thread_pool.getMaxQueueSize(), 0);
+    size_t max_queue_size = 10;
+    thread_pool.setMaxQueueSize(max_queue_size);
+    EXPECT_EQ(thread_pool.getMaxQueueSize(), max_queue_size);
+
+    // adding an item at front should change nothing queue
+    EXPECT_EQ(thread_pool.count(), items_count);
+    EXPECT_NO_THROW(ret = thread_pool.addFront(boost::make_shared<CallBack>(call_back)));
+    EXPECT_FALSE(ret);
+    EXPECT_EQ(thread_pool.count(), items_count);
+}
+
+/// @brief test ThreadPool get queue statistics.
+TEST_F(ThreadPoolTest, getQueueStat) {
+    ThreadPool<CallBack> thread_pool;
+    EXPECT_THROW(thread_pool.getQueueStat(0), InvalidParameter);
+    EXPECT_THROW(thread_pool.getQueueStat(1), InvalidParameter);
+    EXPECT_THROW(thread_pool.getQueueStat(-10), InvalidParameter);
+    EXPECT_THROW(thread_pool.getQueueStat(10000), InvalidParameter);
+    EXPECT_NO_THROW(thread_pool.getQueueStat(10));
+    EXPECT_NO_THROW(thread_pool.getQueueStat(100));
+    EXPECT_NO_THROW(thread_pool.getQueueStat(1000));
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -30,7 +30,7 @@ CfgOptionDef::copyTo(CfgOptionDef& new_config) const {
              def != defs->end(); ++def) {
             OptionDefinitionPtr new_def =
                 OptionDefinitionPtr(new OptionDefinition(**def));
-            new_config.add(new_def, *name);
+            new_config.add(new_def);
         }
     }
 }
@@ -76,18 +76,16 @@ CfgOptionDef::equals(const CfgOptionDef& other) const {
 }
 
 void
-CfgOptionDef::add(const OptionDefinitionPtr& def,
-                  const std::string& option_space) {
-    if (!OptionSpace::validateName(option_space)) {
-        isc_throw(BadValue, "invalid option space name '"
-                  << option_space << "'");
-
+CfgOptionDef::add(const OptionDefinitionPtr& def) {
     // Option definition being added must be a valid pointer.
-    } else if (!def) {
+    if (!def) {
         isc_throw(MalformedOptionDefinition,
                   "option definition must not be NULL");
+    }
+    const std::string& option_space = def->getOptionSpaceName();
+
     // Must not duplicate an option definition.
-    } else if (get(option_space, def->getCode())) {
+    if (get(option_space, def->getCode())) {
         isc_throw(DuplicateOptionDefinition, "option definition with code '"
                   << def->getCode() << "' already exists in option"
                   " space '" << option_space << "'");
@@ -107,7 +105,7 @@ CfgOptionDef::add(const OptionDefinitionPtr& def,
                   << option_space << "'");
     }
     // Add the definition.
-    option_definitions_.addItem(def, option_space);
+    option_definitions_.addItem(def);
 }
 
 OptionDefContainerPtr
@@ -251,7 +249,7 @@ CfgOptionDef::merge(CfgOptionDef& other) {
             }
 
             // Not in "other" so add it.
-            other.add(my_def, space);
+            other.add(my_def);
         }
     }
 

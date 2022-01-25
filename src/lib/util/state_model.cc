@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,7 +6,6 @@
 
 #include <config.h>
 #include <util/state_model.h>
-#include <boost/bind.hpp>
 #include <string>
 
 namespace isc {
@@ -25,7 +24,7 @@ State::~State() {
 
 void
 State::run() {
-        (handler_)();
+    (handler_)();
 }
 
 bool
@@ -91,7 +90,7 @@ StateModel::StateModel() : events_(), states_(), dictionaries_initted_(false),
                            curr_state_(NEW_ST), prev_state_(NEW_ST),
                            last_event_(NOP_EVT), next_event_(NOP_EVT),
                            on_entry_flag_(false), on_exit_flag_(false),
-                           paused_(false) {
+                           paused_(false), mutex_(new std::mutex) {
 }
 
 StateModel::~StateModel(){
@@ -113,7 +112,7 @@ void
 StateModel::runModel(unsigned int run_event) {
     /// If the dictionaries aren't built bail out.
     if (!dictionaries_initted_) {
-       abortModel("runModel invoked before model has been initialized");
+        abortModel("runModel invoked before model has been initialized");
     }
 
     try {
@@ -127,8 +126,7 @@ StateModel::runModel(unsigned int run_event) {
 
             // Keep going until a handler sets next event to a NOP_EVT.
         } while (!isModelDone() && getNextEvent() != NOP_EVT);
-    }
-    catch (const std::exception& ex) {
+    } catch (const std::exception& ex) {
         // The model has suffered an unexpected exception. This constitutes
         // a model violation and indicates a programmatic shortcoming.
         // In theory, the model should account for all error scenarios and
@@ -144,6 +142,10 @@ StateModel::nopStateHandler() {
 
 void
 StateModel::initDictionaries() {
+    std::lock_guard<std::mutex> lock(*mutex_);
+    if (dictionaries_initted_) {
+        isc_throw(StateModelError, "Dictionaries already initialized");
+    }
     // First let's build and verify the dictionary of events.
     try {
         defineEvents();
@@ -166,7 +168,7 @@ StateModel::initDictionaries() {
 
 void
 StateModel::defineEvent(unsigned int event_value, const std::string& label) {
-    if (!isModelNew()) {
+    if (!isModelNewInternal()) {
         // Don't allow for self-modifying models.
         isc_throw(StateModelError, "Events may only be added to a new model."
                    << event_value << " - " << label);
@@ -193,7 +195,7 @@ StateModel::getEvent(unsigned int event_value) {
 void
 StateModel::defineState(unsigned int state_value, const std::string& label,
                         StateHandler handler, const StatePausing& state_pausing) {
-    if (!isModelNew()) {
+    if (!isModelNewInternal()) {
         // Don't allow for self-modifying maps.
         isc_throw(StateModelError, "States may only be added to a new model."
                    << state_value << " - " << label);
@@ -209,6 +211,12 @@ StateModel::defineState(unsigned int state_value, const std::string& label,
 
 const StatePtr
 StateModel::getState(unsigned int state_value) {
+    std::lock_guard<std::mutex> lock(*mutex_);
+    return getStateInternal(state_value);
+}
+
+const StatePtr
+StateModel::getStateInternal(unsigned int state_value) {
     if (!states_.isDefined(state_value)) {
         isc_throw(StateModelError,
                   "State value is not defined:" << state_value);
@@ -236,15 +244,15 @@ StateModel::verifyEvents() {
 void
 StateModel::defineStates() {
     defineState(NEW_ST, "NEW_ST",
-                boost::bind(&StateModel::nopStateHandler, this));
+                std::bind(&StateModel::nopStateHandler, this));
     defineState(END_ST, "END_ST",
-                boost::bind(&StateModel::nopStateHandler, this));
+                std::bind(&StateModel::nopStateHandler, this));
 }
 
 void
 StateModel::verifyStates() {
-    getState(NEW_ST);
-    getState(END_ST);
+    getStateInternal(NEW_ST);
+    getStateInternal(END_ST);
 }
 
 void
@@ -254,8 +262,9 @@ StateModel::onModelFailure(const std::string&) {
 
 void
 StateModel::transition(unsigned int state, unsigned int event) {
-    setState(state);
-    postNextEvent(event);
+    std::lock_guard<std::mutex> lock(*mutex_);
+    setStateInternal(state);
+    postNextEventInternal(event);
 }
 
 void
@@ -265,6 +274,7 @@ StateModel::endModel() {
 
 void
 StateModel::unpauseModel() {
+    std::lock_guard<std::mutex> lock(*mutex_);
     paused_ = false;
 }
 
@@ -279,6 +289,12 @@ StateModel::abortModel(const std::string& explanation) {
 
 void
 StateModel::setState(unsigned int state) {
+    std::lock_guard<std::mutex> lock(*mutex_);
+    setStateInternal(state);
+}
+
+void
+StateModel::setStateInternal(unsigned int state) {
     if (state != END_ST && !states_.isDefined(state)) {
         isc_throw(StateModelError,
                   "Attempt to set state to an undefined value: " << state );
@@ -295,13 +311,19 @@ StateModel::setState(unsigned int state) {
 
     // If we're entering the new state we need to see if we should
     // pause the state model in this state.
-    if (on_entry_flag_ && !paused_ && (getState(state)->shouldPause())) {
+    if (on_entry_flag_ && !paused_ && getStateInternal(state)->shouldPause()) {
         paused_ = true;
     }
 }
 
 void
 StateModel::postNextEvent(unsigned int event_value) {
+    std::lock_guard<std::mutex> lock(*mutex_);
+    postNextEventInternal(event_value);
+}
+
+void
+StateModel::postNextEventInternal(unsigned int event_value) {
     // Check for FAIL_EVT as special case of model error before events are
     // defined.
     if (event_value != FAIL_EVT && !events_.isDefined(event_value)) {
@@ -315,6 +337,7 @@ StateModel::postNextEvent(unsigned int event_value) {
 
 bool
 StateModel::doOnEntry() {
+    std::lock_guard<std::mutex> lock(*mutex_);
     bool ret = on_entry_flag_;
     on_entry_flag_ = false;
     return (ret);
@@ -322,6 +345,7 @@ StateModel::doOnEntry() {
 
 bool
 StateModel::doOnExit() {
+    std::lock_guard<std::mutex> lock(*mutex_);
     bool ret = on_exit_flag_;
     on_exit_flag_ = false;
     return (ret);
@@ -329,81 +353,112 @@ StateModel::doOnExit() {
 
 unsigned int
 StateModel::getCurrState() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     return (curr_state_);
 }
 
 unsigned int
 StateModel::getPrevState() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     return (prev_state_);
 }
 
 unsigned int
 StateModel::getLastEvent() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     return (last_event_);
 }
 
 unsigned int
 StateModel::getNextEvent() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     return (next_event_);
 }
+
 bool
 StateModel::isModelNew() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
+    return isModelNewInternal();
+}
+
+bool
+StateModel::isModelNewInternal() const {
     return (curr_state_ == NEW_ST);
 }
 
 bool
 StateModel::isModelRunning() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     return ((curr_state_ != NEW_ST) && (curr_state_ != END_ST));
 }
 
 bool
 StateModel::isModelWaiting() const {
-    return (isModelRunning() && (next_event_ == NOP_EVT));
+    std::lock_guard<std::mutex> lock(*mutex_);
+    return ((curr_state_ != NEW_ST) && (curr_state_ != END_ST) &&
+            (next_event_ == NOP_EVT));
 }
 
 bool
 StateModel::isModelDone() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     return (curr_state_ == END_ST);
 }
 
 bool
 StateModel::didModelFail() const {
-    return (isModelDone() && (next_event_ == FAIL_EVT));
+    std::lock_guard<std::mutex> lock(*mutex_);
+    return ((curr_state_ == END_ST) && (next_event_ == FAIL_EVT));
 }
 
 bool
 StateModel::isModelPaused() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     return (paused_);
 }
 
 std::string
 StateModel::getStateLabel(const int state) const {
+    std::lock_guard<std::mutex> lock(*mutex_);
+    return getStateLabelInternal(state);
+}
+
+std::string
+StateModel::getStateLabelInternal(const int state) const {
     return (states_.getLabel(state));
 }
 
 std::string
 StateModel::getEventLabel(const int event) const {
+    std::lock_guard<std::mutex> lock(*mutex_);
+    return getEventLabelInternal(event);
+}
+
+std::string
+StateModel::getEventLabelInternal(const int event) const {
     return (events_.getLabel(event));
 }
 
 std::string
 StateModel::getContextStr() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     std::ostringstream stream;
     stream << "current state: [ "
-            << curr_state_ << " " << getStateLabel(curr_state_)
+            << curr_state_ << " " << getStateLabelInternal(curr_state_)
             << " ] next event: [ "
-            << next_event_ << " " << getEventLabel(next_event_) << " ]";
-    return(stream.str());
+            << next_event_ << " " << getEventLabelInternal(next_event_) << " ]";
+    return (stream.str());
 }
 
 std::string
 StateModel::getPrevContextStr() const {
+    std::lock_guard<std::mutex> lock(*mutex_);
     std::ostringstream stream;
     stream << "previous state: [ "
-           << prev_state_ << " " << getStateLabel(prev_state_)
+           << prev_state_ << " " << getStateLabelInternal(prev_state_)
            << " ] last event: [ "
-           << next_event_ << " " << getEventLabel(last_event_) << " ]";
-    return(stream.str());
+           << next_event_ << " " << getEventLabelInternal(last_event_) << " ]";
+    return (stream.str());
 }
 
 } // namespace isc::util

@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -128,12 +128,12 @@ Element::setValue(const std::map<std::string, ConstElementPtr>&) {
 
 ConstElementPtr
 Element::get(const int) const {
-    throwTypeError("get(int) called on a non-list Element");
+    throwTypeError("get(int) called on a non-container Element");
 }
 
 ElementPtr
 Element::getNonConst(const int) const {
-    throwTypeError("get(int) called on a non-list Element");
+    throwTypeError("get(int) called on a non-container Element");
 }
 
 void
@@ -148,7 +148,7 @@ Element::add(ElementPtr) {
 
 void
 Element::remove(const int) {
-    throwTypeError("remove(int) called on a non-list Element");
+    throwTypeError("remove(int) called on a non-container Element");
 }
 
 size_t
@@ -158,7 +158,7 @@ Element::size() const {
 
 bool
 Element::empty() const {
-    throwTypeError("empty() called on a non-list Element");
+    throwTypeError("empty() called on a non-container Element");
 }
 
 ConstElementPtr
@@ -194,13 +194,12 @@ Element::find(const std::string&, ConstElementPtr&) const {
 namespace {
 inline void
 throwJSONError(const std::string& error, const std::string& file, int line,
-               int pos)
-{
+               int pos) {
     std::stringstream ss;
     ss << error << " in " + file + ":" << line << ":" << pos;
     isc_throw(JSONError, ss.str());
 }
-}
+} // end anonymous namespace
 
 std::ostream&
 operator<<(std::ostream& out, const Element& e) {
@@ -214,7 +213,26 @@ operator==(const Element& a, const Element& b) {
 
 bool operator!=(const Element& a, const Element& b) {
     return (!a.equals(b));
-};
+}
+
+bool
+operator<(Element const& a, Element const& b) {
+    if (a.getType() != b.getType()) {
+        isc_throw(BadValue, "cannot compare Elements of different types");
+    }
+    switch (a.getType()) {
+    case Element::integer:
+        return a.intValue() < b.intValue();
+    case Element::real:
+        return a.doubleValue() < b.doubleValue();
+    case Element::boolean:
+        return b.boolValue() || !a.boolValue();
+    case Element::string:
+        return std::strcmp(a.stringValue().c_str(), b.stringValue().c_str()) < 0;
+    }
+    isc_throw(BadValue, "cannot compare Elements of type " <<
+                            std::to_string(a.getType()));
+}
 
 //
 // factory functions
@@ -232,12 +250,12 @@ Element::create(const long long int i, const Position& pos) {
 ElementPtr
 Element::create(const int i, const Position& pos) {
     return (create(static_cast<long long int>(i), pos));
-};
+}
 
 ElementPtr
 Element::create(const long int i, const Position& pos) {
     return (create(static_cast<long long int>(i), pos));
-};
+}
 
 ElementPtr
 Element::create(const double d, const Position& pos) {
@@ -306,9 +324,8 @@ skipChars(std::istream& in, const char* chars, int& line, int& pos) {
 //
 // It returns the found character (as an int value).
 int
-skipTo(std::istream& in, const std::string& file, int& line,
-       int& pos, const char* chars, const char* may_skip="")
-{
+skipTo(std::istream& in, const std::string& file, int& line, int& pos,
+       const char* chars, const char* may_skip="") {
     int c = in.get();
     ++pos;
     while (c != EOF) {
@@ -342,8 +359,7 @@ skipTo(std::istream& in, const std::string& file, int& line,
 // error on the rest)?
 std::string
 strFromStringstream(std::istream& in, const std::string& file,
-                    const int line, int& pos)
-{
+                    const int line, int& pos) {
     std::stringstream ss;
     int c = in.get();
     ++pos;
@@ -469,7 +485,7 @@ numberFromStringstream(std::istream& in, int& pos) {
 //
 ElementPtr
 fromStringstreamNumber(std::istream& in, const std::string& file,
-                       const int& line, int& pos) {
+                       const int line, int& pos) {
     // Remember position where the value starts. It will be set in the
     // Position structure of the Element to be created.
     const uint32_t start_pos = pos;
@@ -498,8 +514,7 @@ fromStringstreamNumber(std::istream& in, const std::string& file,
 
 ElementPtr
 fromStringstreamBool(std::istream& in, const std::string& file,
-                     const int line, int& pos)
-{
+                     const int line, int& pos) {
     // Remember position where the value starts. It will be set in the
     // Position structure of the Element to be created.
     const uint32_t start_pos = pos;
@@ -521,8 +536,7 @@ fromStringstreamBool(std::istream& in, const std::string& file,
 
 ElementPtr
 fromStringstreamNull(std::istream& in, const std::string& file,
-                     const int line, int& pos)
-{
+                     const int line, int& pos) {
     // Remember position where the value starts. It will be set in the
     // Position structure of the Element to be created.
     const uint32_t start_pos = pos;
@@ -539,8 +553,7 @@ fromStringstreamNull(std::istream& in, const std::string& file,
 
 ElementPtr
 fromStringstreamString(std::istream& in, const std::string& file, int& line,
-                       int& pos)
-{
+                       int& pos) {
     // Remember position where the value starts. It will be set in the
     // Position structure of the Element to be created.
     const uint32_t start_pos = pos;
@@ -552,8 +565,7 @@ fromStringstreamString(std::istream& in, const std::string& file, int& line,
 
 ElementPtr
 fromStringstreamList(std::istream& in, const std::string& file, int& line,
-                     int& pos)
-{
+                     int& pos) {
     int c = 0;
     ElementPtr list = Element::createList(Element::Position(file, line, pos));
     ElementPtr cur_list_element;
@@ -574,8 +586,7 @@ fromStringstreamList(std::istream& in, const std::string& file, int& line,
 
 ElementPtr
 fromStringstreamMap(std::istream& in, const std::string& file, int& line,
-                    int& pos)
-{
+                    int& pos) {
     ElementPtr map = Element::createMap(Element::Position(file, line, pos));
     skipChars(in, WHITESPACE, line, pos);
     int c = in.peek();
@@ -599,7 +610,7 @@ fromStringstreamMap(std::istream& in, const std::string& file, int& line,
     }
     return (map);
 }
-} // unnamed namespace
+} // end anonymous namespace
 
 std::string
 Element::typeToName(Element::types type) {
@@ -665,8 +676,7 @@ Element::fromJSON(std::istream& in, bool preproc) {
 }
 
 ElementPtr
-Element::fromJSON(std::istream& in, const std::string& file_name, bool preproc)
-{
+Element::fromJSON(std::istream& in, const std::string& file_name, bool preproc) {
     int line = 1, pos = 1;
     stringstream filtered;
     if (preproc) {
@@ -677,8 +687,7 @@ Element::fromJSON(std::istream& in, const std::string& file_name, bool preproc)
 
 ElementPtr
 Element::fromJSON(std::istream& in, const std::string& file, int& line,
-                  int& pos)
-{
+                  int& pos) {
     int c = 0;
     ElementPtr element;
     bool el_read = false;
@@ -766,14 +775,12 @@ Element::fromJSON(const std::string& in, bool preproc) {
 }
 
 ElementPtr
-Element::fromJSONFile(const std::string& file_name,
-                      bool preproc) {
+Element::fromJSONFile(const std::string& file_name, bool preproc) {
     // zero out the errno to be safe
     errno = 0;
 
     std::ifstream infile(file_name.c_str(), std::ios::in | std::ios::binary);
-    if (!infile.is_open())
-    {
+    if (!infile.is_open()) {
         const char* error = strerror(errno);
         isc_throw(InvalidOperation, "failed to read file '" << file_name
                   << "': " << error);
@@ -872,8 +879,7 @@ ListElement::toJSON(std::ostream& ss) const {
     ss << "[ ";
 
     const std::vector<ElementPtr>& v = listValue();
-    for (std::vector<ElementPtr>::const_iterator it = v.begin();
-         it != v.end(); ++it) {
+    for (auto it = v.begin(); it != v.end(); ++it) {
         if (it != v.begin()) {
             ss << ", ";
         }
@@ -887,8 +893,7 @@ MapElement::toJSON(std::ostream& ss) const {
     ss << "{ ";
 
     const std::map<std::string, ConstElementPtr>& m = mapValue();
-    for (std::map<std::string, ConstElementPtr>::const_iterator it = m.begin();
-         it != m.end(); ++it) {
+    for (auto it = m.begin(); it != m.end(); ++it) {
         if (it != m.begin()) {
             ss << ", ";
         }
@@ -1016,31 +1021,55 @@ ListElement::equals(const Element& other) const {
     }
 }
 
+void
+ListElement::sort(std::string const& index /* = std::string() */) {
+    if (l.empty()) {
+        return;
+    }
+
+    int const t(l.at(0)->getType());
+    std::function<bool(ElementPtr, ElementPtr)> comparator;
+    if (t == map) {
+        if (index.empty()) {
+            isc_throw(BadValue, "index required when sorting maps");
+        }
+        comparator = [&](ElementPtr const& a, ElementPtr const& b) {
+            ConstElementPtr const& ai(a->get(index));
+            ConstElementPtr const& bi(b->get(index));
+            if (ai && bi) {
+                return *ai < *bi;
+            }
+            return true;
+        };
+    } else if (t == list) {
+        // Nested lists. Not supported.
+        return;
+    } else {
+        // Assume scalars.
+        if (!index.empty()) {
+            isc_throw(BadValue, "index given when sorting scalars?");
+        }
+        comparator = [&](ElementPtr const& a, ElementPtr const& b) {
+            return *a < *b;
+        };
+    }
+
+    std::sort(l.begin(), l.end(), comparator);
+}
+
 bool
 MapElement::equals(const Element& other) const {
     if (other.getType() == Element::map) {
-        const std::map<std::string, ConstElementPtr>& m = mapValue();
-        for (std::map<std::string, ConstElementPtr>::const_iterator it =
-                 m.begin();
-             it != m.end() ; ++it) {
-            if (other.contains((*it).first)) {
-                if (!get((*it).first)->equals(*other.get((*it).first))) {
+        if (size() != other.size()) {
+            return (false);
+        }
+        for (auto kv : mapValue()) {
+            auto key = kv.first;
+            if (other.contains(key)) {
+                if (!get(key)->equals(*other.get(key))) {
                     return (false);
                 }
             } else {
-                return (false);
-            }
-        }
-        // quickly walk through the other map too, to see if there's
-        // anything in there that we don't have. We don't need to
-        // compare those elements; if one of them is missing we
-        // differ (and if it's not missing the loop above has checked
-        // it)
-        std::map<std::string, ConstElementPtr>::const_iterator it;
-        for (it = other.mapValue().begin();
-             it != other.mapValue().end();
-             ++it) {
-            if (!contains((*it).first)) {
                 return (false);
             }
         }
@@ -1068,12 +1097,11 @@ removeIdentical(ElementPtr a, ConstElementPtr b) {
     // over a checking for identical entries in b or vice-versa.  As elements
     // are removed from a if a match is found, we choose to iterate over b to
     // avoid problems with element removal affecting the iterator.
-    const std::map<std::string, ConstElementPtr>& m = b->mapValue();
-    for (std::map<std::string, ConstElementPtr>::const_iterator it = m.begin();
-         it != m.end() ; ++it) {
-        if (a->contains((*it).first)) {
-            if (a->get((*it).first)->equals(*b->get((*it).first))) {
-                a->remove((*it).first);
+    for (auto kv : b->mapValue()) {
+        auto key = kv.first;
+        if (a->contains(key)) {
+            if (a->get(key)->equals(*b->get(key))) {
+                a->remove(key);
             }
         }
     }
@@ -1091,12 +1119,11 @@ removeIdentical(ConstElementPtr a, ConstElementPtr b) {
         isc_throw(TypeError, "Non-map Elements passed to removeIdentical");
     }
 
-    const std::map<std::string, ConstElementPtr>& m = a->mapValue();
-    for (std::map<std::string, ConstElementPtr>::const_iterator it = m.begin();
-         it != m.end() ; ++it) {
-        if (!b->contains((*it).first) ||
-            !a->get((*it).first)->equals(*b->get((*it).first))) {
-            result->set((*it).first, (*it).second);
+    for (auto kv : a->mapValue()) {
+        auto key = kv.first;
+        if (!b->contains(key) ||
+            !a->get(key)->equals(*b->get(key))) {
+            result->set(key, kv.second);
         }
     }
 
@@ -1110,20 +1137,20 @@ merge(ElementPtr element, ConstElementPtr other) {
         isc_throw(TypeError, "merge arguments not MapElements");
     }
 
-    const std::map<std::string, ConstElementPtr>& m = other->mapValue();
-    for (std::map<std::string, ConstElementPtr>::const_iterator it = m.begin();
-         it != m.end() ; ++it) {
-        if ((*it).second && (*it).second->getType() != Element::null) {
-            element->set((*it).first, (*it).second);
-        } else if (element->contains((*it).first)) {
-            element->remove((*it).first);
+    for (auto kv : other->mapValue()) {
+        auto key = kv.first;
+        auto value = kv.second;
+        if (value && value->getType() != Element::null) {
+            element->set(key, value);
+        } else if (element->contains(key)) {
+            element->remove(key);
         }
     }
 }
 
 ElementPtr
 copy(ConstElementPtr from, int level) {
-    if (isNull(from)) {
+    if (!from) {
         isc_throw(BadValue, "copy got a null pointer");
     }
     int from_type = from->getType();
@@ -1139,27 +1166,23 @@ copy(ConstElementPtr from, int level) {
         return (ElementPtr(new StringElement(from->stringValue())));
     } else if (from_type == Element::list) {
         ElementPtr result = ElementPtr(new ListElement());
-        typedef std::vector<ElementPtr> ListType;
-        const ListType& value = from->listValue();
-        for (ListType::const_iterator it = value.cbegin();
-             it != value.cend(); ++it) {
+        for (auto elem : from->listValue()) {
             if (level == 0) {
-                result->add(*it);
+                result->add(elem);
             } else {
-                result->add(copy(*it, level - 1));
+                result->add(copy(elem, level - 1));
             }
         }
         return (result);
     } else if (from_type == Element::map) {
         ElementPtr result = ElementPtr(new MapElement());
-        typedef std::map<std::string, ConstElementPtr> MapType;
-        const MapType& value = from->mapValue();
-        for (MapType::const_iterator it = value.cbegin();
-             it != value.cend(); ++it) {
+        for (auto kv : from->mapValue()) {
+            auto key = kv.first;
+            auto value = kv.second;
             if (level == 0) {
-                result->set(it->first, it->second);
+                result->set(key, value);
             } else {
-                result->set(it->first, copy(it->second, level - 1));
+                result->set(key, copy(value, level - 1));
             }
         }
         return (result);
@@ -1172,8 +1195,7 @@ namespace {
 
 // Helper function which blocks infinite recursion
 bool
-isEquivalent0(ConstElementPtr a, ConstElementPtr b, unsigned level)
-{
+isEquivalent0(ConstElementPtr a, ConstElementPtr b, unsigned level) {
     // check looping forever on cycles
     if (!level) {
         isc_throw(BadValue, "isEquivalent got infinite recursion: "
@@ -1198,8 +1220,7 @@ isEquivalent0(ConstElementPtr a, ConstElementPtr b, unsigned level)
 
         // copy b into a list
         const size_t s = a->size();
-        typedef std::list<ConstElementPtr> ListType;
-        ListType l;
+        std::list<ConstElementPtr> l;
         for (size_t i = 0; i < s; ++i) {
             l.push_back(b->get(i));
         }
@@ -1209,8 +1230,7 @@ isEquivalent0(ConstElementPtr a, ConstElementPtr b, unsigned level)
             ConstElementPtr item = a->get(i);
             // lookup this item in the list
             bool found = false;
-            for (ListType::iterator it = l.begin();
-                 it != l.end(); ++it) {
+            for (auto it = l.begin(); it != l.end(); ++it) {
                 // if found in the list remove it
                 if (isEquivalent0(item, *it, level - 1)) {
                     found = true;
@@ -1230,23 +1250,15 @@ isEquivalent0(ConstElementPtr a, ConstElementPtr b, unsigned level)
         }
         return (true);
     } else if (a->getType() == Element::map) {
-        // iterate on the first map
-        typedef std::map<std::string, ConstElementPtr> MapType;
-        const MapType& ma = a->mapValue();
-        for (MapType::const_iterator it = ma.begin();
-             it != ma.end() ; ++it) {
-            // get the b value for the given keyword and recurse
-            ConstElementPtr item = b->get(it->first);
-            if (!item || !isEquivalent0(it->second, item, level - 1)) {
-                return (false);
-            }
+        // check sizes
+        if (a->size() != b->size()) {
+            return (false);
         }
-        // iterate on the second map
-        const MapType& mb = b->mapValue();
-        for (MapType::const_iterator it = mb.begin();
-             it != mb.end() ; ++it) {
-            // check if the keyword exists
-            if (!a->contains(it->first)) {
+        // iterate on the first map
+        for (auto kv : a->mapValue()) {
+            // get the b value for the given keyword and recurse
+            ConstElementPtr item = b->get(kv.first);
+            if (!item || !isEquivalent0(kv.second, item, level - 1)) {
                 return (false);
             }
         }
@@ -1256,7 +1268,7 @@ isEquivalent0(ConstElementPtr a, ConstElementPtr b, unsigned level)
     }
 }
 
-}
+} // end anonymous namespace
 
 bool
 isEquivalent(ConstElementPtr a, ConstElementPtr b) {
@@ -1291,10 +1303,8 @@ prettyPrint(ConstElementPtr element, std::ostream& out,
         out << "[" << (complex ? "\n" : " ");
 
         // iterate on items
-        typedef std::vector<ElementPtr> ListType;
-        const ListType& l = element->listValue();
-        for (ListType::const_iterator it = l.begin();
-             it != l.end(); ++it) {
+        const auto& l = element->listValue();
+        for (auto it = l.begin(); it != l.end(); ++it) {
             // add the separator if not the first item
             if (it != l.begin()) {
                 out << separator;
@@ -1324,28 +1334,10 @@ prettyPrint(ConstElementPtr element, std::ostream& out,
         // open the map
         out << "{\n";
 
-        bool first = true;
-        // output comment first
-        if (element->contains("comment")) {
-            // add indentation
-            out << std::string(indent + step, ' ');
-            // add keyword:
-            out << "\"comment\": ";
-            // recursive call
-            prettyPrint(element->get("comment"), out, indent + step, step);
-            // it was the first
-            first = false;
-        }
-
         // iterate on keyword: value
-        typedef std::map<std::string, ConstElementPtr> MapType;
-        const MapType& m = element->mapValue();
-        for (MapType::const_iterator it = m.begin();
-             it != m.end(); ++it) {
-            // skip comment
-            if (it->first == "comment") {
-                continue;
-            }
+        const auto& m = element->mapValue();
+        bool first = true;
+        for (auto it = m.begin(); it != m.end(); ++it) {
             // add the separator if not the first item
             if (first) {
                 first = false;
@@ -1394,5 +1386,5 @@ void Element::preprocess(std::istream& in, std::stringstream& out) {
     }
 }
 
-}
-}
+} // end of isc::data namespace
+} // end of isc namespace

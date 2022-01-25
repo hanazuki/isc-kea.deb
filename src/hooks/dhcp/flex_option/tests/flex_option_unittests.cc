@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 #include <config.h>
 #include <flex_option.h>
 #include <flex_option_log.h>
+#include <dhcp/option_custom.h>
 #include <dhcp/option_string.h>
 #include <dhcp/libdhcp++.h>
 #include <dhcpsrv/cfgmgr.h>
@@ -249,9 +250,58 @@ TEST_F(FlexOptionTest, optionConfigUnknownName) {
     ElementPtr add = Element::create(string("'ab'"));
     option->set("add", add);
     ElementPtr name = Element::create(string("foobar"));
-    option->set("name",name);
+    option->set("name", name);
     EXPECT_THROW(impl_->testConfigure(options), BadValue);
     EXPECT_EQ("no known 'foobar' option in 'dhcp4' space", impl_->getErrMsg());
+}
+
+// Verify that the definition is not required when csv-format is not specified.
+TEST_F(FlexOptionTest, optionConfigUnknownCodeNoCSVFormat) {
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr add = Element::create(string("'ab'"));
+    option->set("add", add);
+    ElementPtr code = Element::create(109);
+    option->set("code", code);
+    EXPECT_NO_THROW(impl_->testConfigure(options));
+    EXPECT_TRUE(impl_->getErrMsg().empty());
+
+    auto map = impl_->getOptionConfigMap();
+    EXPECT_EQ(1, map.count(109));
+}
+
+// Verify that the definition is not required when csv-format is false.
+TEST_F(FlexOptionTest, optionConfigUnknownCodeDisableCSVFormat) {
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr add = Element::create(string("'ab'"));
+    option->set("add", add);
+    ElementPtr code = Element::create(109);
+    option->set("code", code);
+    // Disable csv-format.
+    option->set("csv-format", Element::create(false));
+    EXPECT_NO_THROW(impl_->testConfigure(options));
+    EXPECT_TRUE(impl_->getErrMsg().empty());
+
+    auto map = impl_->getOptionConfigMap();
+    EXPECT_EQ(1, map.count(109));
+}
+
+// Verify that the code must be a known option when csv-format is true.
+TEST_F(FlexOptionTest, optionConfigUnknownCodeEnableCSVFormat) {
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr add = Element::create(string("'ab'"));
+    option->set("add", add);
+    ElementPtr code = Element::create(109);
+    option->set("code", code);
+    // Enable csv-format.
+    option->set("csv-format", Element::create(true));
+    EXPECT_THROW(impl_->testConfigure(options), BadValue);
+    EXPECT_EQ("no known option with code '109' in 'dhcp4' space", impl_->getErrMsg());
 }
 
 // Verify that the name can be a standard option.
@@ -273,8 +323,9 @@ TEST_F(FlexOptionTest, optionConfigStandardName) {
 // Verify that the name can be an user defined option.
 TEST_F(FlexOptionTest, optionConfigDefinedName) {
     OptionDefSpaceContainer defs;
-    OptionDefinitionPtr def(new OptionDefinition("my-option", 222, "string"));
-    defs.addItem(def, DHCP4_OPTION_SPACE);
+    OptionDefinitionPtr def(new OptionDefinition("my-option", 222,
+                                                 DHCP4_OPTION_SPACE, "string"));
+    defs.addItem(def);
     EXPECT_NO_THROW(LibDHCP::setRuntimeOptionDefs(defs));
 
     ElementPtr options = Element::createList();
@@ -308,6 +359,19 @@ TEST_F(FlexOptionTest, optionConfigCodeNameMismatch) {
     string expected = "option 'host-name' is defined as code: 12, ";
     expected += "not the specified code: 13";
     EXPECT_EQ(expected, impl_->getErrMsg());
+}
+
+// Verify that the csv-format must be a boolean.
+TEST_F(FlexOptionTest, optionConfigBadCSVFormat) {
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr csv_format = Element::create(123);
+    option->set("csv-format", csv_format);
+    ElementPtr code = Element::create(12);
+    option->set("code", code);
+    EXPECT_THROW(impl_->testConfigure(options), BadValue);
+    EXPECT_EQ("'csv-format' must be a boolean: 123", impl_->getErrMsg());
 }
 
 // Verify that an option can be configured only once.
@@ -363,7 +427,7 @@ TEST_F(FlexOptionTest, optionConfigBadAdd) {
     EXPECT_THROW(impl_->testConfigure(options), BadValue);
     string expected = "can't parse add expression [ifelse('a','b','c')] ";
     expected += "error: <string>:1.11: syntax error, ";
-    expected += "unexpected \",\", expecting ==";
+    expected += "unexpected \",\", expecting == or +";
     EXPECT_EQ(expected, impl_->getErrMsg());
 }
 
@@ -467,7 +531,7 @@ TEST_F(FlexOptionTest, optionConfigBadSupersede) {
     EXPECT_THROW(impl_->testConfigure(options), BadValue);
     string expected = "can't parse supersede expression [ifelse('a','b','c')] ";
     expected += "error: <string>:1.11: syntax error, ";
-    expected += "unexpected \",\", expecting ==";
+    expected += "unexpected \",\", expecting == or +";
     EXPECT_EQ(expected, impl_->getErrMsg());
 }
 
@@ -571,7 +635,7 @@ TEST_F(FlexOptionTest, optionConfigBadRemove) {
     EXPECT_THROW(impl_->testConfigure(options), BadValue);
     string expected = "can't parse remove expression ['abc'] error: ";
     expected += "<string>:1.6: syntax error, unexpected end of file, ";
-    expected += "expecting ==";
+    expected += "expecting == or +";
     EXPECT_EQ(expected,impl_->getErrMsg());
 }
 
@@ -737,8 +801,9 @@ TEST_F(FlexOptionTest, processEmpty) {
 TEST_F(FlexOptionTest, processNone) {
     CfgMgr::instance().setFamily(AF_INET6);
 
+    OptionDefinitionPtr def = LibDHCP::getOptionDef(DHCP6_OPTION_SPACE, D6O_BOOTFILE_URL);
     FlexOptionImpl::OptionConfigPtr
-        opt_cfg(new FlexOptionImpl::OptionConfig(D6O_BOOTFILE_URL));
+        opt_cfg(new FlexOptionImpl::OptionConfig(D6O_BOOTFILE_URL, def));
     EXPECT_EQ(FlexOptionImpl::NONE, opt_cfg->getAction());
     auto map = impl_->getMutableOptionConfigMap();
     map[DHO_HOST_NAME] = opt_cfg;
@@ -752,8 +817,8 @@ TEST_F(FlexOptionTest, processNone) {
     EXPECT_EQ(response_txt, response->toText());
 }
 
-// Verify that ADD action adds the specified option.
-TEST_F(FlexOptionTest, processAdd) {
+// Verify that ADD action adds the specified option in csv format.
+TEST_F(FlexOptionTest, processAddEnableCSVFormat) {
     ElementPtr options = Element::createList();
     ElementPtr option = Element::createMap();
     options->add(option);
@@ -761,12 +826,23 @@ TEST_F(FlexOptionTest, processAdd) {
     option->set("code", code);
     ElementPtr add = Element::create(string("'abc'"));
     option->set("add", add);
+
+    option = Element::createMap();
+    options->add(option);
+    code = Element::create(DHO_DOMAIN_SEARCH);
+    option->set("code", code);
+    add = Element::create(string("'example.com'"));
+    option->set("add", add);
+    // fqdn option data is parsed using option definition in csv format.
+    option->set("csv-format", Element::create(true));
+
     EXPECT_NO_THROW(impl_->testConfigure(options));
     EXPECT_TRUE(impl_->getErrMsg().empty());
 
     Pkt4Ptr query(new Pkt4(DHCPDISCOVER, 12345));
     Pkt4Ptr response(new Pkt4(DHCPOFFER, 12345));
     EXPECT_FALSE(response->getOption(DHO_HOST_NAME));
+    EXPECT_FALSE(response->getOption(DHO_DOMAIN_SEARCH));
 
     EXPECT_NO_THROW(impl_->process<Pkt4Ptr>(Option::V4, query, response));
 
@@ -776,6 +852,65 @@ TEST_F(FlexOptionTest, processAdd) {
     const OptionBuffer& buffer = opt->getData();
     ASSERT_EQ(3, buffer.size());
     EXPECT_EQ(0, memcmp(&buffer[0], "abc", 3));
+
+    opt = response->getOption(DHO_DOMAIN_SEARCH);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(DHO_DOMAIN_SEARCH, opt->getType());
+    const OptionBuffer& buffer_fqdn = opt->getData();
+    ASSERT_EQ(13, buffer_fqdn.size());
+    EXPECT_EQ(7, buffer_fqdn[0]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[1], "example", 7));
+    EXPECT_EQ(3, buffer_fqdn[8]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[9], "com", 3));
+    EXPECT_EQ(0, buffer_fqdn[12]);
+}
+
+// Verify that ADD action adds the specified option in raw format.
+TEST_F(FlexOptionTest, processAddDisableCSVFormat) {
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr code = Element::create(DHO_HOST_NAME);
+    option->set("code", code);
+    ElementPtr add = Element::create(string("'abc'"));
+    option->set("add", add);
+
+    option = Element::createMap();
+    options->add(option);
+    code = Element::create(DHO_DOMAIN_SEARCH);
+    option->set("code", code);
+    add = Element::create(string("0x076578616d706c6503636f6d00"));
+    option->set("add", add);
+    // fqdn option data is specified in raw format.
+    option->set("csv-format", Element::create(false));
+
+    EXPECT_NO_THROW(impl_->testConfigure(options));
+    EXPECT_TRUE(impl_->getErrMsg().empty());
+
+    Pkt4Ptr query(new Pkt4(DHCPDISCOVER, 12345));
+    Pkt4Ptr response(new Pkt4(DHCPOFFER, 12345));
+    EXPECT_FALSE(response->getOption(DHO_HOST_NAME));
+    EXPECT_FALSE(response->getOption(DHO_DOMAIN_SEARCH));
+
+    EXPECT_NO_THROW(impl_->process<Pkt4Ptr>(Option::V4, query, response));
+
+    OptionPtr opt = response->getOption(DHO_HOST_NAME);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(DHO_HOST_NAME, opt->getType());
+    const OptionBuffer& buffer = opt->getData();
+    ASSERT_EQ(3, buffer.size());
+    EXPECT_EQ(0, memcmp(&buffer[0], "abc", 3));
+
+    opt = response->getOption(DHO_DOMAIN_SEARCH);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(DHO_DOMAIN_SEARCH, opt->getType());
+    const OptionBuffer& buffer_fqdn = opt->getData();
+    ASSERT_EQ(13, buffer_fqdn.size());
+    EXPECT_EQ(7, buffer_fqdn[0]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[1], "example", 7));
+    EXPECT_EQ(3, buffer_fqdn[8]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[9], "com", 3));
+    EXPECT_EQ(0, buffer_fqdn[12]);
 }
 
 // Verify that ADD action does not add an already existing option.
@@ -828,8 +963,8 @@ TEST_F(FlexOptionTest, processAddEmpty) {
     EXPECT_FALSE(response->getOption(DHO_HOST_NAME));
 }
 
-// Verify that SUPERSEDE action supersedes the specified option.
-TEST_F(FlexOptionTest, processSupersede) {
+// Verify that SUPERSEDE action supersedes the specified option in csv format.
+TEST_F(FlexOptionTest, processSupersedeEnableCSVFormat) {
     ElementPtr options = Element::createList();
     ElementPtr option = Element::createMap();
     options->add(option);
@@ -837,12 +972,23 @@ TEST_F(FlexOptionTest, processSupersede) {
     option->set("code", code);
     ElementPtr supersede = Element::create(string("'abc'"));
     option->set("supersede", supersede);
+
+    option = Element::createMap();
+    options->add(option);
+    code = Element::create(DHO_DOMAIN_SEARCH);
+    option->set("code", code);
+    supersede = Element::create(string("'example.com'"));
+    option->set("supersede", supersede);
+    // fqdn option data is parsed using option definition in csv format.
+    option->set("csv-format", Element::create(true));
+
     EXPECT_NO_THROW(impl_->testConfigure(options));
     EXPECT_TRUE(impl_->getErrMsg().empty());
 
     Pkt4Ptr query(new Pkt4(DHCPDISCOVER, 12345));
     Pkt4Ptr response(new Pkt4(DHCPOFFER, 12345));
     EXPECT_FALSE(response->getOption(DHO_HOST_NAME));
+    EXPECT_FALSE(response->getOption(DHO_DOMAIN_SEARCH));
 
     EXPECT_NO_THROW(impl_->process<Pkt4Ptr>(Option::V4, query, response));
 
@@ -852,6 +998,65 @@ TEST_F(FlexOptionTest, processSupersede) {
     const OptionBuffer& buffer = opt->getData();
     ASSERT_EQ(3, buffer.size());
     EXPECT_EQ(0, memcmp(&buffer[0], "abc", 3));
+
+    opt = response->getOption(DHO_DOMAIN_SEARCH);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(DHO_DOMAIN_SEARCH, opt->getType());
+    const OptionBuffer& buffer_fqdn = opt->getData();
+    ASSERT_EQ(13, buffer_fqdn.size());
+    EXPECT_EQ(7, buffer_fqdn[0]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[1], "example", 7));
+    EXPECT_EQ(3, buffer_fqdn[8]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[9], "com", 3));
+    EXPECT_EQ(0, buffer_fqdn[12]);
+}
+
+// Verify that SUPERSEDE action supersedes the specified option in raw format.
+TEST_F(FlexOptionTest, processSupersedeDisableCSVFormat) {
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr code = Element::create(DHO_HOST_NAME);
+    option->set("code", code);
+    ElementPtr supersede = Element::create(string("'abc'"));
+    option->set("supersede", supersede);
+
+    option = Element::createMap();
+    options->add(option);
+    code = Element::create(DHO_DOMAIN_SEARCH);
+    option->set("code", code);
+    supersede = Element::create(string("0x076578616d706c6503636f6d00"));
+    option->set("supersede", supersede);
+    // fqdn option data is specified in raw format.
+    option->set("csv-format", Element::create(false));
+
+    EXPECT_NO_THROW(impl_->testConfigure(options));
+    EXPECT_TRUE(impl_->getErrMsg().empty());
+
+    Pkt4Ptr query(new Pkt4(DHCPDISCOVER, 12345));
+    Pkt4Ptr response(new Pkt4(DHCPOFFER, 12345));
+    EXPECT_FALSE(response->getOption(DHO_HOST_NAME));
+    EXPECT_FALSE(response->getOption(DHO_DOMAIN_SEARCH));
+
+    EXPECT_NO_THROW(impl_->process<Pkt4Ptr>(Option::V4, query, response));
+
+    OptionPtr opt = response->getOption(DHO_HOST_NAME);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(DHO_HOST_NAME, opt->getType());
+    const OptionBuffer& buffer = opt->getData();
+    ASSERT_EQ(3, buffer.size());
+    EXPECT_EQ(0, memcmp(&buffer[0], "abc", 3));
+
+    opt = response->getOption(DHO_DOMAIN_SEARCH);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(DHO_DOMAIN_SEARCH, opt->getType());
+    const OptionBuffer& buffer_fqdn = opt->getData();
+    ASSERT_EQ(13, buffer_fqdn.size());
+    EXPECT_EQ(7, buffer_fqdn[0]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[1], "example", 7));
+    EXPECT_EQ(3, buffer_fqdn[8]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[9], "com", 3));
+    EXPECT_EQ(0, buffer_fqdn[12]);
 }
 
 // Verify that SUPERSEDE action supersedes an already existing option.
@@ -865,6 +1070,16 @@ TEST_F(FlexOptionTest, processSupersedeExisting) {
     option->set("code", code);
     ElementPtr supersede = Element::create(string("0xabcdef"));
     option->set("supersede", supersede);
+
+    option = Element::createMap();
+    options->add(option);
+    code = Element::create(D6O_DOMAIN_SEARCH);
+    option->set("code", code);
+    supersede = Element::create(string("'example.com'"));
+    option->set("supersede", supersede);
+    // fqdn option data is parsed using option definition in csv format.
+    option->set("csv-format", Element::create(true));
+
     EXPECT_NO_THROW(impl_->testConfigure(options));
     EXPECT_TRUE(impl_->getErrMsg().empty());
 
@@ -872,6 +1087,11 @@ TEST_F(FlexOptionTest, processSupersedeExisting) {
     Pkt6Ptr response(new Pkt6(DHCPV6_ADVERTISE, 12345));
     OptionStringPtr str(new OptionString(Option::V6, D6O_BOOTFILE_URL, "http"));
     response->addOption(str);
+    OptionDefinition def("domain-name", D6O_DOMAIN_SEARCH, DHCP6_OPTION_SPACE,
+                         OPT_FQDN_TYPE);
+    OptionCustomPtr option_domain_name(new OptionCustom(def, Option::V6));
+    option_domain_name->writeFqdn("old.example.com");
+    response->addOption(option_domain_name);
 
     EXPECT_NO_THROW(impl_->process<Pkt6Ptr>(Option::V6, query, response));
 
@@ -882,6 +1102,17 @@ TEST_F(FlexOptionTest, processSupersedeExisting) {
     ASSERT_EQ(3, buffer.size());
     uint8_t expected[] = { 0xab, 0xcd, 0xef };
     EXPECT_EQ(0, memcmp(&buffer[0], expected, 3));
+
+    opt = response->getOption(D6O_DOMAIN_SEARCH);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(D6O_DOMAIN_SEARCH, opt->getType());
+    const OptionBuffer& buffer_fqdn = opt->getData();
+    ASSERT_EQ(13, buffer_fqdn.size());
+    EXPECT_EQ(7, buffer_fqdn[0]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[1], "example", 7));
+    EXPECT_EQ(3, buffer_fqdn[8]);
+    EXPECT_EQ(0, memcmp(&buffer_fqdn[9], "com", 3));
+    EXPECT_EQ(0, buffer_fqdn[12]);
 }
 
 // Verify that SUPERSEDE action does not supersede an empty value.
@@ -1021,6 +1252,76 @@ TEST_F(FlexOptionTest, processFullTest) {
     const OptionBuffer& buffer = opt->getData();
     ASSERT_EQ(8, buffer.size());
     EXPECT_EQ(0, memcmp(&buffer[0], "foo.boot", 8));
+}
+
+// Verify that complex strings with escaped characters are properly parsed on add.
+TEST_F(FlexOptionTest, processFullAddWithComplexString) {
+    CfgMgr::instance().setFamily(AF_INET6);
+
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr code = Element::create(D6O_NEW_POSIX_TIMEZONE);
+    option->set("code", code);
+    string expr = "ifelse(option[39].exists,'EST5EDT4\\,M3.2.0/02:00\\,M11.1.0/02:00','')";
+    ElementPtr add = Element::create(expr);
+    option->set("add", add);
+    // strings with escape characters are parsed in csv format.
+    option->set("csv-format", Element::create(true));
+    EXPECT_NO_THROW(impl_->testConfigure(options));
+    EXPECT_TRUE(impl_->getErrMsg().empty());
+
+    Pkt6Ptr query(new Pkt6(DHCPV6_SOLICIT, 12345));
+    Pkt6Ptr response(new Pkt6(DHCPV6_ADVERTISE, 12345));
+    OptionDefinitionPtr def = isc::dhcp::LibDHCP::getOptionDef(DHCP6_OPTION_SPACE, D6O_CLIENT_FQDN);
+    OptionCustomPtr str(new OptionCustom(*def, Option::V6));
+    query->addOption(str);
+    EXPECT_FALSE(response->getOption(D6O_NEW_POSIX_TIMEZONE));
+
+    EXPECT_NO_THROW(impl_->process<Pkt6Ptr>(Option::V6, query, response));
+
+    OptionPtr opt = response->getOption(D6O_NEW_POSIX_TIMEZONE);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(D6O_NEW_POSIX_TIMEZONE, opt->getType());
+    const OptionBuffer& buffer = opt->getData();
+    EXPECT_EQ(35, buffer.size());
+    std::string data("EST5EDT4,M3.2.0/02:00,M11.1.0/02:00");
+    EXPECT_EQ(0, memcmp(&buffer[0], &data[0], buffer.size()));
+}
+
+// Verify that complex strings with escaped characters are properly parsed on supersede.
+TEST_F(FlexOptionTest, processFullSupersedeWithComplexString) {
+    CfgMgr::instance().setFamily(AF_INET6);
+
+    ElementPtr options = Element::createList();
+    ElementPtr option = Element::createMap();
+    options->add(option);
+    ElementPtr code = Element::create(D6O_NEW_POSIX_TIMEZONE);
+    option->set("code", code);
+    string expr = "ifelse(option[39].exists,'EST5EDT4\\,M3.2.0/02:00\\,M11.1.0/02:00','')";
+    ElementPtr supersede = Element::create(expr);
+    option->set("supersede", supersede);
+    // strings with escape characters are parsed in csv format.
+    option->set("csv-format", Element::create(true));
+    EXPECT_NO_THROW(impl_->testConfigure(options));
+    EXPECT_TRUE(impl_->getErrMsg().empty());
+
+    Pkt6Ptr query(new Pkt6(DHCPV6_SOLICIT, 12345));
+    Pkt6Ptr response(new Pkt6(DHCPV6_ADVERTISE, 12345));
+    OptionDefinitionPtr def = isc::dhcp::LibDHCP::getOptionDef(DHCP6_OPTION_SPACE, D6O_CLIENT_FQDN);
+    OptionCustomPtr str(new OptionCustom(*def, Option::V6));
+    query->addOption(str);
+    EXPECT_FALSE(response->getOption(D6O_NEW_POSIX_TIMEZONE));
+
+    EXPECT_NO_THROW(impl_->process<Pkt6Ptr>(Option::V6, query, response));
+
+    OptionPtr opt = response->getOption(D6O_NEW_POSIX_TIMEZONE);
+    ASSERT_TRUE(opt);
+    EXPECT_EQ(D6O_NEW_POSIX_TIMEZONE, opt->getType());
+    const OptionBuffer& buffer = opt->getData();
+    EXPECT_EQ(35, buffer.size());
+    std::string data("EST5EDT4,M3.2.0/02:00,M11.1.0/02:00");
+    EXPECT_EQ(0, memcmp(&buffer[0], &data[0], buffer.size()));
 }
 
 } // end of anonymous namespace

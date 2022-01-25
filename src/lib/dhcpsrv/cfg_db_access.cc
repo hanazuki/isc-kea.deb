@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -23,7 +23,7 @@ namespace dhcp {
 
 CfgDbAccess::CfgDbAccess()
     : appended_parameters_(), lease_db_access_("type=memfile"),
-      host_db_access_() {
+      host_db_access_(), ip_reservations_unique_(true) {
 }
 
 std::string
@@ -74,6 +74,19 @@ CfgDbAccess::createManagers() const {
 
     // Check for a host cache.
     HostMgr::checkCacheBackend(true);
+
+    // Populate the ip-reservations-unique global setting to HostMgr.
+    // This operation may fail if any of the host backends does not support
+    // the new setting. We throw an exception here to signal configuration
+    // error. The exception does not contain the backend name but the called
+    // function in HostMgr logs a warning message that contains the name of
+    // the backend.
+    if (!HostMgr::instance().setIPReservationsUnique(ip_reservations_unique_)) {
+        isc_throw(InvalidOperation, "unable to configure the server to allow "
+                  "non unique IP reservations (ip-reservations-unique=false) "
+                  "because some host backends in use do not support this "
+                  "setting");
+    }
 }
 
 std::string

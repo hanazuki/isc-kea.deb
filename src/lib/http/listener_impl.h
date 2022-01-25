@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,6 +33,7 @@ public:
     /// @param io_service IO service to be used by the listener.
     /// @param server_address Address on which the HTTP service should run.
     /// @param server_port Port number on which the HTTP service should run.
+    /// @param tls_context TLS context.
     /// @param creator_factory Pointer to the caller-defined
     /// @ref HttpResponseCreatorFactory derivation which should be used to
     /// create @ref HttpResponseCreator instances.
@@ -46,6 +47,7 @@ public:
     HttpListenerImpl(asiolink::IOService& io_service,
                      const asiolink::IOAddress& server_address,
                      const unsigned short server_port,
+                     const asiolink::TlsContextPtr& tls_context,
                      const HttpResponseCreatorFactoryPtr& creator_factory,
                      const long request_timeout,
                      const long idle_timeout);
@@ -89,7 +91,7 @@ protected:
 
     /// @brief Creates an instance of the @c HttpConnection.
     ///
-    /// This method is virtual so as it can be overriden when customized
+    /// This method is virtual so as it can be overridden when customized
     /// connections are to be used, e.g. in case of unit testing.
     ///
     /// @param response_creator Pointer to the response creator object used to
@@ -103,8 +105,11 @@ protected:
     /// @brief Reference to the IO service.
     asiolink::IOService& io_service_;
 
+    /// @brief TLS context.
+    asiolink::TlsContextPtr tls_context_;
+
     /// @brief Acceptor instance.
-    HttpAcceptor acceptor_;
+    HttpAcceptorPtr acceptor_;
 
     /// @brief Pointer to the endpoint representing IP address and port on
     /// which the service is running.

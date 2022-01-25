@@ -1,11 +1,11 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
-#include <eval/token.h>
+
 #include <eval/eval_context.h>
 #include <eval/token.h>
 #include <dhcp/option.h>
@@ -470,6 +470,62 @@ public:
         EXPECT_TRUE(tohex);
     }
 
+    /// @brief checks if the given token is an addrtotext operator
+    void checkTokenIpAddressToText(const TokenPtr& token,
+                                   const std::string& expected) {
+        ASSERT_TRUE(token);
+        boost::shared_ptr<TokenIpAddressToText> addrtotext =
+            boost::dynamic_pointer_cast<TokenIpAddressToText>(token);
+        EXPECT_TRUE(addrtotext);
+
+        Pkt4Ptr pkt4(new Pkt4(DHCPDISCOVER, 12345));
+        ValueStack values;
+
+        std::vector<uint8_t> bytes = IOAddress(expected).toBytes();
+        values.push(std::string(bytes.begin(), bytes.end()));
+
+        EXPECT_NO_THROW(token->evaluate(*pkt4, values));
+
+        ASSERT_EQ(1, values.size());
+        string value = values.top();
+
+        EXPECT_EQ(value, expected);
+    }
+
+    /// @brief checks if the given token is a inttotext operator
+    template <typename IntegerType, typename TokenIntegerType>
+    void checkTokenIntToText(const TokenPtr& token,
+                             const std::string& expected) {
+        ASSERT_TRUE(token);
+        boost::shared_ptr<TokenIntegerType> inttotext =
+            boost::dynamic_pointer_cast<TokenIntegerType>(token);
+        EXPECT_TRUE(inttotext);
+
+        Pkt4Ptr pkt4(new Pkt4(DHCPDISCOVER, 12345));
+        ValueStack values;
+
+        IntegerType n;
+
+        try {
+            if (is_signed<IntegerType>()) {
+                n = static_cast<IntegerType>(boost::lexical_cast<int32_t>(expected));
+            } else {
+                n = static_cast<IntegerType>(boost::lexical_cast<uint32_t>(expected));
+            }
+        } catch (const boost::bad_lexical_cast& e) {
+            FAIL() << "invalid value " << expected << ", error: " << e.what();
+        }
+
+        values.push(std::string(const_cast<const char*>(reinterpret_cast<char*>(&n)), sizeof(IntegerType)));
+
+        EXPECT_NO_THROW(token->evaluate(*pkt4, values));
+
+        ASSERT_EQ(1, values.size());
+        string value = values.top();
+
+        EXPECT_EQ(value, expected);
+    }
+
     /// @brief checks if the given expression raises the expected message
     /// when it is parsed.
     void checkError(const string& expr, const string& msg) {
@@ -873,7 +929,6 @@ TEST_F(EvalContextTest, ipaddress6prefix) {
 
     checkTokenIpAddress(tmp, "2001:db8::");
 }
-
 
 // Test the parsing of an equal expression
 TEST_F(EvalContextTest, equal) {
@@ -1324,6 +1379,70 @@ TEST_F(EvalContextTest, concat) {
     checkTokenConcat(tmp3);
 }
 
+// Test the parsing of a plus expression
+TEST_F(EvalContextTest, plus) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ =
+        eval.parseString("'foo' + 'bar' == 'foobar'"));
+    EXPECT_TRUE(parsed_);
+
+    ASSERT_EQ(5, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+
+    checkTokenString(tmp1, "foo");
+    checkTokenString(tmp2, "bar");
+    checkTokenConcat(tmp3);
+}
+
+// Test the parsing of plus expressions
+TEST_F(EvalContextTest, assocPlus) {
+    EvalContext eval(Option::V4);
+
+    // Operator '+' is (left) associative
+    EXPECT_NO_THROW(parsed_ =
+        eval.parseString("'a' + 'b' + 'c' == 'abc'"));
+
+    ASSERT_EQ(7, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+    TokenPtr tmp5 = eval.expression.at(4);
+
+    checkTokenString(tmp1, "a");
+    checkTokenString(tmp2, "b");
+    checkTokenConcat(tmp3);
+    checkTokenString(tmp4, "c");
+    checkTokenConcat(tmp5);
+}
+
+// Test the parsing of plus expressions with enforced associativity
+TEST_F(EvalContextTest, assocRightPlus) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ =
+        eval.parseString("'a' + ('b' + 'c') == 'abc'"));
+
+    ASSERT_EQ(7, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+    TokenPtr tmp5 = eval.expression.at(4);
+
+    checkTokenString(tmp1, "a");
+    checkTokenString(tmp2, "b");
+    checkTokenString(tmp3, "c");
+    checkTokenConcat(tmp4);
+    checkTokenConcat(tmp5);
+}
+
 // Test the parsing of an ifelse expression
 TEST_F(EvalContextTest, ifElse) {
     EvalContext eval(Option::V4);
@@ -1344,6 +1463,34 @@ TEST_F(EvalContextTest, ifElse) {
     checkTokenIfElse(tmp4);
 }
 
+// Test the parsing of a plus operator and ifelse expression
+TEST_F(EvalContextTest, plusIfElse) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ =
+        eval.parseString("'foo' + ifelse('a' == 'a', 'bar', '') == 'foobar'"));
+
+    ASSERT_EQ(10, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+    TokenPtr tmp5 = eval.expression.at(4);
+    TokenPtr tmp6 = eval.expression.at(5);
+    TokenPtr tmp7 = eval.expression.at(6);
+    TokenPtr tmp8 = eval.expression.at(7);
+
+    checkTokenString(tmp1, "foo");
+    checkTokenString(tmp2, "a");
+    checkTokenString(tmp3, "a");
+    checkTokenEq(tmp4);
+    checkTokenString(tmp5, "bar");
+    checkTokenString(tmp6, "");
+    checkTokenIfElse(tmp7);
+    checkTokenConcat(tmp8);
+}
+
 // Test the parsing of a hexstring expression
 TEST_F(EvalContextTest, toHexString) {
     EvalContext eval(Option::V4);
@@ -1361,6 +1508,167 @@ TEST_F(EvalContextTest, toHexString) {
     checkTokenHexString(tmp1, "fo");
     checkTokenString(tmp2, "-");
     checkTokenToHexString(tmp3);
+}
+
+// Test the parsing of an addrtotext expression
+TEST_F(EvalContextTest, addressToText) {
+    {
+        EvalContext eval(Option::V4);
+
+        EXPECT_NO_THROW(parsed_ = eval.parseString("addrtotext(10.0.0.1) == '10.0.0.1'"));
+        EXPECT_TRUE(parsed_);
+
+        ASSERT_EQ(4, eval.expression.size());
+
+        TokenPtr tmp1 = eval.expression.at(0);
+        TokenPtr tmp2 = eval.expression.at(1);
+        TokenPtr tmp3 = eval.expression.at(2);
+        TokenPtr tmp4 = eval.expression.at(3);
+
+        checkTokenIpAddress(tmp1, "10.0.0.1");
+        checkTokenIpAddressToText(tmp2, "10.0.0.1");
+        checkTokenString(tmp3, "10.0.0.1");
+        checkTokenEq(tmp4);
+    }
+
+    {
+        EvalContext eval(Option::V4);
+
+        EXPECT_NO_THROW(parsed_ = eval.parseString("addrtotext(2001:db8::1) == '2001:db8::1'"));
+        EXPECT_TRUE(parsed_);
+
+        ASSERT_EQ(4, eval.expression.size());
+
+        TokenPtr tmp1 = eval.expression.at(0);
+        TokenPtr tmp2 = eval.expression.at(1);
+        TokenPtr tmp3 = eval.expression.at(2);
+        TokenPtr tmp4 = eval.expression.at(3);
+
+        checkTokenIpAddress(tmp1, "2001:db8::1");
+        checkTokenIpAddressToText(tmp2, "2001:db8::1");
+        checkTokenString(tmp3, "2001:db8::1");
+        checkTokenEq(tmp4);
+    }
+}
+
+// Test the parsing of a int8_t expression
+TEST_F(EvalContextTest, int8ToText) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ = eval.parseString("int8totext(255) == '-1'"));
+    EXPECT_TRUE(parsed_);
+
+    ASSERT_EQ(4, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+
+    checkTokenInteger(tmp1, 255);
+    checkTokenIntToText<int8_t, TokenInt8ToText>(tmp2, "-1");
+    checkTokenString(tmp3, "-1");
+    checkTokenEq(tmp4);
+}
+
+// Test the parsing of a int16_t expression
+TEST_F(EvalContextTest, int16ToText) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ = eval.parseString("int16totext(65535) == '-1'"));
+    EXPECT_TRUE(parsed_);
+
+    ASSERT_EQ(4, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+
+    checkTokenInteger(tmp1, 65535);
+    checkTokenIntToText<int16_t, TokenInt16ToText>(tmp2, "-1");
+    checkTokenString(tmp3, "-1");
+    checkTokenEq(tmp4);
+}
+
+// Test the parsing of a int32_t expression
+TEST_F(EvalContextTest, int32ToText) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ = eval.parseString("int32totext(4294967295) == '-1'"));
+    EXPECT_TRUE(parsed_);
+
+    ASSERT_EQ(4, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+
+    checkTokenInteger(tmp1, 4294967295);
+    checkTokenIntToText<int32_t, TokenInt32ToText>(tmp2, "-1");
+    checkTokenString(tmp3, "-1");
+    checkTokenEq(tmp4);
+}
+
+// Test the parsing of a uint8_t expression
+TEST_F(EvalContextTest, uint8ToText) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ = eval.parseString("uint8totext(255) == '255'"));
+    EXPECT_TRUE(parsed_);
+
+    ASSERT_EQ(4, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+
+    checkTokenInteger(tmp1, 255);
+    checkTokenIntToText<uint8_t, TokenUInt8ToText>(tmp2, "255");
+    checkTokenString(tmp3, "255");
+    checkTokenEq(tmp4);
+}
+
+// Test the parsing of a uint16_t expression
+TEST_F(EvalContextTest, uint16ToText) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ = eval.parseString("uint16totext(65535) == '65535'"));
+    EXPECT_TRUE(parsed_);
+
+    ASSERT_EQ(4, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+
+    checkTokenInteger(tmp1, 65535);
+    checkTokenIntToText<uint16_t, TokenUInt16ToText>(tmp2, "65535");
+    checkTokenString(tmp3, "65535");
+    checkTokenEq(tmp4);
+}
+
+// Test the parsing of a uint32_t expression
+TEST_F(EvalContextTest, uint32ToText) {
+    EvalContext eval(Option::V4);
+
+    EXPECT_NO_THROW(parsed_ = eval.parseString("uint32totext(4294967295) == '4294967295'"));
+    EXPECT_TRUE(parsed_);
+
+    ASSERT_EQ(4, eval.expression.size());
+
+    TokenPtr tmp1 = eval.expression.at(0);
+    TokenPtr tmp2 = eval.expression.at(1);
+    TokenPtr tmp3 = eval.expression.at(2);
+    TokenPtr tmp4 = eval.expression.at(3);
+
+    checkTokenInteger(tmp1, 4294967295);
+    checkTokenIntToText<uint32_t, TokenUInt32ToText>(tmp2, "4294967295");
+    checkTokenString(tmp3, "4294967295");
+    checkTokenEq(tmp4);
 }
 
 //
@@ -1392,10 +1700,11 @@ TEST_F(EvalContextTest, scanParseErrors) {
 
     // This one is a little bid odd. This is a truncated address, so it's not
     // recognized as an address. Instead, the first token (10) is recognized as
-    // an integer. The only thing we can do with integers right now is test
-    // for equality, so the only possible next token is ==. There's a dot
-    // instead, so an error is reported.
-    checkError("10.0.1", "<string>:1.3: syntax error, unexpected ., expecting ==");
+    // an integer. The only thing we can do with integers right now is to
+    // apply equality or concat operators, so the only possible next token
+    // are == and +. There's a dot instead, so an error is reported.
+    checkError("10.0.1", "<string>:1.3: syntax error, unexpected ., "
+               "expecting == or +");
 
     checkError("10.256.0.1",
                "<string>:1.1-10: Failed to convert 10.256.0.1 to "
@@ -1438,9 +1747,9 @@ TEST_F(EvalContextTest, scanParseErrors) {
 TEST_F(EvalContextTest, parseErrors) {
     checkError("'foo''bar'",
                "<string>:1.6-10: syntax error, unexpected constant string, "
-               "expecting ==");
+               "expecting == or +");
     checkError("'foo' (",
-               "<string>:1.7: syntax error, unexpected (, expecting ==");
+               "<string>:1.7: syntax error, unexpected (, expecting == or +");
     checkError("== 'ab'", "<string>:1.1-2: syntax error, unexpected ==");
     checkError("'foo' ==",
                "<string>:1.9: syntax error, unexpected end of file");
@@ -1454,30 +1763,32 @@ TEST_F(EvalContextTest, parseErrors) {
                "<string>:1.4: syntax error, unexpected end of file");
     checkError("not 'foo'",
                "<string>:1.10: syntax error, unexpected end of file, "
-               "expecting ==");
+               "expecting == or +");
     checkError("not()",
                "<string>:1.5: syntax error, unexpected )");
     checkError("(not('foo' 'bar')",
                "<string>:1.12-16: syntax error, unexpected constant string, "
-               "expecting ==");
+               "expecting ) or == or +");
     checkError("and",
                "<string>:1.1-3: syntax error, unexpected and");
     checkError("'foo' and",
-               "<string>:1.7-9: syntax error, unexpected and, expecting ==");
+               "<string>:1.7-9: syntax error, unexpected and, "
+               "expecting == or +");
     checkError("'foo' == 'bar' and",
                "<string>:1.19: syntax error, unexpected end of file");
     checkError("'foo' == 'bar' and ''",
                "<string>:1.22: syntax error, unexpected end of file, "
-               "expecting ==");
+               "expecting == or +");
     checkError("or",
                "<string>:1.1-2: syntax error, unexpected or");
     checkError("'foo' or",
-               "<string>:1.7-8: syntax error, unexpected or, expecting ==");
+               "<string>:1.7-8: syntax error, unexpected or, "
+               "expecting == or +");
     checkError("'foo' == 'bar' or",
                "<string>:1.18: syntax error, unexpected end of file");
     checkError("'foo' == 'bar' or ''",
                "<string>:1.21: syntax error, unexpected end of file, "
-               "expecting ==");
+               "expecting == or +");
     checkError("option 'ab'",
                "<string>:1.8-11: syntax error, unexpected "
                "constant string, expecting [");
@@ -1500,7 +1811,8 @@ TEST_F(EvalContextTest, parseErrors) {
                "<string>:1.19-20: syntax error, unexpected ==, "
                "expecting end of file");
     checkError("substring('foobar') == 'f'",
-               "<string>:1.19: syntax error, unexpected ), expecting \",\"");
+               "<string>:1.19: syntax error, unexpected ), "
+               "expecting \",\" or +");
     checkError("substring('foobar',3) == 'bar'",
                "<string>:1.21: syntax error, unexpected ), expecting \",\"");
     checkError("substring('foobar','3',3) == 'bar'",
@@ -1516,20 +1828,70 @@ TEST_F(EvalContextTest, parseErrors) {
     checkError(long_text,
                "<string>:1.65568: Invalid character: '");
     checkError("concat('foobar') == 'f'",
-               "<string>:1.16: syntax error, unexpected ), expecting \",\"");
+               "<string>:1.16: syntax error, unexpected ), "
+               "expecting \",\" or +");
     checkError("concat('foo','bar','') == 'foobar'",
-               "<string>:1.19: syntax error, unexpected \",\", expecting )");
+               "<string>:1.19: syntax error, unexpected \",\", "
+               "expecting ) or +");
     checkError("ifelse('foo'=='bar','foo')",
-               "<string>:1.26: syntax error, unexpected ), expecting \",\"");
+               "<string>:1.26: syntax error, unexpected ), "
+               "expecting \",\" or +");
     checkError("ifelse('foo'=='bar','foo','bar','')",
-               "<string>:1.32: syntax error, unexpected \",\", expecting )");
+               "<string>:1.32: syntax error, unexpected \",\", "
+               "expecting ) or +");
+    checkError("+ 'a' = 'a'", "<string>:1.1: syntax error, unexpected +");
+    checkError("'a' + == 'a'", "<string>:1.7-8: syntax error, unexpected ==");
+    checkError("'a' ++ 'b' == 'ab'",
+               "<string>:1.6: syntax error, unexpected +");
+    checkError("addrtotext(10.0.0.1, 10.0.0.2)",
+               "<string>:1.20: syntax error, unexpected \",\", expecting ) or +");
+    checkError("addrtotext('cafebabecafebabe')",
+               "<string>:1.31: syntax error, unexpected end of file, expecting == or +");
+    checkError("addrtotext('')",
+               "<string>:1.15: syntax error, unexpected end of file, expecting == or +");
+    checkError("int8totext('01', '01')",
+               "<string>:1.16: syntax error, unexpected \",\", expecting ) or +");
+    checkError("int8totext('0123')",
+               "<string>:1.19: syntax error, unexpected end of file, expecting == or +");
+    checkError("int8totext('')",
+               "<string>:1.15: syntax error, unexpected end of file, expecting == or +");
+    checkError("int16totext('0123', '0123')",
+               "<string>:1.19: syntax error, unexpected \",\", expecting ) or +");
+    checkError("int16totext('01')",
+               "<string>:1.18: syntax error, unexpected end of file, expecting == or +");
+    checkError("int16totext('')",
+               "<string>:1.16: syntax error, unexpected end of file, expecting == or +");
+    checkError("int32totext('01234567', '01234567')",
+               "<string>:1.23: syntax error, unexpected \",\", expecting ) or +");
+    checkError("int32totext('01')",
+               "<string>:1.18: syntax error, unexpected end of file, expecting == or +");
+    checkError("int32totext('')",
+               "<string>:1.16: syntax error, unexpected end of file, expecting == or +");
+    checkError("uint8totext('01', '01')",
+               "<string>:1.17: syntax error, unexpected \",\", expecting ) or +");
+    checkError("uint8totext('0123')",
+               "<string>:1.20: syntax error, unexpected end of file, expecting == or +");
+    checkError("uint8totext('')",
+               "<string>:1.16: syntax error, unexpected end of file, expecting == or +");
+    checkError("uint16totext('0123', '0123')",
+               "<string>:1.20: syntax error, unexpected \",\", expecting ) or +");
+    checkError("uint16totext('01')",
+               "<string>:1.19: syntax error, unexpected end of file, expecting == or +");
+    checkError("uint16totext('')",
+               "<string>:1.17: syntax error, unexpected end of file, expecting == or +");
+    checkError("uint32totext('01234567', '01234567')",
+               "<string>:1.24: syntax error, unexpected \",\", expecting ) or +");
+    checkError("uint32totext('01')",
+               "<string>:1.19: syntax error, unexpected end of file, expecting == or +");
+    checkError("uint32totext('')",
+               "<string>:1.17: syntax error, unexpected end of file, expecting == or +");
 }
 
 // Tests some type error cases
 TEST_F(EvalContextTest, typeErrors) {
     checkError("'foobar'",
                "<string>:1.9: syntax error, unexpected end of file, "
-               "expecting ==");
+               "expecting == or +");
     checkError("substring('foobar',all,1) == 'foo'",
                "<string>:1.20-22: syntax error, unexpected all, "
                "expecting integer");
@@ -1548,19 +1910,24 @@ TEST_F(EvalContextTest, typeErrors) {
                "expecting end of file");
     checkError("not 'true'",
                "<string>:1.11: syntax error, unexpected end of file, "
-               "expecting ==");
+               "expecting == or +");
     checkError("'true' and 'false'",
-               "<string>:1.8-10: syntax error, unexpected and, expecting ==");
+               "<string>:1.8-10: syntax error, unexpected and, "
+               "expecting == or +");
     checkError("'true' or 'false'",
-               "<string>:1.8-9: syntax error, unexpected or, expecting ==");
+               "<string>:1.8-9: syntax error, unexpected or, "
+               "expecting == or +");
+
     // Ifelse requires a boolean condition and string branches.
     checkError("ifelse('foobar','foo','bar')",
-               "<string>:1.16: syntax error, unexpected \",\", expecting ==");
+               "<string>:1.16: syntax error, unexpected \",\", "
+               "expecting == or +");
     checkError("ifelse('foo'=='bar','foo'=='foo','bar')",
                "<string>:1.26-27: syntax error, unexpected ==, "
-               "expecting \",\"");
+               "expecting \",\" or +");
     checkError("ifelse('foo'=='bar','foo','bar'=='bar')",
-               "<string>:1.32-33: syntax error, unexpected ==, expecting )");
+               "<string>:1.32-33: syntax error, unexpected ==, "
+               "expecting ) or +");
 
     // Member uses quotes around the client class name.
     checkError("member(foo)", "<string>:1.8: Invalid character: f");
@@ -1569,8 +1936,35 @@ TEST_F(EvalContextTest, typeErrors) {
     checkError("option[123].option[host-name].exists",
                "<string>:1.20-28: syntax error, unexpected option name, "
                "expecting integer");
-}
 
+    // Addrtotext requires string storing the binary representation of the address.
+    checkError("addrtotext('192.100.1.1')",
+               "<string>:1.26: syntax error, unexpected end of file, expecting == or +");
+
+    // Int8totext requires string storing the binary representation of the 8 bit integer.
+    checkError("int8totext('0123')",
+               "<string>:1.19: syntax error, unexpected end of file, expecting == or +");
+
+    // Int16totext requires string storing the binary representation of the 16 bit integer.
+    checkError("int16totext('01')",
+               "<string>:1.18: syntax error, unexpected end of file, expecting == or +");
+
+    // Int32totext requires string storing the binary representation of the 32 bit integer.
+    checkError("int32totext('01')",
+               "<string>:1.18: syntax error, unexpected end of file, expecting == or +");
+
+    // Uint8totext requires string storing the binary representation of the 8 bit unsigned integer.
+    checkError("uint8totext('0123')",
+               "<string>:1.20: syntax error, unexpected end of file, expecting == or +");
+
+    // Uint16totext requires string storing the binary representation of the 16 bit unsigned integer.
+    checkError("uint16totext('01')",
+               "<string>:1.19: syntax error, unexpected end of file, expecting == or +");
+
+    // Uint32totext requires string storing the binary representation of the 32 bit unsigned integer.
+    checkError("uint32totext('01')",
+               "<string>:1.19: syntax error, unexpected end of file, expecting == or +");
+}
 
 TEST_F(EvalContextTest, vendor4SpecificVendorExists) {
     testVendor("vendor[4491].exists", Option::V4, 4491, TokenOption::EXISTS);
@@ -1662,7 +2056,7 @@ TEST_F(EvalContextTest, vendorClass6DataIndex) {
     testVendorClass("vendor-class[4491].data[3] == 0x1234", Option::V6, 4491, 3);
 }
 
-// Test the parsing of a sub-option with perent by code.
+// Test the parsing of a sub-option with parent by code.
 TEST_F(EvalContextTest, subOptionWithCode) {
     EvalContext eval(Option::V4);
 
@@ -1672,7 +2066,7 @@ TEST_F(EvalContextTest, subOptionWithCode) {
     checkTokenSubOption(eval.expression.at(0), 123, 234, TokenOption::TEXTUAL);
 }
 
-// Test the parsing of a sub-option with perent by name.
+// Test the parsing of a sub-option with parent by name.
 TEST_F(EvalContextTest, subOptionWithName) {
     EvalContext eval(Option::V4);
 
@@ -1721,4 +2115,4 @@ TEST_F(EvalContextTest, integer1) {
     checkTokenInteger(tmp, 2);
 }
 
-};
+}

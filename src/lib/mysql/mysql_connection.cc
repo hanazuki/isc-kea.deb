@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -23,7 +23,9 @@ using namespace std;
 namespace isc {
 namespace db {
 
-bool MySqlHolder::atexit_ = []{atexit([]{mysql_library_end();});return true;};
+int MySqlHolder::atexit_ = [] {
+    return atexit([] { mysql_library_end(); });
+}();
 
 /// @todo: Migrate this default value to src/bin/dhcpX/simple_parserX.cc
 const int MYSQL_DEFAULT_CONNECTION_TIMEOUT = 5; // seconds
@@ -52,7 +54,6 @@ MySqlTransaction::commit() {
 
 void
 MySqlConnection::openDatabase() {
-
     // Set up the values of the parameters
     const char* host = "localhost";
     string shost;
@@ -210,6 +211,24 @@ MySqlConnection::openDatabase() {
     if (status != mysql_) {
         isc_throw(DbOpenError, mysql_error(mysql_));
     }
+
+    // Enable autocommit. In case transaction is explicitly used, this
+    // setting will be overwritten for the transaction. However, there are
+    // cases when lack of autocommit could cause transactions to hang
+    // until commit or rollback is explicitly called. This already
+    // caused issues for some unit tests which were unable to cleanup
+    // the database after the test because of pending transactions.
+    // Use of autocommit will eliminate this problem.
+    my_bool autocommit_result = mysql_autocommit(mysql_, 1);
+    if (autocommit_result != 0) {
+        isc_throw(DbOperationError, mysql_error(mysql_));
+    }
+
+    // To avoid a flush to disk on every commit, the global parameter
+    // innodb_flush_log_at_trx_commit should be set to 2. This will cause the
+    // changes to be written to the log, but flushed to disk in the background
+    // every second. Setting the parameter to that value will speed up the
+    // system, but at the risk of losing data if the system crashes.
 }
 
 // Get schema version.
@@ -241,7 +260,7 @@ MySqlConnection::getVersion(const ParameterMap& parameters) {
         }
 
         // Execute the prepared statement.
-        if (mysql_stmt_execute(stmt) != 0) {
+        if (MysqlExecuteStatement(stmt) != 0) {
             isc_throw(DbOperationError, "cannot execute schema version query <"
                       << version_sql << ">, reason: "
                       << mysql_errno(conn.mysql_));
@@ -376,8 +395,8 @@ MySqlConnection::convertToDatabaseTime(const time_t input_time,
 
 void
 MySqlConnection::convertToDatabaseTime(const time_t cltt,
-                                     const uint32_t valid_lifetime,
-                                     MYSQL_TIME& expire) {
+                                       const uint32_t valid_lifetime,
+                                       MYSQL_TIME& expire) {
     MySqlBinding::convertToDatabaseTime(cltt, valid_lifetime, expire);
 }
 
@@ -389,7 +408,13 @@ MySqlConnection::convertFromDatabaseTime(const MYSQL_TIME& expire,
 
 void
 MySqlConnection::startTransaction() {
+    // If it is nested transaction, do nothing.
+    if (++transaction_ref_count_ > 1) {
+        return;
+    }
+
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, MYSQL_START_TRANSACTION);
+    checkUnusable();
     // We create prepared statements for all other queries, but MySQL
     // don't support prepared statements for START TRANSACTION.
     int status = mysql_query(mysql_, "START TRANSACTION");
@@ -399,9 +424,23 @@ MySqlConnection::startTransaction() {
     }
 }
 
+bool
+MySqlConnection::isTransactionStarted() const {
+    return (transaction_ref_count_ > 0);
+}
+
 void
 MySqlConnection::commit() {
+    if (transaction_ref_count_ <= 0) {
+        isc_throw(Unexpected, "commit called for not started transaction - coding error");
+    }
+
+    // When committing nested transaction, do nothing.
+    if (--transaction_ref_count_ > 0) {
+        return;
+    }
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, MYSQL_COMMIT);
+    checkUnusable();
     if (mysql_commit(mysql_) != 0) {
         isc_throw(DbOperationError, "commit failed: "
                   << mysql_error(mysql_));
@@ -410,13 +449,21 @@ MySqlConnection::commit() {
 
 void
 MySqlConnection::rollback() {
+    if (transaction_ref_count_ <= 0) {
+        isc_throw(Unexpected, "rollback called for not started transaction - coding error");
+    }
+
+    // When rolling back nested transaction, do nothing.
+    if (--transaction_ref_count_ > 0) {
+        return;
+    }
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, MYSQL_ROLLBACK);
+    checkUnusable();
     if (mysql_rollback(mysql_) != 0) {
         isc_throw(DbOperationError, "rollback failed: "
                   << mysql_error(mysql_));
     }
 }
 
-
-} // namespace isc::db
+} // namespace db
 } // namespace isc

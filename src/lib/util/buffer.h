@@ -1,4 +1,4 @@
-// Copyright (C) 2009-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2009-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -337,7 +337,7 @@ public:
     }
 
     /// \brief Destructor
-    ~ OutputBuffer() {
+    ~OutputBuffer() {
         free(buffer_);
     }
     //@}
@@ -408,7 +408,10 @@ public:
     ///
     /// \param pos The position in the buffer to be returned.
     uint8_t operator[](size_t pos) const {
-        assert (pos < size_);
+        if (pos >= size_) {
+            isc_throw(InvalidBufferPosition,
+                      "[]: pos (" << pos << ") >= size (" << size_ << ")");
+        }
         return (buffer_[pos]);
     }
     //@}

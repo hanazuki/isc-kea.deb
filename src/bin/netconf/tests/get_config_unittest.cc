@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,11 +8,14 @@
 
 #include <cc/data.h>
 #include <cc/command_interpreter.h>
+#include <testutils/gtest_utils.h>
 #include <testutils/user_context_utils.h>
 #include <process/testutils/d_test_stubs.h>
 #include <netconf/netconf_cfg_mgr.h>
 #include <netconf/parser_context.h>
+
 #include <boost/scoped_ptr.hpp>
+
 #include <gtest/gtest.h>
 
 #include <iostream>
@@ -71,7 +74,7 @@ readFile(const std::string& file_path) {
 
 /// @brief Runs parser in JSON mode
 ElementPtr
-parseJSON(const std::string& in,  bool verbose = false) {
+parseJSON(const std::string& in, bool verbose = false) {
     try {
         ParserContext ctx;
         return (ctx.parseString(in, ParserContext::PARSER_JSON));
@@ -85,7 +88,7 @@ parseJSON(const std::string& in,  bool verbose = false) {
 
 /// @brief Runs parser in NETCONF mode
 ElementPtr
-parseNETCONF(const std::string& in,  bool verbose = false) {
+parseNETCONF(const std::string& in, bool verbose = false) {
     try {
         ParserContext ctx;
         return (ctx.parseString(in, ParserContext::PARSER_NETCONF));
@@ -115,9 +118,9 @@ public:
     using NetconfCfgMgr::parse;
 };
 
-}
+}  // namespace
 
-/// Test fixture class
+/// @brief Test fixture class
 class NetconfGetCfgTest : public ConfigParseTest {
 public:
     NetconfGetCfgTest()
@@ -226,19 +229,19 @@ public:
     ConstElementPtr comment_;         ///< Reason for parse fail
 };
 
-/// Test a configuration
+// Test a simple configuration.
 TEST_F(NetconfGetCfgTest, simple) {
 
     // get the simple configuration
     std::string simple_file = string(CFG_EXAMPLES) + "/" + "simple-dhcp4.json";
     std::string config;
-    ASSERT_NO_THROW(config = readFile(simple_file));
+    ASSERT_NO_THROW_LOG(config = readFile(simple_file));
 
     // get the expected configuration
     std::string expected_file =
         std::string(NETCONF_TEST_DATA_DIR) + "/" + "get_config.json";
     std::string expected;
-    ASSERT_NO_THROW(expected = readFile(expected_file));
+    ASSERT_NO_THROW_LOG(expected = readFile(expected_file));
 
     // execute the sample configuration
     ASSERT_TRUE(executeConfiguration(config, "simple config"));
@@ -246,26 +249,26 @@ TEST_F(NetconfGetCfgTest, simple) {
     // unparse it
     NetconfConfigPtr context = srv_->getNetconfConfig();
     ConstElementPtr unparsed;
-    ASSERT_NO_THROW(unparsed = context->toElement());
+    ASSERT_NO_THROW_LOG(unparsed = context->toElement());
 
     // dump if wanted else check
     if (generate_action) {
         std::cerr << "// Generated Configuration (remove this line)\n";
-        ASSERT_NO_THROW(expected = prettyPrint(unparsed));
+        ASSERT_NO_THROW_LOG(expected = prettyPrint(unparsed));
         prettyPrint(unparsed, std::cerr, 0, 4);
         std::cerr << "\n";
     } else {
         // get the expected config using the netconf syntax parser
         ElementPtr jsond;
-        ASSERT_NO_THROW(jsond = parseNETCONF(expected, true));
+        ASSERT_NO_THROW_LOG(jsond = parseNETCONF(expected, true));
         // get the expected config using the generic JSON syntax parser
         ElementPtr jsonj;
-        ASSERT_NO_THROW(jsonj = parseJSON(expected));
+        ASSERT_NO_THROW_LOG(jsonj = parseJSON(expected));
         // the generic JSON parser does not handle comments
         EXPECT_TRUE(isEquivalent(jsond, moveComments(jsonj)));
         // replace the path by its actual value
         ConstElementPtr ca;
-        ASSERT_NO_THROW(ca = jsonj->get("Netconf"));
+        ASSERT_NO_THROW_LOG(ca = jsonj->get("Netconf"));
         ASSERT_TRUE(ca);
         pathReplacer(ca);
         // check that unparsed and updated expected values match
@@ -285,7 +288,7 @@ TEST_F(NetconfGetCfgTest, simple) {
     // is it a fixed point?
     NetconfConfigPtr context2 = srv_->getNetconfConfig();
     ConstElementPtr unparsed2;
-    ASSERT_NO_THROW(unparsed2 = context2->toElement());
+    ASSERT_NO_THROW_LOG(unparsed2 = context2->toElement());
     ASSERT_TRUE(unparsed2);
     EXPECT_TRUE(isEquivalent(unparsed, unparsed2));
 }

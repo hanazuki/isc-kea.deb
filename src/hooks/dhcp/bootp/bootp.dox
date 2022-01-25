@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,7 +16,7 @@ library. This file provides information needed to understand and
 perhaps extend this library.
 
 This documentation is stand-alone: you should have read and understood
-the <a href="https://jenkins.isc.org/job/Kea_doc/doxygen/">Kea
+the <a href="https://reports.kea.isc.org/dev_guide/">Kea
 Developer's Guide</a> and in particular its section about hooks.
 
 @section libdhcp_bootpUser Now To Use libdhcp_bootp
@@ -37,7 +37,7 @@ configuration:
 
 @code
 "Dhcp4": {
-    "hook_libraries": [
+    "hooks-libraries": [
         {   "library": "/usr/local/lib/libdhcp_bootp.so" },
         ...
     ]
@@ -64,5 +64,15 @@ On the outgoing side dhcp-message-type and other DHCP specific options
 are removed from the response. When the packed response is shorter than
 the BOOTP minimum size (300 octets) it is padded after the END option
 by nuls up to this size.
+
+In case any other library sets the SKIP flag before pkt4_send, an exception
+with the message "the packet pack already handled" will be thrown, to
+indicate that the action can not be properly performed.
+To fix this, all other libraries which might set the SKIP flag must appear
+in the server configuration after this library.
+
+@section libdhcp_bootpMTCompatibility Multi-Threading Compatibility
+
+The Bootp hooks library is compatible with multi-threading.
 
 */

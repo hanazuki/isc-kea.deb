@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/dhcpsrv/dhcpsrv_messages.mes on Thu Dec 05 2019 16:13
+// File created from ../../../src/lib/dhcpsrv/dhcpsrv_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>
@@ -20,6 +20,9 @@ extern const isc::log::MessageID DHCPSRV_CFGMGR_DDNS_PARAMETER_IGNORED = "DHCPSR
 extern const isc::log::MessageID DHCPSRV_CFGMGR_DDNS_PARAMETER_MOVED = "DHCPSRV_CFGMGR_DDNS_PARAMETER_MOVED";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_DEL_SUBNET4 = "DHCPSRV_CFGMGR_DEL_SUBNET4";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_DEL_SUBNET6 = "DHCPSRV_CFGMGR_DEL_SUBNET6";
+extern const isc::log::MessageID DHCPSRV_CFGMGR_IPV4_RESERVATIONS_NON_UNIQUE_IGNORED = "DHCPSRV_CFGMGR_IPV4_RESERVATIONS_NON_UNIQUE_IGNORED";
+extern const isc::log::MessageID DHCPSRV_CFGMGR_IPV6_RESERVATIONS_NON_UNIQUE_IGNORED = "DHCPSRV_CFGMGR_IPV6_RESERVATIONS_NON_UNIQUE_IGNORED";
+extern const isc::log::MessageID DHCPSRV_CFGMGR_IP_RESERVATIONS_UNIQUE_DUPLICATES_POSSIBLE = "DHCPSRV_CFGMGR_IP_RESERVATIONS_UNIQUE_DUPLICATES_POSSIBLE";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_NEW_SUBNET4 = "DHCPSRV_CFGMGR_NEW_SUBNET4";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_NEW_SUBNET6 = "DHCPSRV_CFGMGR_NEW_SUBNET6";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_NO_SUBNET4 = "DHCPSRV_CFGMGR_NO_SUBNET4";
@@ -84,6 +87,7 @@ extern const isc::log::MessageID DHCPSRV_CQL_LEASE_EXCEPTION_THROWN = "DHCPSRV_C
 extern const isc::log::MessageID DHCPSRV_CQL_ROLLBACK = "DHCPSRV_CQL_ROLLBACK";
 extern const isc::log::MessageID DHCPSRV_CQL_UPDATE_ADDR4 = "DHCPSRV_CQL_UPDATE_ADDR4";
 extern const isc::log::MessageID DHCPSRV_CQL_UPDATE_ADDR6 = "DHCPSRV_CQL_UPDATE_ADDR6";
+extern const isc::log::MessageID DHCPSRV_DEPRECATED = "DHCPSRV_DEPRECATED";
 extern const isc::log::MessageID DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET = "DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET";
 extern const isc::log::MessageID DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION = "DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION";
 extern const isc::log::MessageID DHCPSRV_DHCP_DDNS_HANDLER_NULL = "DHCPSRV_DHCP_DDNS_HANDLER_NULL";
@@ -118,7 +122,6 @@ extern const isc::log::MessageID DHCPSRV_MEMFILE_GET6_DUID = "DHCPSRV_MEMFILE_GE
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_ADDR4 = "DHCPSRV_MEMFILE_GET_ADDR4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_ADDR6 = "DHCPSRV_MEMFILE_GET_ADDR6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_CLIENTID = "DHCPSRV_MEMFILE_GET_CLIENTID";
-extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_CLIENTID_HWADDR_SUBID = "DHCPSRV_MEMFILE_GET_CLIENTID_HWADDR_SUBID";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_EXPIRED4 = "DHCPSRV_MEMFILE_GET_EXPIRED4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_EXPIRED6 = "DHCPSRV_MEMFILE_GET_EXPIRED6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_HOSTNAME4 = "DHCPSRV_MEMFILE_GET_HOSTNAME4";
@@ -188,6 +191,13 @@ extern const isc::log::MessageID DHCPSRV_MYSQL_GET_VERSION = "DHCPSRV_MYSQL_GET_
 extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB = "DHCPSRV_MYSQL_HOST_DB";
 extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_GET_VERSION = "DHCPSRV_MYSQL_HOST_DB_GET_VERSION";
 extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_READONLY = "DHCPSRV_MYSQL_HOST_DB_READONLY";
+extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED = "DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED";
+extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE = "DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE";
+extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_RECONNECT_FAILED = "DHCPSRV_MYSQL_HOST_DB_RECONNECT_FAILED";
+extern const isc::log::MessageID DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED = "DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED";
+extern const isc::log::MessageID DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE = "DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE";
+extern const isc::log::MessageID DHCPSRV_MYSQL_LEASE_DB_RECONNECT_FAILED = "DHCPSRV_MYSQL_LEASE_DB_RECONNECT_FAILED";
+extern const isc::log::MessageID DHCPSRV_MYSQL_NEGATIVE_LEASES_STAT = "DHCPSRV_MYSQL_NEGATIVE_LEASES_STAT";
 extern const isc::log::MessageID DHCPSRV_MYSQL_ROLLBACK = "DHCPSRV_MYSQL_ROLLBACK";
 extern const isc::log::MessageID DHCPSRV_MYSQL_START_TRANSACTION = "DHCPSRV_MYSQL_START_TRANSACTION";
 extern const isc::log::MessageID DHCPSRV_MYSQL_UPDATE_ADDR4 = "DHCPSRV_MYSQL_UPDATE_ADDR4";
@@ -228,6 +238,13 @@ extern const isc::log::MessageID DHCPSRV_PGSQL_GET_VERSION = "DHCPSRV_PGSQL_GET_
 extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB = "DHCPSRV_PGSQL_HOST_DB";
 extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_GET_VERSION = "DHCPSRV_PGSQL_HOST_DB_GET_VERSION";
 extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_READONLY = "DHCPSRV_PGSQL_HOST_DB_READONLY";
+extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED = "DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED";
+extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE = "DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE";
+extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_RECONNECT_FAILED = "DHCPSRV_PGSQL_HOST_DB_RECONNECT_FAILED";
+extern const isc::log::MessageID DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED = "DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED";
+extern const isc::log::MessageID DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE = "DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE";
+extern const isc::log::MessageID DHCPSRV_PGSQL_LEASE_DB_RECONNECT_FAILED = "DHCPSRV_PGSQL_LEASE_DB_RECONNECT_FAILED";
+extern const isc::log::MessageID DHCPSRV_PGSQL_NEGATIVE_LEASES_STAT = "DHCPSRV_PGSQL_NEGATIVE_LEASES_STAT";
 extern const isc::log::MessageID DHCPSRV_PGSQL_ROLLBACK = "DHCPSRV_PGSQL_ROLLBACK";
 extern const isc::log::MessageID DHCPSRV_PGSQL_START_TRANSACTION = "DHCPSRV_PGSQL_START_TRANSACTION";
 extern const isc::log::MessageID DHCPSRV_PGSQL_UPDATE_ADDR4 = "DHCPSRV_PGSQL_UPDATE_ADDR4";
@@ -260,10 +277,13 @@ const char* values[] = {
     "DHCPSRV_CFGMGR_CONFIG4_MERGED", "Configuration backend data has been merged.",
     "DHCPSRV_CFGMGR_CONFIG6_MERGED", "Configuration backend data has been merged.",
     "DHCPSRV_CFGMGR_CONFIGURE_SERVERID", "server configuration includes specification of a server identifier",
-    "DHCPSRV_CFGMGR_DDNS_PARAMETER_IGNORED", "dhpd-ddns:%1 is deprecated, using existing global:%2",
+    "DHCPSRV_CFGMGR_DDNS_PARAMETER_IGNORED", "dhcp-ddns:%1 is deprecated, using existing global:%2",
     "DHCPSRV_CFGMGR_DDNS_PARAMETER_MOVED", "dhcp-ddns:%1 is deprecated, moving it to global:%2",
     "DHCPSRV_CFGMGR_DEL_SUBNET4", "IPv4 subnet %1 removed",
     "DHCPSRV_CFGMGR_DEL_SUBNET6", "IPv6 subnet %1 removed",
+    "DHCPSRV_CFGMGR_IPV4_RESERVATIONS_NON_UNIQUE_IGNORED", "ignoring \"ip-reservations-unique\" setting because at least one of the host database backends does not support non-unique IP reservations in a subnet",
+    "DHCPSRV_CFGMGR_IPV6_RESERVATIONS_NON_UNIQUE_IGNORED", "ignoring \"ip-reservations-unique\" setting because at least one of the host database backends does not support non unique IP reservations in a subnet",
+    "DHCPSRV_CFGMGR_IP_RESERVATIONS_UNIQUE_DUPLICATES_POSSIBLE", "setting \"ip-reservations-unique\" from false to true poses a risk that some host backends may still contain multiple reservations for the same IP address",
     "DHCPSRV_CFGMGR_NEW_SUBNET4", "a new subnet has been added to configuration: %1",
     "DHCPSRV_CFGMGR_NEW_SUBNET6", "a new subnet has been added to configuration: %1",
     "DHCPSRV_CFGMGR_NO_SUBNET4", "no suitable subnet is defined for address hint %1",
@@ -328,6 +348,7 @@ const char* values[] = {
     "DHCPSRV_CQL_ROLLBACK", "rolling back Cassandra database.",
     "DHCPSRV_CQL_UPDATE_ADDR4", "updating IPv4 lease for address %1",
     "DHCPSRV_CQL_UPDATE_ADDR6", "updating IPv6 lease for address %1",
+    "DHCPSRV_DEPRECATED", "This configuration is using a deprecated feature: %1",
     "DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET", "received bad DHCPv4o6 packet: %1",
     "DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION", "error handler for DHCP_DDNS IO generated an expected exception: %1",
     "DHCPSRV_DHCP_DDNS_HANDLER_NULL", "error handler for DHCP_DDNS IO is not set.",
@@ -362,7 +383,6 @@ const char* values[] = {
     "DHCPSRV_MEMFILE_GET_ADDR4", "obtaining IPv4 lease for address %1",
     "DHCPSRV_MEMFILE_GET_ADDR6", "obtaining IPv6 lease for address %1 and lease type %2",
     "DHCPSRV_MEMFILE_GET_CLIENTID", "obtaining IPv4 leases for client ID %1",
-    "DHCPSRV_MEMFILE_GET_CLIENTID_HWADDR_SUBID", "obtaining IPv4 lease for client ID %1, hardware address %2 and subnet ID %3",
     "DHCPSRV_MEMFILE_GET_EXPIRED4", "obtaining maximum %1 of expired IPv4 leases",
     "DHCPSRV_MEMFILE_GET_EXPIRED6", "obtaining maximum %1 of expired IPv6 leases",
     "DHCPSRV_MEMFILE_GET_HOSTNAME4", "obtaining IPv4 leases for hostname %1",
@@ -382,7 +402,7 @@ const char* values[] = {
     "DHCPSRV_MEMFILE_LEASE_LOAD_ROW_ERROR", "discarding row %1, error: %2",
     "DHCPSRV_MEMFILE_LFC_EXECUTE", "executing Lease File Cleanup using: %1",
     "DHCPSRV_MEMFILE_LFC_LEASE_FILE_RENAME_FAIL", "failed to rename the current lease file %1 to %2, reason: %3",
-    "DHCPSRV_MEMFILE_LFC_LEASE_FILE_REOPEN_FAIL", "failed to reopen lease file %1 after preparing input file for lease file cleanup, reason: %2, new leases will not be persisted!",
+    "DHCPSRV_MEMFILE_LFC_LEASE_FILE_REOPEN_FAIL", "failed to reopen lease file %1 after preparing input file for lease file cleanup, reason: %2, new leases will not persist!",
     "DHCPSRV_MEMFILE_LFC_SETUP", "setting up the Lease File Cleanup interval to %1 sec",
     "DHCPSRV_MEMFILE_LFC_SPAWN_FAIL", "lease file cleanup failed to run because kea-lfc process couldn't be spawned",
     "DHCPSRV_MEMFILE_LFC_START", "starting Lease File Cleanup",
@@ -432,6 +452,13 @@ const char* values[] = {
     "DHCPSRV_MYSQL_HOST_DB", "opening MySQL hosts database: %1",
     "DHCPSRV_MYSQL_HOST_DB_GET_VERSION", "obtaining schema version information for the MySQL hosts database",
     "DHCPSRV_MYSQL_HOST_DB_READONLY", "MySQL host database opened for read access only",
+    "DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED", "database reconnect failed: %1",
+    "DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE", "scheduling attempt %1 of %2 in %3 milliseconds",
+    "DHCPSRV_MYSQL_HOST_DB_RECONNECT_FAILED", "maximum number of database reconnect attempts: %1, has been exhausted without success",
+    "DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED", "database reconnect failed: %1",
+    "DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE", "scheduling attempt %1 of %2 in %3 milliseconds",
+    "DHCPSRV_MYSQL_LEASE_DB_RECONNECT_FAILED", "maximum number of database reconnect attempts: %1, has been exhausted without success",
+    "DHCPSRV_MYSQL_NEGATIVE_LEASES_STAT", "recount of leases returned a negative value",
     "DHCPSRV_MYSQL_ROLLBACK", "rolling back MySQL database",
     "DHCPSRV_MYSQL_START_TRANSACTION", "starting new MySQL transaction",
     "DHCPSRV_MYSQL_UPDATE_ADDR4", "updating IPv4 lease for address %1",
@@ -472,6 +499,13 @@ const char* values[] = {
     "DHCPSRV_PGSQL_HOST_DB", "opening PostgreSQL hosts database: %1",
     "DHCPSRV_PGSQL_HOST_DB_GET_VERSION", "obtaining schema version information for the PostgreSQL hosts database",
     "DHCPSRV_PGSQL_HOST_DB_READONLY", "PostgreSQL host database opened for read access only",
+    "DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED", "database reconnect failed: %1",
+    "DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE", "scheduling attempt %1 of %2 in %3 milliseconds",
+    "DHCPSRV_PGSQL_HOST_DB_RECONNECT_FAILED", "maximum number of database reconnect attempts: %1, has been exhausted without success",
+    "DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED", "database reconnect failed: %1",
+    "DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE", "scheduling attempt %1 of %2 in %3 milliseconds",
+    "DHCPSRV_PGSQL_LEASE_DB_RECONNECT_FAILED", "maximum number of database reconnect attempts: %1, has been exhausted without success",
+    "DHCPSRV_PGSQL_NEGATIVE_LEASES_STAT", "recount of leases returned a negative value",
     "DHCPSRV_PGSQL_ROLLBACK", "rolling back PostgreSQL database",
     "DHCPSRV_PGSQL_START_TRANSACTION", "starting a new PostgreSQL transaction",
     "DHCPSRV_PGSQL_UPDATE_ADDR4", "updating IPv4 lease for address %1",

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -98,7 +98,7 @@ public:
         : data::StampedElement(), option_(OptionPtr()), persistent_(persist),
           formatted_value_(), space_name_() {};
 
-    /// @brief Constructor.
+    /// @brief Copy constructor.
     ///
     /// @param desc option descriptor to be copied.
     OptionDescriptor(const OptionDescriptor& desc)
@@ -109,6 +109,22 @@ public:
           space_name_(desc.space_name_) {
         setContext(desc.getContext());
     };
+
+    /// @brief Assignment operator.
+    ///
+    /// @param other option descriptor to be assigned from.
+    OptionDescriptor& operator=(const OptionDescriptor& other) {
+        if (this != &other) {
+            // Not self-assignment.
+            data::StampedElement::operator=(other);
+            option_ = other.option_;
+            persistent_ = other.persistent_;
+            formatted_value_ = other.formatted_value_;
+            space_name_ = other.space_name_;
+            setContext(other.getContext());
+        }
+        return (*this);
+    }
 
     /// @brief Factory function creating an instance of the @c OptionDescriptor.
     ///
@@ -412,7 +428,7 @@ public:
     /// @brief Re-create the option in each descriptor based on given definitions
     ///
     /// Invokes @c createDescriptorOption() on each option descriptor in
-    /// each option space, passing in the the given dictionary of option
+    /// each option space, passing in the given dictionary of option
     /// definitions.  If the descriptor's option is re-created, then the
     /// descriptor is updated by calling @c replace().
     ///

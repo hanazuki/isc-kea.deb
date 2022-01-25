@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,12 +24,14 @@
 
 #include <time.h>
 
-
+using namespace isc::asiolink;
 using namespace isc::db;
 using namespace std;
 
 namespace isc {
 namespace dhcp {
+
+IOServicePtr LeaseMgr::io_service_ = IOServicePtr();
 
 LeasePageSize::LeasePageSize(const size_t page_size)
     : page_size_(page_size) {
@@ -74,10 +76,25 @@ LeaseMgr::recountLeaseStats4() {
     }
 
     // Zero out the global stats.
+    // Cumulative counters ("reclaimed-declined-addresses", "reclaimed-leases",
+    // "cumulative-assigned-addresses") never get zeroed.
     int64_t zero = 0;
     stats_mgr.setValue("declined-addresses", zero);
-    stats_mgr.setValue("reclaimed-declined-addresses", zero);
-    stats_mgr.setValue("reclaimed-leases", zero);
+
+    // Create if it does not exit reclaimed declined leases global stats.
+    if (!stats_mgr.getObservation("reclaimed-declined-addresses")) {
+        stats_mgr.setValue("reclaimed-declined-addresses", zero);
+    }
+
+    // Create if it does not exit reclaimed leases global stats.
+    if (!stats_mgr.getObservation("reclaimed-leases")) {
+        stats_mgr.setValue("reclaimed-leases", zero);
+    }
+
+    // Create if it does not exit cumulative global stats.
+    if (!stats_mgr.getObservation("cumulative-assigned-addresses")) {
+        stats_mgr.setValue("cumulative-assigned-addresses", zero);
+    }
 
     // Clear subnet level stats.  This ensures we don't end up with corner
     // cases that leave stale values in place.
@@ -95,13 +112,23 @@ LeaseMgr::recountLeaseStats4() {
                                                   "declined-addresses"),
                            zero);
 
-        stats_mgr.setValue(StatsMgr::generateName("subnet", subnet_id,
-                                                  "reclaimed-declined-addresses"),
-                           zero);
+        if (!stats_mgr.getObservation(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-declined-addresses"))) {
+            stats_mgr.setValue(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-declined-addresses"),
+                zero);
+        }
 
-        stats_mgr.setValue(StatsMgr::generateName("subnet", subnet_id,
-                                                  "reclaimed-leases"),
-                           zero);
+        if (!stats_mgr.getObservation(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-leases"))) {
+            stats_mgr.setValue(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-leases"),
+                zero);
+        }
     }
 
     // Get counts per state per subnet. Iterate over the result set
@@ -109,8 +136,8 @@ LeaseMgr::recountLeaseStats4() {
     LeaseStatsRow row;
     while (query->getNextRow(row)) {
         if (row.lease_state_ == Lease::STATE_DEFAULT) {
-            // Set subnet level value.
-            stats_mgr.setValue(StatsMgr::generateName("subnet", row.subnet_id_,
+            // Add to subnet level value.
+            stats_mgr.addValue(StatsMgr::generateName("subnet", row.subnet_id_,
                                                       "assigned-addresses"),
                                row.state_count_);
         } else if (row.lease_state_ == Lease::STATE_DECLINED) {
@@ -121,6 +148,12 @@ LeaseMgr::recountLeaseStats4() {
 
             // Add to the global value.
             stats_mgr.addValue("declined-addresses", row.state_count_);
+
+            // Add to subnet level value.
+            // Declined leases also count as assigned.
+            stats_mgr.addValue(StatsMgr::generateName("subnet", row.subnet_id_,
+                                                      "assigned-addresses"),
+                               row.state_count_);
         }
     }
 }
@@ -190,14 +223,29 @@ LeaseMgr::recountLeaseStats6() {
         return;
     }
 
-    // Zero out the global stats. (Ok, so currently there's only one
-    // that should be cleared.  "reclaimed-declined-addresses" never
-    // gets zeroed. @todo discuss with Tomek the rational of not
-    // clearing it when we clear the rest.
+    // Zero out the global stats.
+    // Cumulative counters ("reclaimed-declined-addresses", "reclaimed-leases",
+    // "cumulative-assigned-nas", "cumulative-assigned-pds") never get zeroed.
     int64_t zero = 0;
     stats_mgr.setValue("declined-addresses", zero);
-    stats_mgr.setValue("reclaimed-declined-addresses", zero);
-    stats_mgr.setValue("reclaimed-leases", zero);
+
+    if (!stats_mgr.getObservation("reclaimed-declined-addresses")) {
+        stats_mgr.setValue("reclaimed-declined-addresses", zero);
+    }
+
+    if (!stats_mgr.getObservation("reclaimed-leases")) {
+        stats_mgr.setValue("reclaimed-leases", zero);
+    }
+
+    // Create if it does not exit cumulative nas global stats.
+    if (!stats_mgr.getObservation("cumulative-assigned-nas")) {
+        stats_mgr.setValue("cumulative-assigned-nas", zero);
+    }
+
+    // Create if it does not exit cumulative pds global stats.
+    if (!stats_mgr.getObservation("cumulative-assigned-pds")) {
+        stats_mgr.setValue("cumulative-assigned-pds", zero);
+    }
 
     // Clear subnet level stats.  This ensures we don't end up with corner
     // cases that leave stale values in place.
@@ -215,18 +263,27 @@ LeaseMgr::recountLeaseStats6() {
                                                   "declined-addresses"),
                            zero);
 
-        stats_mgr.setValue(StatsMgr::
-                           generateName("subnet", subnet_id,
-                                        "reclaimed-declined-addresses"),
-                           zero);
+        if (!stats_mgr.getObservation(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-declined-addresses"))) {
+            stats_mgr.setValue(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-declined-addresses"),
+                zero);
+        }
 
         stats_mgr.setValue(StatsMgr::generateName("subnet", subnet_id,
                                                   "assigned-pds"),
                            zero);
 
-        stats_mgr.setValue(StatsMgr::generateName("subnet", subnet_id,
-                                                  "reclaimed-leases"),
-                           zero);
+        if (!stats_mgr.getObservation(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-leases"))) {
+            stats_mgr.setValue(
+                StatsMgr::generateName("subnet", subnet_id,
+                                       "reclaimed-leases"),
+                zero);
+        }
     }
 
     // Get counts per state per subnet. Iterate over the result set
@@ -236,12 +293,12 @@ LeaseMgr::recountLeaseStats6() {
         switch(row.lease_type_) {
             case Lease::TYPE_NA:
                 if (row.lease_state_ == Lease::STATE_DEFAULT) {
-                    // Set subnet level value.
-                    stats_mgr.setValue(StatsMgr::
+                    // Add to subnet level value.
+                    stats_mgr.addValue(StatsMgr::
                                        generateName("subnet", row.subnet_id_,
                                                     "assigned-nas"),
                                        row.state_count_);
-                } if (row.lease_state_ == Lease::STATE_DECLINED) {
+                } else if (row.lease_state_ == Lease::STATE_DECLINED) {
                     // Set subnet level value.
                     stats_mgr.setValue(StatsMgr::
                                        generateName("subnet", row.subnet_id_,
@@ -250,6 +307,13 @@ LeaseMgr::recountLeaseStats6() {
 
                     // Add to the global value.
                     stats_mgr.addValue("declined-addresses", row.state_count_);
+
+                    // Add to subnet level value.
+                    // Declined leases also count as assigned.
+                    stats_mgr.addValue(StatsMgr::
+                                       generateName("subnet", row.subnet_id_,
+                                                    "assigned-nas"),
+                                       row.state_count_);
                 }
                 break;
 
@@ -259,7 +323,7 @@ LeaseMgr::recountLeaseStats6() {
                     stats_mgr.setValue(StatsMgr::
                                        generateName("subnet", row.subnet_id_,
                                                     "assigned-pds"),
-                                        row.state_count_);
+                                       row.state_count_);
                 }
                 break;
 

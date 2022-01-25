@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,7 +7,6 @@
 #include <config.h>
 
 #include <dhcp4/tests/dhcp4_test_utils.h>
-#include <dhcp4/tests/dhcp4_client.h>
 #include <dhcp4/ctrl_dhcp4_srv.h>
 #include <dhcp4/json_config_parser.h>
 #include <asiolink/io_service.h>
@@ -23,6 +22,8 @@
 #include <dhcp4/tests/dhcp4_client.h>
 #include <dhcp4/tests/marker_file.h>
 #include <dhcp4/tests/test_libraries.h>
+#include <stats/stats_mgr.h>
+#include <util/multi_threading_mgr.h>
 
 #include <vector>
 
@@ -33,6 +34,8 @@ using namespace isc::hooks;
 using namespace isc::config;
 using namespace isc::dhcp::test;
 using namespace isc::dhcp;
+using namespace isc::util;
+using namespace isc::stats;
 
 // Checks if hooks are registered properly.
 TEST_F(Dhcpv4SrvTest, Hooks) {
@@ -103,6 +106,11 @@ public:
 
     /// @brief creates Dhcpv4Srv and prepares buffers for callouts
     HooksDhcpv4SrvTest() {
+        HooksManager::setTestMode(false);
+        bool status = HooksManager::unloadLibraries();
+        if (!status) {
+            cerr << "(fixture ctor) unloadLibraries failed" << endl;
+        }
 
         // Allocate new DHCPv6 Server
         srv_ = new NakedDhcpv4Srv(0);
@@ -111,10 +119,15 @@ public:
         resetCalloutBuffers();
 
         io_service_ = boost::make_shared<IOService>();
+
+        // Clear statistics.
+        StatsMgr::instance().removeAll();
     }
 
     /// @brief destructor (deletes Dhcpv4Srv)
     virtual ~HooksDhcpv4SrvTest() {
+        // clear static buffers
+        resetCalloutBuffers();
 
         HooksManager::preCalloutsLibraryHandle().deregisterAllCallouts("dhcp4_srv_configured");
         HooksManager::preCalloutsLibraryHandle().deregisterAllCallouts("buffer4_receive");
@@ -127,8 +140,15 @@ public:
         HooksManager::preCalloutsLibraryHandle().deregisterAllCallouts("lease4_decline");
         HooksManager::preCalloutsLibraryHandle().deregisterAllCallouts("host4_identifier");
 
-        HooksManager::getSharedCalloutManager().reset();
         delete srv_;
+        HooksManager::setTestMode(false);
+        bool status = HooksManager::unloadLibraries();
+        if (!status) {
+            cerr << "(fixture dtor) unloadLibraries failed" << endl;
+        }
+
+        // Clear statistics.
+        StatsMgr::instance().removeAll();
     }
 
     /// @brief creates an option with specified option code
@@ -204,6 +224,7 @@ public:
         // and the fake eth0 interface has IPv4 address matching the subnet
         // currently configured for this test.
         dis->setIface("eth1");
+        dis->setIndex(ETH1_INDEX);
         return (dis);
     }
 
@@ -549,7 +570,7 @@ public:
 
         // Let's change to a different subnet
         if (subnets->size() > 1) {
-            subnet = (*subnets)[1]; // Let's pick the other subnet
+            subnet = *std::next(subnets->begin()); // Let's pick the other subnet
             callout_handle.setArgument("subnet4", subnet);
         }
 
@@ -650,7 +671,6 @@ public:
     static int
     leases4_committed_callout(CalloutHandle& callout_handle) {
         callback_name_ = string("leases4_committed");
-
         callout_handle.getArgument("query4", callback_qry_pkt4_);
 
         Lease4CollectionPtr leases4;
@@ -687,9 +707,9 @@ public:
 
         callout_handle.getArgument("query4", callback_qry_pkt4_);
 
-        io_service_->post(boost::bind(&HooksDhcpv4SrvTest::leases4_committed_unpark,
-                                      callout_handle.getParkingLotHandlePtr(),
-                                      callback_qry_pkt4_));
+        io_service_->post(std::bind(&HooksDhcpv4SrvTest::leases4_committed_unpark,
+                                    callout_handle.getParkingLotHandlePtr(),
+                                    callback_qry_pkt4_));
 
         callout_handle.getParkingLotHandlePtr()->reference(callback_qry_pkt4_);
         callout_handle.setStatus(CalloutHandle::NEXT_STEP_PARK);
@@ -788,6 +808,19 @@ public:
         callback_resp_options_copy_ = false;
     }
 
+    /// @brief Fetches the current value of the given statistic.
+    /// @param name name of the desired statistic.
+    /// @return Current value of the statistic, or zero if the
+    /// statistic is not found.
+    uint64_t getStatistic(const std::string& name) {
+        ObservationPtr stat = StatsMgr::instance().getObservation(name);
+        if (!stat) {
+            return (0);
+        }
+
+        return (stat->getInteger().first);
+    }
+
     /// pointer to Dhcpv4Srv that is used in tests
     NakedDhcpv4Srv* srv_;
 
@@ -860,12 +893,14 @@ public:
 
     LoadUnloadDhcpv4SrvTest() {
         reset();
+        MultiThreadingMgr::instance().setMode(false);
     }
 
     /// @brief Destructor
     ~LoadUnloadDhcpv4SrvTest() {
         server_.reset();
         reset();
+        MultiThreadingMgr::instance().setMode(false);
     };
 
     /// @brief Reset hooks data
@@ -1579,6 +1614,7 @@ TEST_F(HooksDhcpv4SrvTest, subnet4SelectSimple) {
     Pkt4Ptr sol = Pkt4Ptr(new Pkt4(DHCPDISCOVER, 1234));
     sol->setRemoteAddr(IOAddress("192.0.2.1"));
     sol->setIface("eth1");
+    sol->setIndex(ETH1_INDEX);
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
 
@@ -1600,15 +1636,15 @@ TEST_F(HooksDhcpv4SrvTest, subnet4SelectSimple) {
     // The server is supposed to pick the first subnet, because of matching
     // interface. Check that the value is reported properly.
     ASSERT_TRUE(callback_subnet4_);
-    EXPECT_EQ(exp_subnets->front().get(), callback_subnet4_.get());
+    EXPECT_EQ(exp_subnets->begin()->get(), callback_subnet4_.get());
 
     // Server is supposed to report two subnets
     ASSERT_EQ(exp_subnets->size(), callback_subnet4collection_->size());
     ASSERT_GE(exp_subnets->size(), 2);
 
     // Compare that the available subnets are reported as expected
-    EXPECT_TRUE((*exp_subnets)[0].get() == (*callback_subnet4collection_)[0].get());
-    EXPECT_TRUE((*exp_subnets)[1].get() == (*callback_subnet4collection_)[1].get());
+    EXPECT_TRUE((*exp_subnets->begin())->get() == (*callback_subnet4collection_->begin())->get());
+    EXPECT_TRUE((*std::next(exp_subnets->begin()))->get() == (*std::next(callback_subnet4collection_->begin()))->get());
 
     // Pkt passed to a callout must be configured to copy retrieved options.
     EXPECT_TRUE(callback_qry_options_copy_);
@@ -1660,6 +1696,7 @@ TEST_F(HooksDhcpv4SrvTest, subnet4SelectChange) {
     Pkt4Ptr sol = Pkt4Ptr(new Pkt4(DHCPDISCOVER, 1234));
     sol->setRemoteAddr(IOAddress("192.0.2.1"));
     sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
     OptionPtr clientid = generateClientId();
     sol->addOption(clientid);
 
@@ -1680,8 +1717,10 @@ TEST_F(HooksDhcpv4SrvTest, subnet4SelectChange) {
 
     // Advertised address must belong to the second pool (in subnet's range,
     // in dynamic pool)
-    EXPECT_TRUE((*subnets)[1]->inRange(addr));
-    EXPECT_TRUE((*subnets)[1]->inPool(Lease::TYPE_V4, addr));
+    auto subnet = subnets->begin();
+    ++subnet;
+    EXPECT_TRUE((*subnet)->inRange(addr));
+    EXPECT_TRUE((*subnet)->inPool(Lease::TYPE_V4, addr));
 
     // Check if the callout handle state was reset after the callout.
     checkCalloutHandleReset(sol);
@@ -1699,6 +1738,7 @@ TEST_F(HooksDhcpv4SrvTest, leases4CommittedDiscover) {
 
     Dhcp4Client client(Dhcp4Client::SELECTING);
     client.setIfaceName("eth1");
+    client.setIfaceIndex(ETH1_INDEX);
     ASSERT_NO_THROW(client.doDiscover());
 
     // Make sure that we received a response
@@ -1774,6 +1814,7 @@ TEST_F(HooksDhcpv4SrvTest, lease4RenewSimple) {
     req->setYiaddr(addr);
     req->setCiaddr(addr); // client's address
     req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
     req->setHWAddr(hwaddr2);
 
     req->addOption(clientid);
@@ -1822,8 +1863,7 @@ TEST_F(HooksDhcpv4SrvTest, lease4RenewSimple) {
     sort(expected_argument_names.begin(), expected_argument_names.end());
     EXPECT_TRUE(callback_argument_names_ == expected_argument_names);
 
-    Lease4Ptr lease(new Lease4());
-    lease->addr_ = addr;
+    Lease4Ptr lease = LeaseMgrFactory::instance().getLease4(addr);
     EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 
     // Pkt passed to a callout must be configured to copy retrieved options.
@@ -1876,6 +1916,7 @@ TEST_F(HooksDhcpv4SrvTest, lease4RenewSkip) {
     req->setYiaddr(addr);
     req->setCiaddr(addr); // client's address
     req->setIface("eth0");
+    req->setIndex(ETH0_INDEX);
     req->setHWAddr(hwaddr2);
 
     req->addOption(clientid);
@@ -1893,8 +1934,7 @@ TEST_F(HooksDhcpv4SrvTest, lease4RenewSkip) {
     EXPECT_EQ(temp_valid, l->valid_lft_);
     EXPECT_EQ(temp_timestamp, l->cltt_);
 
-    Lease4Ptr lease(new Lease4());
-    lease->addr_ = addr;
+    Lease4Ptr lease = LeaseMgrFactory::instance().getLease4(addr);
     EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 
     // Check if the callout handle state was reset after the callout.
@@ -1914,6 +1954,7 @@ TEST_F(HooksDhcpv4SrvTest, leases4CommittedRequest) {
 
     Dhcp4Client client(Dhcp4Client::SELECTING);
     client.setIfaceName("eth1");
+    client.setIfaceIndex(ETH1_INDEX);
     ASSERT_NO_THROW(client.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.100"))));
 
     // Make sure that we received a response
@@ -2018,6 +2059,78 @@ TEST_F(HooksDhcpv4SrvTest, leases4CommittedRequest) {
     checkCalloutHandleReset(client.getContext().query_);
 }
 
+// This test verifies that the callout installed on the leases4_committed hook
+// point is executed as a result of DHCPREQUEST message sent to reuse
+// an existing lease.
+TEST_F(HooksDhcpv4SrvTest, leases4CommittedCache) {
+    IfaceMgrTestConfig test_config(true);
+    IfaceMgr::instance().openSockets4();
+
+    ASSERT_NO_THROW(HooksManager::preCalloutsLibraryHandle().registerCallout(
+                    "leases4_committed", leases4_committed_callout));
+
+
+    // Modify the subnet to reuse leases.
+    subnet_->setCacheThreshold(.25);
+
+    Dhcp4Client client(Dhcp4Client::SELECTING);
+    client.setIfaceName("eth1");
+    client.setIfaceIndex(ETH1_INDEX);
+    ASSERT_NO_THROW(client.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.100"))));
+
+    // Make sure that we received a response
+    ASSERT_TRUE(client.getContext().response_);
+
+    // Check that the callback called is indeed the one we installed
+    EXPECT_EQ("leases4_committed", callback_name_);
+
+    // Check if all expected parameters were really received
+    vector<string> expected_argument_names;
+    expected_argument_names.push_back("query4");
+    expected_argument_names.push_back("deleted_leases4");
+    expected_argument_names.push_back("leases4");
+
+    sort(expected_argument_names.begin(), expected_argument_names.end());
+    EXPECT_TRUE(callback_argument_names_ == expected_argument_names);
+
+    // Newly allocated lease should be returned.
+    ASSERT_TRUE(callback_lease4_);
+    EXPECT_EQ("192.0.2.100", callback_lease4_->addr_.toText());
+
+    // Deleted lease must not be present, because it is a new allocation.
+    EXPECT_FALSE(callback_deleted_lease4_);
+
+    // Pkt passed to a callout must be configured to copy retrieved options.
+    EXPECT_TRUE(callback_qry_options_copy_);
+
+    // Check if the callout handle state was reset after the callout.
+    checkCalloutHandleReset(client.getContext().query_);
+
+    resetCalloutBuffers();
+
+    // Renew the lease and make sure that the callout has been executed.
+    client.setState(Dhcp4Client::RENEWING);
+    ASSERT_NO_THROW(client.doRequest());
+
+    // Make sure that we received a response
+    ASSERT_TRUE(client.getContext().response_);
+
+    // Check that the callback called is indeed the one we installed
+    EXPECT_EQ("leases4_committed", callback_name_);
+
+    // Renewed lease should not be present because it was reused.
+    EXPECT_FALSE(callback_lease4_);
+
+    // Deleted lease must not be present, because it renews the same address.
+    EXPECT_FALSE(callback_deleted_lease4_);
+
+    // Pkt passed to a callout must be configured to copy retrieved options.
+    EXPECT_TRUE(callback_qry_options_copy_);
+
+    // Check if the callout handle state was reset after the callout.
+    checkCalloutHandleReset(client.getContext().query_);
+}
+
 // This test verifies that it is possible to park a packet as a result of
 // the leases4_committed callouts.
 TEST_F(HooksDhcpv4SrvTest, leases4CommittedParkRequests) {
@@ -2033,6 +2146,7 @@ TEST_F(HooksDhcpv4SrvTest, leases4CommittedParkRequests) {
     // Create first client and perform DORA.
     Dhcp4Client client1(Dhcp4Client::SELECTING);
     client1.setIfaceName("eth1");
+    client1.setIfaceIndex(ETH1_INDEX);
     ASSERT_NO_THROW(client1.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.100"))));
 
     // We should be offered an address but the DHCPACK should not arrive
@@ -2071,6 +2185,7 @@ TEST_F(HooksDhcpv4SrvTest, leases4CommittedParkRequests) {
     // server while the previous packet is parked.
     Dhcp4Client client2(client1.getServer(), Dhcp4Client::SELECTING);
     client2.setIfaceName("eth1");
+    client2.setIfaceIndex(ETH1_INDEX);
     ASSERT_NO_THROW(client2.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.101"))));
 
     // The DHCPOFFER should have been returned but not DHCPACK, as this
@@ -2268,6 +2383,7 @@ TEST_F(HooksDhcpv4SrvTest, leases4CommittedRelease) {
 
     Dhcp4Client client(Dhcp4Client::SELECTING);
     client.setIfaceName("eth1");
+    client.setIfaceIndex(ETH1_INDEX);
     ASSERT_NO_THROW(client.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.100"))));
 
     // Make sure that we received a response
@@ -2373,12 +2489,11 @@ TEST_F(HooksDhcpv4SrvTest, HooksDecline) {
     IfaceMgrTestConfig test_config(true);
     IfaceMgr::instance().openSockets4();
 
-    // Libraries will be reloaded later
-    HooksManager::getSharedCalloutManager().reset(new CalloutManager(0));
-
     // Install a callout
     EXPECT_NO_THROW(HooksManager::preCalloutsLibraryHandle().registerCallout(
                         "lease4_decline", lease4_decline_callout));
+
+    HooksManager::setTestMode(true);
 
     // Conduct the actual DORA + Decline.
     Dhcp4Client client(Dhcp4Client::SELECTING);
@@ -2425,12 +2540,11 @@ TEST_F(HooksDhcpv4SrvTest, HooksDeclineSkip) {
     IfaceMgrTestConfig test_config(true);
     IfaceMgr::instance().openSockets4();
 
-    // Libraries will be reloaded later
-    HooksManager::getSharedCalloutManager().reset(new CalloutManager(0));
-
     // Install a callout
     EXPECT_NO_THROW(HooksManager::preCalloutsLibraryHandle().registerCallout(
                         "lease4_decline", lease4_decline_skip_callout));
+
+    HooksManager::setTestMode(true);
 
     // Conduct the actual DORA + Decline. The DECLINE should fail, as the
     // hook will set the status to SKIP.
@@ -2476,12 +2590,11 @@ TEST_F(HooksDhcpv4SrvTest, HooksDeclineDrop) {
     IfaceMgrTestConfig test_config(true);
     IfaceMgr::instance().openSockets4();
 
-    // Libraries will be reloaded later
-    HooksManager::getSharedCalloutManager().reset(new CalloutManager(0));
-
     // Install a callout
     EXPECT_NO_THROW(HooksManager::preCalloutsLibraryHandle().registerCallout(
                         "lease4_decline", lease4_decline_drop_callout));
+
+    HooksManager::setTestMode(true);
 
     // Conduct the actual DORA + Decline. The DECLINE should fail, as the
     // hook will set the status to DROP.
@@ -2730,12 +2843,12 @@ TEST_F(LoadUnloadDhcpv4SrvTest, unloadLibraries) {
     libraries.push_back(make_pair(std::string(CALLOUT_LIBRARY_1),
                                   ConstElementPtr()));
     libraries.push_back(make_pair(std::string(CALLOUT_LIBRARY_2),
-
                                   ConstElementPtr()));
+
     ASSERT_TRUE(HooksManager::loadLibraries(libraries));
 
     // Verify that they load functions created the LOAD_MARKER_FILE
-    // and that it's contents are correct: "12" - the first library
+    // and that its contents are correct: "12" - the first library
     // appends "1" to the file, the second appends "2"). Also
     // check that the unload marker file does not yet exist.
     EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "12"));
@@ -2749,6 +2862,53 @@ TEST_F(LoadUnloadDhcpv4SrvTest, unloadLibraries) {
     // this should be reflected in the unload file.
     EXPECT_TRUE(checkMarkerFile(UNLOAD_MARKER_FILE, "21"));
     EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "12"));
+}
+
+// Verifies that libraries incompatible with multi threading are not loaded by
+// the server.
+// The callout libraries write their library index number to a marker
+// file upon load and unload, making it simple to test whether or not
+// the load and unload callouts have been invoked.
+TEST_F(LoadUnloadDhcpv4SrvTest, failLoadIncompatibleLibraries) {
+
+    ASSERT_NO_THROW(server_.reset(new NakedDhcpv4Srv()));
+
+    MultiThreadingMgr::instance().setMode(true);
+
+    // Ensure no marker files to start with.
+    ASSERT_FALSE(checkMarkerFileExists(LOAD_MARKER_FILE));
+    ASSERT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
+
+    // Load the test libraries
+    HookLibsCollection libraries;
+    libraries.push_back(make_pair(std::string(CALLOUT_LIBRARY_2),
+                                  ConstElementPtr()));
+
+    ASSERT_FALSE(HooksManager::loadLibraries(libraries));
+
+    // The library is missing multi_threading_compatible function so loading
+    // should fail
+    EXPECT_FALSE(checkMarkerFileExists(LOAD_MARKER_FILE));
+    EXPECT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
+
+    libraries.clear();
+    libraries.push_back(make_pair(std::string(CALLOUT_LIBRARY_3),
+                                  ConstElementPtr()));
+
+    ASSERT_FALSE(HooksManager::loadLibraries(libraries));
+
+    // The library is not multi threading compatible so loading should fail
+    EXPECT_FALSE(checkMarkerFileExists(LOAD_MARKER_FILE));
+    EXPECT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
+
+    // Destroy the server, instance which should unload the libraries.
+    server_.reset();
+
+    // Check that the libraries were unloaded. The libraries are
+    // unloaded in the reverse order to which they are loaded, and
+    // this should be reflected in the unload file.
+    EXPECT_FALSE(checkMarkerFileExists(LOAD_MARKER_FILE));
+    EXPECT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
 }
 
 // Checks if callouts installed on the dhcp4_srv_configured ared indeed called
@@ -2813,3 +2973,130 @@ TEST_F(LoadUnloadDhcpv4SrvTest, Dhcpv4SrvConfigured) {
     EXPECT_TRUE(checkMarkerFile(SRV_CONFIG_MARKER_FILE,
                                 "3io_contextjson_confignetwork_stateserver_config"));
 }
+
+// This test verifies that parked-packet-limit is properly enforced.
+TEST_F(HooksDhcpv4SrvTest, parkedPacketLimit) {
+    IfaceMgrTestConfig test_config(true);
+
+    // Configure 1 directly reachable subnet, parked-packet-limit of 1.
+    string config = "{ \"interfaces-config\": {"
+        "    \"interfaces\": [ \"*\" ]"
+        "},"
+        "\"rebind-timer\": 2000, "
+        "\"renew-timer\": 1000, "
+        "\"parked-packet-limit\": 1,"
+        "\"subnet4\": [ { "
+        "    \"pools\": [ { \"pool\": \"192.0.2.0/24\" } ],"
+        "    \"subnet\": \"192.0.2.0/24\", "
+        "    \"interface\": \"eth1\" "
+        " } ],"
+        "\"valid-lifetime\": 4000 }";
+
+    ConstElementPtr json;
+    EXPECT_NO_THROW(json = parseDHCP4(config));
+    ConstElementPtr status;
+
+    // Configure the server and make sure the config is accepted
+    EXPECT_NO_THROW(status = configureDhcp4Server(*srv_, json));
+    ASSERT_TRUE(status);
+    comment_ = parseAnswer(rcode_, status);
+    ASSERT_EQ(0, rcode_);
+
+    // Commit the config
+    CfgMgr::instance().commit();
+    IfaceMgr::instance().openSockets4();
+
+    // This callout uses the provided IO service object to post a function
+    // that unparks the packet. Once the packet is parked, it can be unparked
+    // by simply calling IOService::poll.
+    ASSERT_NO_THROW(HooksManager::preCalloutsLibraryHandle().registerCallout(
+                    "leases4_committed", leases4_committed_park_callout));
+
+    // Statistic should not show any drops.
+    EXPECT_EQ(0, getStatistic("pkt4-receive-drop"));
+
+    // Create a client and initiate a DORA cycle for it.
+    Dhcp4Client client(Dhcp4Client::SELECTING);
+    client.setIfaceName("eth1");
+    client.setIfaceIndex(ETH1_INDEX);
+    ASSERT_NO_THROW(client.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.100"))));
+
+    // Check that the callback called is indeed the one we installed
+    ASSERT_EQ("leases4_committed", callback_name_);
+
+    // Make sure that we have not received a response.
+    ASSERT_FALSE(client.getContext().response_);
+
+    // Verify we have a packet parked.
+    const auto& parking_lot = ServerHooks::getServerHooks().getParkingLotPtr("leases4_committed");
+    ASSERT_TRUE(parking_lot);
+    ASSERT_EQ(1, parking_lot->size());
+
+    // Clear callout buffers.
+    resetCalloutBuffers();
+
+    // Create a second client and initiate a DORA for it.
+    // Since the parking lot limit has been reached, the packet
+    // should be dropped with no response.
+    Dhcp4Client client2(Dhcp4Client::SELECTING);
+    client2.setIfaceName("eth1");
+    client2.setIfaceIndex(ETH1_INDEX);
+    ASSERT_NO_THROW(client2.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.101"))));
+
+    // Check that no callback was called.
+    ASSERT_EQ("", callback_name_);
+
+    // Make sure that we have not received a response.
+    ASSERT_FALSE(client2.getContext().response_);
+
+    // Verify we have not parked another packet.
+    ASSERT_EQ(1, parking_lot->size());
+
+    // Statistic should show one drop.
+    EXPECT_EQ(1, getStatistic("pkt4-receive-drop"));
+
+    // Invoking poll should run the scheduled action only for
+    // the first client.
+    ASSERT_NO_THROW(io_service_->poll());
+
+    // Receive and check the first response.
+    ASSERT_NO_THROW(client.receiveResponse());
+    ASSERT_TRUE(client.getContext().response_);
+    Pkt4Ptr rsp = client.getContext().response_;
+    EXPECT_EQ(DHCPACK, rsp->getType());
+    EXPECT_EQ("192.0.2.100", rsp->getYiaddr().toText());
+
+    // Verify we have no parked packets.
+    ASSERT_EQ(0, parking_lot->size());
+
+    resetCalloutBuffers();
+
+    // Try client2 again.
+    ASSERT_NO_THROW(client2.doDORA(boost::shared_ptr<IOAddress>(new IOAddress("192.0.2.101"))));
+
+    // Check that the callback called is indeed the one we installed
+    ASSERT_EQ("leases4_committed", callback_name_);
+
+    // Make sure that we have not received a response.
+    ASSERT_FALSE(client2.getContext().response_);
+
+    // Verify we parked the packet.
+    ASSERT_EQ(1, parking_lot->size());
+
+    // Invoking poll should run the scheduled action.
+    ASSERT_NO_THROW(io_service_->poll());
+
+    // Receive and check the first response.
+    ASSERT_NO_THROW(client2.receiveResponse());
+    ASSERT_TRUE(client2.getContext().response_);
+    rsp = client2.getContext().response_;
+    EXPECT_EQ(DHCPACK, rsp->getType());
+    EXPECT_EQ("192.0.2.101", rsp->getYiaddr().toText());
+
+    // Verify we have no parked packets.
+    ASSERT_EQ(0, parking_lot->size());
+
+    // Statistic should still show one drop.
+    EXPECT_EQ(1, getStatistic("pkt4-receive-drop"));
+}
+

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -194,12 +194,6 @@ public:
     static
     bool subnetsIncludeMatchClientId(const Subnet4Ptr& first_subnet,
                                      const ClientClasses& client_classes);
-
-    /// @brief Check if the shared network includes a subnet with
-    /// not global host reservation mode.
-    ///
-    /// @return First subnet which has not a global host reservation mode.
-    Subnet4Ptr subnetsAllHRGlobal() const;
 
     /// @brief Unparses shared network object.
     ///
@@ -398,12 +392,6 @@ public:
     /// if no better subnet was found.
     Subnet6Ptr getPreferredSubnet(const Subnet6Ptr& selected_subnet,
                                   const Lease::Type& lease_type) const;
-
-    /// @brief Check if the shared network includes a subnet with
-    /// not global host reservation mode.
-    ///
-    /// @return First subnet which has not a global host reservation mode.
-    Subnet6Ptr subnetsAllHRGlobal() const;
 
     /// @brief Unparses shared network object.
     ///

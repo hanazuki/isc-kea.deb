@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 #include <cc/command_interpreter.h>
 #include <cfgrpt/config_report.h>
 #include <exceptions/exceptions.h>
+#include <hooks/hooks_manager.h>
 #include <log/logger.h>
 #include <log/logger_support.h>
 #include <process/daemon.h>
@@ -15,12 +16,16 @@
 #include <process/d_controller.h>
 #include <process/config_base.h>
 #include <kea_version.h>
-#include <boost/bind.hpp>
+#include <functional>
 #include <sstream>
 #include <unistd.h>
+#include <signal.h>
 
+using namespace isc::asiolink;
 using namespace isc::data;
 using namespace isc::config;
+using namespace isc::hooks;
+namespace ph = std::placeholders;
 
 namespace isc {
 namespace process {
@@ -32,7 +37,7 @@ DControllerBase::DControllerBase(const char* app_name, const char* bin_name)
     : app_name_(app_name), bin_name_(bin_name),
       verbose_(false), check_only_(false),
       io_service_(new isc::asiolink::IOService()),
-      io_signal_queue_() {
+      io_signal_set_() {
 }
 
 void
@@ -53,7 +58,7 @@ DControllerBase::parseFile(const std::string&) {
     return (elements);
 }
 
-void
+int
 DControllerBase::launch(int argc, char* argv[], const bool test_mode) {
 
     // Step 1 is to parse the command line arguments.
@@ -69,7 +74,7 @@ DControllerBase::launch(int argc, char* argv[], const bool test_mode) {
 
     if (isCheckOnly()) {
         checkConfigOnly();
-        return;
+        return (EXIT_SUCCESS);
     }
 
     // It is important that we set a default logger name because this name
@@ -111,7 +116,14 @@ DControllerBase::launch(int argc, char* argv[], const bool test_mode) {
 
     // Log the starting of the service.
     LOG_INFO(dctl_logger, DCTL_STARTING)
-        .arg(app_name_).arg(getpid()).arg(VERSION);
+        .arg(app_name_)
+        .arg(getpid())
+        .arg(VERSION)
+        .arg(PACKAGE_VERSION_TYPE);
+    // When it is not a stable version dissuade use in production.
+    if (std::string(PACKAGE_VERSION_TYPE) == "development") {
+        LOG_WARN(dctl_logger, DCTL_DEVELOPMENT_VERSION);
+    }
     try {
         // Step 2 is to create and initialize the application process object.
         initProcess();
@@ -141,7 +153,7 @@ DControllerBase::launch(int argc, char* argv[], const bool test_mode) {
     // Everything is clear for launch, so start the application's
     // event loop.
     try {
-        // Now that we have a proces, we can set up signal handling.
+        // Now that we have a process, we can set up signal handling.
         initSignalHandling();
         runProcess();
     } catch (const std::exception& ex) {
@@ -154,6 +166,8 @@ DControllerBase::launch(int argc, char* argv[], const bool test_mode) {
     // All done, so bail out.
     LOG_INFO(dctl_logger, DCTL_SHUTDOWN)
         .arg(app_name_).arg(getpid()).arg(VERSION);
+
+    return (getExitValue());
 }
 
 void
@@ -191,11 +205,14 @@ DControllerBase::checkConfigOnly() {
         }
         if (module_config->getType() != Element::map) {
             isc_throw(InvalidUsage, "Config file " << config_file <<
-                      " include not map '" << getAppName() << "' entry");
+                      " includes not map '" << getAppName() << "' entry");
         }
 
-        // Handle other (i.e. not application name) objects (e.g. Logging).
-        handleOtherObjects(whole_config);
+        // Handle other (i.e. not application name) objects.
+        std::string errmsg = handleOtherObjects(whole_config);
+        if (!errmsg.empty()) {
+            isc_throw(InvalidUsage, "Config file " << config_file << errmsg);
+        }
 
         // Get an application process object.
         initProcess();
@@ -218,8 +235,7 @@ DControllerBase::checkConfigOnly() {
 }
 
 void
-DControllerBase::parseArgs(int argc, char* argv[])
-{
+DControllerBase::parseArgs(int argc, char* argv[]) {
 
     if (argc == 1) {
         isc_throw(InvalidUsage, "");
@@ -299,8 +315,7 @@ DControllerBase::parseArgs(int argc, char* argv[])
 }
 
 bool
-DControllerBase::customOption(int /* option */, char* /*optarg*/)
-{
+DControllerBase::customOption(int /* option */, char* /*optarg*/) {
     // Default implementation returns false.
     return (false);
 }
@@ -364,11 +379,14 @@ DControllerBase::configFromFile() {
         }
         if (module_config->getType() != Element::map) {
             isc_throw(InvalidUsage, "Config file " << config_file <<
-                      " include not map '" << getAppName() << "' entry");
+                      " includes not map '" << getAppName() << "' entry");
         }
 
-        // Handle other (i.e. not application name) objects (e.g. Logging).
-        handleOtherObjects(whole_config);
+        // Handle other (i.e. not application name) objects.
+        std::string errmsg = handleOtherObjects(whole_config);
+        if (!errmsg.empty()) {
+            isc_throw(InvalidUsage, "Config file " << config_file << errmsg);
+        }
 
         // Let's configure logging before applying the configuration,
         // so we can log things during configuration process.
@@ -376,7 +394,7 @@ DControllerBase::configFromFile() {
         // Temporary storage for logging configuration
         ConfigPtr storage(new ConfigBase());
 
-        // Configure logging to the tempoary storage.
+        // Configure logging to the temporary storage.
         Daemon::configureLogger(module_config, storage);
 
         // Let's apply the new logging. We do it early, so we'll be able
@@ -491,31 +509,26 @@ DControllerBase::configWriteHandler(const std::string&,
                          + filename + " successful", params));
 }
 
-void
+std::string
 DControllerBase::handleOtherObjects(ConstElementPtr args) {
     // Check obsolete or unknown (aka unsupported) objects.
     const std::string& app_name = getAppName();
+    std::string errmsg;
     for (auto obj : args->mapValue()) {
         const std::string& obj_name = obj.first;
         if (obj_name == app_name) {
             continue;
         }
-        if (obj_name == "Logging") {
-            LOG_WARN(dctl_logger, DCTL_CONFIG_DEPRECATED)
-                .arg("The top level element, 'Logging', has been deprecated."
-                     "  Loggers should be defined with the 'loggers[]'"
-                     " element within the '" +  app_name + "' scope.");
-            continue;
-        }
-        LOG_WARN(dctl_logger, DCTL_CONFIG_DEPRECATED)
+        LOG_ERROR(dctl_logger, DCTL_CONFIG_DEPRECATED)
             .arg("'" + obj_name + "', defining anything in global level besides '"
                  + app_name + "' is no longer supported.");
+        if (errmsg.empty()) {
+            errmsg = " contains unsupported '" + obj_name + "' parameter";
+        } else {
+            errmsg += " (and '" + obj_name + "')";
+        }
     }
-
-    // Relocate Logging: if there is a global Logging object takes its
-    // loggers entry, move the entry to AppName object and remove
-    // now empty Logging.
-    Daemon::relocateLogging(args, app_name);
+    return (errmsg);
 }
 
 ConstElementPtr
@@ -538,6 +551,14 @@ DControllerBase::configTestHandler(const std::string&, ConstElementPtr args) {
         }
     }
 
+    if (message.empty()) {
+        // Handle other (i.e. not application name) objects.
+        std::string errmsg = handleOtherObjects(args);
+        if (!errmsg.empty()) {
+            message = "'arguments' parameter" + errmsg;
+        }
+    }
+
     if (!message.empty()) {
         // Something is amiss with arguments, return a failure response.
         ConstElementPtr result = isc::config::createAnswer(status_code,
@@ -545,8 +566,6 @@ DControllerBase::configTestHandler(const std::string&, ConstElementPtr args) {
         return (result);
     }
 
-    // Handle other (i.e. not application name) objects (e.g. Logging).
-    handleOtherObjects(args);
 
     // We are starting the configuration process so we should remove any
     // staging configuration that has been created during previous
@@ -593,7 +612,7 @@ DControllerBase::configSetHandler(const std::string&, ConstElementPtr args) {
 
     try {
 
-        // Handle other (i.e. not application name) objects (e.g. Logging).
+        // Handle other (i.e. not application name) objects.
         handleOtherObjects(args);
 
         // We are starting the configuration process so we should remove any
@@ -605,7 +624,7 @@ DControllerBase::configSetHandler(const std::string&, ConstElementPtr args) {
         // Temporary storage for logging configuration
         ConfigPtr storage(new ConfigBase());
 
-        // Configure logging to the tempoary storage.
+        // Configure logging to the temporary storage.
         Daemon::configureLogger(module_config, storage);
 
         // Let's apply the new logging. We do it early, so we'll be able
@@ -682,6 +701,26 @@ DControllerBase::shutdownHandler(const std::string&, ConstElementPtr args) {
     // a custom command supported by the derivation.  If that
     // doesn't pan out either, than send to it the application
     // as it may be supported there.
+
+    int exit_value = EXIT_SUCCESS;
+    if (args) {
+        // @todo Should we go ahead and shutdown even if the args are invalid?
+        if (args->getType() != Element::map) {
+            return (createAnswer(CONTROL_RESULT_ERROR, "Argument must be a map"));
+        }
+
+        ConstElementPtr param = args->get("exit-value");
+        if (param)  {
+            if (param->getType() != Element::integer) {
+                return (createAnswer(CONTROL_RESULT_ERROR,
+                                     "parameter 'exit-value' is not an integer"));
+            }
+
+            exit_value = param->intValue();
+        }
+    }
+
+    setExitValue(exit_value);
     return (shutdownProcess(args));
 }
 
@@ -701,37 +740,15 @@ void
 DControllerBase::initSignalHandling() {
     /// @todo block everything we don't handle
 
-    // Create our signal queue.
-    io_signal_queue_.reset(new IOSignalQueue(io_service_));
-
-    // Install the on-receipt handler
-    util::SignalSet::setOnReceiptHandler(boost::bind(&DControllerBase::
-                                                     osSignalHandler,
-                                                     this, _1));
+    // Create our signal set.
+    io_signal_set_.reset(new IOSignalSet(io_service_,
+                                         std::bind(&DControllerBase::
+                                                   processSignal,
+                                                   this, ph::_1)));
     // Register for the signals we wish to handle.
-    signal_set_.reset(new util::SignalSet(SIGHUP,SIGINT,SIGTERM));
-}
-
-bool
-DControllerBase::osSignalHandler(int signum) {
-    // Create a IOSignal to propagate the signal to IOService.
-    io_signal_queue_->pushSignal(signum, boost::bind(&DControllerBase::
-                                                     ioSignalHandler,
-                                                     this, _1));
-    return (true);
-}
-
-void
-DControllerBase::ioSignalHandler(IOSignalId sequence_id) {
-    // Pop the signal instance off the queue.  This should make us
-    // the only one holding it, so when we leave it should be freed.
-    // (note that popSignal will throw if signal is not found, which
-    // in turn will caught, logged, and swallowed by IOSignal callback
-    // invocation code.)
-    IOSignalPtr io_signal = io_signal_queue_->popSignal(sequence_id);
-
-    // Now call virtual signal processing method.
-    processSignal(io_signal->getSignum());
+    io_signal_set_->add(SIGHUP);
+    io_signal_set_->add(SIGINT);
+    io_signal_set_->add(SIGTERM);
 }
 
 void
@@ -768,8 +785,7 @@ DControllerBase::processSignal(int signum) {
 }
 
 void
-DControllerBase::usage(const std::string & text)
-{
+DControllerBase::usage(const std::string & text) {
     if (text != "") {
         std::cerr << "Usage error: " << text << std::endl;
     }
@@ -791,10 +807,23 @@ DControllerBase::usage(const std::string & text)
 }
 
 DControllerBase::~DControllerBase() {
+    // Explicitly unload hooks
+    HooksManager::prepareUnloadLibraries();
+    if (!HooksManager::unloadLibraries()) {
+        auto names = HooksManager::getLibraryNames();
+        std::string msg;
+        if (!names.empty()) {
+            msg = names[0];
+            for (size_t i = 1; i < names.size(); ++i) {
+                msg += std::string(", ") + names[i];
+            }
+        }
+        LOG_ERROR(dctl_logger, DCTL_UNLOAD_LIBRARIES_ERROR).arg(msg);
+    }
 }
 
 // Refer to config_report so it will be embedded in the binary
-const char* const* d2_config_report = isc::detail::config_report;
+const char* const* d_config_report = isc::detail::config_report;
 
 std::string
 DControllerBase::getVersion(bool extended) {
@@ -811,6 +840,6 @@ DControllerBase::getVersion(bool extended) {
     return (tmp.str());
 }
 
-}; // namespace isc::process
+} // end of namespace isc::process
 
-}; // namespace isc
+} // end of namespace isc

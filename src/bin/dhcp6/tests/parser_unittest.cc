@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,11 +6,14 @@
 
 #include <config.h>
 
-#include <gtest/gtest.h>
 #include <dhcp6/parser_context.h>
 #include <dhcpsrv/parsers/simple_parser6.h>
 #include <testutils/io_utils.h>
 #include <testutils/user_context_utils.h>
+#include <testutils/gtest_utils.h>
+#include <gtest/gtest.h>
+#include <fstream>
+#include <set>
 
 using namespace isc::data;
 using namespace std;
@@ -243,7 +246,7 @@ void testFile(const std::string& fname) {
 
     cout << "Parsing file " << fname << "(" << decommented << ")" << endl;
 
-    EXPECT_NO_THROW(json = Element::fromJSONFile(decommented, true));
+    EXPECT_NO_THROW_LOG(json = Element::fromJSONFile(decommented, true));
     reference_json = moveComments(json);
 
     // remove the temporary file
@@ -271,6 +274,7 @@ TEST(ParserTest, file) {
     vector<string> configs;
     configs.push_back("advanced.json");
     configs.push_back("all-keys.json");
+    configs.push_back("all-options.json");
     configs.push_back("backends.json");
     configs.push_back("cassandra.json");
     configs.push_back("classify.json");
@@ -298,7 +302,7 @@ TEST(ParserTest, file) {
     }
 }
 
-// This test loads the all-keys.json file and check global parameters.
+// This test loads the all-keys.json file and checks global parameters.
 TEST(ParserTest, globalParameters) {
     ConstElementPtr json;
     Parser6Context ctx;
@@ -454,23 +458,43 @@ TEST(ParserTest, errors) {
               "<string>:1.3: Invalid character: e");
     testError("\"a\n\tb\"",
               Parser6Context::PARSER_JSON,
-              "<string>:1.1-6: Invalid control in \"a\n\tb\"");
+              "<string>:1.1-6 (near 2): Invalid control in \"a\n\tb\"");
+    testError("\"a\n\\u12\"",
+              Parser6Context::PARSER_JSON,
+              "<string>:1.1-8 (near 2): Invalid control in \"a\n\\u12\"");
     testError("\"a\\n\\tb\"",
               Parser6Context::PARSER_DHCP6,
               "<string>:1.1-8: syntax error, unexpected constant string, "
               "expecting {");
     testError("\"a\\x01b\"",
               Parser6Context::PARSER_JSON,
-              "<string>:1.1-8: Bad escape in \"a\\x01b\"");
+              "<string>:1.1-8 (near 3): Bad escape in \"a\\x01b\"");
     testError("\"a\\u0162\"",
               Parser6Context::PARSER_JSON,
-              "<string>:1.1-9: Unsupported unicode escape in \"a\\u0162\"");
+              "<string>:1.1-9 (near 4): Unsupported unicode escape "
+              "in \"a\\u0162\"");
     testError("\"a\\u062z\"",
               Parser6Context::PARSER_JSON,
-              "<string>:1.1-9: Bad escape in \"a\\u062z\"");
+              "<string>:1.1-9 (near 3): Bad escape in \"a\\u062z\"");
     testError("\"abc\\\"",
               Parser6Context::PARSER_JSON,
-              "<string>:1.1-6: Overflow escape in \"abc\\\"");
+              "<string>:1.1-6 (near 6): Overflow escape in \"abc\\\"");
+    testError("\"a\\u006\"",
+              Parser6Context::PARSER_JSON,
+              "<string>:1.1-8 (near 3): Overflow unicode escape "
+              "in \"a\\u006\"");
+    testError("\"\\u\"",
+              Parser6Context::PARSER_JSON,
+              "<string>:1.1-4 (near 2): Overflow unicode escape in \"\\u\"");
+    testError("\"\\u\x02\"",
+              Parser6Context::PARSER_JSON,
+              "<string>:1.1-5 (near 2): Bad escape in \"\\u\x02\"");
+    testError("\"\\u\\\"foo\"",
+              Parser6Context::PARSER_JSON,
+              "<string>:1.1-5 (near 2): Bad escape in \"\\u\\\"...");
+    testError("\"\x02\\u\"",
+              Parser6Context::PARSER_JSON,
+              "<string>:1.1-5 (near 1): Invalid control in \"\x02\\u\"");
 
     // from data_unittest.c
     testError("\\a",
@@ -498,30 +522,38 @@ TEST(ParserTest, errors) {
               "expecting }");
     testError("{ 123 }\n",
               Parser6Context::PARSER_DHCP6,
-              "<string>:1.3-5: syntax error, unexpected integer");
+              "<string>:1.3-5: syntax error, unexpected integer, "
+              "expecting Dhcp6");
     testError("{ \"foo\" }\n",
               Parser6Context::PARSER_JSON,
               "<string>:1.9: syntax error, unexpected }, "
               "expecting :");
     testError("{ \"foo\" }\n",
               Parser6Context::PARSER_DHCP6,
-              "<string>:1.9: syntax error, unexpected }, expecting :");
+              "<string>:1.3-7: syntax error, unexpected constant string, "
+              "expecting Dhcp6");
     testError("{ \"foo\":null }\n",
               Parser6Context::PARSER_DHCP6,
-              "<string>:1.3-7: got unexpected keyword "
-              "\"foo\" in toplevel map.");
+              "<string>:1.3-7: syntax error, unexpected constant string, "
+              "expecting Dhcp6");
+    testError("{ \"Logging\":null }\n",
+              Parser6Context::PARSER_DHCP6,
+              "<string>:1.3-11: syntax error, unexpected constant string, "
+              "expecting Dhcp6");
     testError("{ \"Dhcp6\" }\n",
               Parser6Context::PARSER_DHCP6,
               "<string>:1.11: syntax error, unexpected }, "
               "expecting :");
-    testError("{ \"Dhcp4\":[]\n",
-              Parser6Context::PARSER_DHCP6,
-              "<string>:2.1: syntax error, unexpected end of file, "
-              "expecting \",\" or }");
     testError("{}{}\n",
               Parser6Context::PARSER_JSON,
               "<string>:1.3: syntax error, unexpected {, "
               "expecting end of file");
+
+    // duplicate in map
+    testError("{ \"foo\": 1, \"foo\": true }\n",
+              Parser6Context::PARSER_JSON,
+              "<string>:1:13: duplicate foo entries in "
+              "JSON map (previous at <string>:1:10)");
 
     // bad commas
     testError("{ , }\n",
@@ -596,6 +628,29 @@ TEST(ParserTest, errors) {
               Parser6Context::PARSER_DHCP6,
               "<string>:3.3-11: duplicate user-context/comment entries "
               "(previous at <string>:2:19)");
+
+    // duplicate Dhcp6 entries
+    testError("{ \"Dhcp6\":{\n"
+              "  \"comment\": \"first\" },\n"
+              "  \"Dhcp6\":{\n"
+              "  \"comment\": \"second\" }}\n",
+              Parser6Context::PARSER_DHCP6,
+              "<string>:2.23: syntax error, unexpected \",\", expecting }");
+
+    // duplicate of not string entries
+    testError("{ \"Dhcp6\":{\n"
+              " \"subnet6\": [],\n"
+              " \"subnet6\": [] }}\n",
+              Parser6Context::PARSER_DHCP6,
+              "<string>:3:2: duplicate subnet6 entries in "
+              "Dhcp6 map (previous at <string>:2:2)");
+
+    // duplicate of string entries
+    testError("{ \"data\": \"foo\",\n"
+              " \"data\": \"bar\" }\n",
+              Parser6Context::PARSER_OPTION_DATA,
+              "<string>:2:2: duplicate data entries in "
+              "option-data map (previous at <string>:1:11)");
 }
 
 // Check unicode escapes
@@ -639,6 +694,175 @@ TEST(ParserTest, unicodeSlash) {
     EXPECT_EQ("////", result->stringValue());
 }
 
-};
-};
-};
+/// @brief Load a file into a JSON element.
+///
+/// @param fname The name of the file to load.
+/// @param list The JSON element list to add the parsing result to.
+void loadFile(const string& fname, ElementPtr list) {
+    Parser6Context ctx;
+    ElementPtr json;
+    EXPECT_NO_THROW(json = ctx.parseFile(fname, Parser6Context::PARSER_DHCP6));
+    ASSERT_TRUE(json);
+    list->add(json);
+}
+
+// This test checks that all map entries are in the example files.
+TEST(ParserTest, mapEntries) {
+    // Type of keyword set.
+    typedef set<string> KeywordSet;
+
+    // Get keywords from the syntax file (dhcp6_parser.yy).
+    ifstream syntax_file(SYNTAX_FILE);
+    EXPECT_TRUE(syntax_file.is_open());
+    string line;
+    KeywordSet syntax_keys = { "user-context" };
+    // Code setting the map entry.
+    const string pattern = "ctx.stack_.back()->set(\"";
+    while (getline(syntax_file, line)) {
+        // Skip comments.
+        size_t comment = line.find("//");
+        if (comment <= pattern.size()) {
+            continue;
+        }
+        if (comment != string::npos) {
+            line.resize(comment);
+        }
+        // Search for the code pattern.
+        size_t key_begin = line.find(pattern);
+        if (key_begin == string::npos) {
+            continue;
+        }
+        // Extract keywords.
+        line = line.substr(key_begin + pattern.size());
+        size_t key_end = line.find_first_of('"');
+        EXPECT_NE(string::npos, key_end);
+        string keyword = line.substr(0, key_end);
+        // Ignore result when adding the keyword to the syntax keyword set.
+        static_cast<void>(syntax_keys.insert(keyword));
+    }
+    syntax_file.close();
+
+    // Get keywords from the example files.
+    string sample_dir(CFG_EXAMPLES);
+    sample_dir += "/";
+    ElementPtr sample_json = Element::createList();
+    loadFile(sample_dir + "advanced.json", sample_json);
+    loadFile(sample_dir + "all-keys.json", sample_json);
+    loadFile(sample_dir + "duid.json", sample_json);
+    loadFile(sample_dir + "reservations.json", sample_json);
+    loadFile(sample_dir + "all-keys-netconf.json", sample_json);
+    KeywordSet sample_keys = {
+        "hosts-database"
+    };
+    // Recursively extract keywords.
+    static void (*extract)(ConstElementPtr, KeywordSet&) =
+        [] (ConstElementPtr json, KeywordSet& set) {
+            if (json->getType() == Element::list) {
+                // Handle lists.
+                for (auto elem : json->listValue()) {
+                    extract(elem, set);
+                }
+            } else if (json->getType() == Element::map) {
+                // Handle maps.
+                for (auto elem : json->mapValue()) {
+                    static_cast<void>(set.insert(elem.first));
+                    // Skip entries with free content.
+                    if ((elem.first != "user-context") &&
+                        (elem.first != "parameters")) {
+                        extract(elem.second, set);
+                    }
+                }
+            }
+        };
+    extract(sample_json, sample_keys);
+
+    // Compare.
+    auto print_keys = [](const KeywordSet& keys) {
+        string s = "{";
+        bool first = true;
+        for (auto key : keys) {
+            if (first) {
+                first = false;
+                s += " ";
+            } else {
+                s += ", ";
+            }
+            s += "\"" + key + "\"";
+        }
+        return (s + " }");
+    };
+    EXPECT_EQ(syntax_keys, sample_keys)
+        << "syntax has: " << print_keys(syntax_keys) << endl
+        << "sample has: " << print_keys(sample_keys) << endl;
+}
+
+/// @brief Tests a duplicate entry.
+///
+/// The entry was duplicated by adding a new <name>DDDD entry.
+/// An error is expected, usually it is a duplicate but there are
+/// a few syntax errors when the syntax allows only one parameter.
+///
+/// @param json the JSON configuration with the duplicate entry.
+void testDuplicate(ConstElementPtr json) {
+    string config = json->str();
+    size_t where = config.find("DDDD");
+    ASSERT_NE(string::npos, where);
+    string before = config.substr(0, where);
+    string after = config.substr(where + 4, string::npos);
+    Parser6Context ctx;
+    EXPECT_THROW(ctx.parseString(before + after,
+                                 Parser6Context::PARSER_DHCP6),
+                 Dhcp6ParseError) << "config: " << config;
+}
+
+// This test checks that duplicate entries make parsing to fail.
+TEST(ParserTest, duplicateMapEntries) {
+    // Get the config to work with from the all keys file.
+    string sample_fname(CFG_EXAMPLES);
+    sample_fname += "/all-keys.json";
+    Parser6Context ctx;
+    ElementPtr sample_json;
+    EXPECT_NO_THROW(sample_json =
+        ctx.parseFile(sample_fname, Parser6Context::PARSER_DHCP6));
+    ASSERT_TRUE(sample_json);
+
+    // Recursively check duplicates.
+    static void (*test)(ElementPtr, ElementPtr, size_t&) =
+        [] (ElementPtr config, ElementPtr json, size_t& cnt) {
+            if (json->getType() == Element::list) {
+                // Handle lists.
+                for (auto elem : json->listValue()) {
+                    test(config, elem, cnt);
+                }
+            } else if (json->getType() == Element::map) {
+                // Handle maps.
+                for (auto elem : json->mapValue()) {
+                    // Skip entries with free content.
+                    if ((elem.first == "user-context") ||
+                        (elem.first == "parameters")) {
+                        continue;
+                    }
+
+                    // Perform tests.
+                    string dup = elem.first + "DDDD";
+                    json->set(dup, elem.second);
+                    testDuplicate(config);
+                    json->remove(dup);
+                    ++cnt;
+
+                    // Recursive call.
+                    ElementPtr mutable_json =
+                        boost::const_pointer_cast<Element>(elem.second);
+                    ASSERT_TRUE(mutable_json);
+                    test(config, mutable_json, cnt);
+                }
+            }
+        };
+    size_t cnt = 0;
+    test(sample_json, sample_json, cnt);
+    cout << "checked " << cnt << " duplicated map entries\n";
+}
+
+}
+}
+}

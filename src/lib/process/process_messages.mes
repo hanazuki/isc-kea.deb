@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -46,7 +46,7 @@ configuration is committed by the administrator.  Additional information
 may be provided.
 
 % DCTL_CONFIG_DEPRECATED server configuration includes a deprecated object: %1
-This warning message is issued when the configuration includes a deprecated
+This error message is issued when the configuration includes a deprecated
 object (i.e. a top level element) which will be ignored.
 
 % DCTL_CONFIG_FETCH Fetching configuration data from config backends.
@@ -74,6 +74,10 @@ events is called.  This only happens during initial startup.
 % DCTL_CONFIG_UPDATE %1 updated configuration received: %2
 A debug message indicating that the controller has received an
 updated configuration from the Kea configuration system.
+
+% DCTL_DEVELOPMENT_VERSION This software is a development branch of Kea. It is not recommended for production use.
+This warning message is displayed when the version is a development
+(vs stable) one: the second number of the version is odd.
 
 % DCTL_INIT_PROCESS %1 initializing the application
 This debug message is issued just before the controller attempts
@@ -128,21 +132,22 @@ down. The argument specifies a name of the service.
 This is a debug message indicating the application has received a signal
 instructing it to shutdown.
 
-% DCTL_SIGNAL_ERROR signal handler for signal %1, threw an unexpected exception: %2
-This is an error message indicating that the application encountered an unexpected
-error after receiving a signal.  This is a programmatic error and should be
-reported.  While The application will likely continue to operating, it may be
-unable to respond correctly to signals.
-
 % DCTL_STANDALONE %1 skipping message queue, running standalone
 This is a debug message indicating that the controller is running in the
 application in standalone mode. This means it will not connected to the Kea
 message queue. Standalone mode is only useful during program development,
 and should not be used in a production environment.
 
-% DCTL_STARTING %1 starting, pid: %2, version: %3
+% DCTL_STARTING %1 starting, pid: %2, version: %3 (%4)
 This is an informational message issued when controller for the
 service first starts. Version is also reported.
+
+% DCTL_UNLOAD_LIBRARIES_ERROR error unloading hooks libraries during shutdown: %1
+This error message indicates that during shutdown, unloading hooks
+libraries failed to close them. If the list of libraries is empty it is
+a programmatic error in the server code. If it is not empty it could be
+a programmatic error in one of the hooks libraries which could lead to
+a crash during finalization.
 
 % DCTL_UNSUPPORTED_SIGNAL ignoring reception of unsupported signal: %1
 This is a debug message indicating that the application received an

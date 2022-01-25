@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -401,6 +401,8 @@ bool Option::equals(const Option& other) const {
 Option::~Option() {
 
 }
+
+bool Option::lenient_parsing_;
 
 } // end of isc::dhcp namespace
 } // end of isc namespace

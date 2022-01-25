@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/asiodns/asiodns_messages.mes on Fri Feb 08 2019 20:17
+// File created from ../../../src/lib/asiodns/asiodns_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>

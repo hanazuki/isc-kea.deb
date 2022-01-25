@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,7 +10,6 @@
 #include <dhcpsrv/client_class_def.h>
 #include <dhcpsrv/parsers/dhcp_parsers.h>
 #include <dhcpsrv/parsers/client_class_def_parser.h>
-#include <dhcpsrv/parsers/option_data_parser.h>
 #include <dhcpsrv/parsers/simple_parser4.h>
 #include <dhcpsrv/parsers/simple_parser6.h>
 #include <eval/eval_context.h>
@@ -70,7 +69,8 @@ void
 ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
                             ConstElementPtr class_def_cfg,
                             uint16_t family,
-                            bool append_error_position) {
+                            bool append_error_position,
+                            bool check_dependencies) {
     // name is now mandatory, so let's deal with it first.
     std::string name = getString(class_def_cfg, "name");
     if (name.empty()) {
@@ -86,13 +86,12 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
     bool depend_on_known = false;
     if (test_cfg) {
         ExpressionParser parser;
-        using std::placeholders::_1;
         auto check_defined =
-            [&class_dictionary, &depend_on_known]
+            [&class_dictionary, &depend_on_known, check_dependencies]
             (const ClientClass& cclass) {
-                return (isClientClassDefined(class_dictionary,
-                                             depend_on_known,
-                                             cclass));
+                return (!check_dependencies || isClientClassDefined(class_dictionary,
+                                                                    depend_on_known,
+                                                                    cclass));
         };
         parser.parse(match_expr, test_cfg, family, check_defined);
         test = test_cfg->stringValue();
@@ -110,21 +109,20 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
 
         OptionDefParser parser(family);
         BOOST_FOREACH(ConstElementPtr option_def, option_defs->listValue()) {
-            OptionDefinitionTuple def;
+            OptionDefinitionPtr def = parser.parse(option_def);
 
-            def = parser.parse(option_def);
-            // Verify if the defition is for an option which are
-            // in a deferred processing list.
-            if (!LibDHCP::shouldDeferOptionUnpack(def.second,
-                                                  def.first->getCode())) {
+            // Verify if the definition is for an option which is in a deferred
+            // processing list.
+            if (!LibDHCP::shouldDeferOptionUnpack(def->getOptionSpaceName(),
+                                                  def->getCode())) {
                 isc_throw(DhcpConfigError,
                           "Not allowed option definition for code '"
-                          << def.first->getCode() << "' in space '"
-                          << def.second << "' at ("
+                          << def->getCode() << "' in space '"
+                          << def->getOptionSpaceName() << "' at ("
                           << option_def->getPosition() << ")");
             }
             try {
-                defs->add(def.first, def.second);
+                defs->add(def);
             } catch (const std::exception& ex) {
                 // Sanity check: it should never happen
                 isc_throw(DhcpConfigError, ex.what() << " ("
@@ -137,8 +135,8 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
     CfgOptionPtr options(new CfgOption());
     ConstElementPtr option_data = class_def_cfg->get("option-data");
     if (option_data) {
-        OptionDataListParser opts_parser(family, defs);
-        opts_parser.parse(options, option_data);
+        auto opts_parser = createOptionDataListParser(family, defs);
+        opts_parser->parse(options, option_data);
     }
 
     // Parse user context
@@ -203,6 +201,15 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
 
     }
 
+    // Parse valid lifetime triplet.
+    Triplet<uint32_t> valid_lft = parseIntTriplet(class_def_cfg, "valid-lifetime");
+
+    Triplet<uint32_t> preferred_lft;
+    if (family != AF_INET) {
+        // Parse preferred lifetime triplet.
+        preferred_lft = parseIntTriplet(class_def_cfg, "preferred-lifetime");
+    }
+
     // Sanity checks on built-in classes
     for (auto bn : builtinNames) {
         if (name == bn) {
@@ -223,17 +230,15 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
             isc_throw(DhcpConfigError, "special class '" << name
                       << "' only-if-required flag must be false");
         }
-        if (depend_on_known) {
-            isc_throw(DhcpConfigError, "special class '" << name
-                      << "' must not depend on 'KNOWN'/'UNKNOWN' classes");
-        }
+        // depend_on_known is now allowed
     }
 
     // Add the client class definition
     try {
         class_dictionary->addClass(name, match_expr, test, required,
                                    depend_on_known, options, defs,
-                                   user_context, next_server, sname, filename);
+                                   user_context, next_server, sname, filename,
+                                   valid_lft, preferred_lft);
     } catch (const std::exception& ex) {
         std::ostringstream s;
         s << "Can't add class: " << ex.what();
@@ -258,20 +263,29 @@ ClientClassDefParser::checkParametersSupported(const ConstElementPtr& class_def_
                                                       "test",
                                                       "option-data",
                                                       "user-context",
-                                                      "only-if-required" };
+                                                      "only-if-required",
+                                                      "valid-lifetime",
+                                                      "min-valid-lifetime",
+                                                      "max-valid-lifetime" };
 
-    // The v4 client class supports additional parmeters.
+
+    // The v4 client class supports additional parameters.
     static std::set<std::string> supported_params_v4 = { "option-def",
                                                          "next-server",
                                                          "server-hostname",
                                                          "boot-file-name" };
 
+    // The v6 client class supports additional parameters.
+    static std::set<std::string> supported_params_v6 = { "preferred-lifetime",
+                                                         "min-preferred-lifetime",
+                                                         "max-preferred-lifetime" };
+
     // Iterate over the specified parameters and check if they are all supported.
     for (auto name_value_pair : class_def_cfg->mapValue()) {
         if ((supported_params.count(name_value_pair.first) > 0) ||
-            ((family == AF_INET) && (supported_params_v4.count(name_value_pair.first) > 0))) {
+            ((family == AF_INET) && (supported_params_v4.count(name_value_pair.first) > 0)) ||
+            ((family != AF_INET) && (supported_params_v6.count(name_value_pair.first) > 0))) {
             continue;
-
         } else {
             isc_throw(DhcpConfigError, "unsupported client class parameter '"
                       << name_value_pair.first << "'");
@@ -279,17 +293,23 @@ ClientClassDefParser::checkParametersSupported(const ConstElementPtr& class_def_
     }
 }
 
+boost::shared_ptr<OptionDataListParser>
+ClientClassDefParser::createOptionDataListParser(const uint16_t address_family,
+                                                 CfgOptionDefPtr cfg_option_def) const {
+    auto parser = boost::make_shared<OptionDataListParser>(address_family, cfg_option_def);
+    return (parser);
+}
 
 // ****************** ClientClassDefListParser ************************
 
 ClientClassDictionaryPtr
 ClientClassDefListParser::parse(ConstElementPtr client_class_def_list,
-                                uint16_t family) {
+                                uint16_t family, bool check_dependencies) {
     ClientClassDictionaryPtr dictionary(new ClientClassDictionary());
     BOOST_FOREACH(ConstElementPtr client_class_def,
                   client_class_def_list->listValue()) {
         ClientClassDefParser parser;
-        parser.parse(dictionary, client_class_def, family);
+        parser.parse(dictionary, client_class_def, family, true, check_dependencies);
     }
     return (dictionary);
 }

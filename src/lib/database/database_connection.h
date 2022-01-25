@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,11 +7,12 @@
 #ifndef DATABASE_CONNECTION_H
 #define DATABASE_CONNECTION_H
 
+#include <asiolink/io_service.h>
 #include <cc/data.h>
 #include <boost/noncopyable.hpp>
-#include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
 #include <exceptions/exceptions.h>
+#include <functional>
 #include <map>
 #include <string>
 
@@ -39,13 +40,14 @@ public:
         isc::Exception(file, line, what) {}
 };
 
-/// @brief Exception thrown when connectivity has been lost and
-/// cannot be recovered.
-class DbUnrecoverableError : public Exception {
+/// @brief Exception thrown when a specific connection has been rendered unusable
+/// either through loss of connectivity or API lib error
+class DbConnectionUnusable : public Exception {
 public:
-    DbUnrecoverableError(const char* file, size_t line, const char* what) :
+    DbConnectionUnusable(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) {}
 };
+
 
 /// @brief Invalid type exception
 ///
@@ -74,6 +76,13 @@ public:
         isc::Exception(file, line, what) {}
 };
 
+/// @brief Type of action to take on connection loss.
+enum class OnFailAction {
+    STOP_RETRY_EXIT,
+    SERVE_RETRY_EXIT,
+    SERVE_RETRY_CONTINUE
+};
+
 /// @brief Warehouses DB reconnect control values
 ///
 /// When a DatabaseConnection loses connectivity to its backend, it
@@ -83,18 +92,30 @@ public:
 ///
 class ReconnectCtl {
 public:
-    /// @brief Constructor
+    /// @brief Constructor.
+    ///
     /// @param backend_type type of the caller backend.
-    /// @param max_retries maximum number of reconnect attempts to make
-    /// @param retry_interval amount of time to between reconnect attempts
-    ReconnectCtl(const std::string& backend_type, unsigned int max_retries,
-                 unsigned int retry_interval)
-        : backend_type_(backend_type), max_retries_(max_retries),
-          retries_left_(max_retries), retry_interval_(retry_interval) {}
+    /// @param timer_name timer associated to this object.
+    /// @param max_retries maximum number of reconnect attempts to make.
+    /// @param retry_interval amount of time to between reconnect attempts.
+    /// @param action which should be taken on connection loss.
+    ReconnectCtl(const std::string& backend_type, const std::string& timer_name,
+                 unsigned int max_retries, unsigned int retry_interval,
+                 OnFailAction action) :
+          backend_type_(backend_type), timer_name_(timer_name),
+          max_retries_(max_retries), retries_left_(max_retries),
+          retry_interval_(retry_interval), action_(action) {}
 
     /// @brief Returns the type of the caller backend.
     std::string backendType() const {
         return (backend_type_);
+    }
+
+    /// @brief Returns the associated timer name.
+    ///
+    /// @return the associated timer.
+    std::string timerName() const {
+        return (timer_name_);
     }
 
     /// @brief Decrements the number of retries remaining
@@ -110,32 +131,84 @@ public:
         return (max_retries_);
     }
 
-    /// @brief Returns the number for retries remaining
+    /// @brief Returns the number for retries remaining.
     unsigned int retriesLeft() {
         return (retries_left_);
     }
 
-    /// @brief Returns the amount of time to wait between reconnect attempts
+    /// @brief Returns the amount of time to wait between reconnect attempts.
     unsigned int retryInterval() {
         return (retry_interval_);
     }
 
+    /// @brief Resets the retries count.
+    void resetRetries() {
+        retries_left_ = max_retries_;
+    }
+
+    /// @brief Return true if the connection loss should affect the service,
+    /// false otherwise
+    bool alterServiceState() {
+        return (action_ == OnFailAction::STOP_RETRY_EXIT);
+    }
+
+    /// @brief Return true if the connection recovery mechanism should shut down
+    /// the server on failure, false otherwise.
+    bool exitOnFailure() {
+        return ((action_ == OnFailAction::STOP_RETRY_EXIT) ||
+                (action_ == OnFailAction::SERVE_RETRY_EXIT));
+    }
+
+    /// @brief Convert action to string.
+    ///
+    /// @param action The action type to be converted to text.
+    /// @return The text representation of the action type.
+    static std::string onFailActionToText(OnFailAction action);
+
+    /// @brief Convert string to action.
+    ///
+    /// @param text The text to be converted to action type.
+    /// @return The action type corresponding to the text representation.
+    static OnFailAction onFailActionFromText(const std::string& text);
+
 private:
+
     /// @brief Caller backend type.
     const std::string backend_type_;
 
-    /// @brief Maximum number of retry attempts to make
+    /// @brief Timer associated to this object.
+    std::string timer_name_;
+
+    /// @brief Maximum number of retry attempts to make.
     unsigned int max_retries_;
 
-    /// @brief Number of attempts remaining
+    /// @brief Number of attempts remaining.
     unsigned int retries_left_;
 
-    /// @brief The amount of time to wait between reconnect attempts
+    /// @brief The amount of time to wait between reconnect attempts.
     unsigned int retry_interval_;
+
+    /// @brief Action to take on connection loss.
+    OnFailAction action_;
 };
 
 /// @brief Pointer to an instance of ReconnectCtl
 typedef boost::shared_ptr<ReconnectCtl> ReconnectCtlPtr;
+
+/// @brief Defines a callback prototype for propagating events upward
+typedef std::function<bool (ReconnectCtlPtr db_reconnect_ctl)> DbCallback;
+
+/// @brief Function which returns the IOService that can be used to recover the
+/// connection.
+///
+/// This accessor is used to lazy retrieve the IOService when the connection is
+/// lost. It is useful to retrieve it at a later time to support hook libraries
+/// which create managers on load and set IOService later on by using the
+/// dhcp4_srv_configured and dhcp6_srv_configured hooks.
+typedef std::function<isc::asiolink::IOServicePtr ()> IOServiceAccessor;
+
+/// @brief Pointer to an instance of IOServiceAccessor
+typedef boost::shared_ptr<IOServiceAccessor> IOServiceAccessorPtr;
 
 /// @brief Common database connection class.
 ///
@@ -163,8 +236,10 @@ public:
     ///
     /// @param parameters A data structure relating keywords and values
     ///        concerned with the database.
-    DatabaseConnection(const ParameterMap& parameters)
-        :parameters_(parameters) {
+    /// @param callback The connection recovery callback.
+    DatabaseConnection(const ParameterMap& parameters,
+                       DbCallback callback = DbCallback())
+        : parameters_(parameters), callback_(callback), unusable_(false) {
     }
 
     /// @brief Destructor
@@ -172,8 +247,16 @@ public:
 
     /// @brief Instantiates a ReconnectCtl based on the connection's
     /// reconnect parameters
-    /// @return pointer to the new ReconnectCtl object
-    virtual ReconnectCtlPtr makeReconnectCtl() const;
+    ///
+    /// @param timer_name of the timer used for the ReconnectCtl object.
+    virtual void makeReconnectCtl(const std::string& timer_name);
+
+    /// @brief The reconnect settings.
+    ///
+    /// @return The reconnect settings.
+    ReconnectCtlPtr reconnectCtl() {
+        return (reconnect_ctl_);
+    }
 
     /// @brief Returns value of a connection parameter.
     ///
@@ -185,7 +268,8 @@ public:
     /// @brief Parse database access string
     ///
     /// Parses the string of "keyword=value" pairs and separates them
-    /// out into the map.
+    /// out into the map. A value of the password parameter may include
+    /// whitespace in which case it must be surrounded by apostrophes.
     ///
     /// @param dbaccess Database access string.
     ///
@@ -210,19 +294,23 @@ public:
     /// and set to false.
     bool configuredReadOnly() const;
 
-    /// @brief Defines a callback prototype for propogating events upward
-    typedef boost::function<bool (ReconnectCtlPtr db_retry)> DbLostCallback;
-
     /// @brief Invokes the connection's lost connectivity callback
-    ///
-    /// This function may be called by derivations when the connectivity
-    /// to their data server is lost.  If connectivity callback was specified,
-    /// this function will instantiate a ReconnectCtl and pass it to the
-    /// callback.
     ///
     /// @return Returns the result of the callback or false if there is no
     /// callback.
-    bool invokeDbLostCallback() const;
+    static bool invokeDbLostCallback(const ReconnectCtlPtr& db_reconnect_ctl);
+
+    /// @brief Invokes the connection's restored connectivity callback
+    ///
+    /// @return Returns the result of the callback or false if there is no
+    /// callback.
+    static bool invokeDbRecoveredCallback(const ReconnectCtlPtr& db_reconnect_ctl);
+
+    /// @brief Invokes the connection's restore failed connectivity callback
+    ///
+    /// @return Returns the result of the callback or false if there is no
+    /// callback.
+    static bool invokeDbFailedCallback(const ReconnectCtlPtr& db_reconnect_ctl);
 
     /// @brief Unparse a parameter map
     ///
@@ -236,9 +324,36 @@ public:
     /// @return a pointer to configuration
     static isc::data::ElementPtr toElementDbAccessString(const std::string& dbaccess);
 
-    /// @brief Optional call back function to invoke if a successfully
-    /// open connection subsequently fails
-    static DbLostCallback db_lost_callback;
+    /// @brief Optional callback function to invoke if an opened connection is
+    /// lost
+    static DbCallback db_lost_callback_;
+
+    /// @brief Optional callback function to invoke if an opened connection
+    /// recovery succeeded
+    static DbCallback db_recovered_callback_;
+
+    /// @brief Optional callback function to invoke if an opened connection
+    /// recovery failed
+    static DbCallback db_failed_callback_;
+
+    /// @brief Throws an exception if the connection is not usable.
+    /// @throw DbConnectionUnusable
+    void checkUnusable() {
+        if (unusable_)  {
+            isc_throw (DbConnectionUnusable, "Attempt to use an invalid connection");
+        }
+    }
+
+    /// @brief Flag which indicates if connection is unusable.
+    ///
+    /// @return true if the connection is unusable, false otherwise
+    bool isUnusable() {
+        return (unusable_);
+    }
+
+protected:
+    /// @brief Sets the unusable flag to true.
+    void markUnusable() { unusable_ = true; }
 
 private:
 
@@ -249,6 +364,23 @@ private:
     /// intended to keep any DHCP-related parameters.
     ParameterMap parameters_;
 
+protected:
+
+    /// @brief The callback used to recover the connection.
+    DbCallback callback_;
+
+private:
+
+    /// @brief Indicates if the connection can no longer be used for normal
+    /// operations. Typically a connection is marked unusable after an unrecoverable
+    /// DB error. There may be a time when the connection exists, after
+    /// such an event, during which it cannot be used for anything beyond checking
+    /// parameters and error information. This flag can be used as a guard in
+    /// code to prevent inadvertent use of a broken connection.
+    bool unusable_;
+
+    /// @brief Reconnect settings.
+    ReconnectCtlPtr reconnect_ctl_;
 };
 
 }  // namespace db

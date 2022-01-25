@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -105,6 +105,7 @@ DbAccessParser::parse(std::string& access_string,
                 values_copy[param.first] =
                     boost::lexical_cast<std::string>(max_row_errors);
             } else {
+
                 // all remaining string parameters
                 // type
                 // user
@@ -115,6 +116,7 @@ DbAccessParser::parse(std::string& access_string,
                 // keyspace
                 // consistency
                 // serial-consistency
+                // on-fail
                 values_copy[param.first] = param.second->stringValue();
             }
         } catch (const isc::data::TypeError& ex) {
@@ -193,8 +195,9 @@ DbAccessParser::parse(std::string& access_string,
     // Check that the max-reconnect-tries is reasonable.
     if (max_reconnect_tries < 0) {
         ConstElementPtr value = database_config->get("max-reconnect-tries");
-        isc_throw(DbConfigError, "max-reconnect-tries cannot be less than zero: "
-                  << " (" << value->getPosition() << ")");
+        isc_throw(DbConfigError,
+                  "max-reconnect-tries cannot be less than zero: ("
+                      << value->getPosition() << ")");
     }
 
     // Check that the reconnect-wait-time is reasonable.
@@ -203,7 +206,7 @@ DbAccessParser::parse(std::string& access_string,
         ConstElementPtr value = database_config->get("reconnect-wait-time");
         isc_throw(DbConfigError, "reconnect-wait-time " << reconnect_wait_time
                   << " must be in range 0...MAX_UINT32 (4294967295) "
-                  << " (" << value->getPosition() << ")");
+                  << "(" << value->getPosition() << ")");
     }
 
     // Check that request_timeout value makes sense.
@@ -212,15 +215,7 @@ DbAccessParser::parse(std::string& access_string,
         ConstElementPtr value = database_config->get("request-timeout");
         isc_throw(DbConfigError, "request-timeout " << request_timeout
                   << " must be in range 0...MAX_UINT32 (4294967295) "
-                  << " (" << value->getPosition() << ")");
-    }
-
-    if ((reconnect_wait_time < 0) ||
-        (reconnect_wait_time > std::numeric_limits<uint32_t>::max())) {
-        ConstElementPtr value = database_config->get("reconnect-wait-time");
-        isc_throw(DbConfigError, "reconnect-wait-time " << reconnect_wait_time
-                  << " must be in range 0...MAX_UINT32 (4294967295) "
-                  << " (" << value->getPosition() << ")");
+                  << "(" << value->getPosition() << ")");
     }
 
     // Check that tcp_keepalive value makes sense.
@@ -229,7 +224,7 @@ DbAccessParser::parse(std::string& access_string,
         ConstElementPtr value = database_config->get("tcp-keepalive");
         isc_throw(DbConfigError, "tcp-keepalive " << tcp_keepalive
                   << " must be in range 0...MAX_UINT32 (4294967295) "
-                  << " (" << value->getPosition() << ")");
+                  << "(" << value->getPosition() << ")");
     }
 
     // 4. If all is OK, update the stored keyword/value pairs.  We do this by
@@ -258,7 +253,11 @@ DbAccessParser::getDbAccessString() const {
             }
 
             // Add the keyword/value pair to the access string.
-            dbaccess += (keyval.first + std::string("=") + keyval.second);
+            auto val = keyval.second;
+            if (val.find_first_of("\t ") != string::npos){
+                val = "'" + val + "'";
+            }
+            dbaccess += (keyval.first + std::string("=") + val);
         }
     }
 

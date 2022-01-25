@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -68,11 +68,16 @@ ParserContext::parseCommon() {
     }
 }
 
-
 void
-ParserContext::error(const isc::agent::location& loc, const std::string& what)
+ParserContext::error(const isc::agent::location& loc,
+                     const std::string& what,
+                     size_t pos)
 {
-    isc_throw(ParseError, loc << ": " << what);
+    if (pos == 0) {
+        isc_throw(ParseError, loc << ": " << what);
+    } else {
+        isc_throw(ParseError, loc << " (near " << pos << "): " << what);
+    }
 }
 
 void
@@ -94,6 +99,39 @@ ParserContext::loc2pos(isc::agent::location& loc)
     const uint32_t line = loc.begin.line;
     const uint32_t pos = loc.begin.column;
     return (isc::data::Element::Position(file, line, pos));
+}
+
+void
+ParserContext::require(const std::string& name,
+                       isc::data::Element::Position open_loc,
+                       isc::data::Element::Position close_loc)
+{
+    ConstElementPtr value = stack_.back()->get(name);
+    if (!value) {
+        isc_throw(ParseError,
+                  "missing parameter '" << name << "' ("
+                  << stack_.back()->getPosition() << ") ["
+                  << contextName() << " map between "
+                  << open_loc << " and " << close_loc << "]");
+    }
+}
+
+void
+ParserContext::unique(const std::string& name,
+                      isc::data::Element::Position loc)
+{
+    ConstElementPtr value = stack_.back()->get(name);
+    if (value) {
+        if (ctx_ != NO_KEYWORDS) {
+            isc_throw(ParseError, loc << ": duplicate " << name
+                      << " entries in " << contextName()
+                      << " map (previous at " << value->getPosition() << ")");
+        } else {
+            isc_throw(ParseError, loc << ": duplicate " << name
+                      << " entries in JSON"
+                      << " map (previous at " << value->getPosition() << ")");
+        }
+    }
 }
 
 void
@@ -123,8 +161,12 @@ ParserContext::contextName()
         return ("toplevel");
     case AGENT:
         return ("Control-agent");
-    case LOGGING:
-        return ("Logging");
+    case AUTHENTICATION:
+        return ("authentication");
+    case AUTH_TYPE:
+        return ("auth-type");
+    case CLIENTS:
+        return ("clients");
     case CONTROL_SOCKETS:
         return ("control-sockets");
     case SERVER:
@@ -142,5 +184,5 @@ ParserContext::contextName()
     }
 }
 
-};
-};
+} // end of isc::eval namespace
+} // end of isc namespace

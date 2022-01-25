@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -88,8 +88,13 @@ API Reference
         rst += '.\n\n'
 
     for func in sorted(apis.values(), key=lambda f: f['name']):
+        # "name" is visible in the ARM. "real_name" is used to provide links
+        # to commands. Keep both even if they're the same for when you want to
+        # make changes to "name" to change the way it's seen in the ARM.
         name = func['name']
-        rst += '.. _ref-%s:\n\n' % name
+        real_name = func['name']
+
+        rst += '.. _ref-%s:\n\n' % real_name
         rst += name + '\n'
         rst += '-' * len(name) + '\n\n'
 
@@ -108,8 +113,19 @@ API Reference
         rst += '(:ref:`%s <commands-%s>` hook library)' % (func['hook'], func['hook']) if 'hook' in func else '(built-in)'
         rst += '\n\n'
 
+        # access
+        try:
+            access = func['access']
+        except:
+            print('\naccess missing in %s\n\n' % name)
+            raise
+        if not access in ['read', 'write']:
+            print('\nUnknown access %s in %s\n\n' % (access, name))
+            raise ValueError('access must be read or write')
+        rst += 'Access: %s *(parameter ignored in this Kea version)* \n\n' % access
+
         # description and examples
-        rst += 'Description and examples: see :ref:`%s command <command-%s>`\n\n' % (name, name)
+        rst += 'Description and examples: see :ref:`%s command <command-%s>`\n\n' % (name, real_name)
 
         # command syntax
         rst += 'Command syntax:\n\n'

@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,6 +6,7 @@
 
 #include <config.h>
 
+#include <testutils/gtest_utils.h>
 #include <yang/adaptor_host.h>
 
 #include <gtest/gtest.h>
@@ -25,7 +26,7 @@ TEST(AdaptorHostTest, notFlexId) {
         " \"ip-address\": \"192.0.2.201\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorHost::quoteIdentifier(json));
     EXPECT_TRUE(copied->equals(*json));
@@ -39,7 +40,7 @@ TEST(AdaptorHostTest, noQuote) {
         " \"ip-address\": \"192.0.2.206\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorHost::quoteIdentifier(json));
     EXPECT_TRUE(copied->equals(*json));
@@ -52,7 +53,7 @@ TEST(AdaptorHostTest, quotes) {
         " \"ip-addresses\": \"2001:db8:1:cafe::2\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorHost::quoteIdentifier(json));
     EXPECT_FALSE(copied->equals(*json));
@@ -70,7 +71,7 @@ TEST(AdaptorHostTest, extraQuote) {
         " \"ip-addresses\": \"2001:db8:1:cafe::2\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorHost::quoteIdentifier(json));
     EXPECT_FALSE(copied->equals(*json));
@@ -87,7 +88,7 @@ TEST(AdaptorHostTest, notStandard) {
         " \"ip-addresses\": \"2001:db8:1:cafe::2\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorHost::quoteIdentifier(json));
     EXPECT_FALSE(copied->equals(*json));
@@ -105,7 +106,7 @@ TEST(AdaptorHostTest, notQuoted) {
         " \"ip-addresses\": \"2001:db8:1:cafe::2\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorHost::quoteIdentifier(json));
     EXPECT_FALSE(copied->equals(*json));
@@ -115,4 +116,4 @@ TEST(AdaptorHostTest, notQuoted) {
     EXPECT_EQ("73:6f:6d:65:22:76:61:6c:75:65", id->stringValue());
 }
 
-}; // end of anonymous namespace
+}  // namespace

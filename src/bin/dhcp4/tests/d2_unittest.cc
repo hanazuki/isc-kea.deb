@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -60,7 +60,8 @@ Dhcp4SrvD2Test::buildTestNcr(uint32_t dhcid_id_num) {
         << dhcid_id_num << "\" , "
 
         " \"lease-expires-on\" : \"20140121132405\" , "
-        " \"lease-length\" : 1300 "
+        " \"lease-length\" : 1300, "
+        " \"use-conflict-resolution\" : true "
         "}";
 
     return (dhcp_ddns::NameChangeRequest::fromJSON(stream.str()));
@@ -273,6 +274,8 @@ TEST_F(Dhcp4SrvD2Test, simpleUDPSend) {
     // Configure it enabled and start it.
     ASSERT_NO_FATAL_FAILURE(configureD2(true));
     ASSERT_TRUE(mgr.ddnsEnabled());
+    ASSERT_NO_THROW(mgr.clearQueue());
+    EXPECT_EQ(0, mgr.getQueueSize());
     ASSERT_NO_THROW(srv_.startD2());
     ASSERT_TRUE(mgr.amSending());
 
@@ -292,7 +295,7 @@ TEST_F(Dhcp4SrvD2Test, simpleUDPSend) {
 // Checks that an IO error in sending a request to D2, results in ddns updates
 // being suspended.  This indicates that Dhcp4Srv's error handler has been
 // invoked as expected.  Note that this unit test relies on an attempt to send
-// to a server address of 0.0.0.0 port 0 fails, which it does  under all OSes
+// to a server address of 0.0.0.0 port 0 fails, which it does under all OSes
 // except Solaris 11.
 /// @todo Eventually we should find a way to test this under Solaris.
 #ifndef OS_SOLARIS
@@ -312,7 +315,15 @@ TEST_F(Dhcp4SrvD2Test, DISABLED_forceUDPSendFailure) {
     ASSERT_NO_FATAL_FAILURE(configureD2(true, SHOULD_PASS, "0.0.0.0", 0,
                                         "0.0.0.0", 53001));
     ASSERT_TRUE(mgr.ddnsEnabled());
-    ASSERT_NO_THROW(srv_.startD2());
+    ASSERT_NO_THROW(mgr.clearQueue());
+    EXPECT_EQ(0, mgr.getQueueSize());
+    try {
+        srv_.startD2();
+    } catch (const std::exception& ex) {
+        FAIL() << "startD2 failed with " << ex.what();
+    } catch (...) {
+        FAIL() << "startD2 failed";
+    }
     ASSERT_TRUE(mgr.amSending());
 
     // Queue up 3 messages.
@@ -367,6 +378,8 @@ TEST_F(Dhcp4SrvD2Test, queueMaxError) {
     dhcp::D2ClientMgr& mgr = CfgMgr::instance().getD2ClientMgr();
     ASSERT_NO_FATAL_FAILURE(configureD2(true));
     ASSERT_TRUE(mgr.ddnsEnabled());
+    ASSERT_NO_THROW(mgr.clearQueue());
+    EXPECT_EQ(0, mgr.getQueueSize());
     ASSERT_NO_THROW(srv_.startD2());
     ASSERT_TRUE(mgr.amSending());
 

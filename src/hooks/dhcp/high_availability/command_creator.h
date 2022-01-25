@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #ifndef HA_COMMAND_CREATOR_H
 #define HA_COMMAND_CREATOR_H
 
+#include <lease_update_backlog.h>
 #include <ha_server_type.h>
 #include <cc/data.h>
 #include <dhcpsrv/lease.h>
@@ -22,6 +23,10 @@ public:
 
     /// @brief Creates dhcp-disable command for DHCP server.
     ///
+    /// @param max_period The max-period time the service can stay disabled
+    /// before automatically transitioning to enabled state.
+    /// @param server_type type of the DHCP server, i.e. v4 or v6.
+    ///
     /// @return Pointer to the JSON representation of the command.
     static data::ConstElementPtr
     createDHCPDisable(const unsigned int max_period,
@@ -29,9 +34,18 @@ public:
 
     /// @brief Creates dhcp-enable command for DHCP server.
     ///
+    /// @param server_type type of the DHCP server, i.e. v4 or v6.
+    ///
     /// @return Pointer to the JSON representation of the command.
     static data::ConstElementPtr
     createDHCPEnable(const HAServerType& server_type);
+
+    /// @brief Creates ha-reset command.
+    ///
+    /// @param server_type type of the DHCP server, i.e. v4 or v6.
+    /// @return Pointer to the JSON representation of the command.
+    static data::ConstElementPtr
+    createHAReset(const HAServerType& server_type);
 
     /// @brief Creates ha-heartbeat command for DHCP server.
     ///
@@ -80,7 +94,7 @@ public:
     createLease4GetPage(const dhcp::Lease4Ptr& lease4,
                         const uint32_t limit);
 
-    /// @brief Creates lease6-bulk-update command.
+    /// @brief Creates lease6-bulk-apply command.
     ///
     /// @param leases Pointer to the collection of leases to be created
     /// or/and updated.
@@ -90,6 +104,16 @@ public:
     static data::ConstElementPtr
     createLease6BulkApply(const dhcp::Lease6CollectionPtr& leases,
                           const dhcp::Lease6CollectionPtr& deleted_leases);
+
+    /// @brief Creates lease6-bulk-apply command.
+    ///
+    /// This command pops the leases from the backlog. As a result, the
+    /// backlog is empty after calling this function.
+    ///
+    /// @param leases Reference to the collection of DHCPv6 leases backlog.
+    /// @return Pointer to the JSON representation of the command.
+    static data::ConstElementPtr
+    createLease6BulkApply(LeaseUpdateBacklog& leases);
 
     /// @brief Creates lease6-update command.
     ///
@@ -140,6 +164,13 @@ public:
     /// @return Pointer to the JSON representation of the command.
     static data::ConstElementPtr
     createMaintenanceNotify(const bool cancel, const HAServerType& server_type);
+
+    /// @brief Creates ha-sync-complete-notify command.
+    ///
+    /// @param server_type type of the DHCP server, i.e. v4 or v6.
+    /// @return Pointer to the JSON representation of the command.
+    static data::ConstElementPtr
+    createSyncCompleteNotify(const HAServerType& server_type);
 
 private:
 

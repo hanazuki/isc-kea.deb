@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,7 +16,7 @@ namespace bench {
 /// @defgroup benchmark_params Benchmark parameters that define boundary values
 ///           for benchmarks.
 ///
-/// The range is defined as 512..65533. Google benchmark will pick a few specifc
+/// The range is defined as 512..65533. Google benchmark will pick a few specific
 /// values: 512, 4096, 32768, 65533.
 
 /// @{

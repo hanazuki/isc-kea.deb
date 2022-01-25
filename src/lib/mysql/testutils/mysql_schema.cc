@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -31,7 +31,7 @@ validMySQLConnectionString() {
 }
 
 void destroyMySQLSchema(bool show_err, bool force) {
-    // If force is true or wipeMySQLData() fails, destory the schema.
+    // If force is true or wipeMySQLData() fails, destroy the schema.
     if (force || (!softWipeEnabled()) || wipeMySQLData(show_err)) {
         runMySQLScript(DATABASE_SCRIPTS_DIR, "mysql/dhcpdb_drop.mysql", show_err);
     }
@@ -52,7 +52,7 @@ bool wipeMySQLData(bool show_err) {
     std::ostringstream version;
     version << MYSQL_SCHEMA_VERSION_MAJOR  << "." << MYSQL_SCHEMA_VERSION_MINOR;
 
-    cmd << "mysql/wipe_data.sh" << " " << version.str()
+    cmd << "mysql/wipe_data.sh " << version.str()
         << " -N -B --user=keatest --password=keatest keatest";
     if (!show_err) {
         cmd << " 2>/dev/null ";
@@ -82,8 +82,8 @@ void runMySQLScript(const std::string& path, const std::string& script_name,
 
     int retval = ::system(cmd.str().c_str());
     if (retval) {
-        std::cerr << "runMySQLSchema failed:" << cmd.str() << std::endl;
-        isc_throw(Unexpected, "runMySQLSchema failed:" << cmd.str());
+        std::cerr << "runMySQLSchema failed: " << cmd.str() << std::endl;
+        isc_throw(Unexpected, "runMySQLSchema failed: " << cmd.str());
     }
 }
 

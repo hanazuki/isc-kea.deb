@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -34,6 +34,7 @@ using namespace isc::data;
 using namespace isc::dhcp::test;
 using namespace isc::process;
 using namespace boost::asio;
+namespace ph = std::placeholders;
 
 namespace isc {
 namespace d2 {
@@ -45,12 +46,12 @@ class NakedD2Controller : public D2Controller {
     // "Naked" D2 controller, exposes internal methods.
 public:
     static DControllerBasePtr& instance() {
-        if (!getController()) {
-            DControllerBasePtr controller_ptr(new NakedD2Controller());
-            setController(controller_ptr);
+        static DControllerBasePtr controller_ptr;
+        if (!controller_ptr) {
+            controller_ptr.reset(new NakedD2Controller());
         }
 
-        return (getController());
+        return (controller_ptr);
     }
 
     virtual ~NakedD2Controller() { deregisterCommands(); }
@@ -97,7 +98,7 @@ private:
 
 };
 
-/// @brief Fixture class intended for testin control channel in D2.
+/// @brief Fixture class intended for testing control channel in D2.
 class CtrlChannelD2Test : public ::testing::Test {
 public:
     isc::test::Sandbox sandbox;
@@ -539,6 +540,10 @@ TEST_F(CtrlChannelD2Test, commandsRegistration) {
     EXPECT_TRUE(command_list.find("\"config-write\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"shutdown\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"status-get\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-get\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-get-all\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-reset\"") != string::npos);
+    EXPECT_TRUE(command_list.find("\"statistic-reset-all\"") != string::npos);
     EXPECT_TRUE(command_list.find("\"version-get\"") != string::npos);
 
     // Ok, and now delete the server. It should deregister its commands.
@@ -565,7 +570,7 @@ TEST_F(CtrlChannelD2Test, invalid) {
               response);
 }
 
-// Tests that the server properly responds to shtudown command.
+// Tests that the server properly responds to shutdown command.
 TEST_F(CtrlChannelD2Test, shutdown) {
     EXPECT_NO_THROW(createUnixChannelServer());
     string response;
@@ -573,6 +578,23 @@ TEST_F(CtrlChannelD2Test, shutdown) {
     sendUnixCommand("{ \"command\": \"shutdown\" }", response);
     EXPECT_EQ("{ \"result\": 0, \"text\": \"Shutdown initiated, type is: normal\" }",
               response);
+    EXPECT_EQ(EXIT_SUCCESS, server_->getExitValue());
+}
+
+// Tests that the server sets exit value supplied as argument
+// to shutdown command.
+TEST_F(CtrlChannelD2Test, shutdownExitValue) {
+    EXPECT_NO_THROW(createUnixChannelServer());
+    string response;
+
+    sendUnixCommand("{ \"command\": \"shutdown\", "
+                    "\"arguments\": { \"exit-value\": 77 }}",
+                    response);
+
+    EXPECT_EQ("{ \"result\": 0, \"text\": \"Shutdown initiated, type is: normal\" }",
+              response);
+
+    EXPECT_EQ(77, server_->getExitValue());
 }
 
 // This test verifies that the DHCP server handles version-get commands.
@@ -610,6 +632,11 @@ TEST_F(CtrlChannelD2Test, listCommands) {
     checkListCommands(rsp, "config-test");
     checkListCommands(rsp, "config-write");
     checkListCommands(rsp, "list-commands");
+    checkListCommands(rsp, "statistic-get");
+    checkListCommands(rsp, "statistic-get-all");
+    checkListCommands(rsp, "statistic-reset");
+    checkListCommands(rsp, "statistic-reset-all");
+    checkListCommands(rsp, "status-get");
     checkListCommands(rsp, "shutdown");
     checkListCommands(rsp, "version-get");
 }
@@ -1142,8 +1169,8 @@ TEST_F(CtrlChannelD2Test, longCommand) {
 
     ASSERT_NO_THROW(
         CommandMgr::instance().registerCommand("foo",
-            boost::bind(&CtrlChannelD2Test::longCommandHandler,
-                        command.str(), _1, _2));
+            std::bind(&CtrlChannelD2Test::longCommandHandler,
+                      command.str(), ph::_1, ph::_2));
     );
 
     createUnixChannelServer();
@@ -1201,7 +1228,7 @@ TEST_F(CtrlChannelD2Test, longResponse) {
     // of a desired size
     ASSERT_NO_THROW(
         CommandMgr::instance().registerCommand("foo",
-            boost::bind(&CtrlChannelD2Test::longResponseHandler, _1, _2));
+            std::bind(&CtrlChannelD2Test::longResponseHandler, ph::_1, ph::_2));
     );
 
     createUnixChannelServer();

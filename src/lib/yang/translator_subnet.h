@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -43,9 +43,9 @@ namespace yang {
 ///     "next-server": "<next server>",
 ///     "server-hostname": "<server hostname>",
 ///     "boot-file-name": "<boot file name>",
-///     "4o6-interface": "<dhpv4-over-dhcpv6 interface>",
-///     "4o6-interface-id": "<dhpv4-over-dhcpv6 interface id>",
-///     "4o6-subnet": "<dhpv4-over-dhcpv6 subnet>",
+///     "4o6-interface": "<dhcpv4-over-dhcpv6 interface>",
+///     "4o6-interface-id": "<dhcpv4-over-dhcpv6 interface id>",
+///     "4o6-subnet": "<dhcpv4-over-dhcpv6 subnet>",
 ///     "authoritative": <authoritative flag>,
 ///     "user-context": { <json map> },
 ///     "comment": "<comment>"
@@ -259,11 +259,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorSubnet(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorSubnet(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorSubnet();
@@ -322,11 +318,7 @@ public:
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-#ifndef HAVE_PRE_0_7_6_SYSREPO
     TranslatorSubnets(sysrepo::S_Session session, const std::string& model);
-#else
-    TranslatorSubnets(S_Session session, const std::string& model);
-#endif
 
     /// @brief Destructor.
     virtual ~TranslatorSubnets();
@@ -369,7 +361,7 @@ protected:
                        const std::string& subsel);
 };
 
-}; // end of namespace isc::yang
-}; // end of namespace isc
+}  // namespace yang
+}  // namespace isc
 
 #endif // ISC_TRANSLATOR_SUBNET_H

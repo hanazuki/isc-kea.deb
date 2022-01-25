@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -50,9 +50,6 @@ NetconfCfgMgr::NetconfCfgMgr()
     : DCfgMgrBase(ConfigPtr(new NetconfConfig())) {
 }
 
-NetconfCfgMgr::~NetconfCfgMgr() {
-}
-
 std::string
 NetconfCfgMgr::getConfigSummary(const uint32_t /*selection*/) {
 
@@ -93,7 +90,7 @@ NetconfCfgMgr::parse(isc::data::ConstElementPtr config_set,
                      bool check_only) {
     // Do a sanity check first.
     if (!config_set) {
-        isc_throw(DhcpConfigError, "Mandatory config parameter not provided");
+        isc_throw(ConfigError, "Mandatory config parameter not provided");
     }
 
     NetconfConfigPtr ctx = getNetconfConfig();
@@ -162,6 +159,14 @@ NetconfConfig::toElement() const {
     ElementPtr result = Element::createMap();
     result->set("Netconf", netconf);
     return (result);
+}
+
+std::list<std::list<std::string>>
+NetconfCfgMgr::jsonPathsToRedact() const {
+    static std::list<std::list<std::string>> const list({
+        {"hooks-libraries", "[]", "parameters", "*"},
+    });
+    return list;
 }
 
 } // namespace isc::netconf

@@ -84,7 +84,7 @@ Dual-Stack Environments
 `RFC 4703, section
 5.2, <https://tools.ietf.org/html/rfc4703#section-5.2>`__ describes
 issues that may arise with dual-stack clients. These are clients that
-wish to have have both IPv4 and IPv6 mappings for the same FQDN. For
+wish to have both IPv4 and IPv6 mappings for the same FQDN. For
 this to work properly, the clients are required to embed their IPv6 DUID
 within their IPv4 client identifier option, as described in `RFC
 4703 <https://tools.ietf.org/html/rfc4361>`__. In this way, DNS updates
@@ -282,7 +282,7 @@ values are 107 on Linux and 103 on FreeBSD.
 
 Communication over the control channel is conducted using JSON structures.
 See the `Control Channel section in the Kea Developer's
-Guide <https://jenkins.isc.org/job/Kea_doc/doxygen/d2/d96/ctrlSocket.html>`__
+Guide <https://reports.kea.isc.org/dev_guide/d2/d96/ctrlSocket.html>`__
 for more details.
 
 The D2 server supports the following operational commands:
@@ -298,13 +298,45 @@ The D2 server supports the following operational commands:
 -  status-get
 -  version-get
 
+Starting with Kea version 2.0.0 the D2 server supports too the following
+operational commands for statistics:
+
+-  statistic-get
+-  statistic-get-all
+-  statistic-reset
+-  statistic-reset-all
+
+The ``shutdown`` command supports the extra ``type`` argument which controls the
+way the D2 server cleans up on exit.
+The supported shutdown types are:
+
+-  ``normal`` - Stops the queue manager and finishes all current transactions
+   before exiting. This is the default.
+
+-  ``drain_first`` - Stops the queue manager but continues processing requests
+   from the queue until it is empty.
+
+-  ``now`` - Exits immediately.
+
+An example command may look like this:
+
+::
+
+   {
+       "command": "shutdown"
+       "arguments": {
+           "exit-value": 3,
+           "type": "drain_first"
+       }
+   }
+
 .. _d2-tsig-key-list-config:
 
 TSIG Key List
 -------------
 
 A DDNS protocol exchange can be conducted with or without TSIG (defined
-in `RFC 2845 <https://tools.ietf/org/html/rfc2845>`__). This
+in `RFC 2845 <https://tools.ietf.org/html/rfc2845>`__). This
 configuration section allows the administrator to define the set of TSIG
 keys that may be used in such exchanges.
 
@@ -445,7 +477,7 @@ the following parameters:
    used in a first-to-last preference; in other words, when D2 begins to
    process a request for this domain, it will pick the first server in
    this list and attempt to communicate with it. If that attempt fails,
-   D2 will move to next one in the list and so on until either it
+   D2 will move to the next one in the list and so on until either it
    is successful or the list is exhausted.
 
 To create a new Forward DDNS Domain, add a new domain element and set
@@ -505,7 +537,6 @@ running at "172.88.99.10", set the Forward DNS Server as follows:
                    "key-name": "",
                    "dns-servers": [
                        {
-                           "hostname": "",
                            "ip-address": "172.88.99.10",
                            "port": 53
                        }
@@ -573,8 +604,7 @@ the following parameters:
 -  ``key-name`` - if TSIG is used with this domain's servers,
    this value should be the name of the key from the TSIG Key List. If
    the value is blank (the default), TSIG will not be used in DDNS
-   conversations with this domain's servers. Currently this value is not
-   used as TSIG has not been implemented.
+   conversations with this domain's servers.
 
 -  ``dns-servers`` - a list of one or more DNS servers which can conduct
    the server side of the DDNS protocol for this domain. Currently, the
@@ -642,7 +672,6 @@ service is running at "172.88.99.10", then set it as follows:
                    "key-name": "",
                    "dns-servers": [
                        {
-                           "hostname": "",
                            "ip-address": "172.88.99.10",
                            "port": 53
                        }
@@ -659,15 +688,88 @@ service is running at "172.88.99.10", then set it as follows:
    Since "hostname" is not yet supported, the parameter "ip-address"
    must be set to the address of the DNS server.
 
+.. _per-server-keys:
+
+Per DNS server TSIG keys
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+Since Kea version 2.0.0 a TSIG key can be specified in a DNS server
+configuration. The priority rule is:
+
+-  if a not empty key name is specified in a DNS server entry this TSIG
+   key will protect DNS updates sent to this server.
+
+-  if empty or no key name is specified in a DNS server entry but a not
+   empty key name is specified in the parent domain entry, the domain
+   TSIG key will protect DNS updates sent to this server.
+
+-  if empty or no key name is specified in a DNS server entry and its parent
+   domain entry, no TSIG will protect DNS updates sent to this server.
+
+For instance in this configuration:
+
+::
+
+   "DhcpDdns": {
+       "forward-ddns": {
+           "ddns-domains": [
+               {
+                   "name": "other.example.com.",
+                   "key-name": "foo",
+                   "dns-servers": [
+                       {
+                           "ip-address": "172.88.99.10",
+                           "port": 53
+                       },
+                       {
+                           "ip-address": "172.88.99.11",
+                           "port": 53,
+                           "key-name": "bar"
+                       }
+                   ]
+               }
+           ]
+       },
+       "reverse-ddns": {
+           "ddns-domains": [
+               {
+                   "name": "1.0.0.0.8.B.D.0.1.0.0.2.ip6.arpa.",
+                   "dns-servers": [
+                       {
+                           "ip-address": "172.88.99.12",
+                           "port": 53
+                       },
+                       {
+                           "ip-address": "172.88.99.13",
+                           "port": 53,
+                           "key-name": "bar"
+                       }
+                   ]
+               }
+           ]
+       },
+       "tsig-keys": [
+           {
+               "name": "foo",
+               "algorithm": "HMAC-MD5",
+               "secret": "LSWXnfkKZjdPJI5QxlpnfQ=="
+           },
+           {
+               "name": "bar",
+               "algorithm": "HMAC-SHA224",
+               "secret": "bZEG7Ow8OgAUPfLWV3aAUQ=="
+           }
+       ]
+   }
+
+
+The 172.88.99.10 server will use the foo TSIG key, 172.88.99.11 and
+172.88.99.13 servers the bar one and 172.88.99.12 will not use TSIG.
+
 .. _d2-user-contexts:
 
 User Contexts in DDNS
 ---------------------
-
-.. note::
-
-   User contexts were designed for hook libraries, which are not yet
-   supported for DHCP-DDNS server configuration.
 
 See :ref:`user-context` for additional background regarding the user
 context idea.
@@ -808,6 +910,67 @@ These Reverse DDNS Domains are specified as follows:
            ]
        }
    }
+
+DHCP-DDNS Server Statistics
+===========================
+
+Kea version 2.0.0 introduced statistics support for the DHCP-DDNS.
+
+Statistics are divided in three groups: Name Change Request, DNS update
+and per TSIG key DNS updates. If the statistics of the first two groups
+are cumulative, i.e. not affected by configuration change or reload,
+per key statistics are reset to 0 when the underlying object is
+(re)created.
+
+Currently the statistics management is limited:
+
+-  only integer samples (i.e. a counter and a timestamp) are used
+-  the maximum sample count is 1
+-  there is no API to remove one or all statistics
+-  there is no API to set the maximum sample count or age
+
+.. note::
+
+    Hook libraries like the GSS-TSIG add new statistics.
+
+A reference about Kea statistics can be found at :ref:`stats`.
+
+NCR Statistics
+--------------
+
+The Name Change Request statistics are:
+
+-  ``ncr-received`` - received valid NCRs
+-  ``ncr-invalid`` - received invalid NCRs
+-  ``ncr-error`` - errors in NCR receptions other than I/O cancel on shutdown
+
+DNS Update Statistics
+---------------------
+
+The global DNS update statistics are:
+
+-  ``update-sent`` - sent DNS updates
+-  ``update-signed`` - sent DNS updates protected by TSIG
+-  ``update-unsigned`` - sent DNS updates not protected by TSIG
+-  ``update-success`` - DNS updates which completed with a success
+-  ``update-timeout`` - DNS updates which completed on timeout
+-  ``update-error`` - DNS updates which completed with an error other than
+   timeout
+
+Per TSIG key DNS Update Statistics
+----------------------------------
+
+The per TSIG key DNS update statistics are:
+
+-  ``update-sent`` - sent DNS updates
+-  ``update-success`` - DNS updates which completed with a success
+-  ``update-timeout`` - DNS updates which completed on timeout
+-  ``update-error`` - DNS updates which completed with an error other than
+   timeout
+
+The name of a per key statistics is ``key[<key-DNS-name>].<stat-name>``,
+for instance the name of the ``update-sent`` statistics for the
+``key.example.com.`` TSIG key is ``key[key.example.com.].update-sent``.
 
 DHCP-DDNS Server Limitations
 ============================

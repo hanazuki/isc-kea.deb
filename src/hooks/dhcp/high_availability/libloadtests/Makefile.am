@@ -27,6 +27,7 @@ TESTS += ha_unittests
 
 ha_unittests_SOURCES = run_unittests.cc
 ha_unittests_SOURCES += load_unload_unittests.cc
+ha_unittests_SOURCES += close_unittests.cc
 
 ha_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES) $(LOG4CPLUS_INCLUDES)
 
@@ -34,7 +35,7 @@ ha_unittests_LDFLAGS  = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(GTEST_LDFLAGS)
 
 ha_unittests_CXXFLAGS = $(AM_CXXFLAGS)
 
-ha_unittests_LDADD  = $(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la
+ha_unittests_LDADD = $(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/process/libkea-process.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/eval/libkea-eval.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
@@ -43,6 +44,7 @@ ha_unittests_LDADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/http/libkea-http.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
+ha_unittests_LDADD += $(top_builddir)/src/lib/database/libkea-database.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/cc/libkea-cc.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la

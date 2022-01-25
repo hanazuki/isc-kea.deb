@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2017,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -101,6 +101,14 @@ StopwatchMock::getCurrentTime() const {
 
 /// @brief Test fixture class for testing @c StopwatchImpl.
 class StopwatchTest : public ::testing::Test {
+public:
+
+    /// @brief Constructor
+    StopwatchTest() = default;
+
+    /// @brief Destructor
+    virtual ~StopwatchTest() = default;
+
 protected:
 
     /// @brief Set up the test.
@@ -244,7 +252,7 @@ TEST_F(StopwatchTest, realTime) {
     // Start it again.
     stopwatch.start();
 
-    // Slee for 1 ms.
+    // Sleep for 1 ms.
     usleep(1000);
 
     // The durations should get updated as appropriate.

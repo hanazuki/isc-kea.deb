@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,8 +9,10 @@
 
 #include <cc/data.h>
 #include <dhcpsrv/subnet_id.h>
+#include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
 #include <set>
+#include <mutex>
 #include <string>
 
 namespace isc {
@@ -24,15 +26,26 @@ class NetworkStateImpl;
 /// or for specific networks, this has to be recorded to allow for re-enabling
 /// DHCP service for these networks as a result of receiving a command from
 /// the administrator or when the timeout for re-enabling the service occurs.
-///
+/// Currently there are two types of command originating either from user or
+/// HA internal mechanism.
+/// The global state can also be altered by the DB recovery mechanism which
+/// disables the service on connection loss and re-enables it after the
+/// connection is restored. Because the server supports recovery for multiple
+/// connections, this is implemented using an internal counter.
+/// Combining all the origins of the alteration of the network state, the
+/// behavior is:
+/// a) the network state is disabled if any of the originators explicitly set
+///    the disabled flag.
+/// b) the network state is restored only if all originators explicitly clear
+///    the disabled flag.
 /// In the future, it will be possible to specify "disabled" parameter for
 /// a subnet (or network) in the configuration file to indicate that this subnet
 /// should be excluded from the service. When a command is subsequently sent to
 /// temporarily disable a service for some other subnets for a specified amount
-/// ot time, only these subnets should be re-enabled when the time elapses. This
-/// class fulfils this requirement by recording the subnets disabled with a command
+/// of time, only these subnets should be re-enabled when the time elapses. This
+/// class fulfills this requirement by recording the subnets disabled with a command
 /// and re-enabling them when required. The subnets specified as "disabled" in
-/// the configuration file should remain disabled until explcitly enabled with a
+/// the configuration file should remain disabled until explicitly enabled with a
 /// control command.
 ///
 /// This class also allows for disabling the DHCP service globally. In this case
@@ -63,6 +76,21 @@ public:
         DHCPv6
     };
 
+    /// @brief Origin of the network state transition.
+    ///
+    /// The enumeration indicates the originator of the state transition of the
+    /// network state: either user command, HA internal command or DB connection
+    /// recovery mechanism.
+    enum class Origin {
+        /// @brief The network state is being altered by a user command.
+        USER_COMMAND,
+        /// @brief The network state is being altered by a HA internal command.
+        HA_COMMAND,
+        /// @brief The network state is being altered by the DB connection
+        /// recovery mechanics.
+        DB_CONNECTION
+    };
+
     /// @brief Type of the container holding collection of subnet identifiers.
     typedef std::set<SubnetID> Subnets;
 
@@ -72,28 +100,45 @@ public:
     /// @brief Constructor.
     NetworkState(const ServerType& server_type);
 
-    /// @brief Globally disables DHCP service.
+    /// @brief Disable the DHCP service state for respective transition origin.
     ///
-    /// The DHCP service becomes disabled for all subnets and networks,
-    /// regardless of the per scope settings.
-    void disableService();
+    /// @note If any of the user commands, HA internal commands or connection
+    /// recovery processes disable the dhcp service, the service will remain
+    /// disabled until all flags are cleared.
+    ///
+    /// @param origin The origin of the state transition.
+    void disableService(const NetworkState::Origin& origin);
 
-    /// @brief Globally enables DHCP service.
+    /// @brief Enable the DHCP service state for respective transition origin.
     ///
-    /// The DHCP service becomes enabled but per scope settings are in effect.
-    /// In order to enable the service for all scopes previously disabled with
-    /// a control command, use @c enableAll.
-    void enableService();
+    /// @note If any of the user commands, HA internal commands or connection
+    /// recovery processes disable the dhcp service, the service will remain
+    /// disabled until all flags are cleared.
+    ///
+    /// @param origin The origin of the state transition.
+    void enableService(const NetworkState::Origin& origin);
+
+    /// @brief Reset internal counters.
+    ///
+    /// Reset internal counters for a specific 'origin' after the server has
+    /// been reconfigured or all the connections have been restored.
+    ///
+    /// @param type The origin for which the state flags need to be reset.
+    void reset(const NetworkState::Origin& type);
 
     /// @brief Enables DHCP service globally and for scopes which have been
     /// disabled as a result of control command.
-    void enableAll();
+    ///
+    /// @param origin The origin of the state transition.
+    void enableAll(const NetworkState::Origin& origin);
 
     /// @brief Schedules enabling DHCP service in the future.
     ///
     /// @param seconds Number of seconds after which the service should be enabled
     /// unless @c enableAll is enabled before that time.
-    void delayedEnableAll(const unsigned int seconds);
+    /// @param origin The origin of the state transition.
+    void delayedEnableAll(const unsigned int seconds,
+                          const NetworkState::Origin& origin);
 
     /// @brief Checks if the DHCP service is globally enabled.
     ///
@@ -150,6 +195,9 @@ private:
 
     /// @brief Pointer to the @c NetworkState implementation.
     boost::shared_ptr<NetworkStateImpl> impl_;
+
+    /// @brief The mutex used to protect internal state.
+    const boost::scoped_ptr<std::mutex> mutex_;
 };
 
 /// @brief Pointer to the @c NetworkState object.

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,7 +7,7 @@
 #ifndef D_TEST_STUBS_H
 #define D_TEST_STUBS_H
 
-#include <asiolink/io_service.h>
+#include <asiolink/interval_timer.h>
 
 #include <cc/data.h>
 #include <cc/command_interpreter.h>
@@ -190,6 +190,9 @@ public:
         return (processed_signals_);
     }
 
+    /// @brief Deals with other (i.e. not application name) global objects.
+    using DControllerBase::handleOtherObjects;
+
     /// @brief Controls whether signals are processed in full or merely
     /// recorded.
     ///
@@ -258,7 +261,7 @@ protected:
 
     /// @brief Provides alternate parse file implementation
     ///
-    /// Overrides the base class implementation to mimick controllers which
+    /// Overrides the base class implementation to mimic controllers which
     /// implement alternate file parsing.  If enabled via useAlternateParser()
     /// the method will return a fixed map of elements reflecting the following
     /// JSON:
@@ -281,7 +284,7 @@ public:
     ///
     /// Overrides the base class implementation so we can
     /// verify the getting the extended version text
-    /// contains derivaiton specific contributions.
+    /// contains derivation specific contributions.
     virtual std::string getVersionAddendum() {
         return ("StubController Version Text");
     }
@@ -526,6 +529,32 @@ public:
     void runWithConfig(const std::string& config, int run_time_ms,
                        time_duration& elapsed_time);
 
+    /// @brief Type of testing callbacks
+    typedef std::function<void()> TestCallback;
+
+    /// @brief Convenience method for invoking standard, valid launch
+    /// with a testing callback
+    ///
+    /// This method sets up a timed run of the DController::launch.  It does
+    /// the following:
+    /// - It creates command line argument variables argc/argv
+    /// - Invokes writeFile to create the config file with the given content
+    /// - Schedules a shutdown time timer to call DController::executeShutdown
+    /// after the interval
+    /// - Records the start time
+    /// - Invokes DController::launch() with the command line arguments
+    /// - After launch returns, it calculates the elapsed time and returns it
+    ///
+    /// @note the callback is called before the shutdown and MUST NOT throw
+    /// @param config configuration file content to write before calling launch
+    /// @param run_time_ms  maximum amount of time to allow runProcess() to
+    /// continue.
+    /// @param callback testing callback of TestCallback type
+    /// @param[out] elapsed_time the actual time in ms spent in launch().
+    void runWithConfig(const std::string& config, int run_time_ms,
+                       const TestCallback& callback,
+                       time_duration& elapsed_time);
+
     /// @brief Fetches the controller's process
     ///
     /// @return A pointer to the process which may be null if it has not yet
@@ -718,69 +747,7 @@ public:
     isc::data::ConstElementPtr answer_;
 };
 
-/// @brief Implements a time-delayed signal
-///
-/// Given an IOService, a signal number, and a time period, this class will
-/// send (raise) the signal to the current process.
-class TimedSignal {
-public:
-    /// @brief Constructor
-    ///
-    /// @param io_service  IOService to run the timer
-    /// @param signum OS signal value (e.g. SIGHUP, SIGUSR1 ...)
-    /// @param milliseconds time in milliseconds to wait until the signal is
-    /// raised.
-    /// @param mode selects between a one-shot signal or a signal which repeats
-    /// at "milliseconds" interval.
-    TimedSignal(asiolink::IOService& io_service, int signum, int milliseconds,
-                const asiolink::IntervalTimer::Mode& mode =
-                asiolink::IntervalTimer::ONE_SHOT)
-        : timer_(new asiolink::IntervalTimer(io_service)) {
-        timer_->setup(SendSignalCallback(signum), milliseconds, mode);
-    }
-
-    /// @brief Cancels the given timer.
-    void cancel() {
-        if (timer_) {
-            timer_->cancel();
-        }
-    }
-
-    /// @brief Destructor.
-    ~TimedSignal() {
-        cancel();
-    }
-
-    /// @brief Callback for the TimeSignal's internal timer.
-    class SendSignalCallback: public std::unary_function<void, void> {
-    public:
-
-        /// @brief Constructor
-        ///
-        /// @param signum OS signal value of the signal to send
-        SendSignalCallback(int signum) : signum_(signum) {
-        }
-
-        /// @brief Callback method invoked when the timer expires
-        ///
-        /// Calls raise with the given signal which should generate that
-        /// signal to the given process.
-        void operator()() {
-            ASSERT_EQ(0, raise(signum_));
-            return;
-        }
-
-    private:
-        /// @brief Stores the OS signal value to send.
-        int signum_;
-    };
-
-private:
-    /// @brief Timer which controls when the signal is sent.
-    asiolink::IntervalTimerPtr timer_;
-};
-
-}; // namespace isc::process
-}; // namespace isc
+} // namespace isc::process
+} // namespace isc
 
 #endif

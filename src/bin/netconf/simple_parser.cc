@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <netconf/netconf_config.h>
 #include <cc/data.h>
 #include <cc/dhcp_config_error.h>
+#include <hooks/hooks_manager.h>
 #include <hooks/hooks_parser.h>
 #include <boost/foreach.hpp>
 
@@ -41,29 +42,29 @@ const SimpleDefaults NetconfSimpleParser::NETCONF_DEFAULTS = {
     { "validate-changes",  Element::boolean, "true" }
 };
 
-/// Supplies defaults for control-socket elements
+/// @brief Supplies defaults for control-socket elements
 const SimpleDefaults NetconfSimpleParser::CTRL_SOCK_DEFAULTS = {
     { "socket-type", Element::string, "stdout" },
     { "socket-name", Element::string, "" },
     { "socket-url" , Element::string, "http://127.0.0.1:8000/" }
 };
 
-/// Supplies defaults for dhcp4 managed server
+/// @brief Supplies defaults for dhcp4 managed server
 const SimpleDefaults NetconfSimpleParser::DHCP4_DEFAULTS = {
     { "model", Element::string, "kea-dhcp4-server" }
 };
 
-/// Supplies defaults for dhcp6 managed server
+/// @brief Supplies defaults for dhcp6 managed server
 const SimpleDefaults NetconfSimpleParser::DHCP6_DEFAULTS = {
     { "model", Element::string, "kea-dhcp6-server" }
 };
 
-/// Supplies defaults for d2 managed server
+/// @brief Supplies defaults for d2 managed server
 const SimpleDefaults NetconfSimpleParser::D2_DEFAULTS = {
     { "model", Element::string, "kea-dhcp-ddns" }
 };
 
-/// Supplies defaults for ca managed server
+/// @brief Supplies defaults for ca managed server
 const SimpleDefaults NetconfSimpleParser::CA_DEFAULTS = {
     { "model", Element::string, "kea-ctrl-agent" }
 };
@@ -183,9 +184,11 @@ NetconfSimpleParser::parse(const NetconfConfigPtr& ctx,
         // This occurs last as if it succeeds, there is no easy way
         // revert it.  As a result, the failure to commit a subsequent
         // change causes problems when trying to roll back.
+        HooksManager::prepareUnloadLibraries();
+        static_cast<void>(HooksManager::unloadLibraries());
         libraries.loadLibraries();
     }
 }
 
-};
-};
+}  // namespace netconf
+}  // namespace isc

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -52,7 +52,7 @@ The default packet queue implementation for both Kea DHCPv4 and DHCPv6 servers
 is a simple ring buffer.  Once it reaches capacity, new packets get added to
 the back of queue by discarding packets from the front of queue.  Rather than
 always discarding the newest packets, we now always discard the oldest
-packets.  The capacity of the buffer, (i.e the maximum number of packets the
+packets.  The capacity of the buffer (i.e. the maximum number of packets the
 buffer can contain) is configurable.
 
 @section custom-implementations  Custom Packet Queues
@@ -110,7 +110,7 @@ implementation using a ring buffer based on Boost's boost::circular_buffer
 isc::dhcp::PacketQueueRing6).  The most critical aspects to remember when
 developing your implementation are:
 
--# It MUST be thread safe since queuing and dequeing packets are done by
+-# It MUST be thread safe since queuing and dequeuing packets are done by
 separate threads. (You might considering using std::mutex and std::lock_guard).
 
 -# Its efficiency (or lack thereof) will have a direct impact on server
@@ -346,7 +346,7 @@ public:
 };
 @endcode
 
-DHCPv6 Factory implemenation:
+DHCPv6 Factory implementation:
 
 @code
 const std::string QUEUE_TYPE = "Your-Q6";

@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -67,12 +67,20 @@ bool registerFactory2() {
 }
 
 // @brief Factory function returning 0
-HostDataSourcePtr factory0(const DatabaseConnection::ParameterMap&) {
+HostDataSourcePtr
+factory0(const DatabaseConnection::ParameterMap&) {
     return (HostDataSourcePtr());
 }
 
 // @brief Test fixture class
 class HostDataSourceFactoryTest : public ::testing::Test {
+public:
+    /// @brief Constructor
+    HostDataSourceFactoryTest() = default;
+
+    /// @brief Destructor
+    virtual ~HostDataSourceFactoryTest() = default;
+
 private:
     // @brief Prepares the class for a test.
     virtual void SetUp() {

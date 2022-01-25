@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -116,10 +116,16 @@ public:
 
     /// @brief Error handler
     ///
+    /// @note The optional position for an error in a string begins by 1
+    /// so the caller should add 1 to the position of the C++ string.
+    ///
     /// @param loc location within the parsed file when experienced a problem.
     /// @param what string explaining the nature of the error.
+    /// @param pos optional position for in string errors.
     /// @throw ParseError
-    void error(const isc::netconf::location& loc, const std::string& what);
+    void error(const isc::netconf::location& loc,
+               const std::string& what,
+               size_t pos = 0);
 
     /// @brief Error handler
     ///
@@ -155,25 +161,33 @@ public:
     ///
     /// @param name name of the parameter to check
     /// @param open_loc location of the opening curly bracket
-    /// @param close_loc ocation of the closing curly bracket
+    /// @param close_loc location of the closing curly bracket
     /// @throw ParseError
     void require(const std::string& name,
                  isc::data::Element::Position open_loc,
                  isc::data::Element::Position close_loc);
+
+    /// @brief Check if a parameter is already present
+    ///
+    /// Check if a parameter is already present in the map at the top
+    /// of the stack and raise an error when it is.
+    ///
+    /// @param name name of the parameter to check
+    /// @param loc location of the current parameter
+    /// @throw ParseError
+    void unique(const std::string& name,
+                isc::data::Element::Position loc);
 
     /// @brief Defines syntactic contexts for lexical tie-ins
     typedef enum {
         ///< This one is used in pure JSON mode.
         NO_KEYWORDS,
 
-        ///< Used while parsing top level (that contains Netconf, Logging and others)
+        ///< Used while parsing top level (that contains Netconf)
         CONFIG,
 
         ///< Used while parsing content of Netconf.
         NETCONF,
-
-        ///< Used while parsing content of Logging.
-        LOGGING,
 
         /// Used while parsing Netconf/managed-servers.
         MANAGED_SERVERS,
@@ -278,7 +292,7 @@ public:
     isc::data::ElementPtr parseCommon();
 };
 
-}; // end of isc::netconf namespace
-}; // end of isc namespace
+} // end of isc::netconf namespace
+} // end of isc namespace
 
 #endif

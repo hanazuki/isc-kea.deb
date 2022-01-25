@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -68,7 +68,8 @@ public:
 
     /// @brief Constructor.
     TestCBControlDHCPv6()
-        : CBControlDHCPv6(), db_config_fetch_calls_(0),
+        : CBControlDHCPv6(), db_total_config_fetch_calls_(0),
+          db_current_config_fetch_calls_(0), db_staging_config_fetch_calls_(0),
           enable_check_fetch_mode_(false), enable_throw_(false) {
     }
 
@@ -81,33 +82,55 @@ public:
     /// It also throws an exception when desired by a test, to
     /// verify that the server gracefully handles such exception.
     ///
+    /// @param config either the staging or the current configuration.
     /// @param fetch_mode value indicating if the method is called upon the
     /// server start up or it is called to fetch configuration updates.
     ///
     /// @throw Unexpected when configured to do so.
-    virtual void databaseConfigFetch(const process::ConfigPtr&,
+    virtual void databaseConfigFetch(const process::ConfigPtr& config,
                                      const FetchMode& fetch_mode) {
-        ++db_config_fetch_calls_;
+        ++db_total_config_fetch_calls_;
+
+        if (config == CfgMgr::instance().getCurrentCfg()) {
+            ++db_current_config_fetch_calls_;
+        } else if (config == CfgMgr::instance().getStagingCfg()) {
+            ++db_staging_config_fetch_calls_;
+        }
 
         if (enable_check_fetch_mode_) {
-            if ((db_config_fetch_calls_ <= 1) && (fetch_mode == FetchMode::FETCH_UPDATE)) {
+            if ((db_total_config_fetch_calls_ <= 1) &&
+                (fetch_mode == FetchMode::FETCH_UPDATE)) {
                 ADD_FAILURE() << "databaseConfigFetch was called with the value "
                     "of fetch_mode=FetchMode::FETCH_UPDATE upon the server configuration";
 
-            } else if ((db_config_fetch_calls_ > 1) && (fetch_mode == FetchMode::FETCH_ALL)) {
+            } else if ((db_total_config_fetch_calls_ > 1) &&
+                       (fetch_mode == FetchMode::FETCH_ALL)) {
                 ADD_FAILURE() << "databaseConfigFetch was called with the value "
                     "of fetch_mode=FetchMode::FETCH_ALL during fetching the updates";
             }
         }
 
         if (enable_throw_) {
-            isc_throw(Unexpected, "testing if exceptions are corectly handled");
+            isc_throw(Unexpected, "testing if exceptions are correctly handled");
         }
     }
 
-    /// @brief Returns number of invocations of the @c databaseConfigFetch.
-    size_t getDatabaseConfigFetchCalls() const {
-        return (db_config_fetch_calls_);
+    /// @brief Returns number of invocations of the @c databaseConfigFetch
+    /// (total).
+    size_t getDatabaseTotalConfigFetchCalls() const {
+        return (db_total_config_fetch_calls_);
+    }
+
+    /// @brief Returns number of invocations of the @c databaseConfigFetch
+    /// (current configuration).
+    size_t getDatabaseCurrentConfigFetchCalls() const {
+        return (db_current_config_fetch_calls_);
+    }
+
+    /// @brief Returns number of invocations of the @c databaseConfigFetch
+    /// (staging configuration).
+    size_t getDatabaseStagingConfigFetchCalls() const {
+        return (db_staging_config_fetch_calls_);
     }
 
     /// @brief Enables checking of the @c fetch_mode value.
@@ -122,8 +145,17 @@ public:
 
 private:
 
-    /// @brief Counter holding number of invocations of the @c databaseConfigFetch.
-    size_t db_config_fetch_calls_;
+    /// @brief Counter holding number of invocations of the
+    /// @c databaseConfigFetch (total).
+    size_t db_total_config_fetch_calls_;
+
+    /// @brief Counter holding number of invocations of the
+    /// @c databaseConfigFetch (current configuration).
+    size_t db_current_config_fetch_calls_;
+
+    /// @brief Counter holding number of invocations of the
+    /// @c databaseConfigFetch (staging configuration).
+    size_t db_staging_config_fetch_calls_;
 
     /// @brief Boolean flag indicated if the value of the @c fetch_mode
     /// should be verified.
@@ -143,6 +175,7 @@ typedef boost::shared_ptr<TestCBControlDHCPv6> TestCBControlDHCPv6Ptr;
 /// @c CBControlDHCPv6 object.
 class NakedControlledDhcpv6Srv: public ControlledDhcpv6Srv {
 public:
+
     /// @brief Constructor.
     NakedControlledDhcpv6Srv()
         : ControlledDhcpv6Srv(0) {
@@ -150,8 +183,6 @@ public:
         // stub implementation used in tests.
         cb_control_.reset(new TestCBControlDHCPv6());
     }
-
-    using ControlledDhcpv6Srv::signal_handler_;
 };
 
 
@@ -244,8 +275,16 @@ public:
         }
 
         // So far there should be exactly one attempt to fetch the configuration
-        // from the backend. That's the attempt made upon startup.
-        EXPECT_EQ(1, cb_control->getDatabaseConfigFetchCalls());
+        // from the backend. That's the attempt made upon startup on
+        // the staging configuration.
+        // All other fetches will be on the current configuration:
+        //  - the timer makes a closure with the staging one but it is
+        //    committed so becomes the current one.
+        //  - the command is called outside configuration so it must
+        //    be the current configuration. The test explicitly checks this.
+        EXPECT_EQ(1, cb_control->getDatabaseTotalConfigFetchCalls());
+        EXPECT_EQ(0, cb_control->getDatabaseCurrentConfigFetchCalls());
+        EXPECT_EQ(1, cb_control->getDatabaseStagingConfigFetchCalls());
 
 
         if (call_command) {
@@ -254,18 +293,20 @@ public:
             // that the command calls the database config fetch.
 
             // Count the startup.
-            EXPECT_EQ(cb_control->getDatabaseConfigFetchCalls(), 1);
+            EXPECT_EQ(cb_control->getDatabaseTotalConfigFetchCalls(), 1);
+            EXPECT_EQ(cb_control->getDatabaseCurrentConfigFetchCalls(), 0);
+            EXPECT_EQ(cb_control->getDatabaseStagingConfigFetchCalls(), 1);
 
             ConstElementPtr result =
                 ControlledDhcpv6Srv::processCommand("config-backend-pull",
                                                     ConstElementPtr());
-            EXPECT_EQ(cb_control->getDatabaseConfigFetchCalls(), 2);
+            EXPECT_EQ(cb_control->getDatabaseTotalConfigFetchCalls(), 2);
             std::string expected;
 
             if (throw_during_fetch) {
                 expected = "{ \"result\": 1, \"text\": ";
                 expected += "\"On demand configuration update failed: ";
-                expected += "testing if exceptions are corectly handled\" }";
+                expected += "testing if exceptions are correctly handled\" }";
             } else {
                 expected = "{ \"result\": 0, \"text\": ";
                 expected += "\"On demand configuration update successful.\" }";
@@ -276,9 +317,13 @@ public:
             ASSERT_NO_THROW(runTimersWithTimeout(srv->getIOService(), 20));
 
             if (config_wait_fetch_time > 0) {
-                EXPECT_GE(cb_control->getDatabaseConfigFetchCalls(), 5);
+                EXPECT_GE(cb_control->getDatabaseTotalConfigFetchCalls(), 5);
+                EXPECT_GE(cb_control->getDatabaseCurrentConfigFetchCalls(), 4);
+                EXPECT_EQ(cb_control->getDatabaseStagingConfigFetchCalls(), 1);
             } else {
-                EXPECT_EQ(cb_control->getDatabaseConfigFetchCalls(), 2);
+                EXPECT_EQ(cb_control->getDatabaseTotalConfigFetchCalls(), 2);
+                EXPECT_EQ(cb_control->getDatabaseCurrentConfigFetchCalls(), 1);
+                EXPECT_EQ(cb_control->getDatabaseStagingConfigFetchCalls(), 1);
             }
 
         } else if ((config_wait_fetch_time > 0) && (!throw_during_fetch)) {
@@ -291,9 +336,11 @@ public:
                 [cb_control]() {
                     // Interrupt the timers poll if we have recorded at
                     // least 3 attempts to fetch the updates.
-                    return (cb_control->getDatabaseConfigFetchCalls() >= 3);
+                    return (cb_control->getDatabaseTotalConfigFetchCalls() >= 3);
                 }));
-            EXPECT_GE(cb_control->getDatabaseConfigFetchCalls(), 3);
+            EXPECT_GE(cb_control->getDatabaseTotalConfigFetchCalls(), 3);
+            EXPECT_GE(cb_control->getDatabaseCurrentConfigFetchCalls(), 2);
+            EXPECT_EQ(cb_control->getDatabaseStagingConfigFetchCalls(), 1);
 
         } else {
             ASSERT_NO_THROW(runTimersWithTimeout(srv->getIOService(), 500));
@@ -304,12 +351,16 @@ public:
                 // the number of recorded fetches should be 12. One at
                 // startup, 10 failures and one that causes the timer
                 // to stop.
-                EXPECT_EQ(12, cb_control->getDatabaseConfigFetchCalls());
+                EXPECT_EQ(12, cb_control->getDatabaseTotalConfigFetchCalls());
+                EXPECT_EQ(11, cb_control->getDatabaseCurrentConfigFetchCalls());
+                EXPECT_EQ(1, cb_control->getDatabaseStagingConfigFetchCalls());
 
             } else {
                 // If the server is not configured to schedule the timer,
                 // we should still have one fetch attempt recorded.
-                EXPECT_EQ(1, cb_control->getDatabaseConfigFetchCalls());
+                EXPECT_EQ(1, cb_control->getDatabaseTotalConfigFetchCalls());
+                EXPECT_EQ(0, cb_control->getDatabaseCurrentConfigFetchCalls());
+                EXPECT_EQ(1, cb_control->getDatabaseStagingConfigFetchCalls());
             }
         }
     }
@@ -347,6 +398,7 @@ TEST_F(JSONFileBackendTest, jsonFile) {
         " } ],"
         "\"valid-lifetime\": 4000 }"
         "}";
+
     writeFile(TEST_FILE, config);
 
     // Now initialize the server
@@ -364,64 +416,43 @@ TEST_F(JSONFileBackendTest, jsonFile) {
     ASSERT_TRUE(subnets);
     ASSERT_EQ(3, subnets->size()); // We expect 3 subnets.
 
-
     // Check subnet 1.
-    EXPECT_EQ("2001:db8:1::", subnets->at(0)->get().first.toText());
-    EXPECT_EQ(64, subnets->at(0)->get().second);
+    auto subnet = subnets->begin();
+    ASSERT_TRUE(subnet != subnets->end());
+    EXPECT_EQ("2001:db8:1::", (*subnet)->get().first.toText());
+    EXPECT_EQ(64, (*subnet)->get().second);
 
     // Check pools in the first subnet.
-    const PoolCollection& pools1 = subnets->at(0)->getPools(Lease::TYPE_NA);
+    const PoolCollection& pools1 = (*subnet)->getPools(Lease::TYPE_NA);
     ASSERT_EQ(1, pools1.size());
     EXPECT_EQ("2001:db8:1::", pools1.at(0)->getFirstAddress().toText());
     EXPECT_EQ("2001:db8:1::ffff:ffff:ffff", pools1.at(0)->getLastAddress().toText());
     EXPECT_EQ(Lease::TYPE_NA, pools1.at(0)->getType());
 
     // Check subnet 2.
-    EXPECT_EQ("2001:db8:2::", subnets->at(1)->get().first.toText());
-    EXPECT_EQ(64, subnets->at(1)->get().second);
+    ++subnet;
+    ASSERT_TRUE(subnet != subnets->end());
+    EXPECT_EQ("2001:db8:2::", (*subnet)->get().first.toText());
+    EXPECT_EQ(64, (*subnet)->get().second);
 
     // Check pools in the second subnet.
-    const PoolCollection& pools2 = subnets->at(1)->getPools(Lease::TYPE_NA);
+    const PoolCollection& pools2 = (*subnet)->getPools(Lease::TYPE_NA);
     ASSERT_EQ(1, pools2.size());
     EXPECT_EQ("2001:db8:2::", pools2.at(0)->getFirstAddress().toText());
     EXPECT_EQ("2001:db8:2::ffff:ffff:ffff", pools2.at(0)->getLastAddress().toText());
     EXPECT_EQ(Lease::TYPE_NA, pools2.at(0)->getType());
 
     // And finally check subnet 3.
-    EXPECT_EQ("2001:db8:3::", subnets->at(2)->get().first.toText());
-    EXPECT_EQ(64, subnets->at(2)->get().second);
+    ++subnet;
+    ASSERT_TRUE(subnet != subnets->end());
+    EXPECT_EQ("2001:db8:3::", (*subnet)->get().first.toText());
+    EXPECT_EQ(64, (*subnet)->get().second);
 
     // ... and it's only pool.
-    const PoolCollection& pools3 = subnets->at(2)->getPools(Lease::TYPE_NA);
+    const PoolCollection& pools3 = (*subnet)->getPools(Lease::TYPE_NA);
     EXPECT_EQ("2001:db8:3::", pools3.at(0)->getFirstAddress().toText());
     EXPECT_EQ("2001:db8:3::ffff:ffff:ffff", pools3.at(0)->getLastAddress().toText());
     EXPECT_EQ(Lease::TYPE_NA, pools3.at(0)->getType());
-}
-
-// This test verifies that the configurations for various servers
-// can coexist and that the DHCPv6 configuration parsers will simply
-// ignore them.
-TEST_F(JSONFileBackendTest, serverConfigurationsCoexistence) {
-    std::string config = "{ \"Dhcp6\": {"
-        "\"rebind-timer\": 2000, "
-        "\"renew-timer\": 1000, \n"
-        "\"preferred-lifetime\": 1000, \n"
-        "\"valid-lifetime\": 4000 }, "
-        "\"Dhcp4\": { },"
-        "\"DhcpDdns\": { },"
-        "\"Control-agent\": { }"
-        "}";
-
-    writeFile(TEST_FILE, config);
-
-    // Now initialize the server
-    boost::scoped_ptr<ControlledDhcpv6Srv> srv;
-    ASSERT_NO_THROW(
-        srv.reset(new ControlledDhcpv6Srv(0))
-    );
-
-    // And configure it using the config file.
-    EXPECT_NO_THROW(srv->init(TEST_FILE));
 }
 
 // This test checks if configuration can be read from a JSON file
@@ -453,7 +484,7 @@ TEST_F(JSONFileBackendTest, hashComments) {
         srv.reset(new ControlledDhcpv6Srv(0))
     );
 
-    // And configure it using config without
+    // And configure it using config with comments.
     EXPECT_NO_THROW(srv->init(TEST_FILE));
 
     // Now check if the configuration has been applied correctly.
@@ -463,11 +494,13 @@ TEST_F(JSONFileBackendTest, hashComments) {
     ASSERT_EQ(1, subnets->size());
 
     // Check subnet 1.
-    EXPECT_EQ("2001:db8:1::", subnets->at(0)->get().first.toText());
-    EXPECT_EQ(64, subnets->at(0)->get().second);
+    auto subnet = subnets->begin();
+    ASSERT_TRUE(subnet != subnets->end());
+    EXPECT_EQ("2001:db8:1::", (*subnet)->get().first.toText());
+    EXPECT_EQ(64, (*subnet)->get().second);
 
     // Check pools in the first subnet.
-    const PoolCollection& pools1 = subnets->at(0)->getPools(Lease::TYPE_NA);
+    const PoolCollection& pools1 = (*subnet)->getPools(Lease::TYPE_NA);
     ASSERT_EQ(1, pools1.size());
     EXPECT_EQ("2001:db8:1::", pools1.at(0)->getFirstAddress().toText());
     EXPECT_EQ("2001:db8:1::ffff:ffff:ffff", pools1.at(0)->getLastAddress().toText());
@@ -503,7 +536,7 @@ TEST_F(JSONFileBackendTest, cppLineComments) {
         srv.reset(new ControlledDhcpv6Srv(0))
     );
 
-    // And configure it using config without
+    // And configure it using config with comments.
     EXPECT_NO_THROW(srv->init(TEST_FILE));
 
     // Now check if the configuration has been applied correctly.
@@ -513,11 +546,13 @@ TEST_F(JSONFileBackendTest, cppLineComments) {
     ASSERT_EQ(1, subnets->size());
 
     // Check subnet 1.
-    EXPECT_EQ("2001:db8:1::", subnets->at(0)->get().first.toText());
-    EXPECT_EQ(64, subnets->at(0)->get().second);
+    auto subnet = subnets->begin();
+    ASSERT_TRUE(subnet != subnets->end());
+    EXPECT_EQ("2001:db8:1::", (*subnet)->get().first.toText());
+    EXPECT_EQ(64, (*subnet)->get().second);
 
     // Check pools in the first subnet.
-    const PoolCollection& pools1 = subnets->at(0)->getPools(Lease::TYPE_NA);
+    const PoolCollection& pools1 = (*subnet)->getPools(Lease::TYPE_NA);
     ASSERT_EQ(1, pools1.size());
     EXPECT_EQ("2001:db8:1::", pools1.at(0)->getFirstAddress().toText());
     EXPECT_EQ("2001:db8:1::ffff:ffff:ffff", pools1.at(0)->getLastAddress().toText());
@@ -545,7 +580,7 @@ TEST_F(JSONFileBackendTest, cBlockComments) {
         "\"valid-lifetime\": 4000 }"
         "}";
 
-      writeFile(TEST_FILE, config_c_block_comments);
+    writeFile(TEST_FILE, config_c_block_comments);
 
     // Now initialize the server
     boost::scoped_ptr<ControlledDhcpv6Srv> srv;
@@ -553,7 +588,7 @@ TEST_F(JSONFileBackendTest, cBlockComments) {
         srv.reset(new ControlledDhcpv6Srv(0))
     );
 
-    // And configure it using config without
+    // And configure it using config with comments.
     EXPECT_NO_THROW(srv->init(TEST_FILE));
 
     // Now check if the configuration has been applied correctly.
@@ -563,11 +598,13 @@ TEST_F(JSONFileBackendTest, cBlockComments) {
     ASSERT_EQ(1, subnets->size());
 
     // Check subnet 1.
-    EXPECT_EQ("2001:db8:1::", subnets->at(0)->get().first.toText());
-    EXPECT_EQ(64, subnets->at(0)->get().second);
+    auto subnet = subnets->begin();
+    ASSERT_TRUE(subnet != subnets->end());
+    EXPECT_EQ("2001:db8:1::", (*subnet)->get().first.toText());
+    EXPECT_EQ(64, (*subnet)->get().second);
 
     // Check pools in the first subnet.
-    const PoolCollection& pools1 = subnets->at(0)->getPools(Lease::TYPE_NA);
+    const PoolCollection& pools1 = (*subnet)->getPools(Lease::TYPE_NA);
     ASSERT_EQ(1, pools1.size());
     EXPECT_EQ("2001:db8:1::", pools1.at(0)->getFirstAddress().toText());
     EXPECT_EQ("2001:db8:1::ffff:ffff:ffff", pools1.at(0)->getLastAddress().toText());
@@ -603,7 +640,7 @@ TEST_F(JSONFileBackendTest, include) {
         srv.reset(new ControlledDhcpv6Srv(0))
     );
 
-    // And configure it using config without
+    // And configure it using config with comments.
     EXPECT_NO_THROW(srv->init(TEST_FILE));
 
     // Now check if the configuration has been applied correctly.
@@ -613,11 +650,13 @@ TEST_F(JSONFileBackendTest, include) {
     ASSERT_EQ(1, subnets->size());
 
     // Check subnet 1.
-    EXPECT_EQ("2001:db8:1::", subnets->at(0)->get().first.toText());
-    EXPECT_EQ(64, subnets->at(0)->get().second);
+    auto subnet = subnets->begin();
+    ASSERT_TRUE(subnet != subnets->end());
+    EXPECT_EQ("2001:db8:1::", (*subnet)->get().first.toText());
+    EXPECT_EQ(64, (*subnet)->get().second);
 
     // Check pools in the first subnet.
-    const PoolCollection& pools1 = subnets->at(0)->getPools(Lease::TYPE_NA);
+    const PoolCollection& pools1 = (*subnet)->getPools(Lease::TYPE_NA);
     ASSERT_EQ(1, pools1.size());
     EXPECT_EQ("2001:db8:1::", pools1.at(0)->getFirstAddress().toText());
     EXPECT_EQ("2001:db8:1::ffff:ffff:ffff", pools1.at(0)->getLastAddress().toText());
@@ -647,14 +686,13 @@ TEST_F(JSONFileBackendTest, recursiveInclude) {
     writeFile(TEST_FILE, config_recursive_include);
     writeFile(TEST_INCLUDE, include);
 
-
     // Now initialize the server
     boost::scoped_ptr<ControlledDhcpv6Srv> srv;
     ASSERT_NO_THROW(
         srv.reset(new ControlledDhcpv6Srv(0))
     );
 
-    // And configure it using config
+    // And configure it using config with comments.
     try {
         srv->init(TEST_FILE);
         FAIL() << "Expected Dhcp6ParseError but nothing was raised";
@@ -664,7 +702,6 @@ TEST_F(JSONFileBackendTest, recursiveInclude) {
     }
 }
 
-// This test checks if configuration can be read from a JSON file.
 // This test checks if configuration detects failure when trying:
 // - empty file
 // - empty filename
@@ -855,7 +892,6 @@ TEST_F(JSONFileBackendTest, defaultLeaseDbBackend) {
     EXPECT_NO_THROW(static_cast<void>(LeaseMgrFactory::instance()));
 }
 
-
 // This test verifies that the timer triggering configuration updates
 // is invoked according to the configured value of the
 // config-fetch-wait-time.
@@ -918,7 +954,7 @@ public:
     ///
     /// Destroys MySQL schema.
     virtual ~JSONFileBackendMySQLTest() {
-        // If data wipe enabled, delete transient data otherwise destroy the schema
+        // If data wipe enabled, delete transient data otherwise destroy the schema.
         destroyMySQLSchema();
     }
 
@@ -1008,7 +1044,10 @@ testBackendReconfiguration(const std::string& backend_first,
 
     // Explicitly calling signal handler for SIGHUP to trigger server
     // reconfiguration.
-    srv->signal_handler_(SIGHUP);
+    raise(SIGHUP);
+
+    // Polling once to be sure that the signal handle has been called.
+    srv->getIOService()->poll();
 
     // The backend should have been created and its type should be
     // correct.

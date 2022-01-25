@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,6 +18,7 @@
 #include <dhcp/std_option_defs.h>
 #include <dhcp/docsis3_option_defs.h>
 #include <exceptions/exceptions.h>
+#include <exceptions/isc_assert.h>
 #include <util/buffer.h>
 
 #include <boost/lexical_cast.hpp>
@@ -219,7 +220,7 @@ LibDHCP::setRuntimeOptionDefs(const OptionDefSpaceContainer& defs) {
         for (OptionDefContainer::const_iterator def = container->begin();
              def != container->end(); ++def) {
             OptionDefinitionPtr def_copy(new OptionDefinition(**def));
-            defs_copy.addItem(def_copy, *name);
+            defs_copy.addItem(def_copy);
         }
     }
     runtime_option_defs_ = defs_copy;
@@ -433,7 +434,7 @@ LibDHCP::unpackOptions6(const OptionBuffer& buf,
                 // The option definition has been found. Use it to create
                 // the option instance from the provided buffer chunk.
                 const OptionDefinitionPtr& def = *(range.first);
-                assert(def);
+                isc_throw_assert(def);
                 opt = def->optionFactory(Option::V6, opt_type,
                                          buf.begin() + offset,
                                          buf.begin() + offset + opt_len);
@@ -586,7 +587,7 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
                 // The option definition has been found. Use it to create
                 // the option instance from the provided buffer chunk.
                 const OptionDefinitionPtr& def = *(range.first);
-                assert(def);
+                isc_throw_assert(def);
                 opt = def->optionFactory(Option::V4, opt_type,
                                          buf.begin() + offset,
                                          buf.begin() + offset + opt_len);
@@ -675,7 +676,7 @@ LibDHCP::unpackVendorOptions6(const uint32_t vendor_id,
                 // The option definition has been found. Use it to create
                 // the option instance from the provided buffer chunk.
                 const OptionDefinitionPtr& def = *(range.first);
-                assert(def);
+                isc_throw_assert(def);
                 opt = def->optionFactory(Option::V6, opt_type,
                                          buf.begin() + offset,
                                          buf.begin() + offset + opt_len);
@@ -786,7 +787,7 @@ LibDHCP::unpackVendorOptions4(const uint32_t vendor_id, const OptionBuffer& buf,
                     // The option definition has been found. Use it to create
                     // the option instance from the provided buffer chunk.
                     const OptionDefinitionPtr& def = *(range.first);
-                    assert(def);
+                    isc_throw_assert(def);
                     opt = def->optionFactory(Option::V4, opt_type,
                                              buf.begin() + offset,
                                              buf.begin() + offset + opt_len);
@@ -977,12 +978,14 @@ initOptionSpace(OptionDefContainerPtr& defs,
             // Option does not encapsulate any option space.
             definition.reset(new OptionDefinition(params[i].name,
                                                   params[i].code,
+                                                  params[i].space,
                                                   params[i].type,
                                                   params[i].array));
         } else {
             // Option does encapsulate an option space.
             definition.reset(new OptionDefinition(params[i].name,
                                                   params[i].code,
+                                                  params[i].space,
                                                   params[i].type,
                                                   params[i].encapsulates));
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,9 +20,9 @@
 #include <config/config_log.h>
 #include <config/timeouts.h>
 #include <util/watch_socket.h>
-#include <boost/bind.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <array>
+#include <functional>
 #include <unistd.h>
 #include <sys/file.h>
 
@@ -30,6 +30,7 @@ using namespace isc;
 using namespace isc::asiolink;
 using namespace isc::config;
 using namespace isc::data;
+namespace ph = std::placeholders;
 
 namespace {
 
@@ -94,7 +95,7 @@ public:
 
     /// @brief This method schedules timer or reschedules existing timer.
     void scheduleTimer() {
-        timeout_timer_.setup(boost::bind(&Connection::timeoutHandler, this),
+        timeout_timer_.setup(std::bind(&Connection::timeoutHandler, this),
                              timeout_, IntervalTimer::ONE_SHOT);
     }
 
@@ -137,8 +138,8 @@ public:
     /// process received data.
     void doReceive() {
         socket_->asyncReceive(&buf_[0], sizeof(buf_),
-                              boost::bind(&Connection::receiveHandler,
-                                          shared_from_this(), _1, _2));
+                              std::bind(&Connection::receiveHandler,
+                                        shared_from_this(), ph::_1, ph::_2));
     }
 
     /// @brief Starts asynchronous send over the unix domain socket.
@@ -151,7 +152,7 @@ public:
     void doSend() {
         size_t chunk_size = (response_.size() < BUF_SIZE) ? response_.size() : BUF_SIZE;
         socket_->asyncSend(&response_[0], chunk_size,
-           boost::bind(&Connection::sendHandler, shared_from_this(), _1, _2));
+           std::bind(&Connection::sendHandler, shared_from_this(), ph::_1, ph::_2));
 
         // Asynchronous send has been scheduled and we need to indicate this
         // to break the synchronous select(). The handler should clear this
@@ -324,6 +325,7 @@ Connection::receiveHandler(const boost::system::error_code& ec,
     // Reschedule the timer because the transaction is ongoing.
     scheduleTimer();
 
+    ConstElementPtr cmd;
     ConstElementPtr rsp;
 
     try {
@@ -339,7 +341,7 @@ Connection::receiveHandler(const boost::system::error_code& ec,
 
         // Received entire command. Parse the command into JSON.
         if (feed_.feedOk()) {
-            ConstElementPtr cmd = feed_.toElement();
+            cmd = feed_.toElement();
             response_in_progress_ = true;
 
             // Cancel the timer to make sure that long lasting command
@@ -365,7 +367,8 @@ Connection::receiveHandler(const boost::system::error_code& ec,
 
     // No response generated. Connection will be closed.
     if (!rsp) {
-        LOG_WARN(command_logger, COMMAND_RESPONSE_ERROR);
+        LOG_WARN(command_logger, COMMAND_RESPONSE_ERROR)
+            .arg(cmd ? cmd->str() : "unknown");
         rsp = createAnswer(CONTROL_RESULT_ERROR,
                            "internal server error: no response generated");
 

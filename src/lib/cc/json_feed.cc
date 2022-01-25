@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,7 @@
 
 #include <cc/data.h>
 #include <cc/json_feed.h>
-#include <boost/bind.hpp>
+#include <functional>
 
 using namespace isc::data;
 using namespace isc::util;
@@ -18,10 +18,18 @@ namespace config {
 
 const int JSONFeed::RECEIVE_START_ST;
 const int JSONFeed::WHITESPACE_BEFORE_JSON_ST;
+const int JSONFeed::EOL_COMMENT_BEFORE_JSON_ST;
+const int JSONFeed::START_COMMENT_BEFORE_JSON_ST;
+const int JSONFeed::C_COMMENT_BEFORE_JSON_ST;
+const int JSONFeed::STOP_COMMENT_BEFORE_JSON_ST;
 const int JSONFeed::JSON_START_ST;
 const int JSONFeed::INNER_JSON_ST;
 const int JSONFeed::STRING_JSON_ST;
 const int JSONFeed::ESCAPE_JSON_ST;
+const int JSONFeed::EOL_COMMENT_ST;
+const int JSONFeed::START_COMMENT_ST;
+const int JSONFeed::C_COMMENT_ST;
+const int JSONFeed::STOP_COMMENT_ST;
 const int JSONFeed::JSON_END_ST;
 const int JSONFeed::FEED_OK_ST;
 const int JSONFeed::FEED_FAILED_ST;
@@ -135,17 +143,33 @@ JSONFeed::defineStates() {
     StateModel::defineStates();
 
     defineState(RECEIVE_START_ST, "RECEIVE_START_ST",
-                boost::bind(&JSONFeed::receiveStartHandler, this));
+                std::bind(&JSONFeed::receiveStartHandler, this));
     defineState(WHITESPACE_BEFORE_JSON_ST, "WHITESPACE_BEFORE_JSON_ST",
-                boost::bind(&JSONFeed::whiteSpaceBeforeJSONHandler, this));
+                std::bind(&JSONFeed::whiteSpaceBeforeJSONHandler, this));
+    defineState(EOL_COMMENT_BEFORE_JSON_ST, "EOL_COMMENT_BEFORE_JSON_ST",
+                std::bind(&JSONFeed::eolCommentBeforeJSONHandler, this));
+    defineState(START_COMMENT_BEFORE_JSON_ST, "START_COMMENT_BEFORE_JSON_ST",
+                std::bind(&JSONFeed::startCommentBeforeJSONHandler, this));
+    defineState(C_COMMENT_BEFORE_JSON_ST, "C_COMMENT_BEFORE_JSON_ST",
+                std::bind(&JSONFeed::cCommentBeforeJSONHandler, this));
+    defineState(STOP_COMMENT_BEFORE_JSON_ST, "STOP_COMMENT_BEFORE_JSON_ST",
+                std::bind(&JSONFeed::stopCommentBeforeJSONHandler, this));
     defineState(INNER_JSON_ST, "INNER_JSON_ST",
-                boost::bind(&JSONFeed::innerJSONHandler, this));
+                std::bind(&JSONFeed::innerJSONHandler, this));
     defineState(STRING_JSON_ST, "STRING_JSON_ST",
-                boost::bind(&JSONFeed::stringJSONHandler, this));
+                std::bind(&JSONFeed::stringJSONHandler, this));
     defineState(ESCAPE_JSON_ST, "ESCAPE_JSON_ST",
-                boost::bind(&JSONFeed::escapeJSONHandler, this));
+                std::bind(&JSONFeed::escapeJSONHandler, this));
+    defineState(EOL_COMMENT_ST, "EOL_COMMENT_ST",
+                std::bind(&JSONFeed::eolCommentHandler, this));
+    defineState(START_COMMENT_ST, "START_COMMENT_ST",
+                std::bind(&JSONFeed::startCommentHandler, this));
+    defineState(C_COMMENT_ST, "C_COMMENT_ST",
+                std::bind(&JSONFeed::cCommentHandler, this));
+    defineState(STOP_COMMENT_ST, "STOP_COMMENT_ST",
+                std::bind(&JSONFeed::stopCommentHandler, this));
     defineState(JSON_END_ST, "JSON_END_ST",
-                boost::bind(&JSONFeed::endJSONHandler, this));
+                std::bind(&JSONFeed::endJSONHandler, this));
 }
 
 void
@@ -210,8 +234,8 @@ JSONFeed::getNextFromBuffer() {
 void
 JSONFeed::invalidEventError(const std::string& handler_name,
                             const unsigned int event) {
-    isc_throw(JSONFeedError, handler_name << ": "
-              << " invalid event " << getEventLabel(static_cast<int>(event)));
+    isc_throw(JSONFeedError, handler_name << ": invalid event "
+                                 << getEventLabel(static_cast<int>(event)));
 }
 
 void
@@ -226,6 +250,14 @@ JSONFeed::receiveStartHandler() {
             case '\r':
             case ' ':
                 transition(WHITESPACE_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+                return;
+
+            case '#':
+                transition(EOL_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+                return;
+
+            case '/':
+                transition(START_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
                 return;
 
             case '{':
@@ -261,6 +293,14 @@ JSONFeed::whiteSpaceBeforeJSONHandler() {
             transition(getCurrState(), DATA_READ_OK_EVT);
             break;
 
+        case '#':
+            transition(EOL_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            return;
+
+        case '/':
+            transition(START_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            return;
+
         case '{':
         case '[':
             output_.push_back(c);
@@ -277,20 +317,91 @@ JSONFeed::whiteSpaceBeforeJSONHandler() {
 }
 
 void
+JSONFeed::eolCommentBeforeJSONHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '\n':
+            transition(WHITESPACE_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            break;
+
+        default:
+            postNextEvent(DATA_READ_OK_EVT);
+            break;
+        }
+    }
+}
+
+void
+JSONFeed::startCommentBeforeJSONHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '/':
+            transition(EOL_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            break;
+
+        case '*':
+            transition(C_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            break;
+
+        default:
+            feedFailure("invalid characters /" + std::string(1, c));
+        }
+    }
+}
+
+void
+JSONFeed::cCommentBeforeJSONHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '*':
+            transition(STOP_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            break;
+
+        default:
+            postNextEvent(DATA_READ_OK_EVT);
+            break;
+        }
+    }
+}
+
+void
+JSONFeed::stopCommentBeforeJSONHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '/':
+            transition(WHITESPACE_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            break;
+
+        case '*':
+            transition(getCurrState(), DATA_READ_OK_EVT);
+            break;
+
+        default:
+            transition(C_COMMENT_BEFORE_JSON_ST, DATA_READ_OK_EVT);
+            break;
+        }
+    }
+}
+
+void
 JSONFeed::innerJSONHandler() {
     char c = getNextFromBuffer();
     if (getNextEvent() != NEED_MORE_DATA_EVT) {
-        output_.push_back(c);
-
         switch(c) {
         case '{':
         case '[':
+            output_.push_back(c);
             transition(getCurrState(), DATA_READ_OK_EVT);
             ++open_scopes_;
             break;
 
         case '}':
         case ']':
+            output_.push_back(c);
             if (--open_scopes_ == 0) {
                 transition(JSON_END_ST, FEED_OK_EVT);
 
@@ -300,10 +411,20 @@ JSONFeed::innerJSONHandler() {
             break;
 
         case '"':
+            output_.push_back(c);
             transition(STRING_JSON_ST, DATA_READ_OK_EVT);
             break;
 
+        case '#':
+            transition(EOL_COMMENT_ST, DATA_READ_OK_EVT);
+            break;
+
+        case '/':
+            transition(START_COMMENT_ST, DATA_READ_OK_EVT);
+            break;
+
         default:
+            output_.push_back(c);
             postNextEvent(DATA_READ_OK_EVT);
         }
     }
@@ -341,6 +462,88 @@ JSONFeed::escapeJSONHandler() {
 }
 
 void
+JSONFeed::eolCommentHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '\n':
+            output_.push_back(c);
+            transition(INNER_JSON_ST, DATA_READ_OK_EVT);
+            break;
+
+        default:
+            postNextEvent(DATA_READ_OK_EVT);
+            break;
+        }
+    }
+}
+
+void
+JSONFeed::startCommentHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '/':
+            transition(EOL_COMMENT_ST, DATA_READ_OK_EVT);
+            break;
+
+        case '*':
+            transition(C_COMMENT_ST, DATA_READ_OK_EVT);
+            break;
+
+        default:
+            feedFailure("invalid characters /" + std::string(1, c));
+        }
+    }
+}
+
+void
+JSONFeed::cCommentHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '*':
+            transition(STOP_COMMENT_ST, DATA_READ_OK_EVT);
+            break;
+
+        case '\n':
+            output_.push_back(c);
+            postNextEvent(DATA_READ_OK_EVT);
+            break;
+
+        default:
+            postNextEvent(DATA_READ_OK_EVT);
+            break;
+        }
+    }
+}
+
+void
+JSONFeed::stopCommentHandler() {
+    char c = getNextFromBuffer();
+    if (getNextEvent() != NEED_MORE_DATA_EVT) {
+        switch (c) {
+        case '/':
+            transition(INNER_JSON_ST, DATA_READ_OK_EVT);
+            break;
+
+        case '*':
+            transition(getCurrState(), DATA_READ_OK_EVT);
+            break;
+
+        case '\n':
+            output_.push_back(c);
+            transition(C_COMMENT_ST, DATA_READ_OK_EVT);
+            break;
+
+        default:
+            transition(C_COMMENT_ST, DATA_READ_OK_EVT);
+            break;
+        }
+    }
+}
+
+void
 JSONFeed::endJSONHandler() {
     switch (getNextEvent()) {
     case FEED_OK_EVT:
@@ -355,7 +558,6 @@ JSONFeed::endJSONHandler() {
         invalidEventError("endJSONHandler", getNextEvent());
     }
 }
-
 
 } // end of namespace config
 } // end of namespace isc

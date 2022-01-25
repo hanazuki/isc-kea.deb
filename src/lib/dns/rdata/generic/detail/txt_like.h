@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2015,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -39,7 +39,7 @@ public:
     /// <b>Exceptions</b>
     ///
     /// \c InvalidRdataLength is thrown if rdata_len exceeds the maximum.
-    /// \c DNSMessageFORMERR is thrown if the RR is misformed.
+    /// \c DNSMessageFORMERR is thrown if the RR is malformed.
     TXTLikeImpl(util::InputBuffer& buffer, size_t rdata_len) {
         if (rdata_len > MAX_RDLENGTH) {
             isc_throw(InvalidRdataLength, "RDLENGTH too large: " << rdata_len);

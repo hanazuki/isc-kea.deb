@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/eval/eval_messages.mes on Fri Jun 14 2019 20:35
+// File created from ../../../src/lib/eval/eval_messages.mes
 
 #ifndef EVAL_MESSAGES_H
 #define EVAL_MESSAGES_H
@@ -14,7 +14,11 @@ extern const isc::log::MessageID EVAL_DEBUG_EQUAL;
 extern const isc::log::MessageID EVAL_DEBUG_HEXSTRING;
 extern const isc::log::MessageID EVAL_DEBUG_IFELSE_FALSE;
 extern const isc::log::MessageID EVAL_DEBUG_IFELSE_TRUE;
+extern const isc::log::MessageID EVAL_DEBUG_INT16TOTEXT;
+extern const isc::log::MessageID EVAL_DEBUG_INT32TOTEXT;
+extern const isc::log::MessageID EVAL_DEBUG_INT8TOTEXT;
 extern const isc::log::MessageID EVAL_DEBUG_IPADDRESS;
+extern const isc::log::MessageID EVAL_DEBUG_IPADDRESSTOTEXT;
 extern const isc::log::MessageID EVAL_DEBUG_MEMBER;
 extern const isc::log::MessageID EVAL_DEBUG_NOT;
 extern const isc::log::MessageID EVAL_DEBUG_OPTION;
@@ -31,6 +35,9 @@ extern const isc::log::MessageID EVAL_DEBUG_SUBSTRING_RANGE;
 extern const isc::log::MessageID EVAL_DEBUG_SUB_OPTION;
 extern const isc::log::MessageID EVAL_DEBUG_SUB_OPTION_NO_OPTION;
 extern const isc::log::MessageID EVAL_DEBUG_TOHEXSTRING;
+extern const isc::log::MessageID EVAL_DEBUG_UINT16TOTEXT;
+extern const isc::log::MessageID EVAL_DEBUG_UINT32TOTEXT;
+extern const isc::log::MessageID EVAL_DEBUG_UINT8TOTEXT;
 extern const isc::log::MessageID EVAL_DEBUG_VENDOR_CLASS_DATA;
 extern const isc::log::MessageID EVAL_DEBUG_VENDOR_CLASS_DATA_NOT_FOUND;
 extern const isc::log::MessageID EVAL_DEBUG_VENDOR_CLASS_ENTERPRISE_ID;

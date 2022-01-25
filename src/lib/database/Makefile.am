@@ -6,7 +6,7 @@ AM_CPPFLAGS += $(BOOST_INCLUDES)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
 # Ensure that the message file is included in the distribution
-EXTRA_DIST = db_messages.mes
+EXTRA_DIST = database.dox db_messages.mes
 
 CLEANFILES = *.gcno *.gcda
 
@@ -29,7 +29,7 @@ libkea_database_la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_database_la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_database_la_LIBADD += $(LOG4CPLUS_LIBS) $(BOOST_LIBS)
 
-libkea_database_la_LDFLAGS = -no-undefined -version-info 5:1:1
+libkea_database_la_LDFLAGS = -no-undefined -version-info 23:0:0
 
 # If we want to get rid of all generated messages files, we need to use
 # make maintainer-clean. The proper way to introduce custom commands for

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2015,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -59,7 +59,7 @@ class Iface;
 /// on sockets must be simulated.
 ///
 /// @note This class is named after @c PktFilter abstract class which exposes
-/// similar interface for DHVPv4. However, the PktFilter class is devoted to
+/// similar interface for DHCPv4. However, the PktFilter class is devoted to
 /// solve the problem of sending DHCPv4 messages to the hosts which don't have
 /// an IP address yet (a.k.a. direct DHCPv4 traffic). Where required, the
 /// custom implementations of @c PktFilter are provided to send and receive

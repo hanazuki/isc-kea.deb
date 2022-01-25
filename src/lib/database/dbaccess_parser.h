@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,7 +20,7 @@ namespace db {
 /// @brief Parse Database Parameters
 ///
 /// This class is the parser for the database configuration.  This is a
-/// map under the top-level "lease-database", "host-database" and
+/// map under the top-level "lease-database", "hosts-database" and
 /// "config-database" elements, and comprises a map of strings.
 class DbAccessParser: public isc::data::SimpleParser {
 public:
@@ -60,7 +60,7 @@ public:
     ///
     /// @return Reference to the internal map of keyword/value pairs
     ///         representing database access information.  This is valid only
-    ///         for so long as the the parser remains in existence.
+    ///         for so long as the parser remains in existence.
     const DatabaseConnection::ParameterMap& getDbAccessParameters() const {
         return (values_);
     }

@@ -2,8 +2,6 @@ ACLOCAL_AMFLAGS = -I m4macros ${ACLOCAL_FLAGS}
 # ^^^^^^^^ This has to be the first line and cannot come later in this
 # Makefile.am due to some bork in some versions of autotools.
 
-# We now build doc after src/, because docgen, a tool to generate API
-# documentation requires libkea-exceptions and libkea-cc.
 SUBDIRS = tools . ext src doc m4macros @PREMIUM_DIR@ @CONTRIB_DIR@
 
 USE_LCOV=@USE_LCOV@
@@ -17,7 +15,6 @@ DISTCHECK_PERFDHCP_CONFIGURE_FLAG=@DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG=@DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG=@DISTCHECK_PREMIUM_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG=@DISTCHECK_CONTRIB_CONFIGURE_FLAG@
-DISTCHECK_SYSREPO_CONFIGURE_FLAG=@DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 
 OVERALL_COVERAGE_DIR=$(abs_top_builddir)/coverage-cpp-html
 
@@ -50,10 +47,7 @@ DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_PREMIUM_CONFIGURE_FLAG)
 # Keep the contrib config
 DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_CONTRIB_CONFIGURE_FLAG)
 
-# keerp the sysrepo config
-DISTCHECK_CONFIGURE_FLAGS += $(DISTCHECK_SYSREPO_CONFIGURE_FLAG)
-
-dist_doc_DATA = AUTHORS COPYING ChangeLog README CONTRIBUTING.md
+dist_doc_DATA = AUTHORS COPYING ChangeLog README CONTRIBUTING.md platforms.rst code_of_conduct.md
 
 .PHONY: check-valgrind check-valgrind-suppress
 
@@ -146,7 +140,7 @@ cppcheck:
 		--template '{file}:{line}: check_fail: {message} ({severity},{id})' \
 		src
 
-# this is a shortcut that builds only documentation dependecies and documentation itself
+# this is a shortcut that builds only documentation dependencies and documentation itself
 docs:
 	$(MAKE) -C doc/sphinx
 

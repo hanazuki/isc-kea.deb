@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -163,7 +163,7 @@ VersionedCSVFile::next(CSVRow& row) {
         case NEEDS_DOWNGRADE:
             // The input header exceeded current schema so:
             // Rows may be as long as input header but not shorter than
-            // the the current schema
+            // the current schema
             if (row.getValuesCount() < getColumnCount()) {
                 columnCountError(row, "too few columns to downgrade");
             } else if (row.getValuesCount() > getInputHeaderCount()) {

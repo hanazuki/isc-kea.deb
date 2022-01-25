@@ -1,4 +1,4 @@
-// Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -29,8 +29,8 @@ parseJSON(const std::string& in)
     return (ctx.parseString(in, isc::d2::D2ParserContext::PARSER_JSON));
 }
 
-};
-};
-};
+}
+}
+}
 
 #endif // PARSER_UNITTEST_H

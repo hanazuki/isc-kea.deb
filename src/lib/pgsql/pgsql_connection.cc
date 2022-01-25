@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -121,7 +121,7 @@ PgSqlConnection::~PgSqlConnection() {
         // Deallocate the prepared queries.
         if (PQstatus(conn_) == CONNECTION_OK) {
             PgSqlResult r(PQexec(conn_, "DEALLOCATE all"));
-            if(PQresultStatus(r) != PGRES_COMMAND_OK) {
+            if (PQresultStatus(r) != PGRES_COMMAND_OK) {
                 // Highly unlikely but we'll log it and go on.
                 DB_LOG_ERROR(PGSQL_DEALLOC_ERROR)
                     .arg(PQerrorMessage(conn_));
@@ -159,7 +159,7 @@ PgSqlConnection::prepareStatement(const PgSqlTaggedStatement& statement) {
     // Prepare all statements queries with all known fields datatype
     PgSqlResult r(PQprepare(conn_, statement.name, statement.text,
                             statement.nbparams, statement.types));
-    if(PQresultStatus(r) != PGRES_COMMAND_OK) {
+    if (PQresultStatus(r) != PGRES_COMMAND_OK) {
         isc_throw(DbOperationError, "unable to prepare PostgreSQL statement: "
                   << statement.text << ", reason: " << PQerrorMessage(conn_));
     }
@@ -316,7 +316,7 @@ PgSqlConnection::compareError(const PgSqlResult& r, const char* error_state) {
 
 void
 PgSqlConnection::checkStatementError(const PgSqlResult& r,
-                                     PgSqlTaggedStatement& statement) const {
+                                     PgSqlTaggedStatement& statement) {
     int s = PQresultStatus(r);
     if (s != PGRES_COMMAND_OK && s != PGRES_TUPLES_OK) {
         // We're testing the first two chars of SQLSTATE, as this is the
@@ -324,7 +324,7 @@ PgSqlConnection::checkStatementError(const PgSqlResult& r,
         // misleadingly returned as fatal. However, a loss of connectivity
         // can lead to a NULL sqlstate with a status of PGRES_FATAL_ERROR.
         const char* sqlstate = PQresultErrorField(r, PG_DIAG_SQLSTATE);
-        if  ((sqlstate == NULL) ||
+        if ((sqlstate == NULL) ||
             ((memcmp(sqlstate, "08", 2) == 0) ||  // Connection Exception
              (memcmp(sqlstate, "53", 2) == 0) ||  // Insufficient resources
              (memcmp(sqlstate, "54", 2) == 0) ||  // Program Limit exceeded
@@ -335,31 +335,31 @@ PgSqlConnection::checkStatementError(const PgSqlResult& r,
                 .arg(PQerrorMessage(conn_))
                 .arg(sqlstate ? sqlstate : "<sqlstate null>");
 
-            // If there's no lost db callback or it returns false,
-            // then we're not attempting to recover so we're done.
-            if (!invokeDbLostCallback()) {
-                isc_throw(db::DbUnrecoverableError,
-                          "database connectivity cannot be recovered");
-            }
+            // Mark this connection as no longer usable.
+            markUnusable();
+
+            // Start the connection recovery.
+            startRecoverDbConnection();
 
             // We still need to throw so caller can error out of the current
             // processing.
-            isc_throw(DbOperationError,
+            isc_throw(DbConnectionUnusable,
                       "fatal database error or connectivity lost");
         }
 
         // Apparently it wasn't fatal, so we throw with a helpful message.
         const char* error_message = PQerrorMessage(conn_);
-        isc_throw(DbOperationError, "Statement exec failed:" << " for: "
-                << statement.name << ", status: " << s
-                << "sqlstate:[ " << (sqlstate ? sqlstate : "<null>")
-                <<  "], reason: " << error_message);
+        isc_throw(DbOperationError, "Statement exec failed for: "
+                  << statement.name << ", status: " << s
+                  << "sqlstate:[ " << (sqlstate ? sqlstate : "<null>")
+                  << " ], reason: " << error_message);
     }
 }
 
 void
 PgSqlConnection::startTransaction() {
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, PGSQL_START_TRANSACTION);
+    checkUnusable();
     PgSqlResult r(PQexec(conn_, "START TRANSACTION"));
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
         const char* error_message = PQerrorMessage(conn_);
@@ -371,6 +371,7 @@ PgSqlConnection::startTransaction() {
 void
 PgSqlConnection::commit() {
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, PGSQL_COMMIT);
+    checkUnusable();
     PgSqlResult r(PQexec(conn_, "COMMIT"));
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
         const char* error_message = PQerrorMessage(conn_);
@@ -381,6 +382,7 @@ PgSqlConnection::commit() {
 void
 PgSqlConnection::rollback() {
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, PGSQL_ROLLBACK);
+    checkUnusable();
     PgSqlResult r(PQexec(conn_, "ROLLBACK"));
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
         const char* error_message = PQerrorMessage(conn_);
@@ -388,5 +390,5 @@ PgSqlConnection::rollback() {
     }
 }
 
-}; // end of isc::db namespace
-}; // end of isc namespace
+} // end of isc::db namespace
+} // end of isc namespace

@@ -1,4 +1,4 @@
-// File created from ../../../src/bin/netconf/netconf_messages.mes on Fri Feb 08 2019 20:57
+// File created from ../../../src/bin/netconf/netconf_messages.mes
 
 #ifndef NETCONF_MESSAGES_H
 #define NETCONF_MESSAGES_H
@@ -18,11 +18,11 @@ extern const isc::log::MessageID NETCONF_GET_CONFIG;
 extern const isc::log::MessageID NETCONF_GET_CONFIG_FAILED;
 extern const isc::log::MessageID NETCONF_GET_CONFIG_STARTED;
 extern const isc::log::MessageID NETCONF_LOG_CHANGE_FAIL;
-extern const isc::log::MessageID NETCONF_MODULE_INSTALL;
 extern const isc::log::MessageID NETCONF_MODULE_MISSING_ERR;
 extern const isc::log::MessageID NETCONF_MODULE_MISSING_WARN;
 extern const isc::log::MessageID NETCONF_MODULE_REVISION_ERR;
 extern const isc::log::MessageID NETCONF_MODULE_REVISION_WARN;
+extern const isc::log::MessageID NETCONF_NOTIFICATION_RECEIVED;
 extern const isc::log::MessageID NETCONF_RUN_EXIT;
 extern const isc::log::MessageID NETCONF_SET_CONFIG;
 extern const isc::log::MessageID NETCONF_SET_CONFIG_FAILED;
@@ -30,6 +30,8 @@ extern const isc::log::MessageID NETCONF_SET_CONFIG_STARTED;
 extern const isc::log::MessageID NETCONF_STARTED;
 extern const isc::log::MessageID NETCONF_SUBSCRIBE_CONFIG;
 extern const isc::log::MessageID NETCONF_SUBSCRIBE_CONFIG_FAILED;
+extern const isc::log::MessageID NETCONF_SUBSCRIBE_NOTIFICATIONS;
+extern const isc::log::MessageID NETCONF_SUBSCRIBE_NOTIFICATIONS_FAILED;
 extern const isc::log::MessageID NETCONF_UPDATE_CONFIG;
 extern const isc::log::MessageID NETCONF_UPDATE_CONFIG_COMPLETED;
 extern const isc::log::MessageID NETCONF_UPDATE_CONFIG_FAILED;

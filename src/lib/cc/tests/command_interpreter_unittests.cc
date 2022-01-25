@@ -1,4 +1,4 @@
-// Copyright (C) 2009-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2009-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,11 +7,13 @@
 #include <config.h>
 
 #include <gtest/gtest.h>
+
 #include <cc/command_interpreter.h>
 #include <config/tests/data_def_unittests_config.h>
 #include <log/logger_name.h>
+
 #include <boost/scoped_ptr.hpp>
-#include <boost/bind.hpp>
+
 #include <fstream>
 
 using namespace isc::data;

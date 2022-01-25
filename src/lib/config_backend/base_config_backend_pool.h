@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <cc/data.h>
 #include <config_backend/base_config_backend.h>
 #include <database/backend_selector.h>
+#include <database/database_connection.h>
 #include <database/db_exceptions.h>
 #include <database/server_selector.h>
 #include <functional>
@@ -63,7 +64,7 @@ public:
 
     /// @brief Deletes all backends of the given type from the pool.
     ///
-    /// @param db_type backend to remove
+    /// @param db_type Backend to remove.
     void delAllBackends(const std::string& db_type) {
         typename std::list<ConfigBackendTypePtr>::iterator backend = backends_.begin();
 
@@ -74,6 +75,40 @@ public:
                 ++backend;
             }
         }
+    }
+
+    /// @brief Deletes all backends of the given type from the pool.
+    ///
+    /// @param db_type Backend to remove.
+    /// @param dbaccess Database access string being a collection of
+    /// key=value pairs.
+    /// @param if_unusable Flag which indicates if the config backend should be
+    /// deleted only if it is unusable.
+    /// @return false when not removed because it is not found or because it is
+    /// still usable (if_unusable is true), true otherwise.
+    bool del(const std::string& db_type, const std::string& dbaccess,
+             bool if_unusable) {
+        isc::db::DatabaseConnection::ParameterMap parameters =
+            isc::db::DatabaseConnection::parse(dbaccess);
+        bool deleted = false;
+        if (if_unusable) {
+            deleted = true;
+        }
+
+        typename std::list<ConfigBackendTypePtr>::iterator backend = backends_.begin();
+
+        while (backend != backends_.end()) {
+            if ((*backend)->getType() != db_type || (*backend)->getParameters() != parameters) {
+                ++backend;
+            } else if (if_unusable && (!(*backend)->isUnusable())) {
+                deleted = false;
+                ++backend;
+            } else {
+                backends_.erase(backend);
+                return (true);
+            }
+        }
+        return (deleted);
     }
 
 protected:

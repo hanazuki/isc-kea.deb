@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -56,9 +56,11 @@ CtrlAgentProcess::run() {
             // Remove unused listeners within the main loop because new listeners
             // are created in within a callback method. This avoids removal the
             // listeners within a callback.
-            garbageCollectListeners();
+            garbageCollectListeners(1);
             runIO();
         }
+        // Done so removing all listeners.
+        garbageCollectListeners(0);
         stopIOService();
     } catch (const std::exception& ex) {
         LOG_FATAL(agent_logger, CTRL_AGENT_FAILED).arg(ex.what());
@@ -134,11 +136,25 @@ CtrlAgentProcess::configure(isc::data::ConstElementPtr config_set,
         }
 
         uint16_t server_port = ctx->getHttpPort();
+        bool use_https = false;
 
         // Only open a new listener if the configuration has changed.
         if (http_listeners_.empty() ||
             (http_listeners_.back()->getLocalAddress() != server_address) ||
             (http_listeners_.back()->getLocalPort() != server_port)) {
+            // Create a TLS context.
+            TlsContextPtr tls_context;
+            // When TLS is enabled configure it.
+            if (!ctx->getCertFile().empty()) {
+                TlsContext::configure(tls_context,
+                                      TlsRole::SERVER,
+                                      ctx->getTrustAnchor(),
+                                      ctx->getCertFile(),
+                                      ctx->getKeyFile(),
+                                      ctx->getCertRequired());
+                use_https = true;
+            }
+
             // Create response creator factory first. It will be used to
             // generate response creators. Each response creator will be
             // used to generate answer to specific request.
@@ -148,7 +164,7 @@ CtrlAgentProcess::configure(isc::data::ConstElementPtr config_set,
             // prepared to accept incoming connection.
             HttpListenerPtr http_listener
                 (new HttpListener(*getIoService(), server_address,
-                                  server_port, rcf,
+                                  server_port, tls_context, rcf,
                                   HttpListener::RequestTimeout(TIMEOUT_AGENT_RECEIVE_COMMAND),
                                   HttpListener::IdleTimeout(TIMEOUT_AGENT_IDLE_CONNECTION_TIMEOUT)));
 
@@ -163,9 +179,13 @@ CtrlAgentProcess::configure(isc::data::ConstElementPtr config_set,
         }
 
         // Ok, seems we're good to go.
-        LOG_INFO(agent_logger, CTRL_AGENT_HTTP_SERVICE_STARTED)
-            .arg(server_address.toText()).arg(server_port);
-
+        if (use_https) {
+          LOG_INFO(agent_logger, CTRL_AGENT_HTTPS_SERVICE_STARTED)
+              .arg(server_address.toText()).arg(server_port);
+        } else {
+            LOG_INFO(agent_logger, CTRL_AGENT_HTTP_SERVICE_STARTED)
+                .arg(server_address.toText()).arg(server_port);
+        }
     });
 
     int rcode = 0;
@@ -174,13 +194,14 @@ CtrlAgentProcess::configure(isc::data::ConstElementPtr config_set,
 }
 
 void
-CtrlAgentProcess::garbageCollectListeners() {
+CtrlAgentProcess::garbageCollectListeners(size_t leaving) {
     // We expect only one active listener. If there are more (most likely 2),
     // it means we have just reconfigured the server and need to shut down all
     // listeners execept the most recently added.
-    if (http_listeners_.size() > 1) {
+    if (http_listeners_.size() > leaving) {
         // Stop no longer used listeners.
-        for (auto l = http_listeners_.begin(); l != http_listeners_.end() - 1;
+        for (auto l = http_listeners_.begin();
+             l != http_listeners_.end() - leaving;
              ++l) {
             (*l)->stop();
         }
@@ -189,7 +210,7 @@ CtrlAgentProcess::garbageCollectListeners() {
         getIoService()->get_io_service().poll();
         // Finally, we're ready to remove no longer used listeners.
         http_listeners_.erase(http_listeners_.begin(),
-                              http_listeners_.end() - 1);
+                              http_listeners_.end() - leaving);
     }
 }
 

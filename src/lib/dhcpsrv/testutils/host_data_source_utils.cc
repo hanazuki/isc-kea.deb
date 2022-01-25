@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -58,12 +58,13 @@ HostDataSourceUtils::generateIdentifier(const bool new_identifier) {
 
 HostPtr
 HostDataSourceUtils::initializeHost4(const std::string& address,
-                                     const Host::IdentifierType& id) {
+                                     const Host::IdentifierType& id,
+                                     const bool new_identifier) {
     std::vector<uint8_t> ident;
     if (id == Host::IDENT_HWADDR) {
-        ident = generateHWAddr();
+        ident = generateHWAddr(new_identifier);
     } else {
-        ident = generateIdentifier();
+        ident = generateIdentifier(new_identifier);
     }
 
     // Let's create ever increasing subnet-ids. Let's keep those different,
@@ -209,6 +210,8 @@ HostDataSourceUtils::compareDuids(const ConstHostPtr& host1,
 void
 HostDataSourceUtils::compareHosts(const ConstHostPtr& host1,
                                   const ConstHostPtr& host2) {
+    ASSERT_TRUE(host1);
+    ASSERT_TRUE(host2);
     // Let's compare HW addresses and expect match.
     compareHwaddrs(host1, host2, true);
 

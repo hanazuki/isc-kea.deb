@@ -1,5 +1,6 @@
 #!/bin/sh
-# Copyright (C) 2011-2016 Internet Systems Consortium, Inc. ("ISC")
+
+# Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,52 +9,46 @@
 # The logger supports the idea of a "console" logger than logs to either stdout
 # or stderr.  This test checks that both these options work.
 
-testname="Console output test"
-echo $testname
+# Exit with error if commands exit with non-zero and if undefined variables are
+# used.
+set -eu
 
-failcount=0
-tempfile=@abs_builddir@/console_test_tempfile_$$
+# Include common test library.
+# shellcheck disable=SC1091
+# SC1091: Not following: ... was not specified as input (see shellcheck -x).
+. "@abs_top_builddir@/src/lib/testutils/dhcp_test_lib.sh"
+
+tempfile="@abs_builddir@/console_test_tempfile_$$"
 
 # Look at tempfile and check that the count equals the expected count
 passfail() {
-    count=`wc -l $tempfile | awk '{print $1}'`
-    if [ $count -eq $1 ]; then
-        echo " pass"
+    count=$(wc -l $tempfile | awk '{print $1}')
+    if [ "${count}" -eq "${1}" ]; then
+        test_finish 0
     else
-        echo " FAIL"
-        failcount=`expr $failcount + $1`
+        test_finish 1
     fi
 }
 
-echo -n "1. Checking that console output to stdout goes to stdout:"
+test_start 'console-output.stdout'
 rm -f $tempfile
 ./logger_example -c stdout -s error 1> $tempfile 2> /dev/null
 passfail 4
 
-echo -n "2. Checking that console output to stdout does not go to stderr:"
+test_start 'console-output.stdout-not-stderr'
 rm -f $tempfile
 ./logger_example -c stdout -s error 1> /dev/null 2> $tempfile
 passfail 0
 
-echo -n "3. Checking that console output to stderr goes to stderr:"
+test_start 'console-output.stderr'
 rm -f $tempfile
 ./logger_example -c stderr -s error 1> /dev/null 2> $tempfile
 passfail 4
 
-echo -n "4. Checking that console output to stderr does not go to stdout:"
+test_start 'console-output.stderr-not-stdout'
 rm -f $tempfile
 ./logger_example -c stderr -s error 1> $tempfile 2> /dev/null
 passfail 0
 
-if [ $failcount -eq 0 ]; then
-    echo "PASS: $testname"
-elif [ $failcount -eq 1 ]; then
-    echo "FAIL: $testname - 1 test failed"
-else
-    echo "FAIL: $testname - $failcount tests failed"
-fi
-
 # Tidy up
 rm -f $tempfile
-
-exit $failcount

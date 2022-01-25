@@ -1,4 +1,4 @@
-// Copyright (C) 2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,6 +20,13 @@ const char* TESTNAME = "pid_file.test";
 
 class PIDFileTest : public ::testing::Test {
 public:
+
+    /// @brief Constructor
+    PIDFileTest() = default;
+
+    /// @brief Destructor
+    virtual ~PIDFileTest() = default;
+
     /// @brief Prepends the absolute path to the file specified
     /// as an argument.
     ///

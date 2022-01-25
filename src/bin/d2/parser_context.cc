@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,6 +19,10 @@ namespace d2 {
 
 D2ParserContext::D2ParserContext()
   : sfile_(0), ctx_(NO_KEYWORD), trace_scanning_(false), trace_parsing_(false)
+{
+}
+
+D2ParserContext::~D2ParserContext()
 {
 }
 
@@ -64,11 +68,16 @@ D2ParserContext::parseCommon() {
     }
 }
 
-
 void
-D2ParserContext::error(const isc::d2::location& loc, const std::string& what)
+D2ParserContext::error(const isc::d2::location& loc,
+                       const std::string& what,
+                       size_t pos)
 {
-    isc_throw(D2ParseError, loc << ": " << what);
+    if (pos == 0) {
+        isc_throw(D2ParseError, loc << ": " << what);
+    } else {
+        isc_throw(D2ParseError, loc << " (near " << pos << "): " << what);
+    }
 }
 
 void
@@ -90,6 +99,39 @@ D2ParserContext::loc2pos(isc::d2::location& loc)
     const uint32_t line = loc.begin.line;
     const uint32_t pos = loc.begin.column;
     return (isc::data::Element::Position(file, line, pos));
+}
+
+void
+D2ParserContext::require(const std::string& name,
+                         isc::data::Element::Position open_loc,
+                         isc::data::Element::Position close_loc)
+{
+    ConstElementPtr value = stack_.back()->get(name);
+    if (!value) {
+        isc_throw(D2ParseError,
+                  "missing parameter '" << name << "' ("
+                  << stack_.back()->getPosition() << ") ["
+                  << contextName() << " map between "
+                  << open_loc << " and " << close_loc << "]");
+    }
+}
+
+void
+D2ParserContext::unique(const std::string& name,
+                        isc::data::Element::Position loc)
+{
+    ConstElementPtr value = stack_.back()->get(name);
+    if (value) {
+        if (ctx_ != NO_KEYWORD) {
+            isc_throw(D2ParseError, loc << ": duplicate " << name
+                      << " entries in " << contextName()
+                      << " map (previous at " << value->getPosition() << ")");
+        } else {
+            isc_throw(D2ParseError, loc << ": duplicate " << name
+                      << " entries in JSON"
+                  << " map (previous at " << value->getPosition() << ")");
+        }
+    }
 }
 
 void
@@ -144,8 +186,6 @@ D2ParserContext::contextName()
         return("dns-servers");
     case CONTROL_SOCKET:
         return("control-socket");
-    case LOGGING:
-        return ("Logging");
     case LOGGERS:
         return ("loggers");
     case OUTPUT_OPTIONS:
@@ -154,10 +194,12 @@ D2ParserContext::contextName()
         return ("ncr-protocol");
     case NCR_FORMAT:
         return ("ncr-format");
+    case HOOKS_LIBRARIES:
+        return ("hooks-libraries");
     default:
         return ("__unknown__");
     }
 }
 
-};
-};
+}
+}

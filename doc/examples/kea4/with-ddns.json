@@ -10,7 +10,7 @@
     "interfaces": [ "ethX" ]
   },
 
-// We need to specify the the database used to store leases. As of
+// We need to specify the database used to store leases. As of
 // September 2016, four database backends are supported: MySQL,
 // PostgreSQL, Cassandra, and the in-memory database, Memfile.
 // We'll use memfile  because it doesn't require any prior set up.
@@ -59,6 +59,8 @@
   "ddns-replace-client-name" : "when-present",
   "ddns-generated-prefix" : "test.prefix",
   "ddns-qualifying-suffix" : "test.suffix.",
+  "ddns-update-on-renew" : false,
+  "ddns-use-conflict-resolution" : true,
   "hostname-char-set": "[^A-Za-z0-9.-]",
   "hostname-char-replacement": "x",
 

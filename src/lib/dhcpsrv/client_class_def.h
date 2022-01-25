@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,9 +8,11 @@
 #define CLIENT_CLASS_DEF_H
 
 #include <cc/cfg_to_element.h>
+#include <cc/stamped_element.h>
 #include <cc/user_context.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/cfg_option_def.h>
+#include <dhcpsrv/triplet.h>
 #include <eval/token.h>
 #include <exceptions/exceptions.h>
 
@@ -43,7 +45,9 @@ public:
 };
 
 /// @brief Embodies a single client class definition
-class ClientClassDef : public data::UserContext, public isc::data::CfgToElement {
+class ClientClassDef : public data::UserContext,
+                       public data::CfgToElement,
+                       public data::StampedElement {
 public:
     /// @brief Constructor
     ///
@@ -190,6 +194,34 @@ public:
         return (filename_);
     }
 
+    /// @brief Return valid-lifetime value
+    ///
+    /// @return a triplet containing the valid lifetime.
+    Triplet<uint32_t> getValid() const {
+        return (valid_);
+    }
+
+    /// @brief Sets new valid lifetime
+    ///
+    /// @param valid New valid lifetime in seconds.
+    void setValid(const Triplet<uint32_t>& valid) {
+        valid_ = valid;
+    }
+
+    /// @brief Return preferred-lifetime value
+    ///
+    /// @return a triplet containing the preferred lifetime.
+    Triplet<uint32_t> getPreferred() const {
+        return (preferred_);
+    }
+
+    /// @brief Sets new preferred lifetime
+    ///
+    /// @param preferred New valid lifetime in seconds.
+    void setPreferred(const Triplet<uint32_t>& preferred) {
+        preferred_ = preferred;
+    }
+
     /// @brief Unparse a configuration object
     ///
     /// @return a pointer to unparsed configuration
@@ -246,6 +278,11 @@ private:
     /// This can be up to 128 octets long.
     std::string filename_;
 
+    /// @brief a Triplet (min/default/max) holding allowed valid lifetime values
+    Triplet<uint32_t> valid_;
+
+    /// @brief a Triplet (min/default/max) holding allowed preferred lifetime values
+    Triplet<uint32_t> preferred_;
 };
 
 /// @brief a pointer to an ClientClassDef
@@ -288,6 +325,8 @@ public:
     /// @param next_server next-server value for this class (optional)
     /// @param sname server-name value for this class (optional)
     /// @param filename boot-file-name value for this class (optional)
+    /// @param valid valid-lifetime triplet (optional)
+    /// @param preferred preferred-lifetime triplet (optional)
     ///
     /// @throw DuplicateClientClassDef if class already exists within the
     /// dictionary.  See @ref dhcp::ClientClassDef::ClientClassDef() for
@@ -299,7 +338,9 @@ public:
                   isc::data::ConstElementPtr user_context = isc::data::ConstElementPtr(),
                   asiolink::IOAddress next_server = asiolink::IOAddress("0.0.0.0"),
                   const std::string& sname = std::string(),
-                  const std::string& filename = std::string());
+                  const std::string& filename = std::string(),
+                  const Triplet<uint32_t>&valid = Triplet<uint32_t>(),
+                  const Triplet<uint32_t>&preferred = Triplet<uint32_t>());
 
     /// @brief Adds a new class to the list
     ///
@@ -325,10 +366,20 @@ public:
     /// @param name the name of the class to remove
     void removeClass(const std::string& name);
 
+    /// @brief Removes a client class by id.
+    ///
+    /// @param id class id.
+    void removeClass(const uint64_t id);
+
     /// @brief Fetches the dictionary's list of classes
     ///
     /// @return ClientClassDefListPtr to the list of classes
     const ClientClassDefListPtr& getClasses() const;
+
+    /// @brief Checks if the class dictionary is empty.
+    ///
+    /// @return true if there are no classes, false otherwise.
+    bool empty() const;
 
     /// @brief Checks direct dependency.
     ///
@@ -345,6 +396,12 @@ public:
     ///
     /// @return true if descriptors equal, false otherwise.
     bool equals(const ClientClassDictionary& other) const;
+
+    /// @brief Iterates over the classes in the dictionary and ensures that
+    /// that match expressions are initialized.
+    ///
+    /// @param family Class universe, e.g. AF_INET or AF_INET6.
+    void initMatchExpr(uint16_t family);
 
     /// @brief Equality operator.
     ///
@@ -363,6 +420,12 @@ public:
     bool operator!=(const ClientClassDictionary& other) const {
         return (!equals(other));
     }
+
+    /// @brief Copy assignment operator.
+    ///
+    /// @param rhs Client class dictionary to be copied from.
+    /// @return Instance copy.
+    ClientClassDictionary& operator=(const ClientClassDictionary& rhs);
 
     /// @brief Unparse a configuration object
     ///

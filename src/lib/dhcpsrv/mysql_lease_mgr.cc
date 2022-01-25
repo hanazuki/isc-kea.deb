@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,8 +9,12 @@
 #include <asiolink/io_address.h>
 #include <dhcp/duid.h>
 #include <dhcp/hwaddr.h>
+#include <dhcpsrv/cfg_db_access.h>
+#include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/dhcpsrv_log.h>
+#include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/mysql_lease_mgr.h>
+#include <dhcpsrv/timer_mgr.h>
 #include <mysql/mysql_connection.h>
 #include <util/multi_threading_mgr.h>
 
@@ -1425,8 +1429,9 @@ public:
             valid_lft = 0;
         }
         MySqlConnection::convertFromDatabaseTime(expire_, valid_lft, cltt);
+        // Update cltt_ and current_cltt_ explicitly.
         result->cltt_ = cltt;
-        result->old_cltt_ = cltt;
+        result->current_cltt_ = cltt;
 
         // Set state.
         result->state_ = state_;
@@ -1527,7 +1532,7 @@ public:
     /// @param statement_index Index of the query's prepared statement
     /// @param fetch_type Indicates if query supplies lease type
     /// @param subnet_id id of the subnet for which stats are desired
-    /// @throw BadValue if sunbet_id given is 0 or if statement index is invalid.
+    /// @throw BadValue if subnet_id given is 0 or if statement index is invalid.
     MySqlLeaseStatsQuery(MySqlConnection& conn, const size_t statement_index,
                          const bool fetch_type, const SubnetID& subnet_id)
         : LeaseStatsQuery(subnet_id), conn_(conn), statement_index_(statement_index),
@@ -1542,7 +1547,7 @@ public:
     /// @brief Constructor to query for the stats for a range of subnets
     ///
     /// The query created will return statistics for the inclusive range of
-    /// subnets described by first and last sunbet IDs.
+    /// subnets described by first and last subnet IDs.
     ///
     /// @param conn An open connection to the database housing the lease data
     /// @param statement_index Index of the query's prepared statement
@@ -1622,10 +1627,10 @@ public:
         bind_[col].is_unsigned = MLM_TRUE;
         ++col;
 
-        // state_count_: uint32_t
+        // state_count_: int64_t
         bind_[col].buffer_type = MYSQL_TYPE_LONGLONG;
         bind_[col].buffer = reinterpret_cast<char*>(&state_count_);
-        bind_[col].is_unsigned = MLM_TRUE;
+        //bind_[col].is_unsigned = MLM_FALSE;
 
         // Set up the MYSQL_BIND array for the data being returned
         // and bind it to the statement.
@@ -1633,7 +1638,7 @@ public:
         conn_.checkError(status, statement_index_, "outbound binding failed");
 
         // Execute the statement
-        status = mysql_stmt_execute(statement_);
+        status = MysqlExecuteStatement(statement_);
         conn_.checkError(status, statement_index_, "unable to execute");
 
         // Ensure that all the lease information is retrieved in one go to avoid
@@ -1649,6 +1654,10 @@ public:
     /// result set rows. Once the last row has been fetched, subsequent
     /// calls will return false.
     ///
+    /// Checks against negative values for the state count and logs once
+    /// a warning message. Unfortunately not getting the message is not
+    /// a proof that detailed counters are correct.
+    ///
     /// @param row Storage for the fetched row
     ///
     /// @return True if the fetch succeeded, false if there are no more
@@ -1660,7 +1669,15 @@ public:
             row.subnet_id_ = static_cast<SubnetID>(subnet_id_);
             row.lease_type_ = static_cast<Lease::Type>(lease_type_);
             row.lease_state_ = state_;
-            row.state_count_ = state_count_;
+            if (state_count_ >= 0) {
+                row.state_count_ = state_count_;
+            } else {
+                row.state_count_ = 0;
+                if (!negative_count_) {
+                    negative_count_ = true;
+                    LOG_WARN(dhcpsrv_logger, DHCPSRV_MYSQL_NEGATIVE_LEASES_STAT);
+                }
+            }
             have_row = true;
         } else if (status != MYSQL_NO_DATA) {
             conn_.checkError(status, statement_index_, "getNextRow failed");
@@ -1709,12 +1726,20 @@ private:
 
     /// @brief Receives the state count when fetching a row
     int64_t state_count_;
+
+    /// @brief Received negative state count showing a problem
+    static bool negative_count_;
 };
+
+// Initialize negative state count flag to false.
+bool MySqlLeaseStatsQuery::negative_count_ = false;
 
 // MySqlLeaseContext Constructor
 
-MySqlLeaseContext::MySqlLeaseContext(const DatabaseConnection::ParameterMap& parameters)
-    : conn_(parameters) {
+MySqlLeaseContext::MySqlLeaseContext(const DatabaseConnection::ParameterMap& parameters,
+                                     IOServiceAccessorPtr io_service_accessor,
+                                     DbCallback db_reconnect_callback)
+    : conn_(parameters, io_service_accessor, db_reconnect_callback) {
 }
 
 // MySqlLeaseContextAlloc Constructor and Destructor
@@ -1755,8 +1780,13 @@ MySqlLeaseMgr::MySqlLeaseContextAlloc::~MySqlLeaseContextAlloc() {
 
 // MySqlLeaseMgr Constructor and Destructor
 
-MySqlLeaseMgr::MySqlLeaseMgr(const MySqlConnection::ParameterMap& parameters)
-    : parameters_(parameters) {
+MySqlLeaseMgr::MySqlLeaseMgr(const DatabaseConnection::ParameterMap& parameters)
+    : parameters_(parameters), timer_name_("") {
+
+    // Create unique timer name per instance.
+    timer_name_ = "MySqlLeaseMgr[";
+    timer_name_ += boost::lexical_cast<std::string>(reinterpret_cast<uint64_t>(this));
+    timer_name_ += "]DbReconnectTimer";
 
     // Validate schema version first.
     std::pair<uint32_t, uint32_t> code_version(MYSQL_SCHEMA_VERSION_MAJOR,
@@ -1778,24 +1808,84 @@ MySqlLeaseMgr::MySqlLeaseMgr(const MySqlConnection::ParameterMap& parameters)
 MySqlLeaseMgr::~MySqlLeaseMgr() {
 }
 
+bool
+MySqlLeaseMgr::dbReconnect(ReconnectCtlPtr db_reconnect_ctl) {
+    MultiThreadingCriticalSection cs;
+
+    // Invoke application layer connection lost callback.
+    if (!DatabaseConnection::invokeDbLostCallback(db_reconnect_ctl)) {
+        return (false);
+    }
+
+    bool reopened = false;
+
+    const std::string timer_name = db_reconnect_ctl->timerName();
+
+    // At least one connection was lost.
+    try {
+        CfgDbAccessPtr cfg_db = CfgMgr::instance().getCurrentCfg()->getCfgDbAccess();
+        LeaseMgrFactory::destroy();
+        LeaseMgrFactory::create(cfg_db->getLeaseDbAccessString());
+        reopened = true;
+    } catch (const std::exception& ex) {
+        LOG_ERROR(dhcpsrv_logger, DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED)
+                .arg(ex.what());
+    }
+
+    if (reopened) {
+        // Cancel the timer.
+        if (TimerMgr::instance()->isTimerRegistered(timer_name)) {
+            TimerMgr::instance()->unregisterTimer(timer_name);
+        }
+
+        // Invoke application layer connection recovered callback.
+        if (!DatabaseConnection::invokeDbRecoveredCallback(db_reconnect_ctl)) {
+            return (false);
+        }
+    } else {
+        if (!db_reconnect_ctl->checkRetries()) {
+            // We're out of retries, log it and initiate shutdown.
+            LOG_ERROR(dhcpsrv_logger, DHCPSRV_MYSQL_LEASE_DB_RECONNECT_FAILED)
+                    .arg(db_reconnect_ctl->maxRetries());
+
+            // Cancel the timer.
+            if (TimerMgr::instance()->isTimerRegistered(timer_name)) {
+                TimerMgr::instance()->unregisterTimer(timer_name);
+            }
+
+            // Invoke application layer connection failed callback.
+            DatabaseConnection::invokeDbFailedCallback(db_reconnect_ctl);
+            return (false);
+        }
+
+        LOG_INFO(dhcpsrv_logger, DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE)
+                .arg(db_reconnect_ctl->maxRetries() - db_reconnect_ctl->retriesLeft() + 1)
+                .arg(db_reconnect_ctl->maxRetries())
+                .arg(db_reconnect_ctl->retryInterval());
+
+        // Start the timer.
+        if (!TimerMgr::instance()->isTimerRegistered(timer_name)) {
+            TimerMgr::instance()->registerTimer(timer_name,
+                std::bind(&MySqlLeaseMgr::dbReconnect, db_reconnect_ctl),
+                          db_reconnect_ctl->retryInterval(),
+                          asiolink::IntervalTimer::ONE_SHOT);
+        }
+        TimerMgr::instance()->setup(timer_name);
+    }
+
+    return (true);
+}
+
 // Create context.
 
 MySqlLeaseContextPtr
 MySqlLeaseMgr::createContext() const {
-    MySqlLeaseContextPtr ctx(new MySqlLeaseContext(parameters_));
+    MySqlLeaseContextPtr ctx(new MySqlLeaseContext(parameters_,
+        IOServiceAccessorPtr(new IOServiceAccessor(&LeaseMgr::getIOService)),
+        &MySqlLeaseMgr::dbReconnect));
 
     // Open the database.
     ctx->conn_.openDatabase();
-
-    // Enable autocommit.  To avoid a flush to disk on every commit, the global
-    // parameter innodb_flush_log_at_trx_commit should be set to 2.  This will
-    // cause the changes to be written to the log, but flushed to disk in the
-    // background every second.  Setting the parameter to that value will speed
-    // up the system, but at the risk of losing data if the system crashes.
-    my_bool result = mysql_autocommit(ctx->conn_.mysql_, 1);
-    if (result != 0) {
-        isc_throw(DbOperationError, mysql_error(ctx->conn_.mysql_));
-    }
 
     // Prepare all statements likely to be used.
     ctx->conn_.prepareStatements(tagged_statements.begin(),
@@ -1805,6 +1895,9 @@ MySqlLeaseMgr::createContext() const {
     // program and the database.
     ctx->exchange4_.reset(new MySqlLease4Exchange());
     ctx->exchange6_.reset(new MySqlLease6Exchange());
+
+    // Create ReconnectCtl for this connection.
+    ctx->conn_.makeReconnectCtl(timer_name_);
 
     return (ctx);
 }
@@ -1832,7 +1925,7 @@ MySqlLeaseMgr::addLeaseCommon(MySqlLeaseContextPtr& ctx,
     checkError(ctx, status, stindex, "unable to bind parameters");
 
     // Execute the statement
-    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
+    status = MysqlExecuteStatement(ctx->conn_.statements_[stindex]);
     if (status != 0) {
 
         // Failure: check for the special case of duplicate entry.  If this is
@@ -1863,8 +1956,9 @@ MySqlLeaseMgr::addLease(const Lease4Ptr& lease) {
     // ... and drop to common code.
     auto result = addLeaseCommon(ctx, INSERT_LEASE4, bind);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
 
     return (result);
 }
@@ -1885,8 +1979,9 @@ MySqlLeaseMgr::addLease(const Lease6Ptr& lease) {
     // ... and drop to common code.
     auto result = addLeaseCommon(ctx, INSERT_LEASE6, bind);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
 
     return (result);
 }
@@ -1939,7 +2034,7 @@ MySqlLeaseMgr::getLeaseCollection(MySqlLeaseContextPtr& ctx,
     checkError(ctx, status, stindex, "unable to bind SELECT clause parameters");
 
     // Execute the statement
-    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
+    status = MysqlExecuteStatement(ctx->conn_.statements_[stindex]);
     checkError(ctx, status, stindex, "unable to execute");
 
     // Ensure that all the lease information is retrieved in one go to avoid
@@ -2171,16 +2266,6 @@ MySqlLeaseMgr::getLease4(const ClientId& clientid) const {
     getLeaseCollection(ctx, GET_LEASE4_CLIENTID, inbind, result);
 
     return (result);
-}
-
-Lease4Ptr
-MySqlLeaseMgr::getLease4(const ClientId&, const HWAddr&, SubnetID) const {
-    /// This function is currently not implemented because allocation engine
-    /// searches for the lease using HW address or client identifier.
-    /// It never uses both parameters in the same time. We need to
-    /// consider if this function is needed at all.
-    isc_throw(NotImplemented, "The MySqlLeaseMgr::getLease4 function was"
-              " called, but it is not implemented");
 }
 
 Lease4Ptr
@@ -2700,7 +2785,7 @@ MySqlLeaseMgr::updateLeaseCommon(MySqlLeaseContextPtr& ctx,
     checkError(ctx, status, stindex, "unable to bind parameters");
 
     // Execute
-    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
+    status = MysqlExecuteStatement(ctx->conn_.statements_[stindex]);
     checkError(ctx, status, stindex, "unable to execute");
 
     // See how many rows were affected.  The statement should only update a
@@ -2750,7 +2835,8 @@ MySqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
     bind.push_back(inbind[0]);
 
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
+                                           lease->current_valid_lft_,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);
@@ -2761,8 +2847,8 @@ MySqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
     // Drop to common update code
     updateLeaseCommon(ctx, stindex, &bind[0], lease);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 }
 
 void
@@ -2797,7 +2883,8 @@ MySqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
     bind.push_back(inbind[0]);
 
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
+                                           lease->current_valid_lft_,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);
@@ -2808,8 +2895,8 @@ MySqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
     // Drop to common update code
     updateLeaseCommon(ctx, stindex, &bind[0], lease);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 }
 
 // Delete lease methods.  Similar to other groups of methods, these comprise
@@ -2830,7 +2917,7 @@ MySqlLeaseMgr::deleteLeaseCommon(StatementIndex stindex,
     checkError(ctx, status, stindex, "unable to bind WHERE clause parameter");
 
     // Execute
-    status = mysql_stmt_execute(ctx->conn_.statements_[stindex]);
+    status = MysqlExecuteStatement(ctx->conn_.statements_[stindex]);
     checkError(ctx, status, stindex, "unable to execute");
 
     // See how many rows were affected.  Note that the statement may delete
@@ -2855,7 +2942,8 @@ MySqlLeaseMgr::deleteLease(const Lease4Ptr& lease) {
     inbind[0].is_unsigned = MLM_TRUE;
 
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
+                                           lease->current_valid_lft_,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);
@@ -2901,7 +2989,8 @@ MySqlLeaseMgr::deleteLease(const Lease6Ptr& lease) {
     inbind[0].length = &addr6_length;
 
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->old_cltt_, lease->old_valid_lft_,
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
+                                           lease->current_valid_lft_,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);

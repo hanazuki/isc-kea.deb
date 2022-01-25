@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #ifndef MYSQL_LEASE_MGR_H
 #define MYSQL_LEASE_MGR_H
 
+#include <asiolink/io_service.h>
 #include <dhcp/hwaddr.h>
 #include <dhcpsrv/dhcpsrv_exceptions.h>
 #include <dhcpsrv/lease_mgr.h>
@@ -43,7 +44,11 @@ public:
     /// @brief Constructor
     ///
     /// @param parameters See MySqlLeaseMgr constructor.
-    MySqlLeaseContext(const db::DatabaseConnection::ParameterMap& parameters);
+    /// @param io_service_accessor The IOService accessor function.
+    /// @param db_reconnect_callback The connection recovery callback.
+    MySqlLeaseContext(const db::DatabaseConnection::ParameterMap& parameters,
+                      db::IOServiceAccessorPtr io_service_accessor,
+                      db::DbCallback db_reconnect_callback);
 
     /// The exchange objects are used for transfer of data to/from the database.
     /// They are pointed-to objects as the contents may change in "const" calls,
@@ -62,7 +67,7 @@ typedef boost::shared_ptr<MySqlLeaseContext> MySqlLeaseContextPtr;
 /// @brief MySQL Lease Context Pool
 ///
 /// This class provides a pool of contexts.
-/// The manager will use this class to handle avalilable contexts.
+/// The manager will use this class to handle available contexts.
 /// There is only one ContextPool per manager per back-end, which is created
 /// and destroyed by the respective manager factory class.
 class MySqlLeaseContextPool {
@@ -120,6 +125,30 @@ public:
     /// @throw isc::db::DbOperationError An operation on the open database has
     /// failed.
     MySqlLeaseContextPtr createContext() const;
+
+    /// @brief Attempts to reconnect the server to the lease DB backend manager.
+    ///
+    /// This is a self-rescheduling function that attempts to reconnect to the
+    /// server's lease DB backends after connectivity to one or more have been
+    /// lost. Upon entry it will attempt to reconnect via
+    /// @ref LeaseMgrFactory::create.
+    /// If this is successful, DHCP servicing is re-enabled and server returns
+    /// to normal operation.
+    ///
+    /// If reconnection fails and the maximum number of retries has not been
+    /// exhausted, it will schedule a call to itself to occur at the
+    /// configured retry interval. DHCP service remains disabled.
+    ///
+    /// If the maximum number of retries has been exhausted an error is logged
+    /// and the server shuts down.
+    ///
+    /// This function is passed to the connection recovery mechanism. It will be
+    /// invoked when a connection loss is detected.
+    ///
+    /// @param db_reconnect_ctl pointer to the ReconnectCtl containing the
+    /// configured reconnect parameters.
+    /// @return true if connection has been recovered, false otherwise.
+    static bool dbReconnect(db::ReconnectCtlPtr db_reconnect_ctl);
 
     /// @brief Local version of getDBVersion() class method
     static std::string getDBVersion();
@@ -220,19 +249,6 @@ public:
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
     virtual Lease4Collection getLease4(const ClientId& clientid) const;
-
-    /// @brief Returns IPv4 lease for the specified client identifier, HW
-    /// address and subnet identifier.
-    ///
-    /// @param client_id A client identifier.
-    /// @param hwaddr Hardware address.
-    /// @param subnet_id A subnet identifier.
-    ///
-    /// @return A pointer to the lease or NULL if the lease is not found.
-    /// @throw isc::NotImplemented On every call as this function is currently
-    /// not implemented for the MySQL backend.
-    virtual Lease4Ptr getLease4(const ClientId& client_id, const HWAddr& hwaddr,
-                                SubnetID subnet_id) const;
 
     /// @brief Returns existing IPv4 lease for specified client-id
     ///
@@ -453,6 +469,15 @@ public:
     ///        exist.
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The UPDATE query uses WHERE expire = ? to update the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and UPDATE with
+    /// different expiration time.
     virtual void updateLease4(const Lease4Ptr& lease4);
 
     /// @brief Updates IPv6 lease.
@@ -466,6 +491,15 @@ public:
     ///        exist.
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The UPDATE query uses WHERE expire = ? to update the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and UPDATE with
+    /// different expiration time.
     virtual void updateLease6(const Lease6Ptr& lease6);
 
     /// @brief Deletes an IPv4 lease.
@@ -473,6 +507,15 @@ public:
     /// @param lease IPv4 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The DELETE query uses WHERE expire = ? to delete the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and DELETE with
+    /// different expiration time.
     virtual bool deleteLease(const Lease4Ptr& lease);
 
     /// @brief Deletes an IPv6 lease.
@@ -480,6 +523,15 @@ public:
     /// @param lease IPv6 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The DELETE query uses WHERE expire = ? to delete the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and DELETE with
+    /// different expiration time.
     virtual bool deleteLease(const Lease6Ptr& lease);
 
     /// @brief Deletes all expired-reclaimed DHCPv4 leases.
@@ -923,6 +975,9 @@ private:
 
     /// @brief The pool of contexts
     MySqlLeaseContextPoolPtr pool_;
+
+    /// @brief Timer name used to register database reconnect timer.
+    std::string timer_name_;
 };
 
 }  // namespace dhcp

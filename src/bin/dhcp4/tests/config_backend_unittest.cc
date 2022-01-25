@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -74,7 +74,7 @@ protected:
                         }
                     }
 
-                    // Apparently we're looking for one that does not prexist.
+                    // Apparently we're looking for a new one.
                     return (TestConfigBackendDHCPv4Ptr(new TestConfigBackendDHCPv4(params)));
                 });
     }
@@ -264,18 +264,15 @@ TEST_F(Dhcp4CBTest, mergeOptionDefs) {
 
     // Create option one replacement and add it to first backend.
     OptionDefinitionPtr def;
-    def.reset(new OptionDefinition("one", 101, "uint16"));
-    def->setOptionSpaceName("isc");
+    def.reset(new OptionDefinition("one", 101, "isc", "uint16"));
     db1_->createUpdateOptionDef4(ServerSelector::ALL(), def);
 
     // Create option three and add it to first backend.
-    def.reset(new OptionDefinition("three", 3, "string"));
-    def->setOptionSpaceName("isc");
+    def.reset(new OptionDefinition("three", 3, "isc", "string"));
     db1_->createUpdateOptionDef4(ServerSelector::ALL(), def);
 
     // Create option four and add it to second backend.
-    def.reset(new OptionDefinition("four", 4, "string"));
-    def->setOptionSpaceName("isc");
+    def.reset(new OptionDefinition("four", 4, "isc", "string"));
     db2_->createUpdateOptionDef4(ServerSelector::ALL(), def);
 
     // Should parse and merge without error.
@@ -368,18 +365,19 @@ TEST_F(Dhcp4CBTest, mergeOptions) {
     CfgOptionPtr options = staging_cfg->getCfgOption();
 
     // dhcp-message should come from the original config.
-    OptionDescriptor found_opt = options->get("dhcp4", DHO_DHCP_MESSAGE);
+    OptionDescriptor found_opt =
+        options->get(DHCP4_OPTION_SPACE, DHO_DHCP_MESSAGE);
     ASSERT_TRUE(found_opt.option_);
     EXPECT_EQ("0x0A0B0C0D", found_opt.option_->toHexString());
 
     // host-name should come from the first back end,
     // (overwriting the original).
-    found_opt = options->get("dhcp4", DHO_HOST_NAME);
+    found_opt = options->get(DHCP4_OPTION_SPACE, DHO_HOST_NAME);
     ASSERT_TRUE(found_opt.option_);
     EXPECT_EQ("new.example.com", found_opt.option_->toString());
 
     // booth-file-name should come from the first back end.
-    found_opt = options->get("dhcp4", DHO_BOOT_FILE_NAME);
+    found_opt = options->get(DHCP4_OPTION_SPACE, DHO_BOOT_FILE_NAME);
     ASSERT_TRUE(found_opt.option_);
     EXPECT_EQ("my-boot-file", found_opt.option_->toString());
 }

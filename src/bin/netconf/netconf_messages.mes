@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -52,11 +52,6 @@ configuration from a Kea server.
 The warning message indicates that the configuration change logging
 encountered an unexpected condition. Details of it will be logged.
 
-% NETCONF_MODULE_INSTALL Sysrepo (un)installs a module: %1 (revision %2)
-This warning message indicates that sysrepo reports the installation
-or uninstallation of a module used by Kea. The name and revision of
-the module are printed.
-
 % NETCONF_MODULE_MISSING_ERR Missing essential module %1 in sysrepo
 This fatal error message indicates that a module required by Netconf
 configuration is not available in the sysrepo repository.  The name of
@@ -66,15 +61,21 @@ the module is printed.
 This warning message indicates that a module used by Kea is not
 available in the sysrepo repository. The name of the module is printed.
 
-% NETCONF_MODULE_REVISION_ERR Essential module %1 does have the right revision: expected %2, got %3
+% NETCONF_MODULE_REVISION_ERR Essential module %1 does NOT have the right revision: expected %2, got %3
 This fatal error message indicates that a module required by Netconf
 configuration is not at the right revision in the sysrepo repository.
 The name, expected and available revisions of the module are printed.
 
-% NETCONF_MODULE_REVISION_WARN Module %1 does have the right revision: expected %2, got %3
+% NETCONF_MODULE_REVISION_WARN Module %1 does NOT have the right revision: expected %2, got %3
 This warning message indicates that a module used by Kea is not at the
 right revision in the sysrepo repository. The name, expected and
 available revisions of the module are printed.
+
+% NETCONF_NOTIFICATION_RECEIVED Received notification of type %1 for module %1: %2
+This informational message logs any YANG notification that has been signaled
+by the server, sent to kea-netconf which then was forwarded to subscribed
+clients. To achieve this, kea-netconf subscribes itself as a client to all
+notifications for the configured module.
 
 % NETCONF_RUN_EXIT application is exiting the event loop
 This is a debug message issued when the Netconf application exits its
@@ -109,6 +110,15 @@ the module are printed.
 The error message indicates that Netconf got an error subscribing
 configuration changes for a Kea server. The names of the server and
 the module, and the error are printed.
+
+% NETCONF_SUBSCRIBE_NOTIFICATIONS subscribing to notifications for %1 server with %2 module
+This information message indicates that Netconf is trying to subscribe to
+notifications for a Kea server. The server name and module name are printed.
+
+% NETCONF_SUBSCRIBE_NOTIFICATIONS_FAILED subscribing to notifications for %1 server with %2 module failed: %3
+The error message indicates that Netconf got an error subscribing to
+notifications for a Kea server. The server name, module name and the error are
+printed.
 
 % NETCONF_UPDATE_CONFIG updating configuration with %1 server: %2
 This debug message indicates that Netconf update the configuration

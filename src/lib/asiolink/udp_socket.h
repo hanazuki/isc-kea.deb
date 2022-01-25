@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,6 +21,8 @@
 #include <asiolink/io_endpoint.h>
 #include <asiolink/io_service.h>
 #include <asiolink/udp_endpoint.h>
+
+#include <exceptions/isc_assert.h>
 
 namespace isc {
 namespace asiolink {
@@ -85,7 +87,7 @@ public:
     /// Opens the UDP socket.  This is a synchronous operation.
     ///
     /// \param endpoint Endpoint to which the socket will send data.  This is
-    ///        used to determine the address family trhat should be used for the
+    ///        used to determine the address family that should be used for the
     ///        underlying socket.
     /// \param callback Unused as the operation is synchronous.
     virtual void open(const IOEndpoint* endpoint, C& callback);
@@ -148,16 +150,22 @@ private:
     // Two variables to hold the socket - a socket and a pointer to it.  This
     // handles the case where a socket is passed to the UDPSocket on
     // construction, or where it is asked to manage its own socket.
-    boost::asio::ip::udp::socket*      socket_ptr_;    ///< Pointer to own socket
-    boost::asio::ip::udp::socket&      socket_;        ///< Socket
-    bool                               isopen_;        ///< true when socket is open
+
+    /// Pointer to own socket
+    std::unique_ptr<boost::asio::ip::udp::socket> socket_ptr_;
+
+    // Socket
+    boost::asio::ip::udp::socket& socket_;
+
+    // True when socket is open
+    bool isopen_;
 };
 
 // Constructor - caller manages socket
 
 template <typename C>
 UDPSocket<C>::UDPSocket(boost::asio::ip::udp::socket& socket) :
-    socket_ptr_(NULL), socket_(socket), isopen_(true)
+    socket_ptr_(), socket_(socket), isopen_(true)
 {
 }
 
@@ -170,12 +178,11 @@ UDPSocket<C>::UDPSocket(IOService& service) :
 {
 }
 
-// Destructor.  Only delete the socket if we are managing it.
+// Destructor.
 
 template <typename C>
 UDPSocket<C>::~UDPSocket()
 {
-    delete socket_ptr_;
 }
 
 // Open the socket.
@@ -184,7 +191,7 @@ template <typename C> void
 UDPSocket<C>::open(const IOEndpoint* endpoint, C&) {
 
     // Ignore opens on already-open socket.  (Don't throw a failure because
-    // of uncertainties as to what precedes whan when using asynchronous I/O.)
+    // of uncertainties as to what precedes when using asynchronous I/O.)
     // It also allows us a treat a passed-in socket in exactly the same way as
     // a self-managed socket (in that we can call the open() and close() methods
     // of this class).
@@ -228,7 +235,7 @@ UDPSocket<C>::asyncSend(const void* data, size_t length,
         // does not contain a method for getting at the underlying endpoint
         // type - that is in the derived class and the two classes differ on
         // return type.
-        assert(endpoint->getProtocol() == IPPROTO_UDP);
+        isc_throw_assert(endpoint->getProtocol() == IPPROTO_UDP);
         const UDPEndpoint* udp_endpoint =
             static_cast<const UDPEndpoint*>(endpoint);
 
@@ -251,7 +258,7 @@ UDPSocket<C>::asyncReceive(void* data, size_t length, size_t offset,
     if (isopen_) {
 
         // Upconvert the endpoint again.
-        assert(endpoint->getProtocol() == IPPROTO_UDP);
+        isc_throw_assert(endpoint->getProtocol() == IPPROTO_UDP);
         UDPEndpoint* udp_endpoint = static_cast<UDPEndpoint*>(endpoint);
 
         // Ensure we can write into the buffer

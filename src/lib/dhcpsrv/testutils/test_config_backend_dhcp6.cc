@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -86,12 +86,12 @@ TestConfigBackendDHCPv6::getAllSubnets6(const db::ServerSelector& server_selecto
     Subnet6Collection subnets;
     for (auto subnet : subnets_) {
         if (server_selector.amAny()) {
-            subnets.push_back(subnet);
+            subnets.insert(subnet);
             continue;
         }
         if (server_selector.amUnassigned()) {
             if (subnet->getServerTags().empty()) {
-                subnets.push_back(subnet);
+                subnets.insert(subnet);
             }
             continue;
         }
@@ -99,7 +99,7 @@ TestConfigBackendDHCPv6::getAllSubnets6(const db::ServerSelector& server_selecto
         auto tags = server_selector.getTags();
         for (auto tag : tags) {
             if (subnet->hasServerTag(ServerTag(tag))) {
-                subnets.push_back(subnet);
+                subnets.insert(subnet);
                 got = true;
                 break;
             }
@@ -108,7 +108,7 @@ TestConfigBackendDHCPv6::getAllSubnets6(const db::ServerSelector& server_selecto
             continue;
         }
         if (subnet->hasAllServerTag()) {
-            subnets.push_back(subnet);
+            subnets.insert(subnet);
         }
     }
     return (subnets);
@@ -122,12 +122,12 @@ TestConfigBackendDHCPv6::getModifiedSubnets6(const db::ServerSelector& server_se
     auto lb = index.lower_bound(modification_time);
     for (auto subnet = lb; subnet != index.end(); ++subnet) {
         if (server_selector.amAny()) {
-            subnets.push_back(*subnet);
+            subnets.insert(*subnet);
             continue;
         }
         if (server_selector.amUnassigned()) {
             if ((*subnet)->getServerTags().empty()) {
-                subnets.push_back(*subnet);
+                subnets.insert(*subnet);
             }
             continue;
         }
@@ -135,7 +135,7 @@ TestConfigBackendDHCPv6::getModifiedSubnets6(const db::ServerSelector& server_se
         auto tags = server_selector.getTags();
         for (auto tag : tags) {
             if ((*subnet)->hasServerTag(ServerTag(tag))) {
-                subnets.push_back(*subnet);
+                subnets.insert(*subnet);
                 got = true;
                 break;
             }
@@ -144,7 +144,7 @@ TestConfigBackendDHCPv6::getModifiedSubnets6(const db::ServerSelector& server_se
             continue;
         }
         if ((*subnet)->hasAllServerTag()) {
-            subnets.push_back(*subnet);
+            subnets.insert(*subnet);
         }
     }
     return (subnets);
@@ -187,7 +187,7 @@ TestConfigBackendDHCPv6::getSharedNetworkSubnets6(const db::ServerSelector& serv
         subnet->getSharedNetwork(network);
         if (((network && (network->getName() == shared_network_name)) ||
              (subnet->getSharedNetworkName() == shared_network_name))) {
-            subnets.push_back(subnet);
+            subnets.insert(subnet);
         }
     }
     return (subnets);
@@ -318,17 +318,24 @@ TestConfigBackendDHCPv6::getAllOptionDefs6(const db::ServerSelector& server_sele
     OptionDefContainer option_defs;
     for (auto option_def : option_defs_) {
         bool got = false;
-        for (auto tag : tags) {
-            if (option_def->hasServerTag(ServerTag(tag))) {
+        if (server_selector.amUnassigned()) {
+            if (option_def->getServerTags().empty()) {
                 option_defs.push_back(option_def);
                 got = true;
-                break;
+            }
+        } else {
+            for (auto tag : tags) {
+                if (option_def->hasServerTag(ServerTag(tag))) {
+                    option_defs.push_back(option_def);
+                    got = true;
+                    break;
+                }
             }
         }
         if (got) {
             continue;
         }
-        if (option_def->hasAllServerTag()) {
+        if (option_def->hasAllServerTag() && !server_selector.amUnassigned()) {
             option_defs.push_back(option_def);
         }
     }
@@ -508,9 +515,138 @@ TestConfigBackendDHCPv6::getModifiedGlobalParameters6(const db::ServerSelector& 
     return (globals);
 }
 
+ClientClassDefPtr
+TestConfigBackendDHCPv6::getClientClass6(const db::ServerSelector& server_selector,
+                                         const std::string& name) const {
+    ClientClassDefPtr client_class;
+    for (auto c : classes_) {
+        if (c->getName() == name) {
+            client_class = c;
+            break;
+        }
+    }
+    if (!client_class || server_selector.amAny()) {
+        return (client_class);
+    }
+    if (server_selector.amUnassigned()) {
+        return (client_class->getServerTags().empty() ? client_class : ClientClassDefPtr());
+    }
+    auto tags = server_selector.getTags();
+    for (auto tag : tags) {
+        if (client_class->hasServerTag(ServerTag(tag))) {
+            return (client_class);
+        }
+    }
+    return (client_class->hasAllServerTag() ? client_class : ClientClassDefPtr());
+}
+
+ClientClassDictionary
+TestConfigBackendDHCPv6::getAllClientClasses6(const db::ServerSelector& server_selector) const {
+    auto tags = server_selector.getTags();
+    ClientClassDictionary all_classes;
+    for (auto client_class : classes_) {
+        if (server_selector.amAny()) {
+            all_classes.addClass(client_class);
+            continue;
+        }
+        if (server_selector.amUnassigned()) {
+            if (client_class->getServerTags().empty()) {
+                all_classes.addClass(client_class);
+            }
+            continue;
+        }
+        bool got = false;
+        for (auto tag : tags) {
+            if (client_class->hasServerTag(ServerTag(tag))) {
+                all_classes.addClass(client_class);
+                got = true;
+                break;
+            }
+        }
+        if (got) {
+            continue;
+        }
+        if (client_class->hasAllServerTag()) {
+            all_classes.addClass(client_class);
+        }
+    }
+    return (all_classes);
+}
+
+ClientClassDictionary
+TestConfigBackendDHCPv6::getModifiedClientClasses6(const db::ServerSelector& server_selector,
+                                                   const boost::posix_time::ptime& modification_time) const {
+    auto tags = server_selector.getTags();
+    ClientClassDictionary modified_classes;
+    for (auto client_class : classes_) {
+        if (client_class->getModificationTime() >= modification_time) {
+            bool got = false;
+            for (auto tag : tags) {
+                if (client_class->hasServerTag(ServerTag(tag))) {
+                    modified_classes.addClass(client_class);
+                    got = true;
+                    break;
+                }
+            }
+            if (got) {
+                continue;
+            }
+            if (client_class->hasAllServerTag()) {
+                modified_classes.addClass(client_class);
+            }
+        }
+    }
+    return (modified_classes);
+}
+
+void
+TestConfigBackendDHCPv6::createUpdateClientClass6(const db::ServerSelector& server_selector,
+                                                  const ClientClassDefPtr& client_class,
+                                                  const std::string& follow_class_name) {
+    int follow_class_index = -1;
+    if (!follow_class_name.empty()) {
+        for (auto i = 0; i < classes_.size(); ++i) {
+            if (classes_[i]->getName() == follow_class_name) {
+                follow_class_index = i;
+                break;
+            }
+        }
+        if (follow_class_index < 0) {
+            isc_throw(BadValue, "class " << follow_class_name << " does not exist");
+
+        }
+    }
+
+    mergeServerTags(client_class, server_selector);
+
+    int existing_class_index = -1;
+    for (auto i = 0; i < classes_.size(); ++i) {
+        if (classes_[i]->getName() == client_class->getName()) {
+            existing_class_index = i;
+            break;
+        }
+    }
+
+    if (follow_class_index < 0) {
+        if (existing_class_index >= 0) {
+            classes_[existing_class_index] = client_class;
+        } else {
+            classes_.push_back(client_class);
+        }
+    } else {
+        if (existing_class_index < 0) {
+            classes_.insert(classes_.begin() + follow_class_index + 1, client_class);
+        } else {
+            classes_.erase(classes_.begin() + existing_class_index);
+            classes_.insert(classes_.begin() + follow_class_index + 1, client_class);
+        }
+    }
+}
+
 AuditEntryCollection
 TestConfigBackendDHCPv6::getRecentAuditEntries(const db::ServerSelector&,
-                                               const boost::posix_time::ptime&) const {
+                                               const boost::posix_time::ptime&,
+                                               const uint64_t&) const {
     return (AuditEntryCollection());
 }
 
@@ -942,8 +1078,7 @@ uint64_t
 TestConfigBackendDHCPv6::deleteSharedNetworkSubnets6(const db::ServerSelector& server_selector,
                                                      const std::string& shared_network_name) {
     uint64_t cnt = 0;
-    auto& index = subnets_.get<SubnetRandomAccessIndexTag>();
-    for (auto subnet = index.begin(); subnet != index.end(); ) {
+    for (auto subnet = subnets_.begin(); subnet != subnets_.end(); ) {
         // Skip subnets which do not match the server selector.
         if (server_selector.amUnassigned() &&
            !(*subnet)->getServerTags().empty()) {
@@ -973,7 +1108,7 @@ TestConfigBackendDHCPv6::deleteSharedNetworkSubnets6(const db::ServerSelector& s
 
         if ((network && (network->getName() == shared_network_name)) ||
             ((*subnet)->getSharedNetworkName() == shared_network_name)) {
-            subnet = index.erase(subnet);
+            subnet = subnets_.erase(subnet);
             ++cnt;
         } else {
             ++subnet;
@@ -1327,6 +1462,80 @@ TestConfigBackendDHCPv6::deleteAllGlobalParameters6(const db::ServerSelector& se
         }
     }
     return (cnt);
+}
+
+uint64_t
+TestConfigBackendDHCPv6::deleteClientClass6(const db::ServerSelector& server_selector,
+                                            const std::string& name) {
+    ClientClassDefPtr existing_class;
+    auto c = classes_.begin();
+    for (; c != classes_.end(); ++c) {
+        if ((*c)->getName() == name) {
+            existing_class = (*c);
+            break;
+        }
+    }
+    if (!existing_class) {
+        return (0);
+    }
+    if ((server_selector.amUnassigned()) &&
+        !existing_class->getServerTags().empty()) {
+        return (0);
+    }
+    if (!server_selector.amAny()) {
+        bool got = false;
+        auto tags = server_selector.getTags();
+        for (auto tag : tags) {
+            if (existing_class->hasServerTag(ServerTag(tag))) {
+                got = true;
+                break;
+            }
+        }
+        if (!got && !existing_class->hasAllServerTag()) {
+            return (0);
+        }
+    }
+    classes_.erase(c);
+    return (1);
+}
+
+uint64_t
+TestConfigBackendDHCPv6::deleteAllClientClasses6(const db::ServerSelector& server_selector) {
+    uint64_t count = 0;
+    for (auto c = classes_.begin(); c != classes_.end(); ++c) {
+        auto client_class = *c;
+        if (server_selector.amAny()) {
+            c = classes_.erase(c);
+            ++count;
+            continue;
+        }
+        if (server_selector.amUnassigned()) {
+            if (client_class->getServerTags().empty()) {
+                c = classes_.erase(c);
+                ++count;
+            }
+            continue;
+        }
+        bool got = false;
+        auto tags = server_selector.getTags();
+        for (auto tag : tags) {
+            if (client_class->hasServerTag(ServerTag(tag))) {
+                c = classes_.erase(c);
+                ++count;
+                got = true;
+                break;
+            }
+        }
+        if (got) {
+            continue;
+        }
+        if (client_class->hasAllServerTag()) {
+            c = classes_.erase(c);
+            ++count;
+        }
+    }
+
+    return (count);
 }
 
 uint64_t
