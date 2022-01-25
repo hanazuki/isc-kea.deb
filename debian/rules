@@ -35,7 +35,7 @@ override_dh_installdocs:
 	dh_installdocs -A AUTHORS README
 
 override_dh_auto_test:
-	dh_auto_test --no-parallel || /bin/true
+	dh_auto_test --no-parallel
 
 execute_after_dh_auto_install:
 	-rm debian/tmp/usr/share/doc/kea/README \
