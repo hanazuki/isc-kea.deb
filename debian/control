@@ -89,6 +89,7 @@ Architecture: any
 Pre-Depends: ${misc:Pre-Depends}
 Depends: kea-common (= ${binary:Version}),
          lsb-base,
+         python3-kea-connector,
          ${misc:Depends},
          ${python3:Depends},
          ${shlibs:Depends}
