@@ -15,7 +15,7 @@ export DEB_CFLAGS_MAINT_APPEND  = -Wall -pedantic
 	dh $@  --with python3 -X.la -B
 
 override_dh_auto_configure:
-	dh_auto_configure $@ -- \
+	dh_auto_configure -- \
 		--prefix=/usr \
 		--sysconfdir=/etc \
 		--localstatedir=/var/lib \
