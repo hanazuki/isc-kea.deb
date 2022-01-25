@@ -18,7 +18,7 @@ override_dh_auto_configure:
 	dh_auto_configure -- \
 		--prefix=/usr \
 		--sysconfdir=/etc \
-		--localstatedir=/var/lib \
+		--localstatedir=/var \
 		--with-openssl \
 		--with-mysql \
 		--with-pgsql \
