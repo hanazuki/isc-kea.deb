@@ -38,7 +38,6 @@ execute_after_dh_auto_install:
 	    debian/tmp/usr/share/doc/kea/ChangeLog \
 	    debian/tmp/usr/share/doc/kea/AUTHORS \
 	    debian/tmp/usr/share/doc/kea/COPYING \
-	    debian/tmp/usr/share/man/man8/keactrl.8 \
 	    debian/tmp/usr/lib/python3.*/site-packages/kea/__pycache__/*.pyc \
 	    debian/tmp/usr/lib/python3.*/site-packages/kea/__pycache__/*.pyo \
 	    debian/tmp/usr/lib/python3.*/site-packages/kea/kea_connector2.py
