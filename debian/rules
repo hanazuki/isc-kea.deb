@@ -53,9 +53,6 @@ override_dh_auto_install:
 	    debian/tmp/usr/lib/python3.*/site-packages/kea/__pycache__/*.pyo \
 	    debian/tmp/usr/lib/python3.*/site-packages/kea/kea_connector2.py
 
-override_dh_missing:
-	dh_missing --fail-missing
-
 override_dh_clean:
 	dh_clean
 	rm -f tools/system_messages
