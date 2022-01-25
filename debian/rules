@@ -27,16 +27,12 @@ override_dh_auto_configure:
 		--disable-dependency-tracking \
 		--without-werror
 
-override_dh_installdocs:
-	dh_installdocs -A AUTHORS README
-
 override_dh_auto_test:
 	dh_auto_test --no-parallel
 
 execute_after_dh_auto_install:
-	rm -rv debian/tmp/usr/share/doc/kea/README \
+	rm -rv \
 	    debian/tmp/usr/share/doc/kea/ChangeLog \
-	    debian/tmp/usr/share/doc/kea/AUTHORS \
 	    debian/tmp/usr/share/doc/kea/COPYING \
 	    debian/tmp/usr/lib/python3.*/site-packages/kea/__pycache__ \
 	    debian/tmp/usr/lib/python3.*/site-packages/kea/kea_connector2.py
