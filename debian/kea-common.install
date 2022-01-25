@@ -3,4 +3,3 @@ usr/lib/*/kea/hooks
 usr/lib/*/libkea-*.so.*
 usr/sbin/kea-lfc
 usr/sbin/keactrl
-usr/share/man/man8/kea-lfc.8
