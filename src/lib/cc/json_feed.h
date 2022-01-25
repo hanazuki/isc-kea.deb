@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -59,6 +59,9 @@ public:
 /// As '{', '}', '[' and ']' can be embedded in JSON strings two states
 /// for strings and escape in strings are required. Note the processing
 /// of escapes is greatly simplified compared to ECMA 404 figure 5.
+///
+/// Added support for '#' to end of line (bash), '//' to end of line (C++)
+/// and '/*' to '*/' (C) comments both before JSON and inside JSON.
 
 /// Note that this mechanism doesn't check if the JSON structure is well
 /// formed. It merely detects the end of the JSON structure if this structure
@@ -78,20 +81,44 @@ public:
     /// @brief Skipping whitespaces before actual JSON.
     static const int WHITESPACE_BEFORE_JSON_ST = SM_DERIVED_STATE_MIN + 2;
 
+    /// @brief Skipping an end-of-line comment before actual JSON.
+    static const int EOL_COMMENT_BEFORE_JSON_ST = SM_DERIVED_STATE_MIN + 3;
+
+    /// @brief Starting one of the comments beginning with a slash before actual JSON.
+    static const int START_COMMENT_BEFORE_JSON_ST = SM_DERIVED_STATE_MIN + 4;
+
+    /// @brief Skipping a C style comment before actual JSON.
+    static const int C_COMMENT_BEFORE_JSON_ST = SM_DERIVED_STATE_MIN + 5;
+
+    /// @brief Stopping a C style comment before actual JSON.
+    static const int STOP_COMMENT_BEFORE_JSON_ST = SM_DERIVED_STATE_MIN + 6;
+
     /// @brief Found first opening brace or square bracket.
-    static const int JSON_START_ST = SM_DERIVED_STATE_MIN + 3;
+    static const int JSON_START_ST = SM_DERIVED_STATE_MIN + 7;
 
     /// @brief Parsing JSON.
-    static const int INNER_JSON_ST = SM_DERIVED_STATE_MIN + 4;
+    static const int INNER_JSON_ST = SM_DERIVED_STATE_MIN + 8;
 
     /// @brief Parsing JSON string.
-    static const int STRING_JSON_ST = SM_DERIVED_STATE_MIN + 5;
+    static const int STRING_JSON_ST = SM_DERIVED_STATE_MIN + 9;
 
     /// @brief JSON escape next character.
-    static const int ESCAPE_JSON_ST = SM_DERIVED_STATE_MIN + 6;
+    static const int ESCAPE_JSON_ST = SM_DERIVED_STATE_MIN + 10;
+
+    /// @brief Skipping an end-of-line comment.
+    static const int EOL_COMMENT_ST = SM_DERIVED_STATE_MIN + 11;
+
+    /// @brief Starting one of the comments beginning with a slash.
+    static const int START_COMMENT_ST = SM_DERIVED_STATE_MIN + 12;
+
+    /// @brief Skipping a C style comment.
+    static const int C_COMMENT_ST = SM_DERIVED_STATE_MIN + 13;
+
+    /// @brief Stopping a C style comment.
+    static const int STOP_COMMENT_ST = SM_DERIVED_STATE_MIN + 14;
 
     /// @brief Found last closing brace or square bracket.
-    static const int JSON_END_ST = SM_DERIVED_STATE_MIN + 7;
+    static const int JSON_END_ST = SM_DERIVED_STATE_MIN + 15;
 
     /// @brief Found opening and closing brace or square bracket.
     ///
@@ -263,6 +290,18 @@ private:
     /// @brief Handler for WHITESPACE_BEFORE_JSON_ST.
     void whiteSpaceBeforeJSONHandler();
 
+    /// @brief Handler for EOL_COMMENT_BEFORE_JSON_ST.
+    void eolCommentBeforeJSONHandler();
+
+    /// @brief Handler for START_COMMENT_BEFORE_JSON_ST.
+    void startCommentBeforeJSONHandler();
+
+    /// @brief Handler for C_COMMENT_BEFORE_JSON_ST.
+    void cCommentBeforeJSONHandler();
+
+    /// @brief Handler for STOP_COMMENT_BEFORE_JSON_ST.
+    void stopCommentBeforeJSONHandler();
+
     /// @brief Handler for the FIRST_BRACE_ST.
     void innerJSONHandler();
 
@@ -271,6 +310,18 @@ private:
 
     /// @brief Handler for the ESCAPE_JSON_ST;
     void escapeJSONHandler();
+
+    /// @brief Handler for EOL_COMMENT_ST.
+    void eolCommentHandler();
+
+    /// @brief Handler for START_COMMENT_ST.
+    void startCommentHandler();
+
+    /// @brief Handler for C_COMMENT_ST.
+    void cCommentHandler();
+
+    /// @brief Handler for STOP_COMMENT_ST.
+    void stopCommentHandler();
 
     /// @brief Handler for the JSON_END_ST.
     void endJSONHandler();

@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,8 @@
 #ifndef HTTP_REQUEST_H
 #define HTTP_REQUEST_H
 
+#include <hooks/callout_handle_associate.h>
+#include <http/basic_auth.h>
 #include <http/http_message.h>
 #include <http/request_context.h>
 #include <boost/shared_ptr.hpp>
@@ -27,9 +29,6 @@ class HttpRequest;
 /// @brief Pointer to the @ref HttpRequest object.
 typedef boost::shared_ptr<HttpRequest> HttpRequestPtr;
 
-/// @brief Pointer to the const @ref HttpRequest object.
-typedef boost::shared_ptr<const HttpRequest> ConstHttpRequestPtr;
-
 /// @brief Represents HTTP request message.
 ///
 /// This derivation of the @c HttpMessage class is specialized to represent
@@ -45,7 +44,9 @@ typedef boost::shared_ptr<const HttpRequest> ConstHttpRequestPtr;
 /// which derives from @c PostHttpRequest requires that the POST message
 /// includes body holding a JSON structure and provides methods to parse the
 /// JSON body.
-class HttpRequest : public HttpMessage {
+///
+/// Callouts are associated to the request.
+class HttpRequest : public HttpMessage, public hooks::CalloutHandleAssociate {
 public:
 
     /// @brief HTTP methods.
@@ -73,8 +74,11 @@ public:
     /// @param version HTTP version.
     /// @param host_header Host header to be included in the request. The default
     /// is the empty Host header.
+    /// @param basic_auth Basic HTTP authentication credential. The default
+    /// is no authentication.
     HttpRequest(const Method& method, const std::string& uri, const HttpVersion& version,
-                const HostHttpHeader& host_header = HostHttpHeader());
+                const HostHttpHeader& host_header = HostHttpHeader(),
+                const BasicHttpAuthPtr& basic_auth = BasicHttpAuthPtr());
 
     /// @brief Returns pointer to the @ref HttpRequestContext.
     ///

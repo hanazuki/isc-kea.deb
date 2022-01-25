@@ -1,5 +1,5 @@
 ..
-   Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+   Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,7 +15,7 @@ perfdhcp - DHCP benchmarking tool
 Synopsis
 ~~~~~~~~
 
-:program:`perfdhcp` [**-1**] [**-4**|**-6**] [**-A** encapsulation-level] [**-b** base] [**-B**] [**-c**] [**-d** drop-time] [**-D** max-drop] [-e lease-type] [**-E** time-offset] [**-f** renew-rate] [**-F** release-rate] [**-g** thread-mode] [**-h**] [**-i**] [**-I** ip-offset] [**-l** local-address|interface] [**-L** local-port] [**-M** mac-list-file] [**-n** num-request] [**-N** remote-port] [**-O** random-offset] [**-o** code,hexstring] [**-p** test-period] [**-P** preload] [**-r** rate] [**-R** num-clients] [**-s** seed] [**-S** srvid-offset] [**--scenario** name] [**-t** report] [**-T** template-file] [**-v**] [**-W** exit-wait-time] [**-w** script_name] [**-x** diagnostic-selector] [**-X** xid-offset] [server]
+:program:`perfdhcp` [**-1**] [**-4** | **-6**] [**-A** encapsulation-level] [**-b** base] [**-B**] [**-c**] [**-C** separator] [**-d** drop-time] [**-D** max-drop] [-e lease-type] [**-E** time-offset] [**-f** renew-rate] [**-F** release-rate] [**-g** thread-mode] [**-h**] [**-i**] [**-I** ip-offset] [**-J** remote-address-list-file] [**-l** local-address|interface] [**-L** local-port] [**-M** mac-list-file] [**-n** num-request] [**-N** remote-port] [**-O** random-offset] [**-o** code,hexstring] [**-p** test-period] [**-P** preload] [**-r** rate] [**-R** num-clients] [**-s** seed] [**-S** srvid-offset] [**--scenario** name] [**-t** report] [**-T** template-file] [**-u**] [**-v**] [**-W** exit-wait-time] [**-w** script_name] [**-x** diagnostic-selector] [**-X** xid-offset] [server]
 
 Description
 ~~~~~~~~~~~
@@ -116,6 +116,13 @@ points to, and the one which precedes it (random-offset - 1). If the
 number of simulated clients exceeds 65535, three bytes will be
 randomized, and so on.
 
+Perfdhcp can now simulate traffic from multiple subnets by enabling option
+-J and passing path to file that contains v4 or v6 addresses that will be
+used as relay in generated messages. That enable testing of vast numbers
+of Kea shared networks. While testing Kea v4 it should be started with
+KEA_TEST_SEND_RESPONSES_TO_SOURCE environment variable to force Kea
+to send generated messages to source address of incoming packet.
+
 Templates may currently be used to generate packets being sent to the
 server in 4-way exchanges, i.e. SOLICIT, REQUEST (DHCPv6) and DISCOVER,
 REQUEST (DHCPv4). They cannot be used when RENEW or RELEASE packets are
@@ -165,6 +172,13 @@ Options
    The ``-e prefix-only`` and ``-e address-and-prefix`` forms may not be used
    with the ``-4`` option.
 
+``-F release-rate``
+   Specifies the rate at which RELEASE requests are sent to a server. This value
+   is only valid when used in conjunction with the exchange rate (given
+   by ``-r rate``). Furthermore, the sum of this value and the renew-rate
+   (given by ``-f rate``) must be equal to or less than the exchange
+   rate value.
+
 ``-f renew-rate``
    Specifies the rate at which DHCPv4 or DHCPv6 renew requests are sent to a server.
    This value is only valid when used in conjunction with the exchange
@@ -190,6 +204,13 @@ Options
    ``-i`` is incompatible with the following options: ``-1``, ``-d``,
    ``-D``, ``-E``, ``-S``, ``-I`` and ``-F``. In addition, it cannot be
    used with multiple instances of ``-O``, ``-T`` and ``-X``.
+
+``-J remote-address-list-file``
+    Text file that include multiple addresses. If provided perfdhcp will choose
+    randomly one of addresses for each exchange. This is used to generate traffic
+    from multiple subnets. Designed to test shared-networks. While testing kea v4 it
+    should be started with KEA_TEST_SEND_RESPONSES_TO_SOURCE=ENABLE
+    env variable otherwise perfdhcp will not be able to receive responses.
 
 ``-l local-addr|interface``
    For DHCPv4 operation, specifies the local hostname/address to use when
@@ -258,6 +279,11 @@ Options
    controls the contents of the packets sent (see the "Templates"
    section above).
 
+``-u``
+   Enable checking address uniqueness. Lease valid lifetime should not be shorter
+   than test duration and clients should not request address more than once without
+   releasing it first.
+
 ``-v``
    Prints the version of this program.
 
@@ -287,6 +313,9 @@ Options
    **i**
       Prints the rate processing details.
 
+   **l**
+      Prints the received leases.
+
    **s**
       Prints the first server-ID.
 
@@ -295,6 +324,14 @@ Options
 
    **T**
       When finished, prints templates.
+
+``-y seconds``
+   Time in seconds after which perfdhcp will start simulating the client waiting longer for server responses. This increase the
+   secs field in DHCPv4 and sends increased values in Elapsed option in DHCPv6. Must be used with '-Y'.
+
+``-Y seconds``
+   Period of time in seconds in which perfdhcp will be simulating the client waiting longer for server responses. This increase
+   the secs field in DHCPv4 and sends increased values in Elapsed option in DHCPv6. Must be used with '-y'.
 
 DHCPv4-Only Options
 ~~~~~~~~~~~~~~~~~~~
@@ -311,13 +348,6 @@ The following options only apply for DHCPv6 (i.e. when ``-6`` is given).
 
 ``-c``
    Adds a rapid-commit option (exchanges will be SOLICIT-ADVERTISE).
-
-``-F release-rate``
-   Specifies the rate at which IPv6 RELEASE requests are sent to a server. This value
-   is only valid when used in conjunction with the exchange rate (given
-   by ``-r rate``). Furthermore, the sum of this value and the renew-rate
-   (given by ``-f rate``) must be equal to or less than the exchange
-   rate value.
 
 ``-A encapsulation-level``
    Specifies that relayed traffic must be generated. The argument
@@ -384,6 +414,11 @@ Options Controlling a Test
 ``-t interval``
    Sets the delay (in seconds) between two successive reports.
 
+``-C separator``
+    Output reduced, an argument is a separator for periodic (-t) reports
+    generated in easy parsable mode. Data output won't be changed,
+    remain identical as in -t option.
+
 Arguments
 ~~~~~~~~~
 
@@ -429,6 +464,32 @@ Exit Status
 3
    No general failures in operation, but one or more exchanges were
    unsuccessful.
+
+Usage Examples
+~~~~~~~~~~~~~~
+
+Simulate regular DHCPv4 traffic: 100 DHCPv4 devices (-R 100), 10 packets per second (-r 10), show the query/response rate details (-xi),
+the report should be shown every 2 seconds (-t 2), send the packets to the IP 192.0.2.1:
+
+sudo perfdhcp -xi -t 2 -r 10 -R 100 192.0.2.1
+
+Here's a similar case, but for DHCPv6. Note that DHCPv6 protocol uses link-local addresses, so you need to specify the interface
+(eth0 in this example) to send the traffic. 'all' is a convenience alias for All_DHCP_Relay_Agents_and_Servers (the multicast
+address FF02::1:2). Alternatively, you can use 'servers' alias to refer to All_DHCP_Servers (the multicast address FF05::1:3),
+or skip it all together and the default value (all) will be used.
+
+sudo perfdhcp -6 -xi -t 1 -r 1 -R 10 -l eth0 all
+
+The following examples simulate normal DHCPv4 and DHCPv6 traffic that after 3 seconds starts pretending to not receive any
+responses from the server for 10 seconds. DHCPv4 protocol signals this by increased secs field and DHCPv6 uses elapsed option
+for that. In real networks this indicates that the clients are not getting responses in a timely matter. This can be used
+to simulate some HA scenarios, as Kea uses secs field and elapsed option value as one of the indicators that the HA partner
+is not responding. When enabled with -y and -Y, the secs and elapsed time value increased steadily.
+
+sudo perfdhcp -xi -t 1 -r 1 -y 10 -Y 3 192.0.2.1
+
+sudo perfdhcp -6 -xi -t 1 -r 1 -y 10 -Y 3 2001:db8::1
+
 
 Mailing Lists and Support
 ~~~~~~~~~~~~~~~~~~~~~~~~~

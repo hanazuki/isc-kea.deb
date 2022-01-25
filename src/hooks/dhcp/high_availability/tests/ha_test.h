@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -45,15 +45,6 @@ public:
         : StateType(io_service, config) {
     }
 
-    /// @brief Modifies poke time by adding seconds to it.
-    ///
-    /// @param secs number of seconds to be added to the poke time. If
-    /// the value is negative it will set the poke time in the past
-    /// comparing to current value.
-    void modifyPokeTime(const long secs) {
-        StateType::poke_time_ += boost::posix_time::seconds(secs);
-    }
-
     /// @brief Checks if the object was poked recently.
     ///
     /// @return true if the object was poked less than 5 seconds ago,
@@ -68,6 +59,7 @@ public:
     using StateType::last_clock_skew_warn_;
     using StateType::my_time_at_skew_;
     using StateType::partner_time_at_skew_;
+    using StateType::unsent_update_count_;
 };
 
 /// @brief Type of the NakedCommunicationState for DHCPv4.
@@ -150,10 +142,24 @@ public:
     createValidJsonConfiguration(const HAConfig::HAMode& ha_mode =
                                  HAConfig::LOAD_BALANCING) const;
 
+    /// @brief Return HA configuration with one primary and two backup
+    /// servers in the JSON format.
+    ///
+    /// @return Pointer to the unparsed configuration.
+    data::ConstElementPtr
+    createValidPassiveBackupJsonConfiguration() const;
+
     /// @brief Return HA configuration with three servers.
     ///
+    /// @param ha_mode HA operation mode (default is load balancing).
     /// @return Pointer to the parsed configuration.
-    HAConfigPtr createValidConfiguration() const;
+    HAConfigPtr createValidConfiguration(const HAConfig::HAMode& ha_mode =
+                                         HAConfig::LOAD_BALANCING) const;
+
+    /// @brief Return passive-backup configuration.
+    ///
+    /// @return Pointer to the parsed configuration.
+    HAConfigPtr createValidPassiveBackupConfiguration() const;
 
     /// @brief Checks the status code and message against expected values.
     ///
@@ -219,6 +225,39 @@ public:
     dhcp::Pkt6Ptr createMessage6(const uint8_t msg_type,
                                  const uint8_t duid_seed,
                                  const uint16_t elapsed_time) const;
+
+    /// @brief Sets the DHCP multi-threading configuration in staging SrvConfig.
+    ///
+    /// @param enable_multi_threading value that maps to enable-multi-threading.
+    /// @param thread_pool_size value that maps to thread-pool-size.
+    /// @param queue_size value that maps to queue-size.
+    void setDHCPMultiThreadingConfig(bool enable_multi_threading,
+                                     uint32_t thread_pool_size = 0,
+                                     uint32_t queue_size = 16);
+
+    /// @brief Constructs JSON string for HA "multi-threading" element.
+    ///
+    /// Constructs a JSON string with the following content:
+    ///
+    /// ```
+    /// "multi-threading" {
+    ///     "enable-multi-threading": <bool>,
+    ///     "dedicated-http-listener": <bool>,
+    ///     "http-listener-threads": <int>,
+    ///     "http-client-threads": <int>
+    /// }"
+    /// ```
+    ///
+    /// @param enable_multi_threading value for enable-multi-threading.
+    /// @param http_dedicated_listener value for dedicated-http-listener.
+    /// @param http_listener_threads value for http-listener-threads
+    /// @param http_client_threads value for http-client-threads
+    ///
+    /// @return JSON string
+    std::string makeHAMtJson(bool enable_multi_threading,
+                             bool http_dedicated_listener,
+                             uint32_t http_listener_threads,
+                             uint32_t http_client_threads);
 
     /// @brief Creates test DHCPv6 query instance.
     ///

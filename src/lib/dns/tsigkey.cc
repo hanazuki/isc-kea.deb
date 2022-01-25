@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -98,8 +98,7 @@ TSIGKey::TSIGKeyImpl {
 
 TSIGKey::TSIGKey(const Name& key_name, const Name& algorithm_name,
                  const void* secret, size_t secret_len,
-                 size_t digestbits /*= 0*/) : impl_(NULL)
-{
+                 size_t digestbits /*= 0*/) : impl_(NULL) {
     const HashAlgorithm algorithm = convertAlgorithmName(algorithm_name);
     if ((secret != NULL && secret_len == 0) ||
         (secret == NULL && secret_len != 0)) {
@@ -190,8 +189,8 @@ TSIGKey::TSIGKey(const std::string& str) : impl_(NULL) {
 }
 
 
-TSIGKey::TSIGKey(const TSIGKey& source) : impl_(new TSIGKeyImpl(*source.impl_))
-{}
+TSIGKey::TSIGKey(const TSIGKey& source) : impl_(new TSIGKeyImpl(*source.impl_)) {
+}
 
 TSIGKey&
 TSIGKey::operator=(const TSIGKey& source) {
@@ -297,6 +296,12 @@ Name& TSIGKey::HMACSHA384_NAME() {
 const
 Name& TSIGKey::HMACSHA512_NAME() {
     static Name alg_name("hmac-sha512");
+    return (alg_name);
+}
+
+const
+Name& TSIGKey::GSSTSIG_NAME() {
+    static Name alg_name("gss-tsig");
     return (alg_name);
 }
 

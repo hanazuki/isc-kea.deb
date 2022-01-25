@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #include <config.h>
 #include <mysql_cb_dhcp4.h>
 #include <mysql_cb_impl.h>
+#include <database/database_connection.h>
 #include <database/db_exceptions.h>
 #include <database/server.h>
 #include <database/testutils/schema.h>
@@ -16,22 +17,33 @@
 #include <dhcp/option_int.h>
 #include <dhcp/option_space.h>
 #include <dhcp/option_string.h>
+#include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/client_class_def.h>
+#include <dhcpsrv/config_backend_dhcp4_mgr.h>
 #include <dhcpsrv/pool.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/testutils/mysql_generic_backend_unittest.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <mysql/testutils/mysql_schema.h>
+#include <testutils/multi_threading_utils.h>
+
+#include <boost/make_shared.hpp>
 #include <boost/shared_ptr.hpp>
 #include <gtest/gtest.h>
 #include <mysql.h>
 #include <map>
 #include <sstream>
 
+using namespace isc;
 using namespace isc::asiolink;
 using namespace isc::db;
 using namespace isc::db::test;
 using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
+using namespace isc::process;
+using namespace isc::test;
+namespace ph = std::placeholders;
 
 namespace {
 
@@ -69,8 +81,8 @@ public:
     /// @brief Constructor.
     MySqlConfigBackendDHCPv4Test()
         : test_subnets_(), test_networks_(), test_option_defs_(),
-          test_options_(), test_servers_(), timestamps_(), cbptr_(),
-          audit_entries_() {
+          test_options_(), test_client_classes_(), test_servers_(), timestamps_(),
+          cbptr_(), audit_entries_() {
         // Ensure we have the proper schema with no transient data.
         createMySQLSchema();
 
@@ -95,6 +107,7 @@ public:
         initTestSubnets();
         initTestSharedNetworks();
         initTestOptionDefs();
+        initTestClientClasses();
         initTimestamps();
     }
 
@@ -161,7 +174,8 @@ public:
         subnet->setT1(1234);
         subnet->requireClientClass("required-class1");
         subnet->requireClientClass("required-class2");
-        subnet->setHostReservationMode(Subnet4::HR_DISABLED);
+        subnet->setReservationsGlobal(false);
+        subnet->setReservationsInSubnet(false);
         subnet->setSname("server-hostname");
         subnet->setContext(user_context);
         subnet->setValid(555555);
@@ -260,7 +274,8 @@ public:
         shared_network->setT1(1234);
         shared_network->requireClientClass("required-class1");
         shared_network->requireClientClass("required-class2");
-        shared_network->setHostReservationMode(Subnet4::HR_DISABLED);
+        shared_network->setReservationsGlobal(false);
+        shared_network->setReservationsInSubnet(false);
         shared_network->setContext(user_context);
         shared_network->setValid(5555);
         shared_network->setCalculateTeeTimes(true);
@@ -320,27 +335,27 @@ public:
         ElementPtr user_context = Element::createMap();
         user_context->set("foo", Element::create("bar"));
 
-        OptionDefinitionPtr option_def(new OptionDefinition("foo", 234, "string",
+        OptionDefinitionPtr option_def(new OptionDefinition("foo", 234,
+                                                            DHCP4_OPTION_SPACE,
+                                                            "string",
                                                             "espace"));
-        option_def->setOptionSpaceName("dhcp4");
         test_option_defs_.push_back(option_def);
 
-        option_def.reset(new OptionDefinition("bar", 234, "uint32", true));
-        option_def->setOptionSpaceName("dhcp4");
+        option_def.reset(new OptionDefinition("bar", 234, DHCP4_OPTION_SPACE,
+                                              "uint32", true));
         test_option_defs_.push_back(option_def);
 
-        option_def.reset(new OptionDefinition("fish", 235, "record", true));
-        option_def->setOptionSpaceName("dhcp4");
+        option_def.reset(new OptionDefinition("fish", 235, DHCP4_OPTION_SPACE,
+                                              "record", true));
         option_def->addRecordField("uint32");
         option_def->addRecordField("string");
         test_option_defs_.push_back(option_def);
 
-        option_def.reset(new OptionDefinition("whale", 236, "string"));
-        option_def->setOptionSpaceName("xyz");
+        option_def.reset(new OptionDefinition("whale", 236, "xyz", "string"));
         test_option_defs_.push_back(option_def);
 
-        option_def.reset(new OptionDefinition("foobar", 234, "uint64", true));
-        option_def->setOptionSpaceName("dhcp4");
+        option_def.reset(new OptionDefinition("foobar", 234, DHCP4_OPTION_SPACE,
+                                              "uint64", true));
         test_option_defs_.push_back(option_def);
     }
 
@@ -398,17 +413,37 @@ public:
         // the @c toElement functions require option definitions to generate the
         // proper output.
         defs.addItem(OptionDefinitionPtr(new OptionDefinition(
-                         "vendor-encapsulated-1", 1, "uint32")),
-                     "vendor-encapsulated-options");
+                         "vendor-encapsulated-1", 1,
+                         "vendor-encapsulated-options", "uint32")));
         defs.addItem(OptionDefinitionPtr(new OptionDefinition(
-                         "option-254", 254, "ipv4-address", true)),
-                     DHCP4_OPTION_SPACE);
-        defs.addItem(OptionDefinitionPtr(new OptionDefinition("isc-1", 1, "empty")), "isc");
-        defs.addItem(OptionDefinitionPtr(new OptionDefinition("isc-2", 2, "ipv4-address", true)),
-                     "isc");
+                         "option-254", 254, DHCP4_OPTION_SPACE,
+                         "ipv4-address", true)));
+        defs.addItem(OptionDefinitionPtr(new OptionDefinition("isc-1", 1, "isc", "empty")));
+        defs.addItem(OptionDefinitionPtr(new OptionDefinition("isc-2", 2, "isc", "ipv4-address", true)));
 
         // Register option definitions.
         LibDHCP::setRuntimeOptionDefs(defs);
+    }
+
+    /// @brief Creates several client classes used in tests.
+    void initTestClientClasses() {
+        ExpressionPtr match_expr = boost::make_shared<Expression>();
+        CfgOptionPtr cfg_option = boost::make_shared<CfgOption>();
+        auto class1 = boost::make_shared<ClientClassDef>("foo", match_expr, cfg_option);
+        class1->setRequired(true);
+        class1->setNextServer(IOAddress("1.2.3.4"));
+        class1->setSname("cool");
+        class1->setFilename("epc.cfg");
+        class1->setValid(Triplet<uint32_t>(30, 60, 90));
+        test_client_classes_.push_back(class1);
+
+        auto class2 = boost::make_shared<ClientClassDef>("bar", match_expr, cfg_option);
+        class2->setTest("member('foo')");
+        test_client_classes_.push_back(class2);
+
+        auto class3 = boost::make_shared<ClientClassDef>("foobar", match_expr, cfg_option);
+        class3->setTest("member('foo') and member('bar')");
+        test_client_classes_.push_back(class3);
     }
 
     /// @brief Initialize posix time values used in tests.
@@ -416,12 +451,18 @@ public:
         // Current time minus 1 hour to make sure it is in the past.
         timestamps_["today"] = boost::posix_time::second_clock::local_time()
             - boost::posix_time::hours(1);
+        // One second after today.
+        timestamps_["after today"] = timestamps_["today"] + boost::posix_time::seconds(1);
         // Yesterday.
         timestamps_["yesterday"] = timestamps_["today"] - boost::posix_time::hours(24);
+        // One second after yesterday.
+        timestamps_["after yesterday"] = timestamps_["yesterday"] + boost::posix_time::seconds(1);
         // Two days ago.
         timestamps_["two days ago"] = timestamps_["today"] - boost::posix_time::hours(48);
         // Tomorrow.
         timestamps_["tomorrow"] = timestamps_["today"] + boost::posix_time::hours(24);
+        // One second after tomorrow.
+        timestamps_["after tomorrow"] = timestamps_["tomorrow"] + boost::posix_time::seconds(1);
     }
 
     /// @brief Logs audit entries in the @c audit_entries_ member.
@@ -432,7 +473,7 @@ public:
     std::string logExistingAuditEntries(const std::string& server_tag) {
         std::ostringstream s;
 
-        auto& mod_time_idx = audit_entries_[server_tag].get<AuditEntryModificationTimeTag>();
+        auto& mod_time_idx = audit_entries_[server_tag].get<AuditEntryModificationTimeIdTag>();
 
         for (auto audit_entry_it = mod_time_idx.begin();
              audit_entry_it != mod_time_idx.end();
@@ -442,6 +483,7 @@ public:
               << audit_entry->getObjectId() << ", "
               << static_cast<int>(audit_entry->getModificationType()) << ", "
               << audit_entry->getModificationTime() << ", "
+              << audit_entry->getRevisionId() << ", "
               << audit_entry->getLogMessage()
               << std::endl;
         }
@@ -457,7 +499,7 @@ public:
     /// specified by the caller.
     ///
     /// @param exp_object_type Expected object type.
-    /// @param exp_modification_time Expected modification time.
+    /// @param exp_modification_type Expected modification type.
     /// @param exp_log_message Expected log message.
     /// @param server_selector Server selector to be used for next query.
     /// @param new_entries_num Number of the new entries expected to be inserted.
@@ -492,11 +534,11 @@ public:
         // Audit entries for different server tags are stored in separate
         // containers.
         audit_entries_[tag] = cbptr_->getRecentAuditEntries(server_selector,
-                                                            timestamps_["two days ago"]);
+                                                            timestamps_["two days ago"], 0);
         ASSERT_EQ(audit_entries_size_save + new_entries_num, audit_entries_[tag].size())
             << logExistingAuditEntries(tag);
 
-        auto& mod_time_idx = audit_entries_[tag].get<AuditEntryModificationTimeTag>();
+        auto& mod_time_idx = audit_entries_[tag].get<AuditEntryModificationTimeIdTag>();
 
         // Iterate over specified number of entries starting from the most recent
         // one and check they have correct values.
@@ -526,6 +568,9 @@ public:
     /// @brief Holds pointers to options used in tests.
     std::vector<OptionDescriptorPtr> test_options_;
 
+    /// @brief Holds pointers to classes used in tests.
+    std::vector<ClientClassDefPtr> test_client_classes_;
+
     /// @brief Holds pointers to the servers used in tests.
     std::vector<ServerPtr> test_servers_;
 
@@ -546,6 +591,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getType) {
     params["password"] = "keatest";
     params["user"] = "keatest";
     ASSERT_NO_THROW(cbptr_.reset(new MySqlConfigBackendDHCPv4(params)));
+    ASSERT_NE(cbptr_->getParameters(), DatabaseConnection::ParameterMap());
     EXPECT_EQ("mysql", cbptr_->getType());
 }
 
@@ -557,6 +603,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getHost) {
     params["password"] = "keatest";
     params["user"] = "keatest";
     ASSERT_NO_THROW(cbptr_.reset(new MySqlConfigBackendDHCPv4(params)));
+    ASSERT_NE(cbptr_->getParameters(), DatabaseConnection::ParameterMap());
     EXPECT_EQ("localhost", cbptr_->getHost());
 }
 
@@ -567,6 +614,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getPort) {
     params["name"] = "keatest";
     params["password"] = "keatest";
     params["user"] = "keatest";
+    ASSERT_NE(cbptr_->getParameters(), DatabaseConnection::ParameterMap());
     ASSERT_NO_THROW(cbptr_.reset(new MySqlConfigBackendDHCPv4(params)));
     EXPECT_EQ(0, cbptr_->getPort());
 }
@@ -1060,7 +1108,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getModifiedGlobalParameters4) {
 
     // Get parameters modified after "today".
     auto parameters = cbptr_->getModifiedGlobalParameters4(ServerSelector::ALL(),
-                                                           timestamps_["today"]);
+                                                           timestamps_["after today"]);
 
     const auto& parameters_index = parameters.get<StampedValueNameIndexTag>();
 
@@ -1076,7 +1124,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getModifiedGlobalParameters4) {
     // Should be able to fetct these parameters when explicitly providing
     // the server tag.
     parameters = cbptr_->getModifiedGlobalParameters4(ServerSelector::ONE("server1"),
-                                                      timestamps_["today"]);
+                                                      timestamps_["after today"]);
     EXPECT_EQ(1, parameters.size());
 }
 
@@ -1312,8 +1360,14 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSubnet4WithOptionalUnspecified) {
     EXPECT_TRUE(returned_subnet->getT2().unspecified());
     EXPECT_EQ(0, returned_subnet->getT2().get());
 
-    EXPECT_TRUE(returned_subnet->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, returned_subnet->getHostReservationMode().get());
+    EXPECT_TRUE(returned_subnet->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(returned_subnet->getReservationsGlobal().get());
+
+    EXPECT_TRUE(returned_subnet->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(returned_subnet->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(returned_subnet->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(returned_subnet->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(returned_subnet->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(returned_subnet->getCalculateTeeTimes().get());
@@ -1419,7 +1473,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSubnet4ByPrefix) {
     EXPECT_EQ(subnet->toElement()->str(), returned_subnet->toElement()->str());
 
     // Fetching the subnet for an explicitly specified server tag should
-    // succeeed too.
+    // succeed too.
     returned_subnet = cbptr_->getSubnet4(ServerSelector::ONE("server1"),
                                          "192.0.2.0/24");
     EXPECT_EQ(subnet->toElement()->str(), returned_subnet->toElement()->str());
@@ -1472,11 +1526,12 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getAllSubnets4) {
     ASSERT_EQ(test_subnets_.size() - 1, subnets.size());
 
     // See if the subnets are returned ok.
-    for (auto i = 0; i < subnets.size(); ++i) {
-        ASSERT_EQ(1, subnets[i]->getServerTags().size());
-        EXPECT_EQ("all", subnets[i]->getServerTags().begin()->get());
+    auto subnet_it = subnets.begin();
+    for (auto i = 0; i < subnets.size(); ++i, ++subnet_it) {
+        ASSERT_EQ(1, (*subnet_it)->getServerTags().size());
+        EXPECT_EQ("all", (*subnet_it)->getServerTags().begin()->get());
         EXPECT_EQ(test_subnets_[i + 1]->toElement()->str(),
-                  subnets[i]->toElement()->str());
+                  (*subnet_it)->toElement()->str());
     }
 
     // Attempt to remove the non existing subnet should  return 0.
@@ -1919,24 +1974,24 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getModifiedSubnets4) {
     // should be returned.
     Subnet4Collection
         subnets = cbptr_->getModifiedSubnets4(ServerSelector::ALL(),
-                                              timestamps_["today"]);
+                                              timestamps_["after today"]);
     ASSERT_EQ(1, subnets.size());
 
     // All subnets should also be returned for explicitly specified server tag.
     subnets = cbptr_->getModifiedSubnets4(ServerSelector::ONE("server1"),
-                                          timestamps_["today"]);
+                                          timestamps_["after today"]);
     ASSERT_EQ(1, subnets.size());
 
     // Fetch subnets with timestamp later than yesterday. We should get
     // two subnets.
     subnets = cbptr_->getModifiedSubnets4(ServerSelector::ALL(),
-                                          timestamps_["yesterday"]);
+                                          timestamps_["after yesterday"]);
     ASSERT_EQ(2, subnets.size());
 
     // Fetch subnets with timestamp later than tomorrow. Nothing should
     // be returned.
     subnets = cbptr_->getModifiedSubnets4(ServerSelector::ALL(),
-                                          timestamps_["tomorrow"]);
+                                          timestamps_["after tomorrow"]);
     ASSERT_TRUE(subnets.empty());
 }
 
@@ -1991,7 +2046,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSharedNetworkSubnets4) {
 
     // Returned subnet should match test subnet #1.
     EXPECT_TRUE(isEquivalent(test_subnets_[1]->toElement(),
-                             subnets[0]->toElement()));
+                             (*subnets.begin())->toElement()));
 
     // All subnets should also be returned for ANY server.
     subnets = cbptr_->getSharedNetworkSubnets4(ServerSelector::ANY(), "level1");
@@ -1999,11 +2054,11 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSharedNetworkSubnets4) {
 
     // Returned subnet should match test subnet #1.
     EXPECT_TRUE(isEquivalent(test_subnets_[1]->toElement(),
-                             subnets[0]->toElement()));
+                             (*subnets.begin())->toElement()));
 
     // Check server tag
-    ASSERT_EQ(1, subnets[0]->getServerTags().size());
-    EXPECT_EQ("all", subnets[0]->getServerTags().begin()->get());
+    ASSERT_EQ(1, (*subnets.begin())->getServerTags().size());
+    EXPECT_EQ("all", (*subnets.begin())->getServerTags().begin()->get());
 
     // Fetch all subnets belonging to shared network level2.
     subnets = cbptr_->getSharedNetworkSubnets4(ServerSelector::ALL(), "level2");
@@ -2014,8 +2069,9 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSharedNetworkSubnets4) {
     test_list->add(test_subnets_[3]->toElement());
 
     ElementPtr returned_list = Element::createList();
-    returned_list->add(subnets[0]->toElement());
-    returned_list->add(subnets[1]->toElement());
+    auto subnet = subnets.begin();
+    returned_list->add((*subnet)->toElement());
+    returned_list->add((*++subnet)->toElement());
 
     EXPECT_TRUE(isEquivalent(returned_list, test_list));
 
@@ -2024,8 +2080,9 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSharedNetworkSubnets4) {
     ASSERT_EQ(2, subnets.size());
 
     returned_list = Element::createList();
-    returned_list->add(subnets[0]->toElement());
-    returned_list->add(subnets[1]->toElement());
+    subnet = subnets.begin();
+    returned_list->add((*subnet)->toElement());
+    returned_list->add((*++subnet)->toElement());
 
     EXPECT_TRUE(isEquivalent(returned_list, test_list));
 }
@@ -2223,7 +2280,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSharedNetwork4Selectors) {
 TEST_F(MySqlConfigBackendDHCPv4Test, createUpdateSharedNetwork4) {
     auto shared_network = test_networks_[0];
 
-    // An attempto insert the shared network for non-existing server should fail.
+    // An attempt to insert the shared network for non-existing server should fail.
     EXPECT_THROW(cbptr_->createUpdateSharedNetwork4(ServerSelector::ONE("server1"),
                                                     shared_network),
                  NullKeyError);
@@ -2328,8 +2385,14 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getSharedNetwork4WithOptionalUnspecified) {
     EXPECT_TRUE(returned_network->getT2().unspecified());
     EXPECT_EQ(0, returned_network->getT2().get());
 
-    EXPECT_TRUE(returned_network->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, returned_network->getHostReservationMode().get());
+    EXPECT_TRUE(returned_network->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(returned_network->getReservationsGlobal().get());
+
+    EXPECT_TRUE(returned_network->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(returned_network->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(returned_network->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(returned_network->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(returned_network->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(returned_network->getCalculateTeeTimes().get());
@@ -2621,19 +2684,19 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getModifiedSharedNetworks4) {
     // shared network  should be returned.
     SharedNetwork4Collection
         networks = cbptr_->getModifiedSharedNetworks4(ServerSelector::ALL(),
-                                                      timestamps_["today"]);
+                                                      timestamps_["after today"]);
     ASSERT_EQ(1, networks.size());
 
     // Fetch shared networks with timestamp later than yesterday. We
     // should get two shared networks.
     networks = cbptr_->getModifiedSharedNetworks4(ServerSelector::ALL(),
-                                                 timestamps_["yesterday"]);
+                                                 timestamps_["after yesterday"]);
     ASSERT_EQ(2, networks.size());
 
     // Fetch shared networks with timestamp later than tomorrow. Nothing
     // should be returned.
     networks = cbptr_->getModifiedSharedNetworks4(ServerSelector::ALL(),
-                                                  timestamps_["tomorrow"]);
+                                                  timestamps_["after tomorrow"]);
     ASSERT_TRUE(networks.empty());
 }
 
@@ -2925,7 +2988,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, sharedNetworkOptions) {
     EXPECT_NO_THROW(cbptr_->createUpdateSharedNetwork4(ServerSelector::ALL(), test_networks_[0]));
     EXPECT_EQ(4, countRows("dhcp4_options"));
 
-    // Delete this shared netwiork. This should not affect the option associated
+    // Delete this shared network. This should not affect the option associated
     // with the remaining shared network.
     EXPECT_NO_THROW(cbptr_->deleteSharedNetwork4(ServerSelector::ALL(),
                                                  test_networks_[0]->getName()));
@@ -3194,7 +3257,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getAllOptionDefs4) {
             ++updates_num;
 
         } else {
-            SCOPED_TRACE("CREATE audit entry for the option defnition " + name);
+            SCOPED_TRACE("CREATE audit entry for the option definition " + name);
             testNewAuditEntry("dhcp4_option_def",
                               AuditEntry::ModificationType::CREATE,
                               "option definition set");
@@ -3289,19 +3352,19 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getModifiedOptionDefs4) {
     // option definition should be returned.
     OptionDefContainer
         option_defs = cbptr_->getModifiedOptionDefs4(ServerSelector::ALL(),
-                                                     timestamps_["today"]);
+                                                     timestamps_["after today"]);
     ASSERT_EQ(1, option_defs.size());
 
     // Fetch option definitions with timestamp later than yesterday. We
     // should get two option definitions.
     option_defs = cbptr_->getModifiedOptionDefs4(ServerSelector::ALL(),
-                                                 timestamps_["yesterday"]);
+                                                 timestamps_["after yesterday"]);
     ASSERT_EQ(2, option_defs.size());
 
     // Fetch option definitions with timestamp later than tomorrow. Nothing
     // should be returned.
     option_defs = cbptr_->getModifiedOptionDefs4(ServerSelector::ALL(),
-                                              timestamps_["tomorrow"]);
+                                              timestamps_["after tomorrow"]);
     ASSERT_TRUE(option_defs.empty());
 }
 
@@ -3637,13 +3700,13 @@ TEST_F(MySqlConfigBackendDHCPv4Test, getModifiedOptions4) {
     // one option should be returned.
     OptionContainer returned_options =
         cbptr_->getModifiedOptions4(ServerSelector::ALL(),
-                                    timestamps_["today"]);
+                                    timestamps_["after today"]);
     ASSERT_EQ(1, returned_options.size());
 
     // Fetching modified options with explicitly specified server selector
     // should return the same result.
     returned_options = cbptr_->getModifiedOptions4(ServerSelector::ONE("server1"),
-                                                   timestamps_["today"]);
+                                                   timestamps_["after today"]);
     ASSERT_EQ(1, returned_options.size());
 
     // The returned option should be the one with the timestamp
@@ -4090,6 +4153,1146 @@ TEST_F(MySqlConfigBackendDHCPv4Test, sharedNetworkOptionIdOrder) {
                   networks[i]->toElement()->str());
         }
     }
+}
+
+// This test verifies that it is possible to create client classes, update them
+// and retrieve all classes for a given server.
+TEST_F(MySqlConfigBackendDHCPv4Test, setAndGetAllClientClasses4) {
+    // Create a server.
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[0]));
+    {
+        SCOPED_TRACE("server1 is created");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server1"));
+    }
+    // Create first class.
+    auto class1 = test_client_classes_[0];
+    class1->setTest("pkt4.msgtype == 1");
+    ASSERT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+    {
+        SCOPED_TRACE("client class foo is created");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+    // Create second class.
+    auto class2 = test_client_classes_[1];
+    ASSERT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class2, ""));
+    {
+        SCOPED_TRACE("client class bar is created");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+    // Create third class.
+    auto class3 = test_client_classes_[2];
+    ASSERT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class3, ""));
+    {
+        SCOPED_TRACE("client class foobar is created");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+    // Update the third class to depend on the second class.
+    class3->setTest("member('foo')");
+    ASSERT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class3, ""));
+    {
+        SCOPED_TRACE("client class bar is updated");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::UPDATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+    // Only the first class should be returned for the server selector ALL.
+    auto client_classes = cbptr_->getAllClientClasses4(ServerSelector::ALL());
+    ASSERT_EQ(1, client_classes.getClasses()->size());
+    // All three classes should be returned for the server1.
+    client_classes = cbptr_->getAllClientClasses4(ServerSelector::ONE("server1"));
+    auto classes_list = client_classes.getClasses();
+    ASSERT_EQ(3, classes_list->size());
+    EXPECT_EQ("foo", (*classes_list->begin())->getName());
+    EXPECT_EQ("bar", (*(classes_list->begin() + 1))->getName());
+    EXPECT_EQ("foobar", (*(classes_list->begin() + 2))->getName());
+
+
+    // Move the third class between the first and second class.
+    ASSERT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class3, "foo"));
+
+    // Ensure that the classes order has changed.
+    client_classes = cbptr_->getAllClientClasses4(ServerSelector::ONE("server1"));
+    classes_list = client_classes.getClasses();
+    ASSERT_EQ(3, classes_list->size());
+    EXPECT_EQ("foo", (*classes_list->begin())->getName());
+    EXPECT_EQ("foobar", (*(classes_list->begin() + 1))->getName());
+    EXPECT_EQ("bar", (*(classes_list->begin() + 2))->getName());
+
+    // Update the foobar class without specifying its position. It should not
+    // be moved.
+    ASSERT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class3, ""));
+
+    client_classes = cbptr_->getAllClientClasses4(ServerSelector::ONE("server1"));
+    classes_list = client_classes.getClasses();
+    ASSERT_EQ(3, classes_list->size());
+    EXPECT_EQ("foo", (*classes_list->begin())->getName());
+    EXPECT_EQ("foobar", (*(classes_list->begin() + 1))->getName());
+    EXPECT_EQ("bar", (*(classes_list->begin() + 2))->getName());
+}
+
+// This test verifies that a single class can be retrieved from the database.
+TEST_F(MySqlConfigBackendDHCPv4Test, getClientClass4) {
+    // Create a server.
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[0]));
+
+    // Add classes.
+    auto class1 = test_client_classes_[0];
+    EXPECT_NO_THROW(class1->getCfgOption()->add(test_options_[0]->option_,
+                                                test_options_[0]->persistent_,
+                                                test_options_[0]->space_name_));
+    EXPECT_NO_THROW(class1->getCfgOption()->add(test_options_[1]->option_,
+                                                test_options_[1]->persistent_,
+                                                test_options_[1]->space_name_));
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+
+    auto class2 = test_client_classes_[1];
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class2, ""));
+
+    // Get the first client class and validate its contents.
+    ClientClassDefPtr client_class;
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ALL(), class1->getName()));
+    ASSERT_TRUE(client_class);
+    EXPECT_EQ("foo", client_class->getName());
+    EXPECT_TRUE(client_class->getRequired());
+    EXPECT_EQ("1.2.3.4", client_class->getNextServer().toText());
+    EXPECT_EQ("cool", client_class->getSname());
+    EXPECT_EQ("epc.cfg", client_class->getFilename());
+    EXPECT_EQ(30, client_class->getValid().getMin());
+    EXPECT_EQ(60, client_class->getValid().get());
+    EXPECT_EQ(90, client_class->getValid().getMax());
+
+    // Validate options belonging to this class.
+    ASSERT_TRUE(client_class->getCfgOption());
+    OptionDescriptor returned_opt_boot_file_name =
+        client_class->getCfgOption()->get(DHCP4_OPTION_SPACE, DHO_BOOT_FILE_NAME);
+    ASSERT_TRUE(returned_opt_boot_file_name.option_);
+
+    OptionDescriptor returned_opt_ip_ttl =
+        client_class->getCfgOption()->get(DHCP4_OPTION_SPACE, DHO_DEFAULT_IP_TTL);
+    ASSERT_TRUE(returned_opt_ip_ttl.option_);
+
+    // Fetch the same class using different server selectors.
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ANY(),
+                                                           class1->getName()));
+    EXPECT_TRUE(client_class);
+
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ONE("server1"),
+                                                           class1->getName()));
+    EXPECT_TRUE(client_class);
+
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::UNASSIGNED(),
+                                                           class1->getName()));
+    EXPECT_FALSE(client_class);
+
+    // Fetch the second client class using different selectors. This time the
+    // class should not be returned for the ALL server selector because it is
+    // associated with the server1.
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ALL(),
+                                                           class2->getName()));
+    EXPECT_FALSE(client_class);
+
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ANY(),
+                                                           class2->getName()));
+    EXPECT_TRUE(client_class);
+
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ONE("server1"),
+                                                           class2->getName()));
+    EXPECT_TRUE(client_class);
+
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::UNASSIGNED(),
+                                                           class2->getName()));
+    EXPECT_FALSE(client_class);
+}
+
+// This test verifies that client class specific DHCP options can be
+// modified during the class update.
+TEST_F(MySqlConfigBackendDHCPv4Test, createUpdateClientClass4Options) {
+    // Add class with two options and two option definitions.
+    auto class1 = test_client_classes_[0];
+    EXPECT_NO_THROW(class1->getCfgOption()->add(test_options_[0]->option_,
+                                                test_options_[0]->persistent_,
+                                                test_options_[0]->space_name_));
+    EXPECT_NO_THROW(class1->getCfgOption()->add(test_options_[1]->option_,
+                                                test_options_[1]->persistent_,
+                                                test_options_[1]->space_name_));
+    auto cfg_option_def = boost::make_shared<CfgOptionDef>();
+    class1->setCfgOptionDef(cfg_option_def);
+    EXPECT_NO_THROW(class1->getCfgOptionDef()->add(test_option_defs_[0]));
+    EXPECT_NO_THROW(class1->getCfgOptionDef()->add(test_option_defs_[2]));
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+
+    // Fetch the class and the options from the database.
+    ClientClassDefPtr client_class;
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ALL(), class1->getName()));
+    ASSERT_TRUE(client_class);
+
+    // Validate options belonging to the class.
+    ASSERT_TRUE(client_class->getCfgOption());
+    OptionDescriptor returned_opt_boot_file_name =
+        client_class->getCfgOption()->get(DHCP4_OPTION_SPACE, DHO_BOOT_FILE_NAME);
+    ASSERT_TRUE(returned_opt_boot_file_name.option_);
+
+    OptionDescriptor returned_opt_ip_ttl =
+        client_class->getCfgOption()->get(DHCP4_OPTION_SPACE, DHO_DEFAULT_IP_TTL);
+    ASSERT_TRUE(returned_opt_ip_ttl.option_);
+
+    // Validate option definitions belonging to the class.
+    ASSERT_TRUE(client_class->getCfgOptionDef());
+    auto returned_def_foo = client_class->getCfgOptionDef()->get(test_option_defs_[0]->getOptionSpaceName(),
+                                                                 test_option_defs_[0]->getCode());
+    ASSERT_TRUE(returned_def_foo);
+    EXPECT_EQ(234, returned_def_foo->getCode());
+    EXPECT_EQ("foo", returned_def_foo->getName());
+    EXPECT_EQ(DHCP4_OPTION_SPACE, returned_def_foo->getOptionSpaceName());
+    EXPECT_EQ("espace", returned_def_foo->getEncapsulatedSpace());
+    EXPECT_EQ(OPT_STRING_TYPE, returned_def_foo->getType());
+    EXPECT_FALSE(returned_def_foo->getArrayType());
+
+    auto returned_def_fish = client_class->getCfgOptionDef()->get(test_option_defs_[2]->getOptionSpaceName(),
+                                                                  test_option_defs_[2]->getCode());
+    ASSERT_TRUE(returned_def_fish);
+    EXPECT_EQ(235, returned_def_fish->getCode());
+    EXPECT_EQ("fish", returned_def_fish->getName());
+    EXPECT_EQ(DHCP4_OPTION_SPACE, returned_def_fish->getOptionSpaceName());
+    EXPECT_TRUE(returned_def_fish->getEncapsulatedSpace().empty());
+    EXPECT_EQ(OPT_RECORD_TYPE, returned_def_fish->getType());
+    EXPECT_TRUE(returned_def_fish->getArrayType());
+
+    // Replace client class specific option definitions. Leave only one option
+    // definition.
+    cfg_option_def = boost::make_shared<CfgOptionDef>();
+    class1->setCfgOptionDef(cfg_option_def);
+    EXPECT_NO_THROW(class1->getCfgOptionDef()->add(test_option_defs_[2]));
+
+    // Delete one of the options and update the class.
+    class1->getCfgOption()->del(test_options_[0]->space_name_,
+                                test_options_[0]->option_->getType());
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+    EXPECT_NO_THROW(client_class = cbptr_->getClientClass4(ServerSelector::ALL(), class1->getName()));
+    ASSERT_TRUE(client_class);
+
+    // Ensure that the first option definition is gone.
+    ASSERT_TRUE(client_class->getCfgOptionDef());
+    returned_def_foo = client_class->getCfgOptionDef()->get(test_option_defs_[0]->getOptionSpaceName(),
+                                                            test_option_defs_[0]->getCode());
+    EXPECT_FALSE(returned_def_foo);
+
+    // The second option definition should be present.
+    returned_def_fish = client_class->getCfgOptionDef()->get(test_option_defs_[2]->getOptionSpaceName(),
+                                                             test_option_defs_[2]->getCode());
+    EXPECT_TRUE(returned_def_fish);
+
+    // Make sure that the first option is gone.
+    ASSERT_TRUE(client_class->getCfgOption());
+    returned_opt_boot_file_name = client_class->getCfgOption()->get(DHCP4_OPTION_SPACE,
+                                                                    DHO_BOOT_FILE_NAME);
+    EXPECT_FALSE(returned_opt_boot_file_name.option_);
+
+    // The second option should be there.
+    returned_opt_ip_ttl = client_class->getCfgOption()->get(DHCP4_OPTION_SPACE,
+                                                            DHO_DEFAULT_IP_TTL);
+    ASSERT_TRUE(returned_opt_ip_ttl.option_);
+}
+
+// This test verifies that modified client classes can be retrieved from the database.
+TEST_F(MySqlConfigBackendDHCPv4Test, getModifiedClientClasses4) {
+    // Create server1.
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[0]));
+
+    // Add three classes to the database with different timestamps.
+    auto class1 = test_client_classes_[0];
+    class1->setModificationTime(timestamps_["yesterday"]);
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+
+    auto class2 = test_client_classes_[1];
+    class2->setModificationTime(timestamps_["today"]);
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class2, ""));
+
+    auto class3 = test_client_classes_[2];
+    class3->setModificationTime(timestamps_["tomorrow"]);
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class3, ""));
+
+    // Get modified client classes configured for all servers.
+    auto client_classes = cbptr_->getModifiedClientClasses4(ServerSelector::ALL(),
+                                                            timestamps_["two days ago"]);
+    EXPECT_EQ(2, client_classes.getClasses()->size());
+
+    // Get modified client classes appropriate for server1. It includes classes
+    // for all servers and for the server1.
+    client_classes = cbptr_->getModifiedClientClasses4(ServerSelector::ONE("server1"),
+                                                       timestamps_["two days ago"]);
+    EXPECT_EQ(3, client_classes.getClasses()->size());
+
+    // Get the classes again but use the timestamp equal to the modification
+    // time of the first class.
+    client_classes = cbptr_->getModifiedClientClasses4(ServerSelector::ONE("server1"),
+                                                       timestamps_["yesterday"]);
+    EXPECT_EQ(3, client_classes.getClasses()->size());
+
+    // Get modified classes starting from today. It should return only two.
+    client_classes = cbptr_->getModifiedClientClasses4(ServerSelector::ONE("server1"),
+                                                       timestamps_["today"]);
+    EXPECT_EQ(2, client_classes.getClasses()->size());
+
+    // Get client classes modified in the future. It should return none.
+    client_classes = cbptr_->getModifiedClientClasses4(ServerSelector::ONE("server1"),
+                                                       timestamps_["after tomorrow"]);
+    EXPECT_EQ(0, client_classes.getClasses()->size());
+
+    // Getting modified client classes for any server is unsupported.
+    EXPECT_THROW(cbptr_->getModifiedClientClasses4(ServerSelector::ANY(),
+                                                   timestamps_["two days ago"]),
+                 InvalidOperation);
+}
+
+// This test verifies that a specified client class can be deleted.
+TEST_F(MySqlConfigBackendDHCPv4Test, deleteClientClass4) {
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[0]));
+    {
+        SCOPED_TRACE("server1 is created");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server1"));
+    }
+    {
+        SCOPED_TRACE("server1 is created");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[2]));
+    {
+        SCOPED_TRACE("server1 is created and available for server1");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server1"));
+    }
+    {
+        SCOPED_TRACE("server1 is created and available for server2");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    auto class1 = test_client_classes_[0];
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+    {
+        SCOPED_TRACE("client class foo is created and available for server1");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+    {
+        SCOPED_TRACE("client class foo is created and available for server 2");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    auto class2 = test_client_classes_[1];
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class2, ""));
+    {
+        SCOPED_TRACE("client class bar is created");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+
+    auto class3 = test_client_classes_[2];
+    class3->setTest("member('foo')");
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server2"), class3, ""));
+    {
+        SCOPED_TRACE("client class foobar is created");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    uint64_t result;
+    EXPECT_NO_THROW(result = cbptr_->deleteClientClass4(ServerSelector::ONE("server1"),
+                                                        class2->getName()));
+    EXPECT_EQ(1, result);
+    {
+        SCOPED_TRACE("client class bar is deleted");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::DELETE,
+                          "client class deleted",
+                          ServerSelector::ONE("server1"));
+    }
+
+    EXPECT_NO_THROW(result = cbptr_->deleteClientClass4(ServerSelector::ONE("server2"),
+                                                        class3->getName()));
+    EXPECT_EQ(1, result);
+    {
+        SCOPED_TRACE("client class foobar is deleted");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::DELETE,
+                          "client class deleted",
+                          ServerSelector::ONE("server2"));
+    }
+
+    EXPECT_NO_THROW(result = cbptr_->deleteClientClass4(ServerSelector::ANY(),
+                                                        class1->getName()));
+    EXPECT_EQ(1, result);
+    {
+        SCOPED_TRACE("client class foo is deleted and no longer available for the server1");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::DELETE,
+                          "client class deleted",
+                          ServerSelector::ONE("server1"));
+    }
+    {
+        SCOPED_TRACE("client class foo is deleted and no longer available for the server2");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::DELETE,
+                          "client class deleted",
+                          ServerSelector::ONE("server2"));
+    }
+}
+
+// This test verifies that all client classes can be deleted using
+// a specified server selector.
+TEST_F(MySqlConfigBackendDHCPv4Test, deleteAllClientClasses4) {
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[0]));
+    {
+        SCOPED_TRACE("server1 is created");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server1"));
+    }
+    {
+        SCOPED_TRACE("server1 is created");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[2]));
+    {
+        SCOPED_TRACE("server1 is created and available for server1");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server1"));
+    }
+    {
+        SCOPED_TRACE("server1 is created and available for server2");
+        testNewAuditEntry("dhcp4_server",
+                          AuditEntry::ModificationType::CREATE,
+                          "server set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    auto class1 = test_client_classes_[0];
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+    {
+        SCOPED_TRACE("client class foo is created and available for server1");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+    {
+        SCOPED_TRACE("client class foo is created and available for server 2");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    auto class2 = test_client_classes_[1];
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server1"), class2, ""));
+    {
+        SCOPED_TRACE("client class bar is created");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server1"));
+    }
+
+    auto class3 = test_client_classes_[2];
+    class3->setTest("member('foo')");
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ONE("server2"), class3, ""));
+    {
+        SCOPED_TRACE("client class foobar is created");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::CREATE,
+                          "client class set",
+                          ServerSelector::ONE("server2"));
+    }
+
+    uint64_t result;
+
+    EXPECT_NO_THROW(result = cbptr_->deleteAllClientClasses4(ServerSelector::UNASSIGNED()));
+    EXPECT_EQ(0, result);
+
+    EXPECT_NO_THROW(result = cbptr_->deleteAllClientClasses4(ServerSelector::ONE("server2")));
+    EXPECT_EQ(1, result);
+    {
+        SCOPED_TRACE("client classes for server2 deleted");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::DELETE,
+                          "deleted all client classes",
+                          ServerSelector::ONE("server2"));
+    }
+
+    EXPECT_NO_THROW(result = cbptr_->deleteAllClientClasses4(ServerSelector::ONE("server2")));
+    EXPECT_EQ(0, result);
+
+    EXPECT_NO_THROW(result = cbptr_->deleteAllClientClasses4(ServerSelector::ONE("server1")));
+    EXPECT_EQ(1, result);
+    {
+        SCOPED_TRACE("client classes for server1 deleted");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::DELETE,
+                          "deleted all client classes",
+                          ServerSelector::ONE("server1"));
+    }
+
+    EXPECT_NO_THROW(result = cbptr_->deleteAllClientClasses4(ServerSelector::ONE("server1")));
+    EXPECT_EQ(0, result);
+
+    EXPECT_NO_THROW(result = cbptr_->deleteAllClientClasses4(ServerSelector::ALL()));
+    EXPECT_EQ(1, result);
+    {
+        SCOPED_TRACE("client classes for all deleted");
+        testNewAuditEntry("dhcp4_client_class",
+                          AuditEntry::ModificationType::DELETE,
+                          "deleted all client classes",
+                          ServerSelector::ONE("server1"));
+    }
+
+    EXPECT_NO_THROW(result = cbptr_->deleteAllClientClasses4(ServerSelector::ALL()));
+    EXPECT_EQ(0, result);
+
+    // Deleting multiple objects using ANY server tag is unsupported.
+    EXPECT_THROW(cbptr_->deleteAllClientClasses4(ServerSelector::ANY()), InvalidOperation);
+}
+
+// This test verifies that client class dependencies are tracked when the
+// classes are added to the database. It verifies that an attempt to update
+// a class violating the dependencies results in an error.
+TEST_F(MySqlConfigBackendDHCPv4Test, clientClassDependencies4) {
+    // Create a server.
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[0]));
+
+    // Create first class. It depends on KNOWN built-in class.
+    auto class1 = test_client_classes_[0];
+    class1->setTest("member('KNOWN')");
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""));
+
+    // Create second class which depends on the first class. This yelds indirect
+    // dependency on KNOWN class.
+    auto class2 = test_client_classes_[1];
+    class2->setTest("member('foo')");
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class2, ""));
+
+    // Create third class depending on the second class. This also yelds indirect
+    // dependency on KNOWN class.
+    auto class3 = test_client_classes_[2];
+    class3->setTest("member('bar')");
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class3, ""));
+
+    // An attempt to move the first class to the end of the class hierarchy should
+    // fail because other classes depend on it.
+    EXPECT_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, "bar"),
+                 DbOperationError);
+
+    // Try to change the dependency of the first class. There are other classes
+    // having indirect dependency on KNOWN class via this class. Therefore, the
+    // update should be unsuccessful.
+    class1->setTest("member('HA_server1')");
+    EXPECT_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class1, ""),
+                 DbOperationError);
+
+    // Try to change the dependency of the second class. This should result in
+    // an error because the third class depends on it.
+    class2->setTest("member('HA_server1')");
+    EXPECT_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class2, ""),
+                 DbOperationError);
+
+    // Changing the indirect dependency of the third class should succeed, because
+    // no other classes depend on this class.
+    class3->setTest("member('HA_server1')");
+    EXPECT_NO_THROW(cbptr_->createUpdateClientClass4(ServerSelector::ALL(), class3, ""));
+}
+
+/// This test verifies that audit entries can be retrieved from a given
+/// timestamp and id including when two entries can get the same timestamp.
+/// (either it is a common even and this should catch it, or it is a rare
+/// event and it does not matter).
+TEST_F(MySqlConfigBackendDHCPv4Test, multipleAuditEntries) {
+    // Get current time.
+    boost::posix_time::ptime now = boost::posix_time::second_clock::local_time();
+
+    // Create a server.
+    EXPECT_NO_THROW(cbptr_->createUpdateServer4(test_servers_[1]));
+
+    // Create a global parameter and update it many times.
+    const ServerSelector& server_selector = ServerSelector::ALL();
+    StampedValuePtr param;
+    ElementPtr value;
+    for (int i = 0; i < 100; ++i) {
+        value = Element::create(i);
+        param = StampedValue::create("my-parameter", value);
+        cbptr_->createUpdateGlobalParameter4(server_selector, param);
+    }
+
+    // Get all audit entries from now.
+    AuditEntryCollection audit_entries =
+        cbptr_->getRecentAuditEntries(server_selector, now, 0);
+
+    // Check that partial retrieves return the right count.
+    auto& mod_time_idx = audit_entries.get<AuditEntryModificationTimeIdTag>();
+    for (auto it = mod_time_idx.begin(); it != mod_time_idx.end(); ++it) {
+        size_t partial_size =
+            cbptr_->getRecentAuditEntries(server_selector,
+                                          (*it)->getModificationTime(),
+                                          (*it)->getRevisionId()).size();
+        EXPECT_EQ(partial_size + 1,
+                  std::distance(it, mod_time_idx.end()));
+    }
+}
+
+class MySqlConfigBackendDHCPv4DbLostCallbackTest : public ::testing::Test {
+public:
+    MySqlConfigBackendDHCPv4DbLostCallbackTest()
+        : db_lost_callback_called_(0), db_recovered_callback_called_(0),
+          db_failed_callback_called_(0),
+          io_service_(boost::make_shared<isc::asiolink::IOService>()) {
+        isc::db::DatabaseConnection::db_lost_callback_ = 0;
+        isc::db::DatabaseConnection::db_recovered_callback_ = 0;
+        isc::db::DatabaseConnection::db_failed_callback_ = 0;
+        isc::dhcp::MySqlConfigBackendImpl::setIOService(io_service_);
+        isc::dhcp::TimerMgr::instance()->setIOService(io_service_);
+        isc::dhcp::CfgMgr::instance().clear();
+    }
+
+    virtual ~MySqlConfigBackendDHCPv4DbLostCallbackTest() {
+        isc::db::DatabaseConnection::db_lost_callback_ = 0;
+        isc::db::DatabaseConnection::db_recovered_callback_ = 0;
+        isc::db::DatabaseConnection::db_failed_callback_ = 0;
+        isc::dhcp::MySqlConfigBackendImpl::setIOService(isc::asiolink::IOServicePtr());
+        isc::dhcp::TimerMgr::instance()->unregisterTimers();
+        isc::dhcp::CfgMgr::instance().clear();
+    }
+
+    /// @brief Prepares the class for a test.
+    ///
+    /// Invoked by gtest prior test entry, we create the
+    /// appropriate schema and create a basic DB manager to
+    /// wipe out any prior instance
+    virtual void SetUp() {
+        // Ensure we have the proper schema with no transient data.
+        createMySQLSchema();
+        isc::dhcp::CfgMgr::instance().clear();
+        isc::dhcp::MySqlConfigBackendDHCPv4::registerBackendType();
+    }
+
+    /// @brief Pre-text exit clean up
+    ///
+    /// Invoked by gtest upon test exit, we destroy the schema
+    /// we created.
+    virtual void TearDown() {
+        // If data wipe enabled, delete transient data otherwise destroy the schema
+        destroyMySQLSchema();
+        isc::dhcp::CfgMgr::instance().clear();
+        isc::dhcp::MySqlConfigBackendDHCPv4::unregisterBackendType();
+    }
+
+    /// @brief Method which returns the back end specific connection
+    /// string
+    virtual std::string validConnectString() {
+        return (validMySQLConnectionString());
+    }
+
+    /// @brief Method which returns invalid back end specific connection
+    /// string
+    virtual std::string invalidConnectString() {
+        return (connectionString(MYSQL_VALID_TYPE, INVALID_NAME, VALID_HOST,
+                                 VALID_USER, VALID_PASSWORD));
+    }
+
+    /// @brief Verifies open failures do NOT invoke db lost callback
+    ///
+    /// The db lost callback should only be invoked after successfully
+    /// opening the DB and then subsequently losing it. Failing to
+    /// open should be handled directly by the application layer.
+    void testNoCallbackOnOpenFailure();
+
+    /// @brief Verifies the CB manager's behavior if DB connection is lost
+    ///
+    /// This function creates a CB manager with a back end that supports
+    /// connectivity lost callback. It verifies connectivity by issuing a known
+    /// valid query. Next it simulates connectivity lost by identifying and
+    /// closing the socket connection to the CB backend. It then reissues the
+    /// query and verifies that:
+    /// -# The Query throws  DbOperationError (rather than exiting)
+    /// -# The registered DbLostCallback was invoked
+    /// -# The registered DbRecoveredCallback was invoked
+    void testDbLostAndRecoveredCallback();
+
+    /// @brief Verifies the CB manager's behavior if DB connection is lost
+    ///
+    /// This function creates a CB manager with a back end that supports
+    /// connectivity lost callback. It verifies connectivity by issuing a known
+    /// valid query. Next it simulates connectivity lost by identifying and
+    /// closing the socket connection to the CB backend. It then reissues the
+    /// query and verifies that:
+    /// -# The Query throws  DbOperationError (rather than exiting)
+    /// -# The registered DbLostCallback was invoked
+    /// -# The registered DbFailedCallback was invoked
+    void testDbLostAndFailedCallback();
+
+    /// @brief Verifies the CB manager's behavior if DB connection is lost
+    ///
+    /// This function creates a CB manager with a back end that supports
+    /// connectivity lost callback. It verifies connectivity by issuing a known
+    /// valid query. Next it simulates connectivity lost by identifying and
+    /// closing the socket connection to the CB backend. It then reissues the
+    /// query and verifies that:
+    /// -# The Query throws  DbOperationError (rather than exiting)
+    /// -# The registered DbLostCallback was invoked
+    /// -# The registered DbRecoveredCallback was invoked after two reconnect
+    /// attempts (once failing and second triggered by timer)
+    void testDbLostAndRecoveredAfterTimeoutCallback();
+
+    /// @brief Verifies the CB manager's behavior if DB connection is lost
+    ///
+    /// This function creates a CB manager with a back end that supports
+    /// connectivity lost callback. It verifies connectivity by issuing a known
+    /// valid query. Next it simulates connectivity lost by identifying and
+    /// closing the socket connection to the CB backend. It then reissues the
+    /// query and verifies that:
+    /// -# The Query throws  DbOperationError (rather than exiting)
+    /// -# The registered DbLostCallback was invoked
+    /// -# The registered DbFailedCallback was invoked after two reconnect
+    /// attempts (once failing and second triggered by timer)
+    void testDbLostAndFailedAfterTimeoutCallback();
+
+    /// @brief Callback function registered with the CB manager
+    bool db_lost_callback(db::ReconnectCtlPtr /* not_used */) {
+        return (++db_lost_callback_called_);
+    }
+
+    /// @brief Flag used to detect calls to db_lost_callback function
+    uint32_t db_lost_callback_called_;
+
+    /// @brief Callback function registered with the CB manager
+    bool db_recovered_callback(db::ReconnectCtlPtr /* not_used */) {
+        return (++db_recovered_callback_called_);
+    }
+
+    /// @brief Flag used to detect calls to db_recovered_callback function
+    uint32_t db_recovered_callback_called_;
+
+    /// @brief Callback function registered with the CB manager
+    bool db_failed_callback(db::ReconnectCtlPtr /* not_used */) {
+        return (++db_failed_callback_called_);
+    }
+
+    /// @brief Flag used to detect calls to db_failed_callback function
+    uint32_t db_failed_callback_called_;
+
+    /// The IOService object, used for all ASIO operations.
+    isc::asiolink::IOServicePtr io_service_;
+};
+
+void
+MySqlConfigBackendDHCPv4DbLostCallbackTest::testNoCallbackOnOpenFailure() {
+    isc::db::DatabaseConnection::db_lost_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_lost_callback, this, ph::_1);
+
+    // Set the connectivity recovered callback.
+    isc::db::DatabaseConnection::db_recovered_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_recovered_callback, this, ph::_1);
+
+    // Set the connectivity failed callback.
+    isc::db::DatabaseConnection::db_failed_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_failed_callback, this, ph::_1);
+
+    std::string access = invalidConnectString();
+
+    // Connect to the CB backend.
+    ASSERT_THROW(ConfigBackendDHCPv4Mgr::instance().addBackend(access), DbOpenError);
+
+    io_service_->poll();
+
+    EXPECT_EQ(0, db_lost_callback_called_);
+    EXPECT_EQ(0, db_recovered_callback_called_);
+    EXPECT_EQ(0, db_failed_callback_called_);
+}
+
+void
+MySqlConfigBackendDHCPv4DbLostCallbackTest::testDbLostAndRecoveredCallback() {
+    // Set the connectivity lost callback.
+    isc::db::DatabaseConnection::db_lost_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_lost_callback, this, ph::_1);
+
+    // Set the connectivity recovered callback.
+    isc::db::DatabaseConnection::db_recovered_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_recovered_callback, this, ph::_1);
+
+    // Set the connectivity failed callback.
+    isc::db::DatabaseConnection::db_failed_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_failed_callback, this, ph::_1);
+
+    std::string access = validConnectString();
+
+    ConfigControlInfoPtr config_ctl_info(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+
+    // Find the most recently opened socket. Our SQL client's socket should
+    // be the next one.
+    int last_open_socket = findLastSocketFd();
+
+    // Fill holes.
+    FillFdHoles holes(last_open_socket);
+
+    // Connect to the CB backend.
+    ASSERT_NO_THROW(ConfigBackendDHCPv4Mgr::instance().addBackend(access));
+
+    // Find the SQL client socket.
+    int sql_socket = findLastSocketFd();
+    ASSERT_TRUE(sql_socket > last_open_socket);
+
+    // Verify we can execute a query.  We don't care about the answer.
+    ServerCollection servers;
+    ASSERT_NO_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()));
+
+    // Now close the sql socket out from under backend client
+    ASSERT_EQ(0, close(sql_socket));
+
+    // A query should fail with DbConnectionUnusable.
+    ASSERT_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()),
+                 DbConnectionUnusable);
+
+    io_service_->poll();
+
+    // Our lost and recovered connectivity callback should have been invoked.
+    EXPECT_EQ(1, db_lost_callback_called_);
+    EXPECT_EQ(1, db_recovered_callback_called_);
+    EXPECT_EQ(0, db_failed_callback_called_);
+}
+
+void
+MySqlConfigBackendDHCPv4DbLostCallbackTest::testDbLostAndFailedCallback() {
+    // Set the connectivity lost callback.
+    isc::db::DatabaseConnection::db_lost_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_lost_callback, this, ph::_1);
+
+    // Set the connectivity recovered callback.
+    isc::db::DatabaseConnection::db_recovered_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_recovered_callback, this, ph::_1);
+
+    // Set the connectivity failed callback.
+    isc::db::DatabaseConnection::db_failed_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_failed_callback, this, ph::_1);
+
+    std::string access = validConnectString();
+    ConfigControlInfoPtr config_ctl_info(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+
+    // Find the most recently opened socket. Our SQL client's socket should
+    // be the next one.
+    int last_open_socket = findLastSocketFd();
+
+    // Fill holes.
+    FillFdHoles holes(last_open_socket);
+
+    // Connect to the CB backend.
+    ASSERT_NO_THROW(ConfigBackendDHCPv4Mgr::instance().addBackend(access));
+
+    // Find the SQL client socket.
+    int sql_socket = findLastSocketFd();
+    ASSERT_TRUE(sql_socket > last_open_socket);
+
+    // Verify we can execute a query.  We don't care about the answer.
+    ServerCollection servers;
+    ASSERT_NO_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()));
+
+    access = invalidConnectString();
+    CfgMgr::instance().clear();
+    // by adding an invalid access will cause the manager factory to throw
+    // resulting in failure to recreate the manager
+    config_ctl_info.reset(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+    const ConfigDbInfoList& cfg = CfgMgr::instance().getCurrentCfg()->getConfigControlInfo()->getConfigDatabases();
+    (const_cast<ConfigDbInfoList&>(cfg))[0].setAccessString(access, true);
+
+    // Now close the sql socket out from under backend client
+    ASSERT_EQ(0, close(sql_socket));
+
+    // A query should fail with DbConnectionUnusable.
+    ASSERT_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()),
+                 DbConnectionUnusable);
+
+    io_service_->poll();
+
+    // Our lost and failed connectivity callback should have been invoked.
+    EXPECT_EQ(1, db_lost_callback_called_);
+    EXPECT_EQ(0, db_recovered_callback_called_);
+    EXPECT_EQ(1, db_failed_callback_called_);
+}
+
+void
+MySqlConfigBackendDHCPv4DbLostCallbackTest::testDbLostAndRecoveredAfterTimeoutCallback() {
+    // Set the connectivity lost callback.
+    isc::db::DatabaseConnection::db_lost_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_lost_callback, this, ph::_1);
+
+    // Set the connectivity recovered callback.
+    isc::db::DatabaseConnection::db_recovered_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_recovered_callback, this, ph::_1);
+
+    // Set the connectivity failed callback.
+    isc::db::DatabaseConnection::db_failed_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_failed_callback, this, ph::_1);
+
+    std::string access = validConnectString();
+    std::string extra = " max-reconnect-tries=3 reconnect-wait-time=1";
+    access += extra;
+    ConfigControlInfoPtr config_ctl_info(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+
+    // Find the most recently opened socket. Our SQL client's socket should
+    // be the next one.
+    int last_open_socket = findLastSocketFd();
+
+    // Fill holes.
+    FillFdHoles holes(last_open_socket);
+
+    // Connect to the CB backend.
+    ASSERT_NO_THROW(ConfigBackendDHCPv4Mgr::instance().addBackend(access));
+
+    // Find the SQL client socket.
+    int sql_socket = findLastSocketFd();
+    ASSERT_TRUE(sql_socket > last_open_socket);
+
+    // Verify we can execute a query.  We don't care about the answer.
+    ServerCollection servers;
+    ASSERT_NO_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()));
+
+    access = invalidConnectString();
+    access += extra;
+    CfgMgr::instance().clear();
+    // by adding an invalid access will cause the manager factory to throw
+    // resulting in failure to recreate the manager
+    config_ctl_info.reset(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+    const ConfigDbInfoList& cfg = CfgMgr::instance().getCurrentCfg()->getConfigControlInfo()->getConfigDatabases();
+    (const_cast<ConfigDbInfoList&>(cfg))[0].setAccessString(access, true);
+
+    // Now close the sql socket out from under backend client
+    ASSERT_EQ(0, close(sql_socket));
+
+    // A query should fail with DbConnectionUnusable.
+    ASSERT_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()),
+                 DbConnectionUnusable);
+
+    io_service_->poll();
+
+    // Our lost connectivity callback should have been invoked.
+    EXPECT_EQ(1, db_lost_callback_called_);
+    EXPECT_EQ(0, db_recovered_callback_called_);
+    EXPECT_EQ(0, db_failed_callback_called_);
+
+    access = validConnectString();
+    access += extra;
+    CfgMgr::instance().clear();
+    config_ctl_info.reset(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+
+    sleep(1);
+
+    io_service_->poll();
+
+    // Our lost and recovered connectivity callback should have been invoked.
+    EXPECT_EQ(2, db_lost_callback_called_);
+    EXPECT_EQ(1, db_recovered_callback_called_);
+    EXPECT_EQ(0, db_failed_callback_called_);
+
+    sleep(1);
+
+    io_service_->poll();
+
+    // No callback should have been invoked.
+    EXPECT_EQ(2, db_lost_callback_called_);
+    EXPECT_EQ(1, db_recovered_callback_called_);
+    EXPECT_EQ(0, db_failed_callback_called_);
+}
+
+void
+MySqlConfigBackendDHCPv4DbLostCallbackTest::testDbLostAndFailedAfterTimeoutCallback() {
+    // Set the connectivity lost callback.
+    isc::db::DatabaseConnection::db_lost_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_lost_callback, this, ph::_1);
+
+    // Set the connectivity recovered callback.
+    isc::db::DatabaseConnection::db_recovered_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_recovered_callback, this, ph::_1);
+
+    // Set the connectivity failed callback.
+    isc::db::DatabaseConnection::db_failed_callback_ =
+        std::bind(&MySqlConfigBackendDHCPv4DbLostCallbackTest::db_failed_callback, this, ph::_1);
+
+    std::string access = validConnectString();
+    std::string extra = " max-reconnect-tries=3 reconnect-wait-time=1";
+    access += extra;
+    ConfigControlInfoPtr config_ctl_info(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+
+    // Find the most recently opened socket. Our SQL client's socket should
+    // be the next one.
+    int last_open_socket = findLastSocketFd();
+
+    // Fill holes.
+    FillFdHoles holes(last_open_socket);
+
+    // Connect to the CB backend.
+    ASSERT_NO_THROW(ConfigBackendDHCPv4Mgr::instance().addBackend(access));
+
+    // Find the SQL client socket.
+    int sql_socket = findLastSocketFd();
+    ASSERT_TRUE(sql_socket > last_open_socket);
+
+    // Verify we can execute a query.  We don't care about the answer.
+    ServerCollection servers;
+    ASSERT_NO_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()));
+
+    access = invalidConnectString();
+    access += extra;
+    CfgMgr::instance().clear();
+    // by adding an invalid access will cause the manager factory to throw
+    // resulting in failure to recreate the manager
+    config_ctl_info.reset(new ConfigControlInfo());
+    config_ctl_info->addConfigDatabase(access);
+    CfgMgr::instance().getCurrentCfg()->setConfigControlInfo(config_ctl_info);
+    const ConfigDbInfoList& cfg = CfgMgr::instance().getCurrentCfg()->getConfigControlInfo()->getConfigDatabases();
+    (const_cast<ConfigDbInfoList&>(cfg))[0].setAccessString(access, true);
+
+    // Now close the sql socket out from under backend client
+    ASSERT_EQ(0, close(sql_socket));
+
+    // A query should fail with DbConnectionUnusable.
+    ASSERT_THROW(servers = ConfigBackendDHCPv4Mgr::instance().getPool()->getAllServers4(BackendSelector()),
+                 DbConnectionUnusable);
+
+    io_service_->poll();
+
+    // Our lost connectivity callback should have been invoked.
+    EXPECT_EQ(1, db_lost_callback_called_);
+    EXPECT_EQ(0, db_recovered_callback_called_);
+    EXPECT_EQ(0, db_failed_callback_called_);
+
+    sleep(1);
+
+    io_service_->poll();
+
+    // Our lost connectivity callback should have been invoked.
+    EXPECT_EQ(2, db_lost_callback_called_);
+    EXPECT_EQ(0, db_recovered_callback_called_);
+    EXPECT_EQ(0, db_failed_callback_called_);
+
+    sleep(1);
+
+    io_service_->poll();
+
+    // Our lost and failed connectivity callback should have been invoked.
+    EXPECT_EQ(3, db_lost_callback_called_);
+    EXPECT_EQ(0, db_recovered_callback_called_);
+    EXPECT_EQ(1, db_failed_callback_called_);
+}
+
+/// @brief Verifies that db lost callback is not invoked on an open failure
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testNoCallbackOnOpenFailure) {
+    MultiThreadingTest mt(false);
+    testNoCallbackOnOpenFailure();
+}
+
+/// @brief Verifies that db lost callback is not invoked on an open failure
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testNoCallbackOnOpenFailureMultiThreading) {
+    MultiThreadingTest mt(true);
+    testNoCallbackOnOpenFailure();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndRecoveredCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndRecoveredCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndRecoveredCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndRecoveredCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndFailedCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndFailedCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndFailedCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndFailedCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndRecoveredAfterTimeoutCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndRecoveredAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndRecoveredAfterTimeoutCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndRecoveredAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndFailedAfterTimeoutCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndFailedAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to MySQL is handled correctly.
+TEST_F(MySqlConfigBackendDHCPv4DbLostCallbackTest, testDbLostAndFailedAfterTimeoutCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndFailedAfterTimeoutCallback();
 }
 
 }

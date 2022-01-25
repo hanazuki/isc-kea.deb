@@ -1,0 +1,21 @@
+{
+    "access": "write",
+    "avail": "1.4.0",
+    "brief": [
+        "This command globally enables the DHCP service."
+    ],
+    "cmd-syntax": [
+        "{",
+        "    \"command\": \"dhcp-enable\",",
+        "    \"arguments\": {",
+        "        \"origin\": \"user\"",
+        "    }",
+        "}"
+    ],
+    "description": "See <xref linkend=\"command-dhcp-enable\"/>",
+    "name": "dhcp-enable",
+    "support": [
+        "kea-dhcp4",
+        "kea-dhcp6"
+    ]
+}

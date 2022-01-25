@@ -1,7 +1,8 @@
 // Copyright (C) 2019-2020 Internet Systems Consortium, Inc. ("ISC")
 //
-// This Source Code Form is subject to the terms of the End User License
-// Agreement. See COPYING file in the premium/ directory.
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
 
@@ -63,13 +64,19 @@ extern "C" {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int buffer4_receive(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP) {
+        return (0);
+    }
+
     // Get the received unpacked message.
     Pkt4Ptr query;
     handle.getArgument("query4", query);
 
     try {
-        // Unpack it (TODO check if it was already unpacked).
-        query->unpack();
+        if (handle.getStatus() != CalloutHandle::NEXT_STEP_SKIP) {
+            query->unpack();
+        }
 
         // Not DHCP query nor BOOTP response?
         if ((query->getType() == DHCP_NOTYPE) &&
@@ -121,6 +128,11 @@ int buffer4_receive(CalloutHandle& handle) {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int pkt4_send(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP) {
+        return (0);
+    }
+
     // Get the query message.
     Pkt4Ptr query;
     handle.getArgument("query4", query);
@@ -134,7 +146,9 @@ int pkt4_send(CalloutHandle& handle) {
     Pkt4Ptr response;
     handle.getArgument("response4", response);
 
-    // @todo check if exists and/or already packed.
+    if (status == CalloutHandle::NEXT_STEP_SKIP) {
+        isc_throw(InvalidOperation, "packet pack already handled");
+    }
 
     for (uint16_t code : DHCP_SPECIFIC_OPTIONS) {
         while (response->delOption(code))

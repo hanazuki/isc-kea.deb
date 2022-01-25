@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 #include <dhcp/iface_mgr.h>
 #include <dhcp/pkt6.h>
 #include <dhcp/pkt_filter_inet6.h>
+#include <exceptions/isc_assert.h>
 #include <util/io/pktinfo_utilities.h>
 
 #include <fcntl.h>
@@ -19,12 +20,8 @@ using namespace isc::asiolink;
 namespace isc {
 namespace dhcp {
 
-PktFilterInet6::PktFilterInet6()
-: recv_control_buf_len_(CMSG_SPACE(sizeof(struct in6_pktinfo))),
-  send_control_buf_len_(CMSG_SPACE(sizeof(struct in6_pktinfo))),
-  recv_control_buf_(new char[recv_control_buf_len_]),
-  send_control_buf_(new char[send_control_buf_len_]) {
-}
+const size_t
+PktFilterInet6::CONTROL_BUF_LEN = CMSG_SPACE(sizeof(struct in6_pktinfo));
 
 SocketInfo
 PktFilterInet6::openSocket(const Iface& iface,
@@ -94,6 +91,16 @@ PktFilterInet6::openSocket(const Iface& iface,
     }
 #endif
 
+#ifdef IPV6_V6ONLY
+    // Set IPV6_V6ONLY to get only IPv6 packets.
+    if (setsockopt(sock, IPPROTO_IPV6, IPV6_V6ONLY,
+                   (char *)&flag, sizeof(flag)) < 0) {
+          close(sock);
+          isc_throw(SocketConfigError, "Can't set IPV6_V6ONLY option on "
+                    "IPv6 socket.");
+    }
+#endif
+
     if (bind(sock, (struct sockaddr *)&addr6, sizeof(addr6)) < 0) {
         // Get the error message immediately after the bind because the
         // invocation to close() below would override the errno.
@@ -103,6 +110,7 @@ PktFilterInet6::openSocket(const Iface& iface,
                   << addr.toText() << "/port=" << port
                   << ": " << errmsg);
     }
+
 #ifdef IPV6_RECVPKTINFO
     // RFC3542 - a new way
     if (setsockopt(sock, IPPROTO_IPV6, IPV6_RECVPKTINFO,
@@ -137,7 +145,8 @@ Pkt6Ptr
 PktFilterInet6::receive(const SocketInfo& socket_info) {
     // Now we have a socket, let's get some data from it!
     uint8_t buf[IfaceMgr::RCVBUFSIZE];
-    memset(&recv_control_buf_[0], 0, recv_control_buf_len_);
+    uint8_t control_buf[CONTROL_BUF_LEN];
+    memset(&control_buf[0], 0, CONTROL_BUF_LEN);
     struct sockaddr_in6 from;
     memset(&from, 0, sizeof(from));
 
@@ -165,8 +174,8 @@ PktFilterInet6::receive(const SocketInfo& socket_info) {
     // previously asked the kernel to give us packet
     // information (when we initialized the interface), so we
     // should get the destination address from that.
-    m.msg_control = &recv_control_buf_[0];
-    m.msg_controllen = recv_control_buf_len_;
+    m.msg_control = &control_buf[0];
+    m.msg_controllen = CONTROL_BUF_LEN;
 
     int result = recvmsg(socket_info.sockfd_, &m, 0);
 
@@ -246,8 +255,8 @@ PktFilterInet6::receive(const SocketInfo& socket_info) {
 
 int
 PktFilterInet6::send(const Iface&, uint16_t sockfd, const Pkt6Ptr& pkt) {
-
-    memset(&send_control_buf_[0], 0, send_control_buf_len_);
+    uint8_t control_buf[CONTROL_BUF_LEN];
+    memset(&control_buf[0], 0, CONTROL_BUF_LEN);
 
     // Set the target address we're sending to.
     sockaddr_in6 to;
@@ -289,15 +298,15 @@ PktFilterInet6::send(const Iface&, uint16_t sockfd, const Pkt6Ptr& pkt) {
     // define the IPv6 packet information. We could set the
     // source address if we wanted, but we can safely let the
     // kernel decide what that should be.
-    m.msg_control = &send_control_buf_[0];
-    m.msg_controllen = send_control_buf_len_;
+    m.msg_control = &control_buf[0];
+    m.msg_controllen = CONTROL_BUF_LEN;
     struct cmsghdr *cmsg = CMSG_FIRSTHDR(&m);
 
     // FIXME: Code below assumes that cmsg is not NULL, but
     // CMSG_FIRSTHDR() is coded to return NULL as a possibility.  The
     // following assertion should never fail, but if it did and you came
     // here, fix the code. :)
-    assert(cmsg != NULL);
+    isc_throw_assert(cmsg != NULL);
 
     cmsg->cmsg_level = IPPROTO_IPV6;
     cmsg->cmsg_type = IPV6_PKTINFO;
@@ -326,7 +335,6 @@ PktFilterInet6::send(const Iface&, uint16_t sockfd, const Pkt6Ptr& pkt) {
 
     return (0);
 }
-
 
 }
 }

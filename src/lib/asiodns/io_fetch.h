@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -236,6 +236,9 @@ private:
     boost::shared_ptr<IOFetchData>  data_;   ///< Private data
 
 };
+
+/// \brief Defines a pointer to an IOFetch.
+typedef boost::shared_ptr<IOFetch> IOFetchPtr;
 
 } // namespace asiodns
 } // namespace isc

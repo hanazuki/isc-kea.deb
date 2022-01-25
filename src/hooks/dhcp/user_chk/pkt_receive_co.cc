@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,6 +38,12 @@ extern "C" {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int pkt4_receive(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP ||
+        status == CalloutHandle::NEXT_STEP_SKIP) {
+        return (0);
+    }
+
     if (!user_registry) {
         std::cout << "DHCP UserCheckHook : pkt4_receive UserRegistry is null"
                   << std::endl;
@@ -90,6 +96,12 @@ int pkt4_receive(CalloutHandle& handle) {
 ///
 /// @return 0 upon success, non-zero otherwise.
 int pkt6_receive(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP ||
+        status == CalloutHandle::NEXT_STEP_SKIP) {
+        return (0);
+    }
+
     if (!user_registry) {
         std::cout << "DHCP UserCheckHook : pkt6_receive UserRegistry is null"
                   << std::endl;

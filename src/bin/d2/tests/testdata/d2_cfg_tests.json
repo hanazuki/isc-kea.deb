@@ -1,4 +1,4 @@
-# Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -240,7 +240,7 @@
 #-----
 ,{
 "description" : "D2Params.ncr-protocol, unsupported TCP",
-"logic-error" : "ncr-protocol : TCP is not yet supported  (<string>:1:41)",
+"logic-error" : "ncr-protocol : TCP is not yet supported (<string>:1:41)",
 "data" :
     {
     "ncr-protocol" : "TCP",
@@ -363,8 +363,8 @@
             "name" : "first.key",
             "algorithm" : "HMAC-MD5",
             "secret" : "LSWXnfkKZjdPJI5QxlpnfQ=="
-            }
-            ,{
+            },
+            {
             "name" : "first.key",
             "algorithm" : "HMAC-MD5",
             "secret" : "LSWXnfkKZjdPJI5QxlpnfQ=="
@@ -475,7 +475,7 @@
 
 #----- D2.tsig-keys, digest-bits tests
 ,{
-"description" : "D2.tsig-keys, all valid algorthims",
+"description" : "D2.tsig-keys, all valid algorithms",
 "data" :
     {
     "forward-ddns" : {},
@@ -545,7 +545,7 @@
 #-----
 ,{
 "description" : "D2.tsig-keys, too small truncated HMAC-MD5",
-"logic-error" : "tsig-key: digest-bits too small :  (<string>:1:104)",
+"logic-error" : "tsig-key: digest-bits too small : (<string>:1:104)",
 "data" :
     {
     "forward-ddns" : {},
@@ -557,7 +557,7 @@
             "algorithm" : "HMAC-MD5",
             "digest-bits" : 72,
             "secret" : "LSWXnfkKZjdPJI5QxlpnfQ=="
-            },
+            }
         ]
     }
 }
@@ -565,7 +565,7 @@
 #-----
 ,{
 "description" : "D2.tsig-keys, too small truncated HMAC-SHA1",
-"logic-error" : "tsig-key: digest-bits too small :  (<string>:1:105)",
+"logic-error" : "tsig-key: digest-bits too small : (<string>:1:105)",
 "data" :
     {
     "forward-ddns" : {},
@@ -577,7 +577,7 @@
             "algorithm" : "HMAC-SHA1",
             "digest-bits" : 72,
             "secret" : "hRrp29wzUv3uzSNRLlY68w=="
-            },
+            }
         ]
     }
 }
@@ -585,7 +585,7 @@
 #-----
 ,{
 "description" : "D2.tsig-keys, too small truncated HMAC-SHA224",
-"logic-error" : "tsig-key: digest-bits too small :  (<string>:1:107)",
+"logic-error" : "tsig-key: digest-bits too small : (<string>:1:107)",
 "data" :
     {
     "forward-ddns" : {},
@@ -597,7 +597,7 @@
             "algorithm" : "HMAC-SHA224",
             "digest-bits" : 104,
             "secret" : "bZEG7Ow8OgAUPfLWV3aAUQ=="
-            },
+            }
         ]
     }
 }
@@ -605,7 +605,7 @@
 #-----
 ,{
 "description" : "D2.tsig-keys, too small truncated HMAC-SHA256",
-"logic-error" : "tsig-key: digest-bits too small :  (<string>:1:107)",
+"logic-error" : "tsig-key: digest-bits too small : (<string>:1:107)",
 "data" :
     {
     "forward-ddns" : {},
@@ -617,7 +617,7 @@
             "algorithm" : "hmac-sha256",
             "digest-bits" : 120,
             "secret" : "bjF4hYhTfQ5MX0siagelsw=="
-            },
+            }
         ]
     }
 }
@@ -625,7 +625,7 @@
 #-----
 ,{
 "description" : "D2.tsig-keys, too small truncated HMAC-SHA384",
-"logic-error" : "tsig-key: digest-bits too small :  (<string>:1:107)",
+"logic-error" : "tsig-key: digest-bits too small : (<string>:1:107)",
 "data" :
     {
     "forward-ddns" : {},
@@ -637,7 +637,7 @@
             "algorithm" : "hmac-sha384",
             "digest-bits" : 184,
             "secret" : "Gwk53fvy3CmbupoI9TgigA=="
-            },
+            }
         ]
     }
 }
@@ -645,7 +645,7 @@
 #-----
 ,{
 "description" : "D2.tsig-keys, too small truncated HMAC-SHA512",
-"logic-error" : "tsig-key: digest-bits too small :  (<string>:1:107)",
+"logic-error" : "tsig-key: digest-bits too small : (<string>:1:107)",
 "data" :
     {
     "forward-ddns" : {},
@@ -702,7 +702,7 @@
 #-----
 ,{
 "description" : "D2.tsig-keys, invalid secret",
-"logic-error" : "Cannot make TSIGKey: Incomplete input for base64: bogus (<string>:1:62)",
+"logic-error" : "Cannot make D2TsigKey: Incomplete input for base64: bogus (<string>:1:62)",
 "data" :
     {
     "forward-ddns" : {},
@@ -878,7 +878,7 @@
 #------ "D2.forward-ddns.dhcp-ddns, key-name tests
 ,{
 "description" : "D2.forward-ddns, no matching key name",
-"logic-error" : "DdnsDomain : four.example.com. specifies an undefined key: no.such.key (<string>:1:104)",
+"logic-error" : "DdnsDomain : specifies an undefined key: no.such.key (<string>:1:104)",
 "data" :
     {
     "forward-ddns" :
@@ -1112,6 +1112,40 @@
     }
 }
 
+#-----
+,{
+"description" : "D2.forward-ddns.dhcp-ddns.dns-servers.key-name, no matching key name",
+"logic-error" : "Dns Server : specifies an undefined key: no.such.key (<string>:1:100)",
+"data" :
+    {
+    "forward-ddns" :
+    {
+        "ddns-domains" :
+        [
+            {
+            "name" : "four.example.com.",
+            "dns-servers" :
+            [
+                {
+                "ip-address" : "172.16.1.1",
+                "key-name" : "no.such.key"
+                }
+            ]
+            }
+        ]
+    },
+    "reverse-ddns" : {},
+    "tsig-keys" :
+        [
+            {
+            "name" : "d2.md5.key",
+            "algorithm" : "HMAC-MD5",
+            "secret" : "LSWXnfkKZjdPJI5QxlpnfQ=="
+            }
+        ]
+    }
+}
+
 #----- D2.reverse-ddns tests
 ,{
 "description" : "D2.reverse-ddns, valid, empty ddns-domains",
@@ -1272,7 +1306,7 @@
 #------ "D2.reverse-ddns.dhcp-ddns, key-name tests
 ,{
 "description" : "D2.reverse-ddns, no matching key name",
-"logic-error" : "DdnsDomain : 2.0.192.in-addr.arpa. specifies an undefined key: no.such.key (<string>:1:126)",
+"logic-error" : "DdnsDomain : specifies an undefined key: no.such.key (<string>:1:126)",
 "data" :
     {
     "forward-ddns" : {},
@@ -1502,6 +1536,40 @@
         ]
     },
     "tsig-keys" : []
+    }
+}
+
+#-----
+,{
+"description" : "D2.reverse-ddns.dhcp-ddns.dns-servers.key-name, no matching key name",
+"logic-error" : "Dns Server : specifies an undefined key: no.such.key (<string>:1:122)",
+"data" :
+    {
+    "forward-ddns" : {},
+    "reverse-ddns" :
+    {
+        "ddns-domains" :
+        [
+            {
+            "name" : "2.0.192.in-addr.arpa.",
+            "dns-servers" :
+            [
+                {
+                "ip-address" : "172.16.1.1",
+                "key-name" : "no.such.key"
+                }
+            ]
+            }
+        ]
+    },
+    "tsig-keys" :
+        [
+            {
+            "name" : "d2.md5.key",
+            "algorithm" : "HMAC-MD5",
+            "secret" : "LSWXnfkKZjdPJI5QxlpnfQ=="
+            }
+        ]
     }
 }
 

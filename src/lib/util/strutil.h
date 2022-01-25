@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -43,7 +43,6 @@ public:
 /// \param name Name to be substituted
 void normalizeSlash(std::string& name);
 
-
 /// \brief Trim Leading and Trailing Spaces
 ///
 /// Returns a copy of the input string but with any leading or trailing spaces
@@ -56,7 +55,7 @@ std::string trim(const std::string& instring);
 
 /// \brief Finds the "trimmed" end of a buffer
 ///
-/// Works backward from the the end of the buffer, looking for the first
+/// Works backward from the end of the buffer, looking for the first
 /// character not equal to the trim value, and returns an iterator
 /// pointing that that position.
 ///
@@ -106,7 +105,6 @@ std::vector<std::string> tokens(const std::string& text,
         const std::string& delim = std::string(" \t\n"),
         bool escape = false);
 
-
 /// \brief Uppercase Character
 ///
 /// Used in uppercase() to pass as an argument to std::transform().  The
@@ -120,7 +118,6 @@ std::vector<std::string> tokens(const std::string& text,
 inline char toUpper(char chr) {
     return (static_cast<char>(std::toupper(static_cast<int>(chr))));
 }
-
 
 /// \brief Uppercase String
 ///
@@ -155,7 +152,6 @@ inline void lowercase(std::string& text) {
     std::transform(text.begin(), text.end(), text.begin(),
         isc::util::str::toLower);
 }
-
 
 /// \brief Apply Formatting
 ///
@@ -253,7 +249,7 @@ quotedStringToBinary(const std::string& quoted_string);
 /// an exception is thrown.
 ///
 /// \param hex_string Input string.
-/// \param sep character to use a a separator.
+/// \param sep character to use as a separator.
 /// \param binary Vector receiving converted string into binary.
 /// \throw isc::BadValue if the format of the input string is invalid.
 void
@@ -300,7 +296,7 @@ class StringSanitizerImpl;
 
 /// @brief Implements a regular expression based string scrubber
 ///
-/// The implementation uses C++11 regex IF the environemnt supports it
+/// The implementation uses C++11 regex IF the environment supports it
 /// (tested in configure.ac). If not it falls back to C lib regcomp/regexec.
 /// Older compilers, such as pre Gnu g++ 4.9.0, provided only experimental
 /// implementations of regex which are recognized as buggy.
@@ -336,12 +332,48 @@ public:
     /// @param original the string to scrub
     /// @throw Unexpected if an error occurs during scrubbing
     std::string scrub(const std::string& original);
+
+    /// @brief The maximum size for regex parameters.
+    ///
+    /// @note The regex engine is implemented using recursion and can cause
+    /// stack overflow if the input data is too large. An arbitrary size of
+    /// 4096 should be enough for all cases.
+    static const uint32_t MAX_DATA_SIZE;
+
 private:
     /// @brief Pointer to the @c StringSanitizerImpl.
     StringSanitizerImpl* impl_;
 };
 
 typedef boost::shared_ptr<StringSanitizer> StringSanitizerPtr;
+
+/// \brief Check if a string is printable
+///
+/// \param content String to check for printable characters
+/// \return True if empty or contains only printable characters, False otherwise
+inline bool
+isPrintable(const std::string& content) {
+    for (const auto& ch : content) {
+        if (isprint(static_cast<int>(ch)) == 0) {
+            return (false);
+        }
+    }
+    return (true);
+}
+
+/// \brief Check if a byte vector is printable
+///
+/// \param content Vector to check for printable characters
+/// \return True if empty or contains only printable characters, False otherwise
+inline bool
+isPrintable(const std::vector<uint8_t>& content) {
+    for (const auto& ch : content) {
+        if (isprint(static_cast<int>(ch)) == 0) {
+            return (false);
+        }
+    }
+    return (true);
+}
 
 } // namespace str
 } // namespace util

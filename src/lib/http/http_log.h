@@ -1,4 +1,4 @@
-// Copyright (C) 2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,7 +14,7 @@
 namespace isc {
 namespace http {
 
-/// Define the loggers used within libkea-http library.
+/// Define the logger used within libkea-http library.
 extern isc::log::Logger http_logger;
 
 } // namespace http

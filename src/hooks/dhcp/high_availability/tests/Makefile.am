@@ -2,9 +2,11 @@ SUBDIRS = .
 
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
 AM_CPPFLAGS += -I$(top_builddir)/src/hooks/dhcp/high_availability -I$(top_srcdir)/src/hooks/dhcp/high_availability
-AM_CPPFLAGS += $(BOOST_INCLUDES)
+AM_CPPFLAGS += $(BOOST_INCLUDES) $(CRYPTO_CFLAGS) $(CRYPTO_INCLUDES)
 AM_CPPFLAGS += -DLIBDHCP_HA_SO=\"$(abs_top_builddir)/src/hooks/dhcp/high_availability/.libs/libdhcp_ha.so\"
 AM_CPPFLAGS += -DINSTALL_PROG=\"$(abs_top_srcdir)/install-sh\"
+TEST_CA_DIR = $(abs_top_srcdir)/src/lib/asiolink/testutils/ca
+AM_CPPFLAGS += -DTEST_CA_DIR=\"$(TEST_CA_DIR)\"
 
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 
@@ -30,6 +32,8 @@ ha_unittests_SOURCES += ha_config_unittest.cc
 ha_unittests_SOURCES += ha_impl_unittest.cc
 ha_unittests_SOURCES += ha_service_unittest.cc
 ha_unittests_SOURCES += ha_test.cc ha_test.h
+ha_unittests_SOURCES += ha_mt_unittest.cc
+ha_unittests_SOURCES += lease_update_backlog_unittest.cc
 ha_unittests_SOURCES += query_filter_unittest.cc
 ha_unittests_SOURCES += run_unittests.cc
 
@@ -46,9 +50,10 @@ ha_unittests_LDADD += $(top_builddir)/src/lib/eval/libkea-eval.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/stats/libkea-stats.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
-ha_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/http/libkea-http.la
+ha_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
+ha_unittests_LDADD += $(top_builddir)/src/lib/database/libkea-database.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/cc/libkea-cc.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la

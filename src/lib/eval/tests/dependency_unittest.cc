@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -26,11 +26,16 @@ namespace {
 /// @brief Test fixture for testing dependency.
 ///
 /// This class provides several convenience objects to be used during testing
-/// of the dependcy of classification expressions.
+/// of the dependency of classification expressions.
 class DependencyTest : public ::testing::Test {
 public:
+    /// @brief Constructor
+    DependencyTest() : result_(true) {
+    }
 
-    /// @brief Reset expression and result.
+    /// @brief Destructor
+    ///
+    /// Reset expression and result.
     ~DependencyTest() {
         e_.reset();
         result_ = false;

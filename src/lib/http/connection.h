@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,11 +12,11 @@
 #include <http/http_acceptor.h>
 #include <http/request_parser.h>
 #include <http/response_creator_factory.h>
-#include <boost/function.hpp>
 #include <boost/enable_shared_from_this.hpp>
 #include <boost/system/error_code.hpp>
 #include <boost/shared_ptr.hpp>
 #include <array>
+#include <functional>
 #include <string>
 
 namespace isc {
@@ -45,7 +45,7 @@ private:
 
     /// @brief Type of the function implementing a callback invoked by the
     /// @c SocketCallback functor.
-    typedef boost::function<void(boost::system::error_code ec, size_t length)>
+    typedef std::function<void(boost::system::error_code ec, size_t length)>
     SocketCallbackFunction;
 
     /// @brief Functor associated with the socket object.
@@ -230,8 +230,9 @@ public:
     /// @brief Constructor.
     ///
     /// @param io_service IO service to be used by the connection.
-    /// @param acceptor Reference to the TCP acceptor object used to listen for
+    /// @param acceptor Pointer to the TCP acceptor object used to listen for
     /// new HTTP connections.
+    /// @param tls_context TLS context.
     /// @param connection_pool Connection pool in which this connection is
     /// stored.
     /// @param response_creator Pointer to the response creator object used to
@@ -241,7 +242,8 @@ public:
     /// @param idle_timeout Timeout after which persistent HTTP connection is
     /// closed by the server.
     HttpConnection(asiolink::IOService& io_service,
-                   HttpAcceptor& acceptor,
+                   const HttpAcceptorPtr& acceptor,
+                   const asiolink::TlsContextPtr& tls_context,
                    HttpConnectionPool& connection_pool,
                    const HttpResponseCreatorPtr& response_creator,
                    const HttpAcceptorCallback& callback,
@@ -256,11 +258,21 @@ public:
     /// @brief Asynchronously accepts new connection.
     ///
     /// When the connection is established successfully, the timeout timer is
-    /// setup and the asynchronous read from the socket is started.
+    /// setup and the asynchronous handshake with client is performed.
     void asyncAccept();
+
+    /// @brief Shutdown the socket.
+    void shutdown();
 
     /// @brief Closes the socket.
     void close();
+
+    /// @brief Asynchronously performs TLS handshake.
+    ///
+
+    /// When the handshake is performed successfully or skipped because TLS
+    /// was not enabled, the asynchronous read from the socket is started.
+    void doHandshake();
 
     /// @brief Starts asynchronous read from the socket.
     ///
@@ -301,10 +313,19 @@ protected:
     ///
     /// It invokes external (supplied via constructor) acceptor callback. If
     /// the acceptor is not opened it returns immediately. If the connection
-    /// is accepted successfully the @ref HttpConnection::doRead is called.
+    /// is accepted successfully the @ref HttpConnection::doRead or
+    /// @ref HttpConnection::doHandshake is called.
     ///
     /// @param ec Error code.
     void acceptorCallback(const boost::system::error_code& ec);
+
+    /// @brief Local callback invoked when TLS handshake is performed.
+    ///
+    /// If the handshake is performed successfully the @ref
+    /// HttpConnection::doRead is called.
+    ///
+    /// @param ec Error code.
+    void handshakeCallback(const boost::system::error_code& ec);
 
     /// @brief Callback invoked when new data is received over the socket.
     ///
@@ -330,12 +351,21 @@ protected:
                                      boost::system::error_code ec,
                                      size_t length);
 
+    /// @brief Callback invoked when TLS shutdown is performed.
+    ///
+    /// The TLS socket is unconditionally closed but the callback is called
+    /// only when the peer has answered so the connection should be
+    /// explicitly closed in all cases, i.e. do not rely on this handler.
+    ///
+    /// @param ec Error code (ignored).
+    void shutdownCallback(const boost::system::error_code& ec);
+
     /// @brief Reset timer for detecting request timeouts.
     ///
     /// @param transaction Pointer to the transaction to be guarded by the timeout.
     void setupRequestTimer(TransactionPtr transaction = TransactionPtr());
 
-    /// @brief Reset timer for detecing idle timeout in persistent connections.
+    /// @brief Reset timer for detecting idle timeout in persistent connections.
     void setupIdleTimer();
 
     /// @brief Callback invoked when the HTTP Request Timeout occurs.
@@ -347,6 +377,11 @@ protected:
     void requestTimeoutCallback(TransactionPtr transaction);
 
     void idleTimeoutCallback();
+
+    /// @brief Shuts down current connection.
+    ///
+    /// Copied from the next method @ref stopThisConnection
+    void shutdownConnection();
 
     /// @brief Stops current connection.
     void stopThisConnection();
@@ -360,15 +395,21 @@ protected:
     /// @brief Configured Request Timeout in milliseconds.
     long request_timeout_;
 
-    /// @brief Timeout after which the persistent HTTP connection is closed
-    /// by the server.
+    /// @brief TLS context.
+    asiolink::TlsContextPtr tls_context_;
+
+    /// @brief Timeout after which the persistent HTTP connection is shut
+    /// down by the server.
     long idle_timeout_;
 
-    /// @brief Socket used by this connection.
-    asiolink::TCPSocket<SocketCallback> socket_;
+    /// @brief TCP socket used by this connection.
+    std::unique_ptr<asiolink::TCPSocket<SocketCallback> > tcp_socket_;
 
-    /// @brief Reference to the TCP acceptor used to accept new connections.
-    HttpAcceptor& acceptor_;
+    /// @brief TLS socket used by this connection.
+    std::unique_ptr<asiolink::TLSSocket<SocketCallback> > tls_socket_;
+
+    /// @brief Pointer to the TCP acceptor used to accept new connections.
+    HttpAcceptorPtr acceptor_;
 
     /// @brief Connection pool holding this connection.
     HttpConnectionPool& connection_pool_;

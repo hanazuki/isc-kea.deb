@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,7 +9,6 @@
 
 #include <util/buffer.h>
 
-#include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
 
 #include <map>
@@ -48,7 +47,7 @@ typedef boost::shared_ptr<OptionCollection> OptionCollectionPtr;
 /// unpacking efforts and allow the server to attempt to process
 /// the packet as it stands.  In other words, the option that failed
 /// is perhaps optional, and rather than drop the packet as unusable
-/// we wish to attempt to proces it.
+/// we wish to attempt to process it.
 class SkipRemainingOptionsError : public Exception {
 public:
     SkipRemainingOptionsError (const char* file, size_t line, const char* what) :
@@ -375,21 +374,21 @@ public:
     /// @return uint32_t value stored on first four bytes
     uint32_t getUint32() const;
 
-    /// @brief Sets content of this option to singe uint8 value.
+    /// @brief Sets content of this option to a single uint8 value.
     ///
     /// Option it resized appropriately (to length of 1 octet).
     ///
     /// @param value value to be set
     void setUint8(uint8_t value);
 
-    /// @brief Sets content of this option to singe uint16 value.
+    /// @brief Sets content of this option to a single uint16 value.
     ///
     /// Option it resized appropriately (to length of 2 octets).
     ///
     /// @param value value to be set
     void setUint16(uint16_t value);
 
-    /// @brief Sets content of this option to singe uint32 value.
+    /// @brief Sets content of this option to a single uint32 value.
     ///
     /// Option it resized appropriately (to length of 4 octets).
     ///
@@ -451,6 +450,18 @@ public:
     ///
     /// @return true if options are equal, false otherwise.
     virtual bool equals(const Option& other) const;
+
+    /// @brief Governs whether options should be parsed less strictly.
+    ///
+    /// Populated on configuration commit.
+    ///
+    /// When enabled:
+    /// * Tuples are parsed as length-value pairs as usual, but if a length
+    /// surpasses the total option length, the rest of the option buffer is
+    /// parsed as the next value. This more commonly affects DHCPv6's vendor
+    /// class option (16), but it also affects custom options that are defined
+    /// with tuple fields.
+    static bool lenient_parsing_;
 
 protected:
 

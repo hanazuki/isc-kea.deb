@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -22,12 +22,14 @@
 #include <dhcp/option_custom.h>
 #include <dhcp/option.h>
 #include <dhcp/iface_mgr.h>
+#include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease_mgr.h>
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcp6/dhcp6_srv.h>
 #include <dhcp6/parser_context.h>
 #include <hooks/hooks_manager.h>
+#include <util/multi_threading_mgr.h>
 
 #include <list>
 
@@ -136,6 +138,7 @@ public:
         // Open the "memfile" database for leases
         std::string memfile = "type=memfile universe=6 persist=false";
         isc::dhcp::LeaseMgrFactory::create(memfile);
+        LeaseMgr::setIOService(getIOService());
     }
 
     /// @brief fakes packet reception
@@ -156,6 +159,9 @@ public:
             return (pkt);
         }
 
+        // Make sure the server processed all packets in MT.
+        isc::util::MultiThreadingMgr::instance().getThreadPool().wait(3);
+
         // If not, just trigger shutdown and
         // return immediately
         shutdown();
@@ -168,7 +174,42 @@ public:
     /// it in fake_send_ list where test can later inspect
     /// server's response.
     virtual void sendPacket(const isc::dhcp::Pkt6Ptr& pkt) {
-        fake_sent_.push_back(pkt);
+        if (isc::util::MultiThreadingMgr::instance().getMode()) {
+            std::lock_guard<std::mutex> lk(mutex_);
+            fake_sent_.push_back(pkt);
+        } else {
+            fake_sent_.push_back(pkt);
+        }
+    }
+
+    /// @brief fake receive packet from server
+    ///
+    /// The client uses this packet as a reply from the server.
+    ///
+    /// @return The received packet.
+    Pkt6Ptr receiveOneMsg() {
+        if (isc::util::MultiThreadingMgr::instance().getMode()) {
+            std::lock_guard<std::mutex> lk(mutex_);
+            return (receiveOneMsgInternal());
+        } else {
+            return (receiveOneMsgInternal());
+        }
+    }
+
+    /// @brief fake receive packet from server
+    ///
+    /// The client uses this packet as a reply from the server.
+    /// This function should be called in a thread safe context.
+    ///
+    /// @return The received packet.
+    Pkt6Ptr receiveOneMsgInternal() {
+        // Return empty pointer if server hasn't responded.
+        if (fake_sent_.empty()) {
+            return (Pkt6Ptr());
+        }
+        Pkt6Ptr msg = fake_sent_.front();
+        fake_sent_.pop_front();
+        return (msg);
     }
 
     /// @brief adds a packet to fake receive queue
@@ -275,7 +316,7 @@ public:
     using Dhcpv6Srv::server_port_;
     using Dhcpv6Srv::client_port_;
 
-    /// @brief packets we pretend to receive
+    /// @brief packets we pretend to receive.
     ///
     /// Instead of setting up sockets on interfaces that change between
     /// OSes, it is much easier to fake packet reception. This is a list
@@ -284,7 +325,11 @@ public:
     /// NakedDhcpv6Srv::receivePacket() methods.
     std::list<isc::dhcp::Pkt6Ptr> fake_received_;
 
+    /// @brief packets we pretend to send.
     std::list<isc::dhcp::Pkt6Ptr> fake_sent_;
+
+    /// @brief Mutex to protect the packet buffers.
+    std::mutex mutex_;
 };
 
 /// @brief Test fixture for any tests requiring blank/empty configuration
@@ -468,6 +513,9 @@ public:
 
     // Name of a valid network interface
     std::string valid_iface_;
+
+    // Index of a valid network interface
+    uint32_t valid_ifindex_;
 };
 
 // We need to pass one reference to the Dhcp6Client, which is defined in
@@ -493,18 +541,27 @@ public:
         NO_IA       // Client will not send IA_NA at all
     };
 
+    class Dhcpv6SrvMTTestGuard {
+    public:
+        Dhcpv6SrvMTTestGuard(Dhcpv6SrvTest& test, bool mt_enabled) : test_(test) {
+            test_.setMultiThreading(mt_enabled);
+        }
+        ~Dhcpv6SrvMTTestGuard() {
+            test_.setMultiThreading(false);
+        }
+        Dhcpv6SrvTest& test_;
+    };
+
     /// @brief Constructor that initializes a simple default configuration
     ///
     /// Sets up a single subnet6 with one pool for addresses and second
     /// pool for prefixes.
     Dhcpv6SrvTest();
 
-    /// @brief destructor
+    /// @brief Destructor
     ///
     /// Removes existing configuration.
-    ~Dhcpv6SrvTest() {
-        isc::dhcp::CfgMgr::instance().clear();
-    };
+    ~Dhcpv6SrvTest();
 
     /// @brief Runs DHCPv6 configuration from the JSON string.
     ///
@@ -583,9 +640,10 @@ public:
 
     // Checks if the lease sent to client is present in the database
     // and is valid when checked against the configured subnet
-    isc::dhcp::Lease6Ptr checkLease
-        (const isc::dhcp::DuidPtr& duid, const isc::dhcp::OptionPtr& ia_na,
-         boost::shared_ptr<isc::dhcp::Option6IAAddr> addr);
+    isc::dhcp::Lease6Ptr
+    checkLease(const isc::dhcp::DuidPtr& duid,
+               const isc::dhcp::OptionPtr& ia_na,
+               boost::shared_ptr<isc::dhcp::Option6IAAddr> addr);
 
     /// @brief Check if the specified lease is present in the data base.
     ///
@@ -602,9 +660,10 @@ public:
     /// @param ia_pd IA_PD option that contains the IAPRefix option
     /// @param prefix pointer to the IAPREFIX option
     /// @return corresponding IPv6 lease (if found)
-    isc::dhcp::Lease6Ptr checkPdLease
-      (const isc::dhcp::DuidPtr& duid, const isc::dhcp::OptionPtr& ia_pd,
-       boost::shared_ptr<isc::dhcp::Option6IAPrefix> prefix);
+    isc::dhcp::Lease6Ptr
+    checkPdLease(const isc::dhcp::DuidPtr& duid,
+                 const isc::dhcp::OptionPtr& ia_pd,
+                 boost::shared_ptr<isc::dhcp::Option6IAPrefix> prefix);
 
     /// @brief Creates a message with specified IA
     ///
@@ -757,18 +816,25 @@ public:
     /// @param stat_name this statistic is expected to be set to 1
     void testReceiveStats(uint8_t pkt_type, const std::string& stat_name);
 
+    /// @brief Set multi-threading mode.
+    void setMultiThreading(bool enabled) {
+        multi_threading_ = enabled;
+    }
 
-    /// A subnet used in most tests
+    /// A subnet used in most tests.
     isc::dhcp::Subnet6Ptr subnet_;
 
-    /// A normal, non-temporary pool used in most tests
+    /// A normal, non-temporary pool used in most tests.
     isc::dhcp::Pool6Ptr pool_;
 
-    /// A prefix pool used in most tests
+    /// A prefix pool used in most tests.
     isc::dhcp::Pool6Ptr pd_pool_;
 
     /// @brief Server object under test.
     NakedDhcpv6Srv srv_;
+
+    /// @brief The multi-threading flag.
+    bool multi_threading_;
 };
 
 /// @brief Patch the server config to add interface-config/re-detect=false
@@ -783,13 +849,35 @@ disableIfacesReDetect(isc::data::ConstElementPtr json) {
     }
 }
 
+/// @brief Patch the server config to add multi-threading/enable-multi-threading
+/// @param json the server config
+inline void
+configureMultiThreading(bool enabled, isc::data::ConstElementPtr json) {
+    isc::data::ConstElementPtr multi_threading = json->get("multi-threading");
+    if (!multi_threading) {
+        isc::data::ElementPtr mutable_cfg =
+                boost::const_pointer_cast<isc::data::Element>(json);
+        multi_threading = isc::data::Element::createMap();
+        mutable_cfg->set("multi-threading", multi_threading);
+    }
+
+    isc::data::ElementPtr mutable_cfg =
+        boost::const_pointer_cast<isc::data::Element>(multi_threading);
+    if (enabled) {
+        mutable_cfg->set("enable-multi-threading", isc::data::Element::create(true));
+        mutable_cfg->set("thread-pool-size", isc::data::Element::create(4));
+        mutable_cfg->set("packet-queue-size", isc::data::Element::create(4));
+    } else {
+        mutable_cfg->set("enable-multi-threading", isc::data::Element::create(false));
+    }
+}
+
 /// @brief Runs parser in JSON mode, useful for parser testing
 ///
 /// @param in string to be parsed
 /// @return ElementPtr structure representing parsed JSON
 inline isc::data::ElementPtr
-parseJSON(const std::string& in)
-{
+parseJSON(const std::string& in) {
     isc::dhcp::Parser6Context ctx;
     return (ctx.parseString(in, isc::dhcp::Parser6Context::PARSER_JSON));
 }
@@ -803,8 +891,7 @@ parseJSON(const std::string& in)
 /// @param verbose display the exception message when it fails
 /// @return ElementPtr structure representing parsed JSON
 inline isc::data::ElementPtr
-parseDHCP6(const std::string& in, bool verbose = false)
-{
+parseDHCP6(const std::string& in, bool verbose = false) {
     try {
         isc::dhcp::Parser6Context ctx;
         isc::data::ElementPtr json;
@@ -828,8 +915,7 @@ parseDHCP6(const std::string& in, bool verbose = false)
 /// @param verbose display the exception message when it fails
 /// @return ElementPtr structure representing parsed JSON
 inline isc::data::ElementPtr
-parseOPTION_DEFS(const std::string& in, bool verbose = false)
-{
+parseOPTION_DEFS(const std::string& in, bool verbose = false) {
     try {
         isc::dhcp::Parser6Context ctx;
         return (ctx.parseString(in, isc::dhcp::Parser6Context::PARSER_OPTION_DEFS));
@@ -842,8 +928,8 @@ parseOPTION_DEFS(const std::string& in, bool verbose = false)
     }
 }
 
-}; // end of isc::dhcp::test namespace
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp::test namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace
 
 #endif // DHCP6_TEST_UTILS_H

@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,7 +7,7 @@
 #include <config.h>
 
 #include <asiolink/io_address.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <exceptions/exceptions.h>
 #include <dhcpsrv/host.h>
 #include <dhcpsrv/pgsql_host_data_source.h>
@@ -17,6 +17,7 @@
 #include <dhcpsrv/host_data_source_factory.h>
 #include <pgsql/pgsql_connection.h>
 #include <pgsql/testutils/pgsql_schema.h>
+#include <testutils/multi_threading_utils.h>
 #include <util/multi_threading_mgr.h>
 
 #include <gtest/gtest.h>
@@ -34,6 +35,7 @@ using namespace isc::db::test;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::data;
+using namespace isc::test;
 using namespace isc::util;
 using namespace std;
 
@@ -60,6 +62,7 @@ public:
         }
 
         hdsptr_ = HostMgr::instance().getHostDataSource();
+        hdsptr_->setIPReservationsUnique(true);
 
         MultiThreadingMgr::instance().setMode(false);
     }
@@ -115,7 +118,7 @@ public:
     int countRowsInTable(const std::string& table) {
         string query = "SELECT * FROM " + table;
 
-        PgSqlConnection::ParameterMap params;
+        DatabaseConnection::ParameterMap params;
         params["name"] = "keatest";
         params["user"] = "keatest";
         params["password"] = "keatest";
@@ -125,7 +128,7 @@ public:
 
         PgSqlResult r(PQexec(conn, query.c_str()));
         if (PQresultStatus(r) != PGRES_TUPLES_OK) {
-            isc_throw(DbOperationError, "Query failed:" << PQerrorMessage(conn));
+            isc_throw(DbOperationError, "Query failed: " << PQerrorMessage(conn));
         }
 
         int numrows = PQntuples(r);
@@ -222,6 +225,9 @@ TEST(PgSqlHostDataSource, OpenDatabase) {
     EXPECT_THROW(HostMgr::addBackend(connectionString(
         PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD, INVALID_TIMEOUT_2)),
         DbInvalidTimeout);
+    EXPECT_THROW(HostMgr::addBackend(connectionString(
+        PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+        VALID_TIMEOUT, INVALID_READONLY_DB)), DbInvalidReadOnly);
 
     // Check for missing parameters
     EXPECT_THROW(HostMgr::addBackend(connectionString(
@@ -240,7 +246,7 @@ TEST(PgSqlHostDataSource, OpenDatabase) {
 /// opened: the fixtures assume that and check basic operations.
 TEST(PgSqlHostDataSource, OpenDatabaseMultiThreading) {
     // Enable Multi-Threading.
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
 
     // Schema needs to be created for the test to work.
     destroyPgSQLSchema();
@@ -307,6 +313,9 @@ TEST(PgSqlHostDataSource, OpenDatabaseMultiThreading) {
     EXPECT_THROW(HostMgr::addBackend(connectionString(
         PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD, INVALID_TIMEOUT_2)),
         DbInvalidTimeout);
+    EXPECT_THROW(HostMgr::addBackend(connectionString(
+        PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+        VALID_TIMEOUT, INVALID_READONLY_DB)), DbInvalidReadOnly);
 
     // Check for missing parameters
     EXPECT_THROW(HostMgr::addBackend(connectionString(
@@ -339,7 +348,7 @@ TEST(PgSqlHostDataSource, NoCallbackOnOpenFail) {
     createPgSQLSchema();
 
     callback_called = false;
-    DatabaseConnection::db_lost_callback = db_lost_callback;
+    DatabaseConnection::db_lost_callback_ = db_lost_callback;
     HostMgr::create();
     EXPECT_THROW(HostMgr::addBackend(connectionString(
         PGSQL_VALID_TYPE, VALID_NAME, INVALID_HOST, VALID_USER, VALID_PASSWORD)),
@@ -359,14 +368,14 @@ TEST(PgSqlHostDataSource, NoCallbackOnOpenFail) {
 /// as a system test.
 TEST(PgSqlHostDataSource, NoCallbackOnOpenFailMultiThreading) {
     // Enable Multi-Threading.
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
 
     // Schema needs to be created for the test to work.
     destroyPgSQLSchema();
     createPgSQLSchema();
 
     callback_called = false;
-    DatabaseConnection::db_lost_callback = db_lost_callback;
+    DatabaseConnection::db_lost_callback_ = db_lost_callback;
     HostMgr::create();
     EXPECT_THROW(HostMgr::addBackend(connectionString(
         PGSQL_VALID_TYPE, VALID_NAME, INVALID_HOST, VALID_USER, VALID_PASSWORD)),
@@ -383,7 +392,7 @@ TEST_F(PgSqlHostDataSourceTest, testReadOnlyDatabase) {
 
 /// @brief This test verifies that database backend can operate in Read-Only mode.
 TEST_F(PgSqlHostDataSourceTest, testReadOnlyDatabaseMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testReadOnlyDatabase(PGSQL_VALID_TYPE);
 }
 
@@ -396,33 +405,33 @@ TEST_F(PgSqlHostDataSourceTest, basic4HWAddr) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by IPv4
 /// address. Host uses hw address as identifier.
 TEST_F(PgSqlHostDataSourceTest, basic4HWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testBasic4(Host::IDENT_HWADDR);
 }
 
-/// @brief Verifies that IPv4 host reservation with options can have a the global
+/// @brief Verifies that IPv4 host reservation with options can have the global
 /// subnet id value
 TEST_F(PgSqlHostDataSourceTest, globalSubnetId4) {
     testGlobalSubnetId4();
 }
 
-/// @brief Verifies that IPv4 host reservation with options can have a the global
+/// @brief Verifies that IPv4 host reservation with options can have the global
 /// subnet id value
 TEST_F(PgSqlHostDataSourceTest, globalSubnetId4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGlobalSubnetId4();
 }
 
-/// @brief Verifies that IPv6 host reservation with options can have a the global
+/// @brief Verifies that IPv6 host reservation with options can have the global
 /// subnet id value
 TEST_F(PgSqlHostDataSourceTest, globalSubnetId6) {
     testGlobalSubnetId6();
 }
 
-/// @brief Verifies that IPv6 host reservation with options can have a the global
+/// @brief Verifies that IPv6 host reservation with options can have the global
 /// subnet id value
 TEST_F(PgSqlHostDataSourceTest, globalSubnetId6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGlobalSubnetId6();
 }
 
@@ -435,7 +444,7 @@ TEST_F(PgSqlHostDataSourceTest, maxSubnetId4) {
 /// @brief Verifies that IPv4 host reservation with options can have a max value
 /// for  dhcp4_subnet id
 TEST_F(PgSqlHostDataSourceTest, maxSubnetId4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMaxSubnetId4();
 }
 
@@ -448,7 +457,7 @@ TEST_F(PgSqlHostDataSourceTest, maxSubnetId6) {
 /// @brief Verifies that IPv6 host reservation with options can have a max value
 /// for  dhcp6_subnet id
 TEST_F(PgSqlHostDataSourceTest, maxSubnetId6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMaxSubnetId6();
 }
 
@@ -459,7 +468,7 @@ TEST_F(PgSqlHostDataSourceTest, getAll4BySubnet) {
 
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 TEST_F(PgSqlHostDataSourceTest, getAll4BySubnetMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAll4();
 }
 
@@ -470,7 +479,7 @@ TEST_F(PgSqlHostDataSourceTest, getAll6BySubnet) {
 
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 TEST_F(PgSqlHostDataSourceTest, getAll6BySubnetMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAll6();
 }
 
@@ -481,7 +490,7 @@ TEST_F(PgSqlHostDataSourceTest, getAllbyHostname) {
 
 /// @brief Verifies that host reservations with the same hostname can be retrieved
 TEST_F(PgSqlHostDataSourceTest, getAllbyHostnameMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAllbyHostname();
 }
 
@@ -494,7 +503,7 @@ TEST_F(PgSqlHostDataSourceTest, getAllbyHostnameSubnet4) {
 /// @brief Verifies that IPv4 host reservations with the same hostname and in
 /// the same subnet can be retrieved
 TEST_F(PgSqlHostDataSourceTest, getAllbyHostnameSubnet4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAllbyHostnameSubnet4();
 }
 
@@ -507,7 +516,7 @@ TEST_F(PgSqlHostDataSourceTest, getAllbyHostnameSubnet6) {
 /// @brief Verifies that IPv6 host reservations with the same hostname and in
 /// the same subnet can be retrieved
 TEST_F(PgSqlHostDataSourceTest, getAllbyHostnameSubnet6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetAllbyHostnameSubnet6();
 }
 
@@ -520,7 +529,7 @@ TEST_F(PgSqlHostDataSourceTest, getPage4) {
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 /// by pages.
 TEST_F(PgSqlHostDataSourceTest, getPage4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage4();
 }
 
@@ -533,7 +542,7 @@ TEST_F(PgSqlHostDataSourceTest, getPage6) {
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 /// by pages.
 TEST_F(PgSqlHostDataSourceTest, getPage6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage6();
 }
 
@@ -546,7 +555,7 @@ TEST_F(PgSqlHostDataSourceTest, getPageLimit4) {
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 /// by pages without truncation from the limit.
 TEST_F(PgSqlHostDataSourceTest, getPageLimit4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPageLimit4(Host::IDENT_DUID);
 }
 
@@ -559,7 +568,7 @@ TEST_F(PgSqlHostDataSourceTest, getPageLimit6) {
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 /// by pages without truncation from the limit.
 TEST_F(PgSqlHostDataSourceTest, getPageLimit6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPageLimit6(Host::IDENT_HWADDR);
 }
 
@@ -572,7 +581,7 @@ TEST_F(PgSqlHostDataSourceTest, getPage4Subnets) {
 /// @brief Verifies that IPv4 host reservations in the same subnet can be retrieved
 /// by pages even with multiple subnets.
 TEST_F(PgSqlHostDataSourceTest, getPage4SubnetsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage4Subnets();
 }
 
@@ -585,8 +594,30 @@ TEST_F(PgSqlHostDataSourceTest, getPage6Subnets) {
 /// @brief Verifies that IPv6 host reservations in the same subnet can be retrieved
 /// by pages even with multiple subnets.
 TEST_F(PgSqlHostDataSourceTest, getPage6SubnetsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetPage6Subnets();
+}
+
+// Verifies that all IPv4 host reservations can be retrieved by pages.
+TEST_F(PgSqlHostDataSourceTest, getPage4All) {
+    testGetPage4All();
+}
+
+// Verifies that all IPv4 host reservations can be retrieved by pages.
+TEST_F(PgSqlHostDataSourceTest, getPage4AllMultiThreading) {
+    MultiThreadingTest mt(true);
+    testGetPage4All();
+}
+
+// Verifies that all IPv6 host reservations can be retrieved by pages.
+TEST_F(PgSqlHostDataSourceTest, getPage6All) {
+    testGetPage6All();
+}
+
+// Verifies that all IPv6 host reservations can be retrieved by pages.
+TEST_F(PgSqlHostDataSourceTest, getPage6AllMultiThreading) {
+    MultiThreadingTest mt(true);
+    testGetPage6All();
 }
 
 /// @brief Test verifies if a host reservation can be added and later retrieved by IPv4
@@ -598,7 +629,7 @@ TEST_F(PgSqlHostDataSourceTest, basic4ClientId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by IPv4
 /// address. Host uses client-id (DUID) as identifier.
 TEST_F(PgSqlHostDataSourceTest, basic4ClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testBasic4(Host::IDENT_DUID);
 }
 
@@ -611,7 +642,7 @@ TEST_F(PgSqlHostDataSourceTest, getByIPv4HWaddr) {
 /// @brief Test verifies that multiple hosts can be added and later retrieved by their
 /// reserved IPv4 address. This test uses HW addresses as identifiers.
 TEST_F(PgSqlHostDataSourceTest, getByIPv4HWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv4(Host::IDENT_HWADDR);
 }
 
@@ -624,7 +655,7 @@ TEST_F(PgSqlHostDataSourceTest, getByIPv4ClientId) {
 /// @brief Test verifies that multiple hosts can be added and later retrieved by their
 /// reserved IPv4 address. This test uses client-id (DUID) as identifiers.
 TEST_F(PgSqlHostDataSourceTest, getByIPv4ClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv4(Host::IDENT_DUID);
 }
 
@@ -637,7 +668,7 @@ TEST_F(PgSqlHostDataSourceTest, get4ByHWaddr) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// hardware address.
 TEST_F(PgSqlHostDataSourceTest, get4ByHWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_HWADDR);
 }
 
@@ -650,7 +681,7 @@ TEST_F(PgSqlHostDataSourceTest, get4ByDUID) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// DUID.
 TEST_F(PgSqlHostDataSourceTest, get4ByDUIDMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_DUID);
 }
 
@@ -663,7 +694,7 @@ TEST_F(PgSqlHostDataSourceTest, get4ByCircuitId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// circuit id.
 TEST_F(PgSqlHostDataSourceTest, get4ByCircuitIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_CIRCUIT_ID);
 }
 
@@ -676,7 +707,7 @@ TEST_F(PgSqlHostDataSourceTest, get4ByClientId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// client-id.
 TEST_F(PgSqlHostDataSourceTest, get4ByClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet4ByIdentifier(Host::IDENT_CLIENT_ID);
 }
 
@@ -687,7 +718,7 @@ TEST_F(PgSqlHostDataSourceTest, hwaddrNotClientId1) {
 
 /// @brief Test verifies if hardware address and client identifier are not confused.
 TEST_F(PgSqlHostDataSourceTest, hwaddrNotClientId1MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHWAddrNotClientId();
 }
 
@@ -698,7 +729,7 @@ TEST_F(PgSqlHostDataSourceTest, hwaddrNotClientId2) {
 
 /// @brief Test verifies if hardware address and client identifier are not confused.
 TEST_F(PgSqlHostDataSourceTest, hwaddrNotClientId2MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testClientIdNotHWAddr();
 }
 
@@ -709,7 +740,7 @@ TEST_F(PgSqlHostDataSourceTest, hostnameFQDN) {
 
 /// @brief Test verifies if a host with FQDN hostname can be stored and later retrieved.
 TEST_F(PgSqlHostDataSourceTest, hostnameFQDNMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHostname("foo.example.org", 1);
 }
 
@@ -722,7 +753,7 @@ TEST_F(PgSqlHostDataSourceTest, hostnameFQDN100) {
 /// @brief Test verifies if 100 hosts with unique FQDN hostnames can be stored and later
 /// retrieved.
 TEST_F(PgSqlHostDataSourceTest, hostnameFQDN100MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHostname("foo.example.org", 100);
 }
 
@@ -735,7 +766,7 @@ TEST_F(PgSqlHostDataSourceTest, noHostname) {
 /// @brief Test verifies if a host without any hostname specified can be stored and later
 /// retrieved.
 TEST_F(PgSqlHostDataSourceTest, noHostnameMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testHostname("", 1);
 }
 
@@ -747,7 +778,7 @@ TEST_F(PgSqlHostDataSourceTest, usercontext) {
 
 /// @brief Test verifies if a host with user context can be stored and later retrieved.
 TEST_F(PgSqlHostDataSourceTest, usercontextMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testUserContext(Element::fromJSON(comment));
 }
@@ -764,7 +795,7 @@ TEST_F(PgSqlHostDataSourceTest, DISABLED_hwaddrOrClientId1) {
 
 /// @brief Test verifies if the hardware or client-id query can match hardware address.
 TEST_F(PgSqlHostDataSourceTest, DISABLED_hwaddrOrClientId1MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     /// @todo: The logic behind ::get4(subnet_id, hwaddr, duid) call needs to
     /// be discussed.
     ///
@@ -785,7 +816,7 @@ TEST_F(PgSqlHostDataSourceTest, DISABLED_hwaddrOrClientId2) {
 
 /// @brief Test verifies if the hardware or client-id query can match client-id.
 TEST_F(PgSqlHostDataSourceTest, DISABLED_hwaddrOrClientId2MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     /// @todo: The logic behind ::get4(subnet_id, hwaddr, duid) call needs to
     /// be discussed.
     ///
@@ -803,7 +834,7 @@ TEST_F(PgSqlHostDataSourceTest, get6AddrWithDuid) {
 /// @brief Test verifies that host with IPv6 address and DUID can be added and
 /// later retrieved by IPv6 address.
 TEST_F(PgSqlHostDataSourceTest, get6AddrWithDuidMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_DUID, false);
 }
 
@@ -816,7 +847,7 @@ TEST_F(PgSqlHostDataSourceTest, get6AddrWithHWAddr) {
 /// @brief Test verifies that host with IPv6 address and HWAddr can be added and
 /// later retrieved by IPv6 address.
 TEST_F(PgSqlHostDataSourceTest, get6AddrWithHWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_HWADDR, false);
 }
 
@@ -829,7 +860,7 @@ TEST_F(PgSqlHostDataSourceTest, get6PrefixWithDuid) {
 /// @brief Test verifies that host with IPv6 prefix and DUID can be added and
 /// later retrieved by IPv6 prefix.
 TEST_F(PgSqlHostDataSourceTest, get6PrefixWithDuidMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_DUID, true);
 }
 
@@ -842,7 +873,7 @@ TEST_F(PgSqlHostDataSourceTest, get6PrefixWithHWaddr) {
 /// @brief Test verifies that host with IPv6 prefix and HWAddr can be added and
 /// later retrieved by IPv6 prefix.
 TEST_F(PgSqlHostDataSourceTest, get6PrefixWithHWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetByIPv6(Host::IDENT_HWADDR, true);
 }
 
@@ -855,7 +886,7 @@ TEST_F(PgSqlHostDataSourceTest, get6SubnetPrefix) {
 /// @brief Test verifies that host with IPv6 prefix reservation can be retrieved
 /// by subnet id and prefix value.
 TEST_F(PgSqlHostDataSourceTest, get6SubnetPrefixMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGetBySubnetIPv6();
 }
 
@@ -868,7 +899,7 @@ TEST_F(PgSqlHostDataSourceTest, get6ByHWaddr) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// hardware address.
 TEST_F(PgSqlHostDataSourceTest, get6ByHWaddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet6ByHWAddr();
 }
 
@@ -881,7 +912,7 @@ TEST_F(PgSqlHostDataSourceTest, get6ByClientId) {
 /// @brief Test verifies if a host reservation can be added and later retrieved by
 /// client identifier.
 TEST_F(PgSqlHostDataSourceTest, get6ByClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testGet6ByClientId();
 }
 
@@ -894,7 +925,7 @@ TEST_F(PgSqlHostDataSourceTest, addr6AndPrefix) {
 /// @brief Test verifies if a host reservation can be stored with both IPv6 address and
 /// prefix.
 TEST_F(PgSqlHostDataSourceTest, addr6AndPrefixMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testAddr6AndPrefix();
 }
 
@@ -907,7 +938,7 @@ TEST_F(PgSqlHostDataSourceTest, multipleReservations) {
 /// @brief Tests if host with multiple IPv6 reservations can be added and then
 /// retrieved correctly. Test checks reservations comparing.
 TEST_F(PgSqlHostDataSourceTest, multipleReservationsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleReservations();
 }
 
@@ -920,7 +951,7 @@ TEST_F(PgSqlHostDataSourceTest, multipleReservationsDifferentOrder) {
 /// @brief Tests if compareIPv6Reservations() method treats same pool of reservations
 /// but added in different order as equal.
 TEST_F(PgSqlHostDataSourceTest, multipleReservationsDifferentOrderMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleReservationsDifferentOrder();
 }
 
@@ -933,7 +964,7 @@ TEST_F(PgSqlHostDataSourceTest, multipleClientClasses4) {
 /// @brief Test that multiple client classes for IPv4 can be inserted and
 /// retrieved for a given host reservation.
 TEST_F(PgSqlHostDataSourceTest, multipleClientClasses4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleClientClasses4();
 }
 
@@ -946,7 +977,7 @@ TEST_F(PgSqlHostDataSourceTest, multipleClientClasses6) {
 /// @brief Test that multiple client classes for IPv6 can be inserted and
 /// retrieved for a given host reservation.
 TEST_F(PgSqlHostDataSourceTest, multipleClientClasses6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleClientClasses6();
 }
 
@@ -959,7 +990,7 @@ TEST_F(PgSqlHostDataSourceTest, multipleClientClassesBoth) {
 /// @brief Test that multiple client classes for both IPv4 and IPv6 can
 /// be inserted and retrieved for a given host reservation.
 TEST_F(PgSqlHostDataSourceTest, multipleClientClassesBothMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleClientClassesBoth();
 }
 
@@ -978,7 +1009,7 @@ TEST_F(PgSqlHostDataSourceTest, multipleSubnetsHWAddr) {
 /// hardware address), but for different subnets (different subnet-ids).
 /// Make sure that getAll() returns them all correctly.
 TEST_F(PgSqlHostDataSourceTest, multipleSubnetsHWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleSubnets(10, Host::IDENT_HWADDR);
 }
 
@@ -999,7 +1030,7 @@ TEST_F(PgSqlHostDataSourceTest, multipleSubnetsClientId) {
 /// client-identifier), but for different subnets (different subnet-ids).
 /// Make sure that getAll() returns them correctly.
 TEST_F(PgSqlHostDataSourceTest, multipleSubnetsClientIdMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleSubnets(10, Host::IDENT_DUID);
 }
 
@@ -1018,7 +1049,7 @@ TEST_F(PgSqlHostDataSourceTest, subnetId6) {
 /// Insert 10 host reservations for different subnets. Make sure that
 /// get6(subnet-id, ...) calls return correct reservation.
 TEST_F(PgSqlHostDataSourceTest, subnetId6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testSubnetId6(10, Host::IDENT_HWADDR);
 }
 
@@ -1035,7 +1066,7 @@ TEST_F(PgSqlHostDataSourceTest, addDuplicate6WithDUID) {
 /// verify that the second and following attempts will throw exceptions.
 /// Hosts with same DUID.
 TEST_F(PgSqlHostDataSourceTest, addDuplicate6WithDUIDMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testAddDuplicate6WithSameDUID();
 }
 
@@ -1052,23 +1083,64 @@ TEST_F(PgSqlHostDataSourceTest, addDuplicate6WithHWAddr) {
 /// verify that the second and following attempts will throw exceptions.
 /// Hosts with same HWAddr.
 TEST_F(PgSqlHostDataSourceTest, addDuplicate6WithHWAddrMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testAddDuplicate6WithSameHWAddr();
 }
 
-/// @brief Test if the duplicate IPv4 host instances can't be inserted. The test logic is as
-/// follows: try to add multiple instances of the same host reservation and
-/// verify that the second and following attempts will throw exceptions.
-TEST_F(PgSqlHostDataSourceTest, addDuplicate4) {
-    testAddDuplicate4();
+/// @brief Test if the same IPv6 reservation can't be inserted multiple times.
+TEST_F(PgSqlHostDataSourceTest, addDuplicateIPv6) {
+    testAddDuplicateIPv6();
+}
+
+/// @brief Test if the same IPv6 reservation can't be inserted multiple times.
+TEST_F(PgSqlHostDataSourceTest, addDuplicateIPv6MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAddDuplicateIPv6();
+}
+
+/// @brief Test if the host reservation for the same IPv6 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(PgSqlHostDataSourceTest, allowDuplicateIPv6) {
+    testAllowDuplicateIPv6();
+}
+
+/// @brief Test if the host reservation for the same IPv6 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(PgSqlHostDataSourceTest, allowDuplicateIPv6MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAllowDuplicateIPv6();
 }
 
 /// @brief Test if the duplicate IPv4 host instances can't be inserted. The test logic is as
 /// follows: try to add multiple instances of the same host reservation and
 /// verify that the second and following attempts will throw exceptions.
-TEST_F(PgSqlHostDataSourceTest, addDuplicate4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
-    testAddDuplicate4();
+TEST_F(PgSqlHostDataSourceTest, addDuplicateIPv4) {
+    testAddDuplicateIPv4();
+}
+
+/// @brief Test if the duplicate IPv4 host instances can't be inserted. The test logic is as
+/// follows: try to add multiple instances of the same host reservation and
+/// verify that the second and following attempts will throw exceptions.
+TEST_F(PgSqlHostDataSourceTest, addDuplicateIPv4MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAddDuplicateIPv4();
+}
+
+/// @brief Test if the host reservation for the same IPv4 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(PgSqlHostDataSourceTest, allowDuplicateIPv4) {
+    testAllowDuplicateIPv4();
+}
+
+/// @brief Test if the host reservation for the same IPv4 address can be inserted
+/// multiple times when allowed by the configuration and when the host identifier
+/// is different.
+TEST_F(PgSqlHostDataSourceTest, allowDuplicateIPv4MultiThreading) {
+    MultiThreadingTest mt(true);
+    testAllowDuplicateIPv4();
 }
 
 /// @brief This test verifies that DHCPv4 options can be inserted in a binary format
@@ -1081,7 +1153,7 @@ TEST_F(PgSqlHostDataSourceTest, optionsReservations4) {
 /// @brief This test verifies that DHCPv4 options can be inserted in a binary format
 /// and retrieved from the PostgreSQL host database.
 TEST_F(PgSqlHostDataSourceTest, optionsReservations4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations4(false, Element::fromJSON(comment));
 }
@@ -1096,7 +1168,7 @@ TEST_F(PgSqlHostDataSourceTest, optionsReservations6) {
 /// @brief This test verifies that DHCPv6 options can be inserted in a binary format
 /// and retrieved from the PostgreSQL host database.
 TEST_F(PgSqlHostDataSourceTest, optionsReservations6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations6(false, Element::fromJSON(comment));
 }
@@ -1110,7 +1182,7 @@ TEST_F(PgSqlHostDataSourceTest, optionsReservations46) {
 /// @brief This test verifies that DHCPv4 and DHCPv6 options can be inserted in a
 /// binary format and retrieved with a single query to the database.
 TEST_F(PgSqlHostDataSourceTest, optionsReservations46MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testOptionsReservations46(false);
 }
 
@@ -1124,7 +1196,7 @@ TEST_F(PgSqlHostDataSourceTest, formattedOptionsReservations4) {
 /// @brief This test verifies that DHCPv4 options can be inserted in a textual format
 /// and retrieved from the PostgreSQL host database.
 TEST_F(PgSqlHostDataSourceTest, formattedOptionsReservations4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations4(true, Element::fromJSON(comment));
 }
@@ -1139,7 +1211,7 @@ TEST_F(PgSqlHostDataSourceTest, formattedOptionsReservations6) {
 /// @brief This test verifies that DHCPv6 options can be inserted in a textual format
 /// and retrieved from the PostgreSQL host database.
 TEST_F(PgSqlHostDataSourceTest, formattedOptionsReservations6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     string comment = "{ \"comment\": \"a host reservation\" }";
     testOptionsReservations6(true, Element::fromJSON(comment));
 }
@@ -1153,7 +1225,7 @@ TEST_F(PgSqlHostDataSourceTest, formattedOptionsReservations46) {
 /// @brief This test verifies that DHCPv4 and DHCPv6 options can be inserted in a
 /// textual format and retrieved with a single query to the database.
 TEST_F(PgSqlHostDataSourceTest, formattedOptionsReservations46MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testOptionsReservations46(true);
 }
 
@@ -1170,7 +1242,7 @@ TEST_F(PgSqlHostDataSourceTest, testAddRollback) {
     // when inserting reservations or options. The simplest way to
     // achieve that is to simply drop one of the tables. To do so, we
     // connect to the database and issue a DROP query.
-    PgSqlConnection::ParameterMap params;
+    DatabaseConnection::ParameterMap params;
     params["name"] = "keatest";
     params["user"] = "keatest";
     params["password"] = "keatest";
@@ -1210,7 +1282,7 @@ TEST_F(PgSqlHostDataSourceTest, testAddRollback) {
 /// into the database. The failure to insert host information at
 /// any stage should cause the whole transaction to be rolled back.
 TEST_F(PgSqlHostDataSourceTest, testAddRollbackMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     // Make sure we have the pointer to the host data source.
     ASSERT_TRUE(hdsptr_);
 
@@ -1220,7 +1292,7 @@ TEST_F(PgSqlHostDataSourceTest, testAddRollbackMultiThreading) {
     // when inserting reservations or options. The simplest way to
     // achieve that is to simply drop one of the tables. To do so, we
     // connect to the database and issue a DROP query.
-    PgSqlConnection::ParameterMap params;
+    DatabaseConnection::ParameterMap params;
     params["name"] = "keatest";
     params["user"] = "keatest";
     params["password"] = "keatest";
@@ -1265,7 +1337,7 @@ TEST_F(PgSqlHostDataSourceTest, messageFields) {
 /// @brief This test checks that siaddr, sname, file fields can be retrieved
 /// from a database for a host.
 TEST_F(PgSqlHostDataSourceTest, messageFieldsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMessageFields4();
 }
 
@@ -1276,7 +1348,7 @@ TEST_F(PgSqlHostDataSourceTest, deleteByAddr4) {
 
 /// @brief Check that delete(subnet-id, addr4) works.
 TEST_F(PgSqlHostDataSourceTest, deleteByAddr4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteByAddr4();
 }
 
@@ -1287,7 +1359,7 @@ TEST_F(PgSqlHostDataSourceTest, deleteById4) {
 
 /// @brief Check that delete(subnet4-id, identifier-type, identifier) works.
 TEST_F(PgSqlHostDataSourceTest, deleteById4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById4();
 }
 
@@ -1300,7 +1372,7 @@ TEST_F(PgSqlHostDataSourceTest, deleteById4Options) {
 /// @brief Check that delete(subnet4-id, identifier-type, identifier) works,
 /// even when options are present.
 TEST_F(PgSqlHostDataSourceTest, deleteById4OptionsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById4Options();
 }
 
@@ -1311,7 +1383,7 @@ TEST_F(PgSqlHostDataSourceTest, deleteById6) {
 
 /// @brief Check that delete(subnet6-id, identifier-type, identifier) works.
 TEST_F(PgSqlHostDataSourceTest, deleteById6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById6();
 }
 
@@ -1324,7 +1396,7 @@ TEST_F(PgSqlHostDataSourceTest, deleteById6Options) {
 /// @brief Check that delete(subnet6-id, identifier-type, identifier) works,
 /// even when options are present.
 TEST_F(PgSqlHostDataSourceTest, deleteById6OptionsMultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testDeleteById6Options();
 }
 
@@ -1337,7 +1409,7 @@ TEST_F(PgSqlHostDataSourceTest, testMultipleHostsNoAddress4) {
 /// @brief Tests that multiple reservations without IPv4 addresses can be
 /// specified within a subnet.
 TEST_F(PgSqlHostDataSourceTest, testMultipleHostsNoAddress4MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleHostsNoAddress4();
 }
 
@@ -1348,8 +1420,239 @@ TEST_F(PgSqlHostDataSourceTest, testMultipleHosts6) {
 
 /// @brief Tests that multiple hosts can be specified within an IPv6 subnet.
 TEST_F(PgSqlHostDataSourceTest, testMultipleHosts6MultiThreading) {
-    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingTest mt(true);
     testMultipleHosts6();
+}
+
+/// @brief Test fixture class for validating @c HostMgr using
+/// PostgreSQL as alternate host data source.
+class PgSQLHostMgrTest : public HostMgrTest {
+protected:
+
+    /// @brief Build PostgreSQL schema for a test.
+    virtual void SetUp();
+
+    /// @brief Rollback and drop PostgreSQL schema after the test.
+    virtual void TearDown();
+};
+
+void
+PgSQLHostMgrTest::SetUp() {
+    HostMgrTest::SetUp();
+
+    // Ensure we have the proper schema with no transient data.
+    db::test::createPgSQLSchema();
+
+    // Connect to the database
+    try {
+        HostMgr::addBackend(db::test::validPgSQLConnectionString());
+    } catch (...) {
+        std::cerr << "*** ERROR: unable to open database. The test\n"
+            "*** environment is broken and must be fixed before\n"
+            "*** the PostgreSQL tests will run correctly.\n"
+            "*** The reason for the problem is described in the\n"
+            "*** accompanying exception output.\n";
+        throw;
+    }
+}
+
+void
+PgSQLHostMgrTest::TearDown() {
+    HostMgr::instance().getHostDataSource()->rollback();
+    HostMgr::delBackend("postgresql");
+    // If data wipe enabled, delete transient data otherwise destroy the schema
+    db::test::destroyPgSQLSchema();
+}
+
+/// @brief Test fixture class for validating @c HostMgr using
+/// PostgreSQL as alternate host data source and PostgreSQL connectivity loss.
+class PgSQLHostMgrDbLostCallbackTest : public HostMgrDbLostCallbackTest {
+public:
+    virtual void destroySchema() {
+        // If data wipe enabled, delete transient data otherwise destroy the schema
+        db::test::destroyPgSQLSchema();
+    }
+
+    virtual void createSchema() {
+        // Ensure we have the proper schema with no transient data.
+        db::test::createPgSQLSchema();
+    }
+
+    virtual std::string validConnectString() {
+        return (db::test::validPgSQLConnectionString());
+    }
+
+    virtual std::string invalidConnectString() {
+        return (connectionString(PGSQL_VALID_TYPE, INVALID_NAME, VALID_HOST,
+                                 VALID_USER, VALID_PASSWORD));
+    }
+};
+
+// This test verifies that reservations for a particular client can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(PgSQLHostMgrTest, getAll) {
+    testGetAll(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(PgSQLHostMgrTest, getAll4BySubnet) {
+    testGetAll4BySubnet(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(PgSQLHostMgrTest, getAll6BySubnet) {
+    testGetAll6BySubnet(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that HostMgr returns all reservations for the specified
+// IPv4 subnet and reserved address.
+TEST_F(PgSQLHostMgrTest, getAll4BySubnetIP) {
+    testGetAll4BySubnetIP(*getCfgHosts(), *getCfgHosts());
+}
+
+// This test verifies that HostMgr returns all reservations for the specified
+// IPv6 subnet and reserved address.
+TEST_F(PgSQLHostMgrTest, getAll6BySubnetIP) {
+    testGetAll6BySubnetIP(*getCfgHosts(), *getCfgHosts());
+}
+
+// This test verifies that reservations for a particular hostname can be
+// retrieved from the configuration file and a database simultaneously.
+TEST_F(PgSQLHostMgrTest, getAllbyHostname) {
+    testGetAllbyHostname(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular hostname and
+// DHCPv4 subnet can be retrieved from the configuration file and a
+// database simultaneously.
+TEST_F(PgSQLHostMgrTest, getAllbyHostnameSubnet4) {
+    testGetAllbyHostnameSubnet4(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular hostname and
+// DHCPv6 subnet can be retrieved from the configuration file and a
+// database simultaneously.
+TEST_F(PgSQLHostMgrTest, getAllbyHostnameSubnet6) {
+    testGetAllbyHostnameSubnet6(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved by pages from the configuration file and a database
+// simultaneously.
+TEST_F(PgSQLHostMgrTest, getPage4) {
+    testGetPage4(true);
+}
+
+// This test verifies that all v4 reservations be retrieved by pages
+// from the configuration file and a database simultaneously.
+TEST_F(PgSQLHostMgrTest, getPage4All) {
+    testGetPage4All(true);
+}
+
+// This test verifies that reservations for a particular subnet can
+// be retrieved by pages from the configuration file and a database
+// simultaneously.
+TEST_F(PgSQLHostMgrTest, getPage6) {
+    testGetPage6(true);
+}
+
+// This test verifies that all v6 reservations be retrieved by pages
+// from the configuration file and a database simultaneously.
+TEST_F(PgSQLHostMgrTest, getPage6All) {
+    testGetPage6All(true);
+}
+
+// This test verifies that IPv4 reservations for a particular client can
+// be retrieved from the configuration file and a database simultaneously.
+TEST_F(PgSQLHostMgrTest, getAll4) {
+    testGetAll4(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that the IPv4 reservation can be retrieved from a
+// database.
+TEST_F(PgSQLHostMgrTest, get4) {
+    testGet4(HostMgr::instance());
+}
+
+// This test verifies that the IPv6 reservation can be retrieved from a
+// database.
+TEST_F(PgSQLHostMgrTest, get6) {
+    testGet6(HostMgr::instance());
+}
+
+// This test verifies that the IPv6 prefix reservation can be retrieved
+// from a configuration file and a database.
+TEST_F(PgSQLHostMgrTest, get6ByPrefix) {
+    testGet6ByPrefix(*getCfgHosts(), HostMgr::instance());
+}
+
+// This test verifies that it is possible to control whether the reserved
+// IP addresses are unique or non unique via the HostMgr.
+TEST_F(PgSQLHostMgrTest, setIPReservationsUnique) {
+    EXPECT_TRUE(HostMgr::instance().setIPReservationsUnique(true));
+    EXPECT_TRUE(HostMgr::instance().setIPReservationsUnique(false));
+}
+
+/// @brief Verifies that db lost callback is not invoked on an open failure
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testNoCallbackOnOpenFailure) {
+    MultiThreadingTest mt(false);
+    testNoCallbackOnOpenFailure();
+}
+
+/// @brief Verifies that db lost callback is not invoked on an open failure
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testNoCallbackOnOpenFailureMultiThreading) {
+    MultiThreadingTest mt(true);
+    testNoCallbackOnOpenFailure();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndRecoveredCallback();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndRecoveredCallback();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndFailedCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndFailedCallback();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndFailedCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndFailedCallback();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredAfterTimeoutCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndRecoveredAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndRecoveredAfterTimeoutCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndRecoveredAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndFailedAfterTimeoutCallback) {
+    MultiThreadingTest mt(false);
+    testDbLostAndFailedAfterTimeoutCallback();
+}
+
+/// @brief Verifies that loss of connectivity to PostgreSQL is handled correctly.
+TEST_F(PgSQLHostMgrDbLostCallbackTest, testDbLostAndFailedAfterTimeoutCallbackMultiThreading) {
+    MultiThreadingTest mt(true);
+    testDbLostAndFailedAfterTimeoutCallback();
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,6 +15,7 @@
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/parsers/shared_network_parser.h>
+#include <testutils/gtest_utils.h>
 #include <gtest/gtest.h>
 #include <string>
 
@@ -127,7 +128,9 @@ public:
                 "    \"rebind-timer\": 199,"
                 "    \"relay\": { \"ip-addresses\": [ \"10.1.1.1\" ] },"
                 "    \"renew-timer\": 99,"
-                "    \"reservation-mode\": \"out-of-pool\","
+                "    \"reservations-global\": false,"
+                "    \"reservations-in-subnet\": true,"
+                "    \"reservations-out-of-pool\": true,"
                 "    \"server-hostname\": \"example.org\","
                 "    \"require-client-classes\": [ \"runner\" ],"
                 "    \"user-context\": { \"comment\": \"example\" },"
@@ -145,6 +148,10 @@ public:
                 "    \"ddns-qualifying-suffix\": \"example.com.\","
                 "    \"hostname-char-set\": \"[^A-Z]\","
                 "    \"hostname-char-replacement\": \"x\","
+                "    \"store-extended-info\": true,"
+                "    \"cache-threshold\": 0.123,"
+                "    \"cache-max-age\": 123,"
+                "    \"ddns-update-on-renew\": true,"
                 "    \"option-data\": ["
                 "        {"
                 "            \"name\": \"domain-name-servers\","
@@ -168,15 +175,18 @@ public:
                 "            \"boot-file-name\": \"\","
                 "            \"client-class\": \"\","
                 "            \"require-client-classes\": []\n,"
-                "            \"reservation-mode\": \"all\","
+                "            \"reservations-global\": false,"
+                "            \"reservations-in-subnet\": true,"
+                "            \"reservations-out-of-pool\": false,"
                 "            \"4o6-interface\": \"\","
                 "            \"4o6-interface-id\": \"\","
                 "            \"4o6-subnet\": \"\","
-                "            \"reservation-mode\": \"all\","
                 "            \"calculate-tee-times\": true,"
                 "            \"t1-percent\": .45,"
                 "            \"t2-percent\": .65,"
-                "            \"hostname-char-set\": \"\""
+                "            \"hostname-char-set\": \"\","
+                "            \"cache-threshold\": .20,"
+                "            \"cache-max-age\": 50"
                 "        },"
                 "        {"
                 "            \"id\": 2,"
@@ -192,14 +202,17 @@ public:
                 "            \"boot-file-name\": \"\","
                 "            \"client-class\": \"\","
                 "            \"require-client-classes\": []\n,"
-                "            \"reservation-mode\": \"all\","
+                "            \"reservations-global\": false,"
+                "            \"reservations-in-subnet\": true,"
+                "            \"reservations-out-of-pool\": false,"
                 "            \"4o6-interface\": \"\","
                 "            \"4o6-interface-id\": \"\","
                 "            \"4o6-subnet\": \"\","
-                "            \"reservation-mode\": \"all\","
                 "            \"calculate-tee-times\": false,"
                 "            \"t1-percent\": .40,"
-                "            \"t2-percent\": .80"
+                "            \"t2-percent\": .80,"
+                "            \"cache-threshold\": .15,"
+                "            \"cache-max-age\": 5"
                 "        }"
                 "    ]"
                 "}";
@@ -233,7 +246,7 @@ TEST_F(SharedNetwork4ParserTest, parse) {
     SharedNetwork4Parser parser;
     SharedNetwork4Ptr network;
 
-    ASSERT_NO_THROW(network = parser.parse(config_element));
+    ASSERT_NO_THROW_LOG(network = parser.parse(config_element));
     ASSERT_TRUE(network);
 
     // Check basic parameters.
@@ -252,7 +265,9 @@ TEST_F(SharedNetwork4ParserTest, parse) {
     EXPECT_EQ("/dev/null", network->getFilename().get());
     EXPECT_EQ("10.0.0.1", network->getSiaddr().get().toText());
     EXPECT_EQ("example.org", network->getSname().get());
-    EXPECT_EQ(Network::HR_OUT_OF_POOL, network->getHostReservationMode());
+    EXPECT_FALSE(network->getReservationsGlobal());
+    EXPECT_TRUE(network->getReservationsInSubnet());
+    EXPECT_TRUE(network->getReservationsOutOfPool());
     EXPECT_TRUE(network->getDdnsSendUpdates().get());
     EXPECT_TRUE(network->getDdnsOverrideNoUpdate().get());
     EXPECT_TRUE(network->getDdnsOverrideClientUpdate().get());
@@ -261,6 +276,10 @@ TEST_F(SharedNetwork4ParserTest, parse) {
     EXPECT_EQ("example.com.", network->getDdnsQualifyingSuffix().get());
     EXPECT_EQ("[^A-Z]", network->getHostnameCharSet().get());
     EXPECT_EQ("x", network->getHostnameCharReplacement().get());
+    EXPECT_TRUE(network->getStoreExtendedInfo().get());
+    EXPECT_EQ(0.123, network->getCacheThreshold());
+    EXPECT_EQ(123, network->getCacheMaxAge());
+    EXPECT_TRUE(network->getDdnsUpdateOnRenew().get());
 
     // Relay information.
     auto relay_info = network->getRelayInfo();
@@ -466,6 +485,49 @@ TEST_F(SharedNetwork4ParserTest, iface) {
     EXPECT_EQ("eth1", network->getIface().get());
 }
 
+// This test verifies that shared network parser for IPv4 works properly
+// when using invalid renew and rebind timers.
+TEST_F(SharedNetwork4ParserTest, parseWithInvalidRenewRebind) {
+    IfaceMgrTestConfig ifmgr(true);
+
+    // Basic configuration for shared network.
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+    ConstElementPtr valid_element = config_element->get("rebind-timer");
+    int64_t value = valid_element->intValue();
+    valid_element = config_element->get("renew-timer");
+    ElementPtr mutable_element = boost::const_pointer_cast<Element>(valid_element);
+    mutable_element->setValue(value + 1);
+
+    // Parse configuration specified above.
+    SharedNetwork4Parser parser;
+    SharedNetwork4Ptr network;
+
+    ASSERT_THROW(network = parser.parse(config_element), DhcpConfigError);
+    ASSERT_FALSE(network);
+}
+
+// This test verifies that shared network parser for IPv4 works properly
+// when renew and rebind timers are equal.
+TEST_F(SharedNetwork4ParserTest, parseValidWithEqualRenewRebind) {
+    IfaceMgrTestConfig ifmgr(true);
+
+    // Basic configuration for shared network.
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+    ConstElementPtr valid_element = config_element->get("rebind-timer");
+    int64_t value = valid_element->intValue();
+    valid_element = config_element->get("renew-timer");
+    ElementPtr mutable_element = boost::const_pointer_cast<Element>(valid_element);
+    mutable_element->setValue(value);
+
+    // Parse configuration specified above.
+    SharedNetwork4Parser parser;
+    SharedNetwork4Ptr network;
+
+    ASSERT_NO_THROW(network = parser.parse(config_element));
+    ASSERT_TRUE(network);
+}
 
 /// @brief Test fixture class for SharedNetwork6Parser class.
 class SharedNetwork6ParserTest : public SharedNetworkParserTest {
@@ -493,7 +555,9 @@ public:
                 "    \"relay\": { \"ip-addresses\": [ \"2001:db8:1::1\" ] },"
                 "    \"renew-timer\": 99,"
                 "    \"require-client-classes\": [ \"runner\" ],"
-                "    \"reservation-mode\": \"out-of-pool\","
+                "    \"reservations-global\": false,"
+                "    \"reservations-in-subnet\": true,"
+                "    \"reservations-out-of-pool\": true,"
                 "    \"user-context\": { },"
                 "    \"valid-lifetime\": 399,"
                 "    \"min-valid-lifetime\": 299,"
@@ -509,6 +573,10 @@ public:
                 "    \"ddns-qualifying-suffix\": \"example.com.\","
                 "    \"hostname-char-set\": \"[^A-Z]\","
                 "    \"hostname-char-replacement\": \"x\","
+                "    \"store-extended-info\": true,"
+                "    \"cache-threshold\": 0.123,"
+                "    \"cache-max-age\": 123,"
+                "    \"ddns-update-on-renew\": true,"
                 "    \"option-data\": ["
                 "        {"
                 "            \"name\": \"dns-servers\","
@@ -531,7 +599,9 @@ public:
                 "            \"max-valid-lifetime\": 500,"
                 "            \"client-class\": \"\","
                 "            \"require-client-classes\": []\n,"
-                "            \"reservation-mode\": \"all\","
+                "            \"reservations-global\": false,"
+                "            \"reservations-in-subnet\": true,"
+                "            \"reservations-out-of-pool\": false,"
                 "            \"rapid-commit\": false,"
                 "            \"hostname-char-set\": \"\""
                 "        },"
@@ -546,7 +616,9 @@ public:
                 "            \"valid-lifetime\": 40,"
                 "            \"client-class\": \"\","
                 "            \"require-client-classes\": []\n,"
-                "            \"reservation-mode\": \"all\","
+                "            \"reservations-global\": false,"
+                "            \"reservations-in-subnet\": true,"
+                "            \"reservations-out-of-pool\": false,"
                 "            \"rapid-commit\": false"
                 "        }"
                 "    ]"
@@ -571,7 +643,7 @@ public:
     bool use_iface_id_;
 };
 
-// This test verifies that shared network parser for IPv4 works properly
+// This test verifies that shared network parser for IPv6 works properly
 // in a positive test scenario.
 TEST_F(SharedNetwork6ParserTest, parse) {
     IfaceMgrTestConfig ifmgr(true);
@@ -612,6 +684,10 @@ TEST_F(SharedNetwork6ParserTest, parse) {
     EXPECT_EQ("example.com.", network->getDdnsQualifyingSuffix().get());
     EXPECT_EQ("[^A-Z]", network->getHostnameCharSet().get());
     EXPECT_EQ("x", network->getHostnameCharReplacement().get());
+    EXPECT_TRUE(network->getStoreExtendedInfo().get());
+    EXPECT_EQ(0.123, network->getCacheThreshold());
+    EXPECT_EQ(123, network->getCacheMaxAge());
+    EXPECT_TRUE(network->getDdnsUpdateOnRenew().get());
 
     // Relay information.
     auto relay_info = network->getRelayInfo();
@@ -668,7 +744,7 @@ TEST_F(SharedNetwork6ParserTest, parse) {
     EXPECT_EQ("2001:db8:1::cafe", addresses[0].toText());
 }
 
-// This test verifies that shared network parser for IPv4 works properly
+// This test verifies that shared network parser for IPv6 works properly
 // in a positive test scenario.
 TEST_F(SharedNetwork6ParserTest, parseWithInterfaceId) {
     IfaceMgrTestConfig ifmgr(true);
@@ -687,6 +763,52 @@ TEST_F(SharedNetwork6ParserTest, parseWithInterfaceId) {
     // Check that interface-id has been parsed.
     auto opt_iface_id = network->getInterfaceId();
     ASSERT_TRUE(opt_iface_id);
+}
+
+// This test verifies that shared network parser for IPv6 works properly
+// when using invalid renew and rebind timers.
+TEST_F(SharedNetwork6ParserTest, parseWithInvalidRenewRebind) {
+    IfaceMgrTestConfig ifmgr(true);
+
+    // Use the configuration with interface-id instead of interface parameter.
+    use_iface_id_ = true;
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+    ConstElementPtr valid_element = config_element->get("rebind-timer");
+    int64_t value = valid_element->intValue();
+    valid_element = config_element->get("renew-timer");
+    ElementPtr mutable_element = boost::const_pointer_cast<Element>(valid_element);
+    mutable_element->setValue(value + 1);
+
+    // Parse configuration specified above.
+    SharedNetwork6Parser parser;
+    SharedNetwork6Ptr network;
+
+    ASSERT_THROW(network = parser.parse(config_element), DhcpConfigError);
+    ASSERT_FALSE(network);
+}
+
+// This test verifies that shared network parser for IPv6 works properly
+// when renew and rebind timers are equal.
+TEST_F(SharedNetwork6ParserTest, parseValidWithEqualRenewRebind) {
+    IfaceMgrTestConfig ifmgr(true);
+
+    // Use the configuration with interface-id instead of interface parameter.
+    use_iface_id_ = true;
+    std::string config = getWorkingConfig();
+    ElementPtr config_element = Element::fromJSON(config);
+    ConstElementPtr valid_element = config_element->get("rebind-timer");
+    int64_t value = valid_element->intValue();
+    valid_element = config_element->get("renew-timer");
+    ElementPtr mutable_element = boost::const_pointer_cast<Element>(valid_element);
+    mutable_element->setValue(value);
+
+    // Parse configuration specified above.
+    SharedNetwork6Parser parser;
+    SharedNetwork6Ptr network;
+
+    ASSERT_NO_THROW(network = parser.parse(config_element));
+    ASSERT_TRUE(network);
 }
 
 // This test verifies that error is returned when trying to configure a

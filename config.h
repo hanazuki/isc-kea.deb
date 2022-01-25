@@ -1,6 +1,9 @@
 /* config.h.  Generated from config.h.in by configure.  */
 /* config.h.in.  Generated from configure.ac by autoheader.  */
 
+/* Define to 1 if system and steady clocks use the same duration type */
+#define CHRONO_SAME_DURATION 1
+
 /* config.h inclusion marker */
 #define CONFIG_H_WAS_INCLUDED 1
 
@@ -25,11 +28,14 @@
 /* Define to 1 if you have the <boost/asio/ip/address.hpp> header file. */
 #define HAVE_BOOST_ASIO_IP_ADDRESS_HPP 1
 
+/* Define to 1 if you have the <boost/asio/signal_set.hpp> header file. */
+#define HAVE_BOOST_ASIO_SIGNAL_SET_HPP 1
+
+/* Define to 1 if you have the <boost/asio/ssl.hpp> header file. */
+#define HAVE_BOOST_ASIO_SSL_HPP 1
+
 /* Define to 1 if you have the <boost/atomic.hpp> header file. */
 #define HAVE_BOOST_ATOMIC_HPP 1
-
-/* Define to 1 if you have the <boost/bind.hpp> header file. */
-#define HAVE_BOOST_BIND_HPP 1
 
 /* Define to 1 if you have the <boost/circular_buffer.hpp> header file. */
 #define HAVE_BOOST_CIRCULAR_BUFFER_HPP 1
@@ -41,8 +47,8 @@
 /* Define to 1 if you have the <boost/foreach.hpp> header file. */
 #define HAVE_BOOST_FOREACH_HPP 1
 
-/* Define to 1 if you have the <boost/function.hpp> header file. */
-#define HAVE_BOOST_FUNCTION_HPP 1
+/* Define to 1 if you have the <boost/functional/hash.hpp> header file. */
+#define HAVE_BOOST_FUNCTIONAL_HASH_HPP 1
 
 /* Define to 1 if you have the <boost/integer/common_factor.hpp> header file.
    */
@@ -58,6 +64,12 @@
 /* Define to 1 if you have the <boost/system/error_code.hpp> header file. */
 #define HAVE_BOOST_SYSTEM_ERROR_CODE_HPP 1
 
+/* Define to 1 if you have the <botan/asio_stream.h> header file. */
+/* #undef HAVE_BOTAN_ASIO_STREAM_H */
+
+/* Define to 1 if you have the <botan/botan.h> header file. */
+/* #undef HAVE_BOTAN_BOTAN_H */
+
 /* Define to 1 if getsockopt(IPV6_USE_MIN_MTU) does not work */
 /* #undef HAVE_BROKEN_GET_IPV6_USE_MIN_MTU */
 
@@ -70,11 +82,29 @@
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
 
+/* Define to 1 if boost::asio::ssl::context::tls is available */
+#define HAVE_GENERIC_TLS_METHOD 1
+
+/* Define to 1 if you have the <gssapi/gssapi.h> header file. */
+/* #undef HAVE_GSSAPI_GSSAPI_H */
+
+/* Define to 1 if you have the <gssapi/gssapi_krb5.h> header file. */
+/* #undef HAVE_GSSAPI_GSSAPI_KRB5_H */
+
+/* gss_str_to_oid is available */
+/* #undef HAVE_GSS_STR_TO_OID */
+
 /* Define to 1 if you have the <inttypes.h> header file. */
 #define HAVE_INTTYPES_H 1
 
 /* Define to 1 if std::is_base_of is available */
 #define HAVE_IS_BASE_OF 1
+
+/* Define to 1 if you have the <krb5.h> header file. */
+/* #undef HAVE_KRB5_H */
+
+/* Define to 1 if you have the <krb5/krb5.h> header file. */
+/* #undef HAVE_KRB5_KRB5_H */
 
 /* Define to 1 if you have the <log4cplus/logger.h> header file. */
 #define HAVE_LOG4CPLUS_LOGGER_H 1
@@ -94,12 +124,6 @@
 /* PostgreSQL is present */
 /* #undef HAVE_PGSQL */
 
-/* Using sysrepo > 0.7.7 */
-/* #undef HAVE_POST_0_7_7_SYSREPO */
-
-/* Using sysrepo < 0.7.6 */
-/* #undef HAVE_PRE_0_7_6_SYSREPO */
-
 /* Define to 1 if you have the `pselect' function. */
 #define HAVE_PSELECT 1
 
@@ -116,14 +140,17 @@
 /* Define to 1 if you have the <stdlib.h> header file. */
 #define HAVE_STDLIB_H 1
 
+/* Define to 1 if boost::asio::ssl::error::stream_truncated is available */
+#define HAVE_STREAM_TRUNCATED_ERROR 1
+
 /* Define to 1 if you have the <strings.h> header file. */
 #define HAVE_STRINGS_H 1
 
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
 
-/* SYSREPO is present */
-/* #undef HAVE_SYSREPO */
+/* Using sysrepo 1.x */
+/* #undef HAVE_SYSREPO_V1 */
 
 /* Define to 1 if you have the <sys/devpoll.h> header file. */
 /* #undef HAVE_SYS_DEVPOLL_H */
@@ -137,6 +164,9 @@
 /* Define to 1 if you have the <sys/types.h> header file. */
 #define HAVE_SYS_TYPES_H 1
 
+/* Define to 1 if boost::asio::ssl::context::tlsv12 is available */
+/* #undef HAVE_TLS_1_2_METHOD */
+
 /* Define to 1 if you have the <unistd.h> header file. */
 #define HAVE_UNISTD_H 1
 
@@ -144,13 +174,16 @@
 /* #undef HAVE_UTILS_ERRCODES_H */
 
 /* Check valgrind headers */
-#define HAVE_VALGRIND_HEADERS 1
+/* #undef HAVE_VALGRIND_HEADERS */
 
 /* Define to 1 if you have the <valgrind/valgrind.h> header file. */
-#define HAVE_VALGRIND_VALGRIND_H 1
+/* #undef HAVE_VALGRIND_VALGRIND_H */
 
 /* Define to 1 if the system has the type `_Bool'. */
 /* #undef HAVE__BOOL */
+
+/* Define to 1 if libc is musl */
+/* #undef LIBC_MUSL */
 
 /* Explicit initialization of log4cplus possible */
 /* #undef LOG4CPLUS_INITIALIZER_H */
@@ -189,7 +222,7 @@
 #define PACKAGE_NAME "kea"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kea 1.7.5"
+#define PACKAGE_STRING "kea 2.0.1"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kea"
@@ -198,7 +231,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "1.7.5"
+#define PACKAGE_VERSION "2.0.1"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -210,10 +243,16 @@
 /* #undef USE_STATIC_LINK */
 
 /* Version number of package */
-#define VERSION "1.7.5"
+#define VERSION "2.0.1"
 
 /* Compile with Botan crypto */
 /* #undef WITH_BOTAN */
+
+/* Define to 1 if Botan boost TLS is available */
+/* #undef WITH_BOTAN_BOOST */
+
+/* Heimdal GSS-API implementation */
+/* #undef WITH_HEIMDAL */
 
 /* Compile with OpenSSL crypto */
 #define WITH_OPENSSL /**/
@@ -224,3 +263,6 @@
 
 /* Define to `unsigned int' if <sys/types.h> does not define. */
 /* #undef size_t */
+
+/* Define to `int' if <sys/types.h> does not define. */
+/* #undef ssize_t */

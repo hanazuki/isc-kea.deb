@@ -29,7 +29,7 @@ boost::shared_ptr<CalloutManager>
 LibraryManagerCollection::getCalloutManager() const {
 
     // Only return a pointer if we have a CalloutManager created.
-    if (! callout_manager_) {
+    if (!callout_manager_) {
         isc_throw(LoadLibrariesNotCalled, "must load hooks libraries before "
                   "attempting to retrieve a CalloutManager for them");
     }
@@ -38,7 +38,7 @@ LibraryManagerCollection::getCalloutManager() const {
 }
 
 LibraryManagerCollection::LibraryManagerCollection(const HookLibsCollection& libraries)
-    :library_info_(libraries) {
+    : library_info_(libraries) {
 
     // We need to split hook libs into library names and library parameters.
     for (HookLibsCollection::const_iterator it = libraries.begin();
@@ -52,8 +52,10 @@ LibraryManagerCollection::LibraryManagerCollection(const HookLibsCollection& lib
 bool
 LibraryManagerCollection::loadLibraries() {
 
-    // Unload libraries if any are loaded.
-    static_cast<void>(unloadLibraries());
+    // There must be no libraries still in memory.
+    if (!lib_managers_.empty()) {
+        isc_throw(LibrariesStillOpened, "some libraries are still opened");
+    }
 
     // Access the callout manager, (re)creating it if required.
     //
@@ -67,22 +69,12 @@ LibraryManagerCollection::loadLibraries() {
     // associated libraries are deleted, hence this link (LibraryManager ->
     // CalloutManager) is safe.
     //
-    // If the list of libraries is not empty, re-create the callout manager.
+    // The call of this function will result in re-creating the callout manager.
     // This deletes all callouts (including the pre-library and post-
     // library) ones.  It is up to the libraries to re-register their callouts.
     // The pre-library and post-library callouts will also need to be
     // re-registered.
-    //
-    // If the list of libraries stays empty (as in the case of a reconfiguration
-    // where the hooks-libraries clause was empty and is not changed), try
-    // to re-use the existing callout manager (so retaining registered pre-
-    // and post-library callouts).
-    if (library_names_.empty()) {
-        callout_manager_ = HooksManager::getSharedCalloutManager();
-    }
-    if (!library_names_.empty() || !callout_manager_) {
-        callout_manager_.reset(new CalloutManager(library_names_.size()));
-    }
+    callout_manager_.reset(new CalloutManager(library_names_.size()));
 
     // Now iterate through the libraries are load them one by one.  We'll
     for (size_t i = 0; i < library_names_.size(); ++i) {
@@ -116,14 +108,24 @@ LibraryManagerCollection::unloadLibraries() {
 
     // Delete the library managers in the reverse order to which they were
     // created, then clear the library manager vector.
-    for (int i = lib_managers_.size() - 1; i >= 0; --i) {
-        lib_managers_[i].reset();
+    while (!lib_managers_.empty()) {
+        lib_managers_.pop_back();
     }
-    lib_managers_.clear();
 
     // Get rid of the callout manager. (The other member, the list of library
     // names, was cleared when the libraries were loaded.)
     callout_manager_.reset();
+}
+
+// Prepare the unloading of libraries.
+bool
+LibraryManagerCollection::prepareUnloadLibraries() {
+    bool result = true;
+    // Iterate on library managers in reverse order.
+    for (auto lm = lib_managers_.rbegin(); lm != lib_managers_.rend(); ++lm) {
+        result = (*lm)->prepareUnloadLibrary() && result;
+    }
+    return (result);
 }
 
 // Return number of loaded libraries.

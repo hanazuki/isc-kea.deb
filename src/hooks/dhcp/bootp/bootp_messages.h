@@ -1,4 +1,4 @@
-// File created from ../../../../src/hooks/dhcp/bootp/bootp_messages.mes on Wed Jan 22 2020 19:48
+// File created from ../../../../src/hooks/dhcp/bootp/bootp_messages.mes
 
 #ifndef BOOTP_MESSAGES_H
 #define BOOTP_MESSAGES_H

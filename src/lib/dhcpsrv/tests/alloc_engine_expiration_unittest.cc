@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,13 +9,12 @@
 #include <dhcp/option_data_types.h>
 #include <dhcp_ddns/ncr_msg.h>
 #include <dhcpsrv/tests/alloc_engine_utils.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <hooks/hooks_manager.h>
 #include <stats/stats_mgr.h>
 #include <gtest/gtest.h>
-#include <boost/bind.hpp>
-#include <boost/function.hpp>
 #include <boost/static_assert.hpp>
+#include <functional>
 #include <iomanip>
 #include <sstream>
 #include <time.h>
@@ -30,6 +29,7 @@ using namespace isc::dhcp::test;
 using namespace isc::dhcp_ddns;
 using namespace isc::hooks;
 using namespace isc::stats;
+namespace ph = std::placeholders;
 
 namespace {
 
@@ -160,9 +160,9 @@ class ExpirationAllocEngineTest : public ::testing::Test {
 public:
 
     /// @brief Type definition for the lease algorithm.
-    typedef boost::function<bool (const LeasePtrType)> LeaseAlgorithmFun;
+    typedef std::function<bool (const LeasePtrType)> LeaseAlgorithmFun;
     /// @brief type definition for the lease index algorithm.
-    typedef boost::function<bool (const size_t)> IndexAlgorithmFun;
+    typedef std::function<bool (const size_t)> IndexAlgorithmFun;
 
     /// @brief Constructor.
     ///
@@ -217,6 +217,12 @@ public:
 
         // Remove callouts executed.
         callouts_.clear();
+
+        // Unload libraries.
+        bool status = HooksManager::unloadLibraries();
+        if (!status) {
+            cerr << "(fixture dtor) unloadLibraries failed" << endl;
+        }
     }
 
     /// @brief Starts D2 client.
@@ -226,7 +232,7 @@ public:
         D2ClientConfigPtr cfg(new D2ClientConfig());
         cfg->enableUpdates(true);
         mgr.setD2ClientConfig(cfg);
-        mgr.startSender(boost::bind(&ExpirationAllocEngineTest::d2ErrorHandler, _1, _2));
+        mgr.startSender(std::bind(&ExpirationAllocEngineTest::d2ErrorHandler, ph::_1, ph::_2));
     }
 
     /// @brief No-op error handler for the D2 client.

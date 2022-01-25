@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -535,7 +535,7 @@ TEST_F(Lease4Test, toElement) {
 
     expected = "{"
         "\"cltt\": 12345678,"
-        "\"comment\": \"a comment\","
+        "\"user-context\": { \"comment\": \"a comment\" },"
         "\"fqdn-fwd\": true,"
         "\"fqdn-rev\": true,"
         "\"hostname\": \"urania.example.org\","
@@ -577,7 +577,9 @@ TEST_F(Lease4Test, fromElement) {
     ASSERT_TRUE(lease->client_id_);
     EXPECT_EQ("17:34:e2:ff:09:92:54", lease->client_id_->toText());
     EXPECT_EQ(12345678, lease->cltt_);
+    EXPECT_EQ(lease->cltt_, lease->current_cltt_);
     EXPECT_EQ(3600, lease->valid_lft_);
+    EXPECT_EQ(lease->valid_lft_, lease->current_valid_lft_);
     EXPECT_TRUE(lease->fqdn_fwd_);
     EXPECT_TRUE(lease->fqdn_rev_);
     EXPECT_EQ("urania.example.org", lease->hostname_);
@@ -1119,7 +1121,7 @@ TEST(Lease6Test, toElementAddress) {
 
     expected = "{"
         "\"cltt\": 12345678,"
-        "\"comment\": \"a comment\","
+        "\"user-context\": { \"comment\": \"a comment\" },"
         "\"duid\": \"00:01:02:03:04:05:06:0a:0b:0c:0d:0e:0f\","
         "\"fqdn-fwd\": false,"
         "\"fqdn-rev\": false,"
@@ -1207,15 +1209,17 @@ TEST(Lease6Test, toElementPrefix) {
     l = lease.toElement();
     EXPECT_FALSE(l->contains("hw-address"));
     EXPECT_FALSE(l->contains("user-context"));
-    EXPECT_FALSE(l->contains("comment"));
 
     // And to finish try with a comment.
     lease.setContext(Element::fromJSON("{ \"comment\": \"a comment\" }"));
     l = lease.toElement();
     EXPECT_FALSE(l->contains("hw-address"));
-    EXPECT_FALSE(l->contains("user-context"));
-    ASSERT_TRUE(l->contains("comment"));
-    EXPECT_EQ("a comment", l->get("comment")->stringValue());
+    ConstElementPtr ctx = l->get("user-context");
+    ASSERT_TRUE(ctx);
+    ASSERT_EQ(Element::map, ctx->getType());
+    EXPECT_EQ(1, ctx->size());
+    ASSERT_TRUE(ctx->contains("comment"));
+    EXPECT_EQ("a comment", ctx->get("comment")->stringValue());
 }
 
 // Verify that the IA_NA can be created from JSON.
@@ -1247,7 +1251,9 @@ TEST(Lease6Test, fromElementNA) {
     ASSERT_TRUE(lease->hwaddr_);
     EXPECT_EQ("hwtype=1 08:00:2b:02:3f:4e", lease->hwaddr_->toText());
     EXPECT_EQ(12345678, lease->cltt_);
+    EXPECT_EQ(lease->cltt_, lease->current_cltt_);
     EXPECT_EQ(800, lease->valid_lft_);
+    EXPECT_EQ(lease->valid_lft_, lease->current_valid_lft_);
     EXPECT_FALSE(lease->fqdn_fwd_);
     EXPECT_FALSE(lease->fqdn_rev_);
     EXPECT_EQ("urania.example.org", lease->hostname_);
@@ -1293,7 +1299,9 @@ TEST(Lease6Test, fromElementPD) {
     ASSERT_TRUE(lease->hwaddr_);
     EXPECT_EQ("hwtype=1 08:00:2b:02:3f:4e", lease->hwaddr_->toText());
     EXPECT_EQ(12345678, lease->cltt_);
+    EXPECT_EQ(lease->cltt_, lease->current_cltt_);
     EXPECT_EQ(600, lease->valid_lft_);
+    EXPECT_EQ(lease->valid_lft_, lease->current_valid_lft_);
     EXPECT_FALSE(lease->fqdn_fwd_);
     EXPECT_FALSE(lease->fqdn_rev_);
     EXPECT_EQ("urania.example.org", lease->hostname_);

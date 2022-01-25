@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -70,7 +70,7 @@ public:
     /// the received message and will be the first one to process
     /// server's response). RELAY_GET_FIRST will try to get option from
     /// the first relay only (closest to the client), RELAY_GET_LAST will
-    /// try to get option form the the last relay (closest to the server).
+    /// try to get option form the last relay (closest to the server).
     enum RelaySearchOrder {
         RELAY_SEARCH_FROM_CLIENT = 1,
         RELAY_SEARCH_FROM_SERVER = 2,
@@ -146,7 +146,9 @@ public:
     /// @brief Returns protocol of this packet (UDP or TCP).
     ///
     /// @return protocol type
-    DHCPv6Proto getProto();
+    DHCPv6Proto getProto() {
+        return (proto_);
+    }
 
     /// @brief Sets protocol of this packet.
     ///

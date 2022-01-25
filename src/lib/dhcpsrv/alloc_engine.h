@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -23,11 +23,12 @@
 #include <dhcpsrv/srv_config.h>
 #include <hooks/callout_handle.h>
 #include <util/multi_threading_mgr.h>
+#include <util/readwrite_mutex.h>
 
-#include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/noncopyable.hpp>
 
+#include <functional>
 #include <list>
 #include <map>
 #include <mutex>
@@ -557,6 +558,11 @@ public:
             /// FQDN has changed.
             Lease6Collection changed_leases_;
 
+            /// @brief Holds addresses and prefixes allocated for this IA.
+            ///
+            /// This collection is used to update at most once new leases.
+            ResourceContainer new_resources_;
+
             /// @brief A pointer to the IA_NA/IA_PD option to be sent in
             /// response
             Option6IAPtr ia_rsp_;
@@ -590,6 +596,20 @@ public:
             ///
             /// @throw BadValue if iaprefix is null.
             void addHint(const Option6IAPrefixPtr& iaprefix);
+
+            /// @brief Convenience method adding new prefix or address.
+            ///
+            /// @param prefix Prefix or address
+            /// @param prefix_len Prefix length. Default is 128 for addresses.
+            void addNewResource(const asiolink::IOAddress& prefix,
+                                const uint8_t prefix_len = 128);
+
+            /// @brief Checks if specified address or prefix was new.
+            ///
+            /// @param prefix Prefix or address
+            /// @param prefix_len Prefix length. Default is 128 for addresses.
+            bool isNewResource(const asiolink::IOAddress& prefix,
+                               const uint8_t prefix_len = 128) const;
         };
 
         /// @brief Container holding IA specific contexts.
@@ -650,12 +670,15 @@ public:
 
         /// @brief Returns host from the most preferred subnet.
         ///
+        /// If there is no such host and global reservations are enabled
+        /// returns the global host.
+        ///
         /// @return Pointer to the host object.
         ConstHostPtr currentHost() const;
 
         /// @brief Returns global host reservation if there is one
         ///
-        /// If the current subnet's reservation mode is global and
+        /// If the current subnet's reservations-global is true and
         /// there is a global host (i.e. reservation belonging to
         /// the global subnet), return it.  Otherwise return an
         /// empty pointer.
@@ -665,8 +688,8 @@ public:
 
         /// @brief Determines if a global reservation exists
         ///
-        /// @return true if there current subnet's reservation mode is
-        /// global and there is global host containing the given
+        /// @return true if there current subnet's reservations-global
+        /// is true and there is global host containing the given
         /// lease reservation, false otherwise
         bool hasGlobalReservation(const IPv6Resrv& resv) const;
 
@@ -716,8 +739,8 @@ public:
     /// it into LeaseMgr (if this allocation is not fake, i.e. this is not a
     /// response to SOLICIT).
     ///
-    /// This method uses host reservation if ctx.hosts_ is set. The easy way to
-    /// set it is to call @ref findReservationDecl.
+    /// This method uses host reservation if @ref ClientContext6::hosts_ is set.
+    /// The easy way to set it is to call @ref findReservationDecl.
     /// The host reservation is convenient, but incurs performance penalty,
     /// so it can be tweaked on a per subnet basis. There are three possible modes:
     /// 1. disabled (no host reservation at all). This is the most performant one
@@ -932,12 +955,18 @@ public:
     /// deleted.
     void deleteExpiredReclaimedLeases4(const uint32_t secs);
 
-
     /// @anchor findReservationDecl
     /// @brief Attempts to find appropriate host reservation.
     ///
     /// Attempts to find appropriate host reservation in HostMgr. If found, it
-    /// will be set in ctx.host_.
+    /// is set in the @ref ClientContext6::hosts_.
+    ///
+    /// @note When the out-of-pool flag is enabled, because the function is
+    /// called only once per DHCP message, the reservations that are in-subnet
+    /// are not filtered out as there is no sufficient information regarding the
+    /// selected subnet, shared network or lease types, but will be filtered out
+    /// at allocation time.
+    ///
     /// @param ctx Client context that contains all necessary information.
     static void findReservation(ClientContext6& ctx);
 
@@ -967,6 +996,25 @@ public:
         return (IPv6Resrv(IPv6Resrv::TYPE_PD, lease.addr_, lease.prefixlen_));
     }
 
+public:
+    /// @brief Determines the preferred and valid v6 lease lifetimes.
+    ///
+    /// A candidate triplet for both preferred and valid lifetimes will be 
+    /// selected from the first class matched to the query which defines the
+    /// value or from the subnet if none do. Classes are searched in the order 
+    /// they are assigned to the query.
+    ///
+    /// If the client requested a lifetime IA hint, then the
+    /// lifetime values returned will be the requested values bounded by
+    /// the candidate triplets.  If the client did not request a value, then
+    /// it simply returns the candidate triplet's default value.
+    ///
+    /// @param ctx client context that passes all necessary information. See
+    ///        @ref ClientContext6 for details.
+    /// @param [out] preferred set to the preferred lifetime that should be used.
+    /// @param [out] valid set to the valid lifetime that should be used.
+    static void getLifetimes6(ClientContext6& ctx, uint32_t& preferred,
+                              uint32_t& valid);
 private:
 
     /// @brief Creates a lease and inserts it in LeaseMgr if necessary
@@ -1016,6 +1064,10 @@ private:
     /// may return more than one lease, but we currently handle only one.
     /// This may change in the future.
     ///
+    /// @note If reservations-out-of-pool flag is enabled, dynamic address that
+    /// match reservations from within the dynamic pool will not be prevented to
+    /// be assigned to any client.
+    ///
     /// @param ctx client context that contains all details (subnet, client-id, etc.)
     ///
     /// @return collection of newly allocated leases
@@ -1023,14 +1075,17 @@ private:
 
     /// @brief Creates new leases based on reservations.
     ///
-    /// This method allcoates new leases,  based on host reservations.
-    /// Existing leases are specified in the existing_leases parameter.
-    /// It first calls @c allocateGlobalReservedLeases6 to accomodate
-    /// subnets using global reservations.  If that method allocates
-    /// addresses, we return, otherwise we continue and check for non-global
-    /// reservations.  A new lease is not created, if there is a lease for
-    /// specified address on existing_leases list or there is a lease used by
-    /// someone else.
+    /// This method allocates new leases, based on host reservations.
+    /// Existing leases are specified in the existing_leases
+    /// parameter.  It first checks for non-global reservations.  A
+    /// new lease is not created, if there is a lease for specified
+    /// address on existing_leases list or there is a lease used by
+    /// someone else. It last calls @c allocateGlobalReservedLeases6
+    /// to accommodate subnets using global reservations.
+    ///
+    /// @note If reservations-out-of-pool flag is enabled, reservations from
+    /// within the dynamic pool will not be checked to be assigned to the
+    /// respective client.
     ///
     /// @param ctx client context that contains all details (subnet, client-id, etc.)
     /// @param existing_leases leases that are already associated with the client
@@ -1050,7 +1105,7 @@ private:
     ///
     /// @param ctx client context that contains all details (subnet, client-id, etc.)
     /// @param existing_leases leases that are already associated with the client
-    bool
+    void
     allocateGlobalReservedLeases6(ClientContext6& ctx, Lease6Collection& existing_leases);
 
     /// @brief Removes leases that are reserved for someone else.
@@ -1267,7 +1322,7 @@ private:
     template<typename LeasePtrType>
     void reclaimLeaseInDatabase(const LeasePtrType& lease,
                                 const bool remove_lease,
-                                const boost::function<void (const LeasePtrType&)>&
+                                const std::function<void (const LeasePtrType&)>&
                                 lease_update_fun) const;
 
     /// @anchor reclaimDeclinedLease4
@@ -1406,8 +1461,21 @@ public:
 
         /// @brief Returns host for currently selected subnet.
         ///
+        /// If there is no such host and global reservations are enabled
+        /// returns the global host.
+        ///
         /// @return Pointer to the host object.
         ConstHostPtr currentHost() const;
+
+        /// @brief Returns global host reservation if there is one
+        ///
+        /// If the current subnet's reservations-global is true and
+        /// there is a global host (i.e. reservation belonging to
+        /// the global subnet), return it.  Otherwise return an
+        /// empty pointer.
+        ///
+        /// @return Pointer to the host object.
+        ConstHostPtr globalHost() const;
 
         /// @brief Default constructor.
         ClientContext4();
@@ -1551,10 +1619,14 @@ public:
 
     /// @brief Attempts to find the host reservation for the client.
     ///
-    /// This method attempts to find the host reservation for the client. If
-    /// found, it is set in the @c ctx.host_. If the host reservations are
-    /// disabled for the particular subnet or the reservation is not found
-    /// for the client, the @c ctx.host_ is set to NULL.
+    /// Attempts to find appropriate host reservation in HostMgr. If found, it
+    /// is set in the @ref ClientContext4::hosts_.
+    ///
+    /// @note When the out-of-pool flag is enabled, because the function is
+    /// called only once per DHCP message, the reservations that are in-subnet
+    /// are not filtered out as there is no sufficient information regarding the
+    /// selected subnet or shared network, but will be filtered out at
+    /// allocation time.
     ///
     /// @param ctx Client context holding various information about the client.
     static void findReservation(ClientContext4& ctx);
@@ -1570,6 +1642,25 @@ public:
     ///
     /// @return Pointer to the reservation found, or an empty pointer.
     static ConstHostPtr findGlobalReservation(ClientContext4& ctx);
+
+    /// @brief Returns the valid lifetime based on the v4 context
+    ///
+    /// If the client query is a BOOTP query, the value returned will
+    /// be Lease::INFINITY_LFT.
+    ///
+    /// Otherwise, a candidate triplet will be selected from the first
+    /// class matched to the query which defines it or from the subnet
+    /// if none do. Classes are searched in the order they are assigned
+    /// to the query.
+    ///
+    /// If the client requested a lifetime value via DHCP option 51, then the
+    /// lifetime value returned will be the requested value bounded by
+    /// the candidate triplet.  If the client did not request a value, then
+    /// it simply returns the candidate triplet's default value.
+    ///
+    /// @param ctx Client context holding various information about the client.
+    /// @return unsigned integer value of the valid lifetime to use.
+    static uint32_t getValidLft(const ClientContext4& ctx);
 
 private:
 
@@ -1772,29 +1863,86 @@ private:
     /// @param [out] lease A pointer to the lease to be updated.
     /// @param ctx A context containing information from the server about the
     /// client and its message.
-    void updateLease4Information(const Lease4Ptr& lease,
+    /// @return True if there was a significant (e.g. other than cltt) change,
+    /// false otherwise.
+    bool updateLease4Information(const Lease4Ptr& lease,
                                  ClientContext4& ctx) const;
 
-    /// @brief Extends the lease lifetime.
+protected:
+    /// @brief Stores additional client query parameters on a V4 lease
     ///
-    /// This function is called to conditionally extend the lifetime of
-    /// the DHCPv4 or DHCPv6 lease. It is envisaged that this function will
-    /// make a decision if the lease lifetime should be extended, using
-    /// a preconfigured threshold, which would indicate how many percent
-    /// of the valid lifetime should have passed for the lease lifetime
-    /// to be extended. The lease lifetime would not be extended if
-    /// the threshold hasn't been reached.
+    /// Extended features such as LeaseQuery require additional parameters
+    /// to be stored for each lease, than we would otherwise retain.
+    /// This function adds that information to the lease's user-context.
+    /// (Note it is protected to facilitate unit testing).
     ///
-    /// @todo Currently this function always extends the lease lifetime.
-    /// In the future, it will take the threshold value into account,
-    /// once the threshold is configurable.
+    /// @warning This method doesn't check if the pointer to the lease is
+    /// valid nor if the subnet to the pointer in the @c ctx is valid.
+    /// The caller is responsible for making sure that they are valid.
     ///
-    /// @param [in,out] lease A lease for which the lifetime should be
-    /// extended.
+    /// @param [out] lease A pointer to the lease to be updated.
+    /// @param ctx A context containing information from the server about the
+    /// client and its message.
+    /// @return True if there was a significant (e.g. other than cltt) change,
+    /// false otherwise.
+    bool updateLease4ExtendedInfo(const Lease4Ptr& lease,
+                                  const ClientContext4& ctx) const;
+
+    /// @brief Stores additional client query parameters on a V6 lease
     ///
-    /// @return true if the lease lifetime has been extended, false
-    /// otherwise.
-    bool conditionalExtendLifetime(Lease& lease) const;
+    /// Extended features such as LeaseQuery and Reconfigure require
+    /// additional parameters to be stored for each lease, than we would
+    /// otherwise retain.  This function adds that information to the
+    /// lease's user-context.
+    /// (Note it is protected to facilitate unit testing).
+    ///
+    /// @warning This method doesn't check if the pointer to the lease is
+    /// valid nor if the subnet to the pointer in the @c ctx is valid.
+    /// The caller is responsible for making sure that they are valid.
+    ///
+    /// @param [out] lease A pointer to the lease to be updated.
+    /// @param ctx A context containing information from the server about the
+    /// client and its message.
+    /// @return True if there was a significant (e.g. other than cltt) change,
+    /// false otherwise.
+    bool updateLease6ExtendedInfo(const Lease6Ptr& lease,
+                                  const ClientContext6& ctx) const;
+
+private:
+
+    /// @brief Try to reuse an already allocated lease.
+    ///
+    /// This function computes and sets when acceptable the reusable
+    /// valid lifetime of an already allocated lease.
+    /// This uses the cache-threshold and cache-max-age parameters.
+    ///
+    /// A not zero value for the reusable valid lifetime means the
+    /// lease can reuse i.e.:
+    ///  - the lease is not updated in the lease database.
+    ///  - the previous value of the lease can be returned to the client.
+    ///
+    /// @param [in,out] lease A pointer to the lease to be updated.
+    /// @param subnet A pointer to the lease subnet.
+    void setLeaseReusable(const Lease4Ptr& lease,
+                          const ClientContext4& ctx) const;
+
+    /// @brief Try to reuse an already allocated lease.
+    ///
+    /// This function computes and sets when acceptable the reusable
+    /// valid lifetime of an already allocated lease.
+    /// This uses the cache-threshold and cache-max-age parameters.
+    ///
+    /// A not zero value for the reusable valid lifetime means the
+    /// lease can reuse i.e.:
+    ///  - the lease is not updated in the lease database.
+    ///  - the previous value of the lease can be returned to the client.
+    ///
+    /// @param [in,out] lease A pointer to the lease to be updated.
+    /// @param current_preferred_lft Current preferred lease lifetime.
+    /// @param subnet A pointer to the lease subnet.
+    void setLeaseReusable(const Lease6Ptr& lease,
+                          uint32_t current_preferred_lft,
+                          const ClientContext6& ctx) const;
 
 private:
 
@@ -1805,6 +1953,20 @@ private:
     /// @brief Number of consecutive DHCPv6 leases' reclamations after
     /// which there are still expired leases in the database.
     uint16_t incomplete_v6_reclamations_;
+
+public:
+
+    /// @brief Get the read-write mutex.
+    ///
+    /// This read-write mutex is used to make reclamation exclusive
+    /// of multi-threaded packet processing.
+    /// @return A reference to the read-write mutex.
+    isc::util::ReadWriteMutex& getReadWriteMutex() {
+        return (rw_mutex_);
+    }
+
+    /// @brief The read-write mutex.
+    isc::util::ReadWriteMutex rw_mutex_;
 };
 
 /// @brief A pointer to the @c AllocEngine object.

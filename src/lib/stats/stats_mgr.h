@@ -137,9 +137,9 @@ public:
     /// setMaxSampleCount() below.
     /// Example:
     /// To set a statistic to keep observations for the last 5 minutes, call:
-    /// setMaxSampleAge("incoming-packets", time_duration(0, 5, 0, 0));
+    /// setMaxSampleAge("incoming-packets", StatsDuration::minutes(5));
     /// to revert statistic to a single value, call:
-    /// setMaxSampleAge("incoming-packets", time_duration(0, 0, 0, 0));
+    /// setMaxSampleAge("incoming-packets", StatsDuration:zero());
     ///
     /// @param name name of the observation
     /// @param duration determines maximum age of samples
@@ -170,6 +170,28 @@ public:
     /// @param max_samples how many samples of a given statistic should be kept
     void setMaxSampleCountAll(uint32_t max_samples);
 
+    /// @brief Set default duration limit.
+    ///
+    /// @param duration default maximum age of samples to keep
+    void setMaxSampleAgeDefault(const StatsDuration& duration);
+
+    /// @brief Set default count limit.
+    ///
+    /// @param max_samples default maximum number of samples to keep
+    /// (0 means to disable count limit and enable age limit)
+    void setMaxSampleCountDefault(uint32_t max_samples);
+
+    /// @brief Get default duration limit.
+    ///
+    /// @return default maximum age of samples to keep.
+    const StatsDuration& getMaxSampleAgeDefault() const;
+
+    /// @brief Get default count limit.
+    ///
+    /// @return default maximum number of samples to keep.
+    /// (0 means that count limit was disabled)
+    uint32_t getMaxSampleCountDefault() const;
+
     /// @}
 
     /// @defgroup consumer_methods Methods are used by data consumers.
@@ -197,6 +219,7 @@ public:
     void resetAll();
 
     /// @brief Removes all collected statistics.
+    /// @note This command was deprecated.
     void removeAll();
 
     /// @brief Returns size of specified statistic.
@@ -224,7 +247,8 @@ public:
 
     /// @brief Returns an observation.
     ///
-    /// Used in testing only. Production code should use @ref get() method.
+    /// Used in testing only. Production code should use @ref get() method
+    /// when the value is dereferenced.
     /// Calls @ref getObservationInternal() method in a thread safe context.
     ///
     /// @param name name of the statistic
@@ -233,8 +257,8 @@ public:
 
     /// @brief Returns an observation in a thread safe context.
     ///
-    /// Used in testing only. Production code should use @ref get() method.
-    /// Should be called in a thread safe context.
+    /// Used in testing only. Production code should use @ref get() method
+    /// when the value is dereferenced. Should be called in a thread safe context.
     ///
     /// @param name name of the statistic
     /// @return Pointer to the Observation object
@@ -325,7 +349,7 @@ public:
     /// @brief Handles statistic-sample-age-set command
     ///
     /// This method handles statistic-sample-age-set command,
-    /// which set max_sample_age_ limit of a given statistic
+    /// which sets max_sample_age_ limit of a given statistic
     /// and leaves max_sample_count_ disabled.
     /// It expects two parameters stored in params map:
     /// name: name of the statistic
@@ -347,7 +371,7 @@ public:
     /// @brief Handles statistic-sample-count-set command
     ///
     /// This method handles statistic-sample-count-set command,
-    /// which set max_sample_count_ limit of a given statistic
+    /// which sets max_sample_count_ limit of a given statistic
     /// and leaves max_sample_age_ disabled.
     /// It expects two parameters stored in params map:
     /// name: name of the statistic
@@ -392,6 +416,8 @@ public:
 
     /// @brief Handles statistic-remove-all command
     ///
+    /// @note The statistic-remove-all command was deprecated.
+    ///
     /// This method handles statistic-remove-all command, which removes all
     /// statistics. Params parameter is ignored.
     ///
@@ -405,7 +431,7 @@ public:
     /// @brief Handles statistic-sample-age-set-all command
     ///
     /// This method handles statistic-sample-age-set-all command,
-    /// which set max_sample_age_ limit to all statistics.
+    /// which sets max_sample_age_ limit to all statistics and the default.
     /// It expects one parameter stored in params map:
     /// duration: limit expressed as a number of seconds
     ///
@@ -414,31 +440,28 @@ public:
     ///     "duration": 1245
     /// }
     ///
-    /// @param name name of the command (ignored, should be "statistic-sample-age-set-all")
     /// @param params structure containing a map that contains "duration"
     /// @return answer confirming success of this operation
-    static isc::data::ConstElementPtr
-    statisticSetMaxSampleAgeAllHandler(const std::string& name,
-                                       const isc::data::ConstElementPtr& params);
+    isc::data::ConstElementPtr
+    statisticSetMaxSampleAgeAllHandler(const isc::data::ConstElementPtr& params);
 
     /// @brief Handles statistic-sample-count-set-all command
     ///
     /// This method handles statistic-sample-count-set-all command,
-    /// which set max_sample_count_ limit of all statistics.
+    /// which sets max_sample_count_ limit of all statistics and the default.
     /// It expects one parameter stored in params map:
     /// max-samples: count limit
+    /// The value 0 is out of range.
     ///
     /// Example params structure:
     /// {
     ///     "max-samples": 15
     /// }
     ///
-    /// @param name name of the command (ignored, should be "statistic-sample-count-set-all")
     /// @param params structure containing a map that contains "max-samples"
     /// @return answer confirming success of this operation
-    static isc::data::ConstElementPtr
-    statisticSetMaxSampleCountAllHandler(const std::string& name,
-                                         const isc::data::ConstElementPtr& params);
+    isc::data::ConstElementPtr
+    statisticSetMaxSampleCountAllHandler(const isc::data::ConstElementPtr& params);
 
     /// @}
 
@@ -452,7 +475,7 @@ private:
     /// method.
     StatsMgr();
 
-    /// @private
+    /// @public
 
     /// @brief Sets a given statistic to specified value (internal version).
     ///
@@ -476,7 +499,7 @@ private:
         }
     }
 
-    /// @private
+    /// @public
 
     /// @brief Adds specified value to a given statistic (internal version).
     ///
@@ -505,7 +528,7 @@ private:
         }
     }
 
-    /// @private
+    /// @public
 
     /// @brief Adds a new observation.
     ///
@@ -516,7 +539,7 @@ private:
     /// @param stat observation
     void addObservation(const ObservationPtr& stat);
 
-    /// @private
+    /// @public
 
     /// @brief Adds a new observation in a thread safe context.
     ///
@@ -586,6 +609,40 @@ private:
     ///
     /// @param max_samples how many samples of a given statistic should be kept
     void setMaxSampleCountAllInternal(uint32_t max_samples);
+
+    /// @private
+
+    /// @brief Set default duration limit.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param duration default maximum age of samples to keep.
+    void setMaxSampleAgeDefaultInternal(const StatsDuration& duration);
+
+    /// @brief Set default count limit.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param max_samples default maximum number of samples to keep.
+    /// (0 means to disable count limit and enable age limit)
+    void setMaxSampleCountDefaultInternal(uint32_t max_samples);
+
+    /// @private
+
+    /// @brief Get default duration limit.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return default maximum age of samples to keep.
+    const StatsDuration& getMaxSampleAgeDefaultInternal() const;
+
+    /// @brief Get default count limit.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return default maximum number of samples to keep.
+    /// (0 means that count limit was disabled)
+    uint32_t getMaxSampleCountDefaultInternal() const;
 
     /// @private
 

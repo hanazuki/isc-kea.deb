@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,13 +42,13 @@ const DbLogger::MessageMap db_message_map = {
     { CQL_CONNECTION_ROLLBACK, DATABASE_CQL_CONNECTION_ROLLBACK }
 };
 
-
 isc::log::Logger database_logger("database");
 
 DbLogger db_logger_translator(database_logger, db_message_map);
 
 DbLoggerStack db_logger_stack = { db_logger_translator };
 
+std::mutex db_logger_mutex;
 
 const MessageID&
 DbLogger::translateMessage(const DbMessageID& id) const {
@@ -63,6 +63,77 @@ void checkDbLoggerStack() {
     if (db_logger_stack.empty()) {
         isc_throw(isc::Unexpected, "database logger stack is empty");
     }
+}
+
+template <>
+isc::log::Logger::Formatter
+DB_LOG<fatal>::formatter(DbMessageID const message_id,
+                         int const /* debug_level = 0 */) {
+    return isc::db::db_logger_stack.back().logger_.fatal(
+        isc::db::db_logger_stack.back().translateMessage(message_id));
+}
+
+template <>
+isc::log::Logger::Formatter
+DB_LOG<error>::formatter(DbMessageID const message_id,
+                         int const /* debug_level = 0 */) {
+    return isc::db::db_logger_stack.back().logger_.error(
+        isc::db::db_logger_stack.back().translateMessage(message_id));
+}
+
+template <>
+isc::log::Logger::Formatter
+DB_LOG<warn>::formatter(DbMessageID const message_id,
+                        int const /* debug_level = 0 */) {
+    return isc::db::db_logger_stack.back().logger_.warn(
+        isc::db::db_logger_stack.back().translateMessage(message_id));
+}
+
+template <>
+isc::log::Logger::Formatter
+DB_LOG<info>::formatter(DbMessageID const message_id,
+                        int const /* debug_level = 0 */) {
+    return isc::db::db_logger_stack.back().logger_.info(
+        isc::db::db_logger_stack.back().translateMessage(message_id));
+}
+
+template <>
+isc::log::Logger::Formatter
+DB_LOG<debug>::formatter(DbMessageID const message_id,
+                         int const debug_level /* = 0 */) {
+    return isc::db::db_logger_stack.back().logger_.debug(
+        debug_level,
+        isc::db::db_logger_stack.back().translateMessage(message_id));
+}
+
+template <>
+bool
+DB_LOG<fatal>::isEnabled(int const /* debug_level = 0 */) const {
+    return db_logger_stack.back().logger_.isFatalEnabled();
+}
+
+template <>
+bool
+DB_LOG<error>::isEnabled(int const /* debug_level = 0 */) const {
+    return db_logger_stack.back().logger_.isErrorEnabled();
+}
+
+template <>
+bool
+DB_LOG<warn>::isEnabled(int const /* debug_level = 0 */) const {
+    return db_logger_stack.back().logger_.isWarnEnabled();
+}
+
+template <>
+bool
+DB_LOG<info>::isEnabled(int const /* debug_level = 0 */) const {
+    return db_logger_stack.back().logger_.isInfoEnabled();
+}
+
+template <>
+bool
+DB_LOG<debug>::isEnabled(int const debug_level /* = 0 */) const {
+    return db_logger_stack.back().logger_.isDebugEnabled(debug_level);
 }
 
 } // namespace db

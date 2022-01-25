@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -331,6 +331,11 @@ Lease6Parser::parse(ConstSrvConfigPtr& cfg,
                   "values are: 0 (default), 1 (declined) and 2 (expired-reclaimed)");
     }
 
+    if ((state == Lease::STATE_DECLINED) && (type == Lease::TYPE_PD)) {
+        isc_throw(isc::InvalidOperation,
+                  "Invalid declined state for PD prefix.");
+    }
+
     // Handle user context.
     ConstElementPtr ctx = lease_info->get("user-context");
     if (ctx && (ctx->getType() != Element::map)) {
@@ -374,5 +379,5 @@ Lease6Parser::parse(ConstSrvConfigPtr& cfg,
     return (l);
 }
 
-};
-};
+} // end of namespace lease_cmds
+} // end of namespace isc

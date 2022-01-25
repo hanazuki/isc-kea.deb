@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,6 +19,7 @@
 #include <dhcp/option6_ia.h>
 #include <dhcp/option6_iaaddr.h>
 #include <dhcp/option6_iaprefix.h>
+#include <dhcp/option_int.h>
 #include <util/unittests/check_valgrind.h>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -43,23 +44,21 @@ namespace perfdhcp {
 
 bool TestControl::interrupted_ = false;
 
-
 bool
-TestControl::waitToExit() const {
-    static ptime exit_time = ptime(not_a_date_time);
-    uint32_t wait_time = options_.getExitWaitTime();
+TestControl::waitToExit() {
+    uint32_t const wait_time = options_.getExitWaitTime();
 
     // If we care and not all packets are in yet
     if (wait_time && !haveAllPacketsBeenReceived()) {
         const ptime now = microsec_clock::universal_time();
 
         // Init the end time if it hasn't started yet
-        if (exit_time.is_not_a_date_time()) {
-            exit_time = now + time_duration(microseconds(wait_time));
+        if (exit_time_.is_not_a_date_time()) {
+            exit_time_ = now + time_duration(microseconds(wait_time));
         }
 
         // If we're not at end time yet, return true
-        return (now < exit_time);
+        return (now < exit_time_);
     }
 
     // No need to wait, return false;
@@ -153,7 +152,7 @@ TestControl::copyIaOptions(const Pkt6Ptr& pkt_from, Pkt6Ptr& pkt_to) {
 }
 
 std::string
-TestControl::byte2Hex(const uint8_t b) const {
+TestControl::byte2Hex(const uint8_t b) {
     const int b1 = b / 16;
     const int b0 = b % 16;
     ostringstream stream;
@@ -162,18 +161,63 @@ TestControl::byte2Hex(const uint8_t b) const {
 }
 
 Pkt4Ptr
-TestControl::createRequestFromAck(const dhcp::Pkt4Ptr& ack) {
-    if (!ack) {
-        isc_throw(isc::BadValue, "Unable to create DHCPREQUEST from a"
-                  " null DHCPACK message");
-    } else if (ack->getYiaddr().isV4Zero()) {
-        isc_throw(isc::BadValue, "Unable to create DHCPREQUEST from a"
-                  " DHCPACK message containing yiaddr of 0");
+TestControl::createMessageFromAck(const uint16_t msg_type,
+                                  const dhcp::Pkt4Ptr& ack) {
+    // Restrict messages to Release and Renew.
+    if (msg_type != DHCPREQUEST && msg_type != DHCPRELEASE) {
+        isc_throw(isc::BadValue, "invalid message type " << msg_type
+                  << " to be created from Reply, expected DHCPREQUEST or"
+                  " DHCPRELEASE");
     }
-    Pkt4Ptr msg(new Pkt4(DHCPREQUEST, generateTransid()));
+
+    // Get the string representation of the message - to be used for error
+    // logging purposes.
+    auto msg_type_str = [=]() -> const char* {
+        return (msg_type == DHCPREQUEST ? "Request" : "Release");
+    };
+
+    if (!ack) {
+        isc_throw(isc::BadValue, "Unable to create "
+                                     << msg_type_str()
+                                     << " from a null DHCPACK message");
+    } else if (ack->getYiaddr().isV4Zero()) {
+        isc_throw(isc::BadValue,
+                  "Unable to create "
+                      << msg_type_str()
+                      << " from a DHCPACK message containing yiaddr of 0");
+    }
+    Pkt4Ptr msg(new Pkt4(msg_type, generateTransid()));
     msg->setCiaddr(ack->getYiaddr());
     msg->setHWAddr(ack->getHWAddr());
     msg->addOption(generateClientId(msg->getHWAddr()));
+    if (msg_type == DHCPRELEASE) {
+        // RFC 2132: DHCPRELEASE MUST include server ID.
+        if (options_.isUseFirst()) {
+            // Honor the '-1' flag if it exists.
+            if (first_packet_serverid_.empty()) {
+                isc_throw(isc::BadValue,
+                          "Unable to create "
+                              << msg_type_str()
+                              << "from the first packet which lacks the server "
+                                 "identifier option");
+            }
+            msg->addOption(Option::factory(Option::V4,
+                                           DHO_DHCP_SERVER_IDENTIFIER,
+                                           first_packet_serverid_));
+        } else {
+            // Otherwise take it from the DHCPACK message.
+            OptionPtr server_identifier(
+                ack->getOption(DHO_DHCP_SERVER_IDENTIFIER));
+            if (!server_identifier) {
+                isc_throw(isc::BadValue,
+                          "Unable to create "
+                              << msg_type_str()
+                              << "from a DHCPACK message without the server "
+                                 "identifier option");
+            }
+            msg->addOption(server_identifier);
+        }
+    }
     return (msg);
 }
 
@@ -186,12 +230,16 @@ TestControl::createMessageFromReply(const uint16_t msg_type,
                   << " to be created from Reply, expected DHCPV6_RENEW or"
                   " DHCPV6_RELEASE");
     }
+
     // Get the string representation of the message - to be used for error
     // logging purposes.
-    const char* msg_type_str = (msg_type == DHCPV6_RENEW ? "Renew" : "Release");
+    auto msg_type_str = [=]() -> const char* {
+        return (msg_type == DHCPV6_RENEW ? "Renew" : "Release");
+    };
+
     // Reply message must be specified.
     if (!reply) {
-        isc_throw(isc::BadValue, "Unable to create " << msg_type_str
+        isc_throw(isc::BadValue, "Unable to create " << msg_type_str()
                   << " message from the Reply message because the instance of"
                   " the Reply message is NULL");
     }
@@ -200,7 +248,7 @@ TestControl::createMessageFromReply(const uint16_t msg_type,
     // Client id.
     OptionPtr opt_clientid = reply->getOption(D6O_CLIENTID);
     if (!opt_clientid) {
-        isc_throw(isc::Unexpected, "failed to create " << msg_type_str
+        isc_throw(isc::Unexpected, "failed to create " << msg_type_str()
                   << " message because client id option has not been found"
                   " in the Reply message");
     }
@@ -208,7 +256,7 @@ TestControl::createMessageFromReply(const uint16_t msg_type,
     // Server id.
     OptionPtr opt_serverid = reply->getOption(D6O_SERVERID);
     if (!opt_serverid) {
-        isc_throw(isc::Unexpected, "failed to create " << msg_type_str
+        isc_throw(isc::Unexpected, "failed to create " << msg_type_str()
                   << " because server id option has not been found in the"
                   " Reply message");
     }
@@ -536,9 +584,10 @@ TestControl::sendPackets(const uint64_t packets_num,
 }
 
 uint64_t
-TestControl::sendMultipleRequests(const uint64_t msg_num) {
+TestControl::sendMultipleMessages4(const uint32_t msg_type,
+                                   const uint64_t msg_num) {
     for (uint64_t i = 0; i < msg_num; ++i) {
-        if (!sendRequestFromAck()) {
+        if (!sendMessageFromAck(msg_type)) {
             return (i);
         }
     }
@@ -670,6 +719,10 @@ TestControl::printRate() const {
     }
 
     std::cout << s.str() << std::endl;
+
+    std::cout <<"***Malformed Packets***" << std::endl
+              << "Malformed packets: " << ExchangeStats::malformed_pkts_
+	      << std::endl;
 }
 
 void
@@ -678,7 +731,8 @@ TestControl::printIntermediateStats() {
     ptime now = microsec_clock::universal_time();
     time_period time_since_report(last_report_, now);
     if (time_since_report.length().total_seconds() >= delay) {
-        stats_mgr_.printIntermediateStats();
+        stats_mgr_.printIntermediateStats(options_.getCleanReport(),
+                                          options_.getCleanReportSeparator());
         last_report_ = now;
     }
 }
@@ -694,7 +748,7 @@ TestControl::printStats() const {
 
 std::string
 TestControl::vector2Hex(const std::vector<uint8_t>& vec,
-                        const std::string& separator /* ="" */) const {
+                        const std::string& separator /* = "" */) {
     std::ostringstream stream;
     for (std::vector<uint8_t>::const_iterator it = vec.begin();
          it != vec.end();
@@ -782,10 +836,11 @@ TestControl::processReceivedPacket4(const Pkt4Ptr& pkt4) {
             // So, we may need to keep this DHCPACK in the storage if renews.
             // Note that, DHCPACK messages hold the information about
             // leases assigned. We use this information to renew.
-            if (stats_mgr_.hasExchangeStats(ExchangeType::RNA)) {
-                // Renew messages are sent, because StatsMgr has the
-                // specific exchange type specified. Let's append the DHCPACK.
-                // message to a storage
+            if (stats_mgr_.hasExchangeStats(ExchangeType::RNA) ||
+                stats_mgr_.hasExchangeStats(ExchangeType::RLA)) {
+                // Renew or release messages are sent, because StatsMgr has the
+                // specific exchange type specified. Let's append the DHCPACK
+                // message to a storage.
                 ack_storage_.append(pkt4);
             }
         // The DHCPACK message is not a server's response to the DHCPREQUEST
@@ -989,7 +1044,7 @@ void
 TestControl::registerOptionFactories6() const {
     static bool factories_registered = false;
     if (!factories_registered) {
-        // D60_ELAPSED_TIME
+        // D6O_ELAPSED_TIME
         LibDHCP::OptionFactoryRegister(Option::V6,
                                        D6O_ELAPSED_TIME,
                                        &TestControl::factoryElapsedTime6);
@@ -1052,6 +1107,7 @@ TestControl::reset() {
 }
 
 TestControl::TestControl(CommandOptions& options, BasePerfSocket &socket) :
+    exit_time_(not_a_date_time),
     number_generator_(0, options.getMacsFromFile().size()),
     socket_(socket),
     receiver_(socket, options.isSingleThreaded(), options.getIpVersion()),
@@ -1157,6 +1213,7 @@ TestControl::sendDiscover4(const bool preload /*= false*/) {
     pkt4->addOption(Option::factory(Option::V4,
                                     DHO_DHCP_PARAMETER_REQUEST_LIST));
 
+
     // Set client's and server's ports as well as server's address,
     // and local (relay) address.
     setDefaults4(pkt4);
@@ -1166,6 +1223,21 @@ TestControl::sendDiscover4(const bool preload /*= false*/) {
 
     // Set client identifier
     pkt4->addOption(generateClientId(pkt4->getHWAddr()));
+
+    // Check if we need to simulate HA failures by pretending no responses were received.
+    // The DHCP protocol signals that by increasing secs field (seconds since the configuration attempt started).
+    if (options_.getIncreaseElapsedTime() &&
+        stats_mgr_.getTestPeriod().length().total_seconds() >= options_.getWaitForElapsedTime() &&
+        stats_mgr_.getTestPeriod().length().total_seconds() < options_.getWaitForElapsedTime() +
+                                     options_.getIncreaseElapsedTime()) {
+
+        // Keep increasing elapsed time. The value should start increasing steadily.
+        uint32_t val = stats_mgr_.getTestPeriod().length().total_seconds() - options_.getWaitForElapsedTime() + 1;
+        if (val > 65535) {
+            val = 65535;
+        }
+        pkt4->setSecs(static_cast<uint16_t>(val));
+    }
 
     // Add any extra options that user may have specified.
     addExtraOpts(pkt4);
@@ -1226,7 +1298,16 @@ TestControl::sendDiscover4(const std::vector<uint8_t>& template_buf,
 }
 
 bool
-TestControl::sendRequestFromAck() {
+TestControl::sendMessageFromAck(const uint16_t msg_type) {
+    // We only permit Request or Release messages to be sent using this
+    // function.
+    if (msg_type != DHCPREQUEST && msg_type != DHCPRELEASE) {
+        isc_throw(isc::BadValue,
+                  "invalid message type "
+                      << msg_type
+                      << " to be sent, expected DHCPREQUEST or DHCPRELEASE");
+    }
+
     // Get one of the recorded DHCPACK messages.
     Pkt4Ptr ack = ack_storage_.getRandom();
     if (!ack) {
@@ -1234,16 +1315,24 @@ TestControl::sendRequestFromAck() {
     }
 
     // Create message of the specified type.
-    Pkt4Ptr msg = createRequestFromAck(ack);
+    Pkt4Ptr msg = createMessageFromAck(msg_type, ack);
     setDefaults4(msg);
+
+    // Override relay address
+    msg->setGiaddr(ack->getGiaddr());
 
     // Add any extra options that user may have specified.
     addExtraOpts(msg);
 
+    // Pack it.
     msg->pack();
+
     // And send it.
     socket_.send(msg);
-    stats_mgr_.passSentPacket(ExchangeType::RNA, msg);
+    address4Uniqueness(msg, ExchangeType::RLA);
+    stats_mgr_.passSentPacket((msg_type == DHCPREQUEST ? ExchangeType::RNA :
+                                                         ExchangeType::RLA),
+                              msg);
     return (true);
 }
 
@@ -1255,6 +1344,8 @@ TestControl::sendMessageFromReply(const uint16_t msg_type) {
         isc_throw(isc::BadValue, "invalid message type " << msg_type
                   << " to be sent, expected DHCPV6_RENEW or DHCPV6_RELEASE");
     }
+
+    // Get one of the recorded DHCPV6_OFFER messages.
     Pkt6Ptr reply = reply_storage_.getRandom();
     if (!reply) {
         return (false);
@@ -1266,7 +1357,9 @@ TestControl::sendMessageFromReply(const uint16_t msg_type) {
     // Add any extra options that user may have specified.
     addExtraOpts(msg);
 
+    // Pack it.
     msg->pack();
+
     // And send it.
     socket_.send(msg);
     address6Uniqueness(msg, ExchangeType::RL);
@@ -1315,10 +1408,10 @@ TestControl::sendRequest4(const dhcp::Pkt4Ptr& discover_pkt4,
     OptionPtr opt_parameter_list =
         Option::factory(Option::V4, DHO_DHCP_PARAMETER_REQUEST_LIST);
     pkt4->addOption(opt_parameter_list);
-    // Set client's and server's ports as well as server's address,
-    // and local (relay) address.
+    // Set client's and server's ports as well as server's address
     setDefaults4(pkt4);
-
+    // Override relay address
+    pkt4->setGiaddr(offer_pkt4->getGiaddr());
     // Add any extra options that user may have specified.
     addExtraOpts(pkt4);
 
@@ -1622,12 +1715,32 @@ TestControl::sendSolicit6(const bool preload /*= false*/) {
     if (!pkt6) {
         isc_throw(Unexpected, "failed to create SOLICIT packet");
     }
-    pkt6->addOption(Option::factory(Option::V6, D6O_ELAPSED_TIME));
+
+    // Check if we need to simulate HA failures by pretending no responses were received.
+    // The DHCPv6 protocol signals that by increasing the elapsed option field. Note it is in 1/100 of a second.
+    if (options_.getIncreaseElapsedTime() &&
+        stats_mgr_.getTestPeriod().length().total_seconds() >= options_.getWaitForElapsedTime() &&
+        stats_mgr_.getTestPeriod().length().total_seconds() < options_.getWaitForElapsedTime() +
+                                     options_.getIncreaseElapsedTime()) {
+
+
+        // Keep increasing elapsed time. The value should start increasing steadily.
+        uint32_t val = (stats_mgr_.getTestPeriod().length().total_seconds() - options_.getWaitForElapsedTime() + 1)*100;
+        if (val > 65535) {
+            val = 65535;
+        }
+        OptionPtr elapsed(new OptionInt<uint16_t>(Option::V6, D6O_ELAPSED_TIME, val));
+        pkt6->addOption(elapsed);
+    } else {
+        pkt6->addOption(Option::factory(Option::V6, D6O_ELAPSED_TIME));
+    }
+
     if (options_.isRapidCommit()) {
         pkt6->addOption(Option::factory(Option::V6, D6O_RAPID_COMMIT));
     }
     pkt6->addOption(Option::factory(Option::V6, D6O_CLIENTID, duid));
     pkt6->addOption(Option::factory(Option::V6, D6O_ORO));
+
 
     // Depending on the lease-type option specified, we should request
     // IPv6 address (with IA_NA) or IPv6 prefix (IA_PD) or both.
@@ -1721,8 +1834,13 @@ TestControl::setDefaults4(const Pkt4Ptr& pkt) {
     pkt->setRemoteAddr(IOAddress(options_.getServerName()));
     // Set local address.
     pkt->setLocalAddr(IOAddress(socket_.addr_));
-    // Set relay (GIADDR) address to local address.
-    pkt->setGiaddr(IOAddress(socket_.addr_));
+    // Set relay (GIADDR) address to local address if multiple
+    // subnet mode is not enabled
+    if (!options_.checkMultiSubnet()) {
+        pkt->setGiaddr(IOAddress(socket_.addr_));
+    } else {
+        pkt->setGiaddr(IOAddress(options_.getRandRelayAddr()));
+    }
     // Pretend that we have one relay (which is us).
     pkt->setHops(1);
 }
@@ -1756,25 +1874,65 @@ TestControl::setDefaults6(const Pkt6Ptr& pkt) {
     if (options_.isUseRelayedV6()) {
       Pkt6::RelayInfo relay_info;
       relay_info.msg_type_ = DHCPV6_RELAY_FORW;
-      relay_info.hop_count_ = 1;
-      relay_info.linkaddr_ = IOAddress(socket_.addr_);
+      relay_info.hop_count_ = 0;
+      if (options_.checkMultiSubnet()) {
+          relay_info.linkaddr_ = IOAddress(options_.getRandRelayAddr());
+      } else {
+          relay_info.linkaddr_ = IOAddress(socket_.addr_);
+      }
       relay_info.peeraddr_ = IOAddress(socket_.addr_);
       pkt->addRelayInfo(relay_info);
     }
 }
 
+namespace {
+
+static OptionBuffer const concatenateBuffers(OptionBuffer const& a,
+                                             OptionBuffer const& b) {
+    OptionBuffer result;
+    result.insert(result.end(), a.begin(), a.end());
+    result.insert(result.end(), b.begin(), b.end());
+    return result;
+}
+
+static void mergeOptionIntoPacket(Pkt4Ptr const& packet,
+                                  OptionPtr const& extra_option) {
+    uint16_t const code(extra_option->getType());
+    // If option already exists...
+    OptionPtr const& option(packet->getOption(code));
+    if (option) {
+        switch (code) {
+        // List here all the options for which we want to concatenate buffers.
+        case DHO_DHCP_PARAMETER_REQUEST_LIST:
+            packet->delOption(code);
+            packet->addOption(boost::make_shared<Option>(
+                Option::V4, code,
+                concatenateBuffers(option->getData(),
+                                   extra_option->getData())));
+            return;
+        default:
+            // For all others, add option as usual, it will result in "Option
+            // already present in this message" error.
+            break;
+        }
+    }
+    packet->addOption(extra_option);
+}
+
+}  // namespace
+
 void
 TestControl::addExtraOpts(const Pkt4Ptr& pkt) {
-    // All all extra options that the user may have specified
+    // Add all extra options that the user may have specified.
     const dhcp::OptionCollection& extra_opts = options_.getExtraOpts();
     for (auto entry : extra_opts) {
-        pkt->addOption(entry.second);
+        mergeOptionIntoPacket(pkt, entry.second);
     }
 }
 
 void
 TestControl::addExtraOpts(const Pkt6Ptr& pkt) {
-    // All all extra options that the user may have specified
+    // Add all extra options that the user may have specified.
     const dhcp::OptionCollection& extra_opts = options_.getExtraOpts();
     for (auto entry : extra_opts) {
         pkt->addOption(entry.second);

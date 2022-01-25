@@ -25,19 +25,20 @@ libkea_process_la_SOURCES += d_controller.cc d_controller.h
 libkea_process_la_SOURCES += d_log.cc d_log.h
 libkea_process_la_SOURCES += d_process.h
 libkea_process_la_SOURCES += daemon.cc daemon.h
-libkea_process_la_SOURCES += io_service_signal.cc io_service_signal.h
 libkea_process_la_SOURCES += log_parser.cc log_parser.h
 libkea_process_la_SOURCES += logging_info.cc logging_info.h
 libkea_process_la_SOURCES += process_messages.cc process_messages.h
+libkea_process_la_SOURCES += redact_config.cc redact_config.h
 
 libkea_process_la_CXXFLAGS = $(AM_CXXFLAGS)
 libkea_process_la_CPPFLAGS = $(AM_CPPFLAGS)
 libkea_process_la_LDFLAGS  = $(AM_LDFLAGS)
-libkea_process_la_LDFLAGS += -no-undefined -version-info 7:1:4
+libkea_process_la_LDFLAGS += -no-undefined -version-info 29:0:0
 
 libkea_process_la_LIBADD  =
 libkea_process_la_LIBADD += $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la
 libkea_process_la_LIBADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+libkea_process_la_LIBADD += $(top_builddir)/src/lib/http/libkea-http.la
 libkea_process_la_LIBADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 libkea_process_la_LIBADD += $(top_builddir)/src/lib/database/libkea-database.la
 libkea_process_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
@@ -93,7 +94,7 @@ libkea_process_include_HEADERS = \
 	d_controller.h \
 	d_log.h \
 	d_process.h \
-	io_service_signal.h \
 	logging_info.h \
 	log_parser.h \
-	process_messages.h
+	process_messages.h \
+	redact_config.h

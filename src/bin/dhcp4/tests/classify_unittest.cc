@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -81,6 +81,31 @@ namespace {
 ///   - 1 subnet: 10.0.0.0/24
 ///   - 1 pool: 10.0.0.10-10.0.0.100
 ///   - the following class defined: option[93].hex == 0x0009, DROP
+///
+/// - Configuration 6:
+///   - Used for the DROP class and reservation existence.
+///   - 1 subnet: 10.0.0.0/24
+///   - 1 pool: 10.0.0.10-10.0.0.100
+///   - 1 reservation for HW address 'aa:bb:cc:dd:ee:ff'
+///   - the following class defined: not member('KNOWN'), DROP
+///     (the not member also verifies that the DROP class is set only
+///      after the host reservation lookup)
+/// @note the reservation includes a hostname because raw reservations are
+/// not yet allowed.
+///
+/// - Configuration 7:
+///   - Used for the DROP class and reservation class.
+///   - 1 subnet: 10.0.0.0/24
+///   - 1 pool: 10.0.0.10-10.0.0.100
+///   - 1 reservation for HW address 'aa:bb:cc:dd:ee:ff'
+///     setting the allowed class
+///   - the following classes defined:
+///     - allowed
+///     - member('KNOWN') or member('UNKNOWN'), t
+///     - not member('allowed') and member('t'), DROP
+///     The function of the always true 't' class is to move the DROP
+///     evaluation to the classification point after the host reservation
+///     lookup, i.e. indirect KNOWN / UNKNOWN dependency.
 ///
 const char* CONFIGS[] = {
     // Configuration 0
@@ -297,6 +322,53 @@ const char* CONFIGS[] = {
         "    \"id\": 1,"
         "    \"pools\": [ { \"pool\": \"10.0.0.10-10.0.0.100\" } ]"
         " } ]"
+    "}",
+
+    // Configuration 6
+    "{ \"interfaces-config\": {"
+        "   \"interfaces\": [ \"*\" ]"
+        "},"
+        "\"valid-lifetime\": 600,"
+        "\"client-classes\": ["
+        "{"
+        "   \"name\": \"DROP\","
+        "   \"test\": \"not member('KNOWN')\""
+        "}],"
+        "\"subnet4\": [ { "
+        "    \"subnet\": \"10.0.0.0/24\", "
+        "    \"id\": 1,"
+        "    \"pools\": [ { \"pool\": \"10.0.0.10-10.0.0.100\" } ],"
+        "    \"reservations\": [ {"
+        "        \"hw-address\": \"aa:bb:cc:dd:ee:ff\","
+        "        \"hostname\": \"allowed\" } ]"
+        " } ]"
+    "}",
+
+    // Configuration 7
+    "{ \"interfaces-config\": {"
+        "   \"interfaces\": [ \"*\" ]"
+        "},"
+        "\"valid-lifetime\": 600,"
+        "\"client-classes\": ["
+        "{"
+        "   \"name\": \"allowed\""
+        "},"
+        "{"
+        "   \"name\": \"t\","
+        "   \"test\": \"member('KNOWN') or member('UNKNOWN')\""
+        "},"
+        "{"
+        "   \"name\": \"DROP\","
+        "   \"test\": \"not member('allowed') and member('t')\""
+        "}],"
+        "\"subnet4\": [ { "
+        "    \"subnet\": \"10.0.0.0/24\", "
+        "    \"id\": 1,"
+        "    \"pools\": [ { \"pool\": \"10.0.0.10-10.0.0.100\" } ],"
+        "    \"reservations\": [ {"
+        "        \"hw-address\": \"aa:bb:cc:dd:ee:ff\","
+        "        \"client-classes\": [ \"allowed\" ] } ]"
+        " } ]"
     "}"
 };
 
@@ -313,7 +385,6 @@ public:
     ClassifyTest()
         : Dhcpv4SrvTest(),
           iface_mgr_test_config_(true) {
-        IfaceMgr::instance().openSockets4();
     }
 
     /// @brief Destructor.
@@ -1154,6 +1225,78 @@ TEST_F(ClassifyTest, dropClass) {
     client2.doDiscover();
 
     // Option, dropped.
+    EXPECT_FALSE(client2.getContext().response_);
+
+    // There should also be pkt4-receive-drop stat bumped up.
+    stats::StatsMgr& mgr = stats::StatsMgr::instance();
+    stats::ObservationPtr drop_stat = mgr.getObservation("pkt4-receive-drop");
+
+    // This statistic must be present and must be set to 1.
+    ASSERT_TRUE(drop_stat);
+    EXPECT_EQ(1, drop_stat->getInteger().first);
+}
+
+// This test checks the handling for the DROP special class at the host
+// reservation classification point with KNOWN / UNKNOWN.
+TEST_F(ClassifyTest, dropClassUnknown) {
+    Dhcp4Client client(Dhcp4Client::SELECTING);
+
+    // Configure DHCP server.
+    configure(CONFIGS[6], *client.getServer());
+
+    // Set the HW address to the reservation.
+    client.setHWAddress("aa:bb:cc:dd:ee:ff");
+
+    // Send the discover.
+    client.doDiscover();
+
+    // Reservation match: no drop.
+    EXPECT_TRUE(client.getContext().response_);
+
+    // Retry with another HW address.
+    Dhcp4Client client2(Dhcp4Client::SELECTING);
+    client2.setHWAddress("aa:bb:cc:dd:ee:fe");
+
+    // Send the discover.
+    client2.doDiscover();
+
+    // No reservation, dropped.
+    EXPECT_FALSE(client2.getContext().response_);
+
+    // There should also be pkt4-receive-drop stat bumped up.
+    stats::StatsMgr& mgr = stats::StatsMgr::instance();
+    stats::ObservationPtr drop_stat = mgr.getObservation("pkt4-receive-drop");
+
+    // This statistic must be present and must be set to 1.
+    ASSERT_TRUE(drop_stat);
+    EXPECT_EQ(1, drop_stat->getInteger().first);
+}
+
+// This test checks the handling for the DROP special class at the host
+// reservation classification point with a reserved class.
+TEST_F(ClassifyTest, dropClassReservedClass) {
+    Dhcp4Client client(Dhcp4Client::SELECTING);
+
+    // Configure DHCP server.
+    configure(CONFIGS[7], *client.getServer());
+
+    // Set the HW address to the reservation.
+    client.setHWAddress("aa:bb:cc:dd:ee:ff");
+
+    // Send the discover.
+    client.doDiscover();
+
+    // Reservation match: no drop.
+    EXPECT_TRUE(client.getContext().response_);
+
+    // Retry with another HW address.
+    Dhcp4Client client2(Dhcp4Client::SELECTING);
+    client2.setHWAddress("aa:bb:cc:dd:ee:fe");
+
+    // Send the discover.
+    client2.doDiscover();
+
+    // No reservation, dropped.
     EXPECT_FALSE(client2.getContext().response_);
 
     // There should also be pkt4-receive-drop stat bumped up.

@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -128,7 +128,7 @@ public:
     NetconfCfgMgr();
 
     /// @brief Destructor
-    virtual ~NetconfCfgMgr();
+    virtual ~NetconfCfgMgr() = default;
 
     /// @brief Convenience method that returns the Netconf configuration
     /// context.
@@ -145,6 +145,13 @@ public:
     ///
     /// @return Summary of the configuration in the textual format.
     virtual std::string getConfigSummary(const uint32_t selection);
+
+    /// @brief Return a list of all paths that contain passwords or secrets for
+    /// kea-netconf.
+    ///
+    /// @return the list of lists of sequential JSON map keys needed to reach
+    /// the passwords and secrets.
+    std::list<std::list<std::string>> jsonPathsToRedact() const;
 
 protected:
 

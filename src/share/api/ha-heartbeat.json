@@ -1,0 +1,34 @@
+{
+    "access": "write",
+    "avail": "1.4.0",
+    "brief": [
+        "This command is sent internally by a Kea partner when operating in High Availability (HA) mode or by the system administrator to verify the state of the servers with regards to the High Availability. It retrieves the server's HA state and clock value."
+    ],
+    "cmd-syntax": [
+        "{",
+        "    \"command\": \"ha-heartbeat\"",
+        "}"
+    ],
+    "description": "See <xref linkend=\"ha-server-states\"/>",
+    "hook": "high_availability",
+    "name": "ha-heartbeat",
+    "resp-comment": [
+        "The response includes a server state (see :ref:`ha-server-states`), current clock value, served scopes and the counter indicating how many leases the server has allocated without sending lease updates to its partner. The partner uses this counter to determine if it should synchronize its lease database."
+    ],
+    "resp-syntax": [
+        "{",
+        "    \"result\": 0,",
+        "    \"text\": \"HA peer status returned.\",",
+        "    \"arguments\": {",
+        "        \"state\": <server state>,",
+        "        \"date-time\": <server notion of time>,",
+        "        \"scopes\": [ <first scope>, <second scope>, ... ],",
+        "        \"unsent-update-count\": <total number of lease allocations in partner-down state>",
+        "    }",
+        "}"
+    ],
+    "support": [
+        "kea-dhcp4",
+        "kea-dhcp6"
+    ]
+}

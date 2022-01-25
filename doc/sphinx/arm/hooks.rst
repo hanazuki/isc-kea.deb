@@ -33,17 +33,26 @@ order in which the libraries are specified in the configuration file.
 The order may be important; consult the documentation of the libraries
 for specifics.
 
+When a Kea process unloads a library, it expects the ``dlclose`` function
+removes all library symbols and removes the library code from address space
+on the last reference. This behavior is not required by the POSIX standard
+and at least the musl library used by default by Alpine Linux implements
+the ``dlclose`` function as a no operation. On such systems a library
+is loaded forever in a process, for instance it is not possible to
+replace a library binary by another version using configuration change
+or reload: the process must be stopped and relaunched.
+
 The next section describes how to configure hooks libraries. Users who are
 interested in writing their own hooks library can find information
 in the `Hooks Developer's Guide section of the Kea Developer's
-Guide <https://jenkins.isc.org/job/Kea_doc/doxygen/df/d46/hooksdgDevelopersGuide.html>`__.
+Guide <https://reports.kea.isc.org/dev_guide/df/d46/hooksdgDevelopersGuide.html>`__.
 
 Note that some libraries are available under different licenses.
 
 Please also note that some libraries may require additional dependencies and/or
 compilation switches to be enabled, e.g. the RADIUS library introduced in
 Kea 1.4 requires the FreeRadius-client library to be present. If
---with-free-radius option is not specified, the RADIUS library will not
+--with-freeradius option is not specified, the RADIUS library will not
 be built.
 
 Installing Hook Packages
@@ -52,7 +61,7 @@ Installing Hook Packages
 .. note::
 
    For more details about installing the Kea Premium Hooks package, please read
-   `this Knowledgebase article <https://kb.isc.org/docs/aa-01587>`__.
+   `this Knowledge Base article <https://kb.isc.org/docs/aa-01587>`__.
 
 Some hook packages are included in the base Kea sources. There is no
 need to do anything special to compile or install them, as they are covered
@@ -77,7 +86,7 @@ Unpack this tarball:
 
 .. parsed-literal::
 
-   $ tar zxvf kea-|release|.tar.gz
+   $ tar -zxvf kea-|release|.tar.gz
 
 This will unpack the tarball into the kea-|release| subdirectory of
 the current working directory.
@@ -90,7 +99,7 @@ steps will unpack the premium tarball into the correct location:
 .. parsed-literal::
 
      $ cd kea-|release|
-     $ tar xvf ../kea-premium-|release|.tar.gz
+     $ tar -xvf ../kea-premium-|release|.tar.gz
 
 Note that unpacking the Kea premium package will put the files into a
 directory named "premium". Regardless of the name of the package, the
@@ -120,7 +129,7 @@ first section of the output should look something like this:
      OS Family:        Linux
      Using GNU sed:    yes
      Premium package:  yes
-     Included Hooks:   forensic_log flex_id host_cmds
+     Included Hooks:   forensic_log flex_id host_cmds subnet_cmds radius host_cache class_cmds cb_cmds lease_query
 
 The last line indicates which specific hooks were detected. Note that
 some hooks may require their own dedicated switches, e.g. the RADIUS hook
@@ -229,7 +238,7 @@ floor (integer parameter), debug (boolean parameter), lists
 (list of strings), and maps (containing strings). Nested parameters can
 be used if the library supports it. This topic is explained in detail in
 the `Hooks Developer's Guide section of the Kea Developer's Guide
-<https://jenkins.isc.org/job/Kea_doc/doxygen/df/d46/hooksdgDevelopersGuide.html>`__.
+<https://reports.kea.isc.org/dev_guide/df/d46/hooksdgDevelopersGuide.html>`__.
 
 Notes:
 
@@ -297,7 +306,7 @@ loaded by the correct process per the table below.
    +=================+===============+============================================================+
    | User Check      | Kea sources   |Reads known users list from a file. Unknown users will be   |
    |                 | (since 0.8)   |assigned a lease from the last subnet defined in the        |
-   |                 |               |configuration file, e.g. to redirect them a captive         |
+   |                 |               |configuration file, e.g. to redirect them to a captive      |
    |                 |               |portal. This demonstrates how an external source of         |
    |                 |               |information can be used to influence the Kea allocation     |
    |                 |               |engine. This hook is part of the Kea source code and is     |
@@ -312,7 +321,9 @@ loaded by the correct process per the table below.
    |                 |               |sufficient it may be used directly. If your jurisdiction    |
    |                 |               |requires that you save a different set of information, you  |
    |                 |               |may use it as a template or example and create your own     |
-   |                 |               |custom logging hooks.                                       |
+   |                 |               |custom logging hooks. In Kea 1.9.8 additional parameters    |
+   |                 |               |have been added to give users more flexibility regarding    |
+   |                 |               |what information should be logged.                          |
    +-----------------+---------------+------------------------------------------------------------+
    | Flexible        | Support       |Kea software provides a way to handle host reservations that|
    | Identifier      | customers     |include addresses, prefixes, options, client classes and    |
@@ -379,25 +390,25 @@ loaded by the correct process per the table below.
    | Availability    | (since 1.4)   |by setting up a pair of the DHCP servers in a network.  Two |
    |                 |               |modes of operation are supported. The first one is called   |
    |                 |               |load balancing and is sometimes referred to as              |
-   |                 |               |active-active. Each server can handle selected group of     |
+   |                 |               |active-active. Each server can handle selected groups of    |
    |                 |               |clients in this network or all clients, if it detects that  |
-   |                 |               |its partner has became unavailable.  It is also possible to |
+   |                 |               |its partner has become unavailable. It is also possible to  |
    |                 |               |designate one server to serve all DHCP clients, and leave   |
    |                 |               |another server as "standby". This mode is called hot standby|
-   |                 |               |and is sometimes referenced to as active-passive. This      |
+   |                 |               |and is sometimes referred to as active-passive. This        |
    |                 |               |server will activate its DHCP function when it detects that |
    |                 |               |its partner is not available.  Such cooperation between the |
    |                 |               |DHCP servers requires that these servers constantly         |
    |                 |               |communicate with each other to send updates about allocated |
    |                 |               |leases and to periodically test whether their partners are  |
    |                 |               |still operational. The hook library also provides an ability|
-   |                 |               |to send lease updates to external backup server, making it  |
+   |                 |               |to send lease updates to external backup servers, making it |
    |                 |               |much easier to have a replacement that is almost up to      |
    |                 |               |date. The "libdhcp_ha" library provides such functionality  |
    |                 |               |for Kea DHCP servers.                                       |
    +-----------------+---------------+------------------------------------------------------------+
    | Statistics      | Kea sources   |The Statistics Commands library provides additional         |
-   | Commands        | (since 1.4)   |commmands for retrieving accurate DHCP lease statistics for |
+   | Commands        | (since 1.4)   |commands for retrieving accurate DHCP lease statistics for  |
    |                 |               |Kea DHCP servers that share the same lease database. This   |
    |                 |               |setup is common in deployments where DHCP service redundancy|
    |                 |               |is required and a shared lease database is used to avoid    |
@@ -414,7 +425,7 @@ loaded by the correct process per the table below.
    |                 |               |specific IPv4 or IPv6 addresses reserved by RADIUS,         |
    |                 |               |dynamically assigning addresses from designated pools chosen|
    |                 |               |by RADIUS or rejecting the client's messages altogether. The|
-   |                 |               |accounting mechanism allows RADIUS server to keep track of  |
+   |                 |               |accounting mechanism allows a RADIUS server to keep track of|
    |                 |               |device activity over time.                                  |
    +-----------------+---------------+------------------------------------------------------------+
    | Host Cache      | Support       |Some of the database backends, such as RADIUS, are          |
@@ -426,25 +437,40 @@ loaded by the correct process per the table below.
    |                 |               |includes negative caching, i.e. the ability to remember that|
    |                 |               |there is no client information in the database.             |
    +-----------------+---------------+------------------------------------------------------------+
-   | Class Commands  | Support       |This Class Cmds hooks library allows for adding, updating   |
+   | Class Commands  | Support       |This Class Cmds hooks library allows for adding, updating,  |
    |                 | customers     |deleting and fetching configured DHCP client classes without|
    |                 | (since 1.5)   |the need to restart the DHCP server.                        |
    +-----------------+---------------+------------------------------------------------------------+
    | MySQL           | Kea sources   |The MySQL CB hooks library is an implementation of the Kea  |
-   | Configuration   | (since 1.6)   |Configuration Backend for MySQL. It uses MySQL database as a|
-   | Backend         |               |repository for the Kea configuration information. The Kea   |
+   | Configuration   | (since 1.6)   |Configuration Backend for MySQL. It uses a MySQL database as|
+   | Backend         |               |a repository for the Kea configuration information. The Kea |
    |                 |               |servers use this library to fetch their configurations.     |
    +-----------------+---------------+------------------------------------------------------------+
    | Configuration   | Support       |The Configuration Backend Commands (CB Commands) hooks      |
    | Backend         | customers     |library implements a collection of commands to manage the   |
    | Commands        | (since 1.6)   |configuration information of the Kea servers in the         |
-   |                 |               |database. This library may only be used in conjuction with  |
+   |                 |               |database. This library may only be used in conjunction with |
    |                 |               |one of the supported configuration backend implementations. |
    +-----------------+---------------+------------------------------------------------------------+
    | BOOTP           | Kea sources   |The BOOTP hooks library adds BOOTP support, as defined in   |
    |                 | (since 1.7.3) |RFC 1497. It recognizes received BOOTP requests:            |
    |                 |               |they are translated into DHCPREQUEST packets, put into the  |
    |                 |               |BOOTP client class and get infinite lifetime leases.        |
+   +-----------------+---------------+------------------------------------------------------------+
+   | Leasequery      | Support       |The Leasequery hooks library adds support for DHCPv4        |
+   |                 | customers     |Leasequery as described in RFC 4388; and for DHCPv6         |
+   |                 | (DHCPv4 since |Leasequery as described in RFC 5007.                        |
+   |                 | 1.7.8, DHCPv6 |                                                            |
+   |                 | since 1.7.9)  |                                                            |
+   +-----------------+---------------+------------------------------------------------------------+
+   | Run Script      | Kea sources   |The Run Script hooks library adds support to run external   |
+   |                 | (since 1.9.5) |scripts for specific packet processing hook points. There   |
+   |                 |               |are several exported environment variables available for    |
+   |                 |               |the script.                                                 |
+   +-----------------+---------------+------------------------------------------------------------+
+   | GSS-TSIG        | ISC support   |This hook library adds support to the Kea D2 server         |
+   |                 | customers     |(kea-dhcp-ddns) for using GSS-TSIG to sign DNS updates.     |
+   |                 | (since 2.0.1) |                                                            |
    +-----------------+---------------+------------------------------------------------------------+
 
 ISC hopes to see more hooks libraries become available as time
@@ -529,22 +555,22 @@ A sample user registry file is shown below:
 As with any other hooks libraries provided by ISC, internals of the
 user_chk code are well-documented. Users may refer to the `user_chk
 library section of the Kea Developer's Guide
-<https://jenkins.isc.org/job/Kea_doc/doxygen/d8/db2/libdhcp_user_chk.html>`__
+<https://reports.kea.isc.org/dev_guide/d8/db2/libdhcp_user_chk.html>`__
 for information on how the code works internally. That, together with the
 `Hooks Framework section of the Kea Developer's Guide
-<https://jenkins.isc.org/job/Kea_doc/doxygen/index.html#hooksFramework>`__ should give users
+<https://reports.kea.isc.org/dev_guide/index.html#hooksFramework>`__ should give users
 some pointers on how to extend this library and perhaps even write one
 from scratch.
 
 legal_log: Forensic Logging Hooks
 =================================
 
-This section describes the forensic log hooks library. This library
-provides hooks that record a detailed log of lease assignments and
-renewals into a set of log files.
+This section describes the forensic log hooks library. This library provides
+hooks that record a detailed log of assignments, renewals, releases and other
+lease events into a set of log files.
 
-Currently this library is only
-available to ISC customers with a paid support contract.
+Currently this library is only available to ISC customers with a paid support
+contract.
 
 .. note::
 
@@ -554,15 +580,19 @@ available to ISC customers with a paid support contract.
 In many legal jurisdictions, companies, especially ISPs, must record
 information about the addresses they have leased to DHCP clients. This
 library is designed to help with that requirement. If the information
-that it records is sufficient, it may be used directly. If a
-jurisdiction requires that a different set of information be saved, users
-may use this library as a template or example to create their own custom logging
-hooks.
+that it records is sufficient, it may be used directly.
 
-This logging is done as a set of hooks to allow it to be customized to
-any particular need. Modifying a hooks library is easier and safer than
-updating the core code. In addition by using the hooks features, those
-users who do not need to log this information can leave it out and avoid
+If a jurisdiction requires that a different set of information be saved, users
+may use the custom formatting capability to extract information from the inbound
+request packet, or from the outbound response packet. Use with caution as this
+might affect server performance.  The custom format can not be used for control
+channel commands.
+
+Alternatively, this library may be used as a template or an example for the
+user's own custom logging hook. The logging is done as a set of hooks to allow
+it to be customized to any particular need. Modifying a hooks library is easier
+and safer than updating the core code. In addition by using the hooks features,
+those users who do not need to log this information can leave it out and avoid
 any performance penalties.
 
 Log File Naming
@@ -570,26 +600,229 @@ Log File Naming
 
 The names for the log files have the following form:
 
+Legal file names, if using ``day``, ``month`` or ``year`` as time unit:
+
 ::
 
    path/base-name.CCYYMMDD.txt
 
-The "path" and "base-name" are supplied in the configuration as
-described below; see :ref:`forensic-log-configuration`. The next part of the name is the
-date the log file was started, with four digits for year, two digits for
-month, and two digits for day. The file is rotated on a daily basis.
+where ``CC`` represents century, ``YY`` represents current year,
+``MM`` represents current month and ``DD`` represents current day.
+
+Legal file names, if using ``second`` as time unit:
+
+::
+
+   path/base-name.TXXXXXXXXXXXXXXXXXXXX.txt
+
+where ``XXXXXXXXXXXXXXXXXXXX`` represents time in seconds since epoch.
+
+When using ``second`` as the time unit, the file will be rotated when
+the ``count`` number of seconds pass. In contrast, when using ``day``, ``month``
+or ``year`` as time unit, the file will be rotated whenever the ``count`` th day,
+month or year starts respectively.
+
+The ``"path"`` and ``"base-name"`` are supplied in the configuration as
+described below; see :ref:`forensic-log-configuration`.
 
 .. note::
 
    When running Kea servers for both DHCPv4 and DHCPv6, the log names
    must be distinct. See the examples in :ref:`forensic-log-configuration`.
 
+.. _forensic-log-configuration:
+
+Configuring the Forensic Log Hooks
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+To use this functionality, the hook library must be included in the
+configuration of the desired DHCP server modules. The legal_log library
+is able to save logs to a text file or to a database (created using
+``kea-admin`` see :ref:`mysql-database-create`, :ref:`pgsql-database-create`).
+The library is installed alongside the Kea libraries in
+``[kea-install-dir]/var/lib/kea`` where ``kea-install-dir`` is determined
+by the "--prefix" option of the configure script. It defaults to
+``/usr/local``. Assuming the default value, configuring kea-dhcp4 to load
+the legal_log library could be done with the following kea-dhcp4 configuration:
+
+.. code-block:: json
+
+    {
+        "Dhcp4": {
+            "hooks-libraries": [
+                {
+                    "library": "/usr/local/lib/kea/hooks/libdhcp_legal_log.so",
+                    "parameters": {
+                        "path": "/var/lib/kea/log",
+                        "base-name": "kea-forensic4"
+                    }
+                }
+            ]
+        }
+    }
+
+For kea-dhcp6, the configuration is:
+
+.. code-block:: json
+
+    {
+        "Dhcp6": {
+            "hooks-libraries": [
+                {
+                    "library": "/usr/local/lib/kea/hooks/libdhcp_legal_log.so",
+                    "parameters": {
+                        "path": "/var/lib/kea/log",
+                        "base-name": "kea-forensic6"
+                    }
+                }
+            ]
+        }
+    }
+
+The hook library parameters for the text file configuration are:
+
+-  ``path`` - the directory in which the forensic file(s) will be written.
+   The default value is ``[prefix]/var/lib/kea``. The directory must exist.
+
+-  ``base-name`` - an arbitrary value which is used in conjunction with the
+   current system date to form the current forensic file name. It
+   defaults to ``kea-legal``.
+
+-  ``time-unit`` - configures the time unit used to rotate the log file. Valid
+   values are ``second``, ``day``, ``month`` or ``year``. It defaults to
+   ``day``.
+
+-  ``count`` - configures the number of time units that need to pass until the
+   log file is rotated. It can be any positive number, or 0 which disables log
+   rotate. It defaults to 1.
+
+If log rotate is disabled, a new file will be created when the library is
+loaded and the new file name is different that any previous file name.
+
+Additional actions can be performed just before closing the old file and after
+opening the new file. These actions must point to an external executable or
+script and are configured by setting:
+
+-  ``prerotate`` - external executable or script called with the name of the
+   file that will be closed. Kea will not wait for the process to finish.
+
+-  ``postrotate`` - external executable or script called with the name of the
+   file that had been opened. Kea will not wait for the process to finish.
+
+Custom formatting can be enabled for logging information that can be extracted
+either from the client's request packet or from the server's response packet.
+Use with caution as this might affect server performance.
+The custom format can not be used for control channel commands.
+Two parameters can be used towards this goal, either together or separately:
+
+-  ``request-parser-format`` - evaluated parsed expression used to extract and
+   log data from the incoming packet
+
+-  ``response-parser-format`` - evaluated parsed expression used to extract and
+   log data from the server response packet
+
+See :ref:`classification-using-expressions` for a list of expressions.
+If any of ``request-parser-format`` or ``response-parser-format`` is
+configured, the default logging format is not used. If both of them are
+configured, the resulting log message is constructed by concatenating the
+data extracted from the request and the data extracted from the response.
+
+Some data might be available in the request or in the response only and some
+data might differ in the request packet from the one in the response packet.
+
+The lease client context can only be printed using the default format, as this
+information is not directly stored in the request packet or in the response
+packet.
+
+Additional parameters for the database connection can be specified, e.g:
+
+.. code-block:: json
+
+    {
+      "Dhcp6": {
+        "hooks-libraries": [
+          {
+            "library": "/usr/local/lib/kea/hooks/libdhcp_legal_log.so",
+            "parameters": {
+              "name": "database-name",
+              "password": "passwd",
+              "type": "mysql",
+              "user": "user-name"
+            }
+          }
+        ]
+      }
+    }
+
+For more specific information about database related parameters please refer to
+:ref:`database-configuration6` and :ref:`database-configuration4`.
+
+If it is desired to restrict forensic logging to certain subnets, the
+"legal-logging" boolean parameter can be specified within a user context
+of these subnets. For example:
+
+.. code-block:: json
+
+    {
+        "Dhcp4": {
+            "subnet4": [
+                {
+                    "subnet": "192.0.2.0/24",
+                    "pools": [
+                        {
+                            "pool": "192.0.2.1 - 192.0.2.200"
+                        }
+                    ],
+                    "user-context": {
+                        "legal-logging": false
+                    }
+                }
+            ]
+        }
+    }
+
+This configuration disables legal logging for the subnet "192.0.2.0/24". If the
+"legal-logging" parameter is not specified, it defaults to 'true', which
+enables legal logging for the subnet.
+
+The following example demonstrates how to selectively disable legal
+logging for an IPv6 subnet:
+
+.. code-block:: json
+
+    {
+        "Dhcp6": {
+            "subnet6": [
+                {
+                    "subnet": "2001:db8:1::/64",
+                    "pools": [
+                        {
+                            "pool": "2001:db8:1::1-2001:db8:1::ffff"
+                        }
+                    ],
+                    "user-context": {
+                        "legal-logging": false
+                    }
+                }
+            ]
+        }
+    }
+
+
+See :ref:`dhcp4-user-contexts` and :ref:`dhcp6-user-contexts` to
+learn more about user contexts in Kea configuration.
+
 DHCPv4 Log Entries
 ~~~~~~~~~~~~~~~~~~
 
-For DHCPv4, the library creates entries based on DHCPREQUEST messages and
-corresponding DHCPv4 leases intercepted by the lease4_select (for new
-leases) and the lease4_renew (for renewed leases) hooks.
+For DHCPv4, the library creates entries based on DHCPREQUEST, DHCPDECLINE,
+DHCPRELEASE messages et.al. and their responses. The resulting packets and
+leases are taken into account, intercepted through the following hook points:
+* pkt4_receive
+* leases4_committed
+* pkt4_send
+* lease4_release
+* lease4_decline
 
 An entry is a single string with no embedded end-of-line markers and a
 prepended timestamp, and has the following sections:
@@ -604,22 +837,23 @@ Where:
    "%Y-%m-%d %H:%M:%S %Z" strftime format ("%Z" is the time zone name).
 
 -  address - the leased IPv4 address given out and whether it was
-   assigned or renewed.
+   assigned, renewed or released.
 
 -  duration - the lease lifetime expressed in days (if present), hours,
    minutes, and seconds. A lease lifetime of 0xFFFFFFFF will be denoted
-   with the text "infinite duration".
+   with the text "infinite duration". This information is not given
+   when the lease is released.
 
 -  device-id - the client's hardware address shown as numerical type and
    hex digit string.
 
 -  client-info - the DHCP client id option (61) if present, shown as a
-   hex string.
+   hex string. When its content is printable it is displayed.
 
 -  relay-info - for relayed packets the giaddr and the RAI circuit-id,
-   remote-id, and subscriber-id options (option 82 sub options: 1, 2 and
-   6) if present. The circuit id and remote id are presented as hex
-   strings.
+   remote-id, and subscriber-id options (option 82 sub options: 1, 2 and 6)
+   if present. The circuit id and remote id are presented as hex
+   strings. When their content is printable it is displayed.
 
 -  user-context - the optional user context associated with the lease.
 
@@ -630,13 +864,21 @@ present in the log file):
 
    2018-01-06 01:02:03 CET Address: 192.2.1.100 has been renewed for 1 hrs 52 min 15 secs to a device with hardware address:
    hwtype=1 08:00:2b:02:3f:4e, client-id: 17:34:e2:ff:09:92:54 connected via relay at address: 192.2.16.33,
-   identified by circuit-id: 68:6f:77:64:79 and remote-id: 87:f6:79:77:ef
+   identified by circuit-id: 68:6f:77:64:79 (howdy) and remote-id: 87:f6:79:77:ef
+
+or for a release:
+
+::
+
+   2018-01-06 01:02:03 CET Address: 192.2.1.100 has been released from a device with hardware address:
+   hwtype=1 08:00:2b:02:3f:4e, client-id: 17:34:e2:ff:09:92:54 connected via relay at address: 192.2.16.33,
+   identified by circuit-id: 68:6f:77:64:79 (howdy) and remote-id: 87:f6:79:77:ef
 
 In addition to logging lease activity driven by DHCPv4 client traffic,
-the hooks library also logs entries for the following lease management control channel
-commands: lease4-add, lease4-update, and lease4-del. Each entry is a
-single string with no embedded end-of-line markers, and it will
-typically have the following form:
+the hooks library also logs entries for the following lease management control
+channel commands: lease4-add, lease4-update, and lease4-del. These cannot have
+custom formatting. Each entry is a single string with no embedded end-of-line
+markers, and it will typically have the following form:
 
 ``lease4-add:``
 
@@ -693,12 +935,170 @@ Examples:
 
    2018-01-06 01:02:12 CET Administrator deleted a lease for a device identified by: hw-address of 1a:1b:1c:1d:1e:1f
 
+The ``request-parser-format`` and ``response-parser-format`` can be used to
+extract and log data from the incoming packet and server response packet
+respectively. The configured value is an evaluated parsed expression returning a
+string. A list of tokens is described in the server classification process.
+Use with caution as this might affect server performance.
+If any of them is configured, the default logging format is not used.
+If both of them are configured, the resulting log message is constructed by
+concatenating the logged data extracted from the request and the logged data
+extracted from the response.
+
+Some data might be available in the request or in the response only and some
+data might differ in the incoming packet from the one in the response packet.
+
+Examples:
+
+.. code-block:: json
+
+    {
+        "request-parser-format": "ifelse(pkt4.msgtype == 4 or pkt4.msgtype == 7, 'Address: ' + ifelse(option[50].exists, addrtotext(option[50].hex), addrtotext(pkt4.ciaddr)) + ' has been released from a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') + ifelse(option[61].exists, ', client-id: ' + hexstring(option[61].hex, ':'), '') + ifelse(pkt4.giaddr == 0.0.0.0, '', ' connected via relay at address: ' + addrtotext(pkt4.giaddr) + ifelse(option[82].option[1].exists, ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'), '') + ifelse(option[82].option[2].exists, ', remote-id: ' + hexstring(option[82].option[2].hex, ':'), '') + ifelse(option[82].option[6].exists, ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'), '')), '')",
+        "response-parser-format": "ifelse(pkt4.msgtype == 5, 'Address: ' + addrtotext(pkt4.yiaddr) + ' has been assigned for ' + uint32totext(option[51].hex) + ' seconds to a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') + ifelse(option[61].exists, ', client-id: ' + hexstring(option[61].hex, ':'), '') + ifelse(pkt4.giaddr == 0.0.0.0, '', ' connected via relay at address: ' + addrtotext(pkt4.giaddr) + ifelse(option[82].option[1].exists, ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'), '') + ifelse(option[82].option[2].exists, ', remote-id: ' + hexstring(option[82].option[2].hex, ':'), '') + ifelse(option[82].option[6].exists, ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'), '')), '')"
+    }
+
+.. raw:: html
+
+    <details><summary>Expand here!</summary>
+    <pre>{
+        "request-parser-format":
+            "ifelse(pkt4.msgtype == 4 or pkt4.msgtype == 7,
+                'Address: ' +
+                ifelse(option[50].exists,
+                    addrtotext(option[50].hex),
+                    addrtotext(pkt4.ciaddr)) +
+                ' has been released from a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') +
+                ifelse(option[61].exists,
+                    ', client-id: ' + hexstring(option[61].hex, ':'),
+                    '') +
+                ifelse(pkt4.giaddr == 0.0.0.0,
+                    '',
+                    ' connected via relay at address: ' + addrtotext(pkt4.giaddr) +
+                    ifelse(option[82].option[1].exists,
+                        ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'),
+                        '') +
+                    ifelse(option[82].option[2].exists,
+                        ', remote-id: ' + hexstring(option[82].option[2].hex, ':'),
+                        '') +
+                    ifelse(option[82].option[6].exists,
+                        ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'),
+                        '')),
+                '')",
+        "response-parser-format":
+            "ifelse(pkt4.msgtype == 5,
+                'Address: ' + addrtotext(pkt4.yiaddr) + ' has been assigned for ' + uint32totext(option[51].hex) + ' seconds to a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') +
+                ifelse(option[61].exists,
+                    ', client-id: ' + hexstring(option[61].hex, ':'),
+                    '') +
+                ifelse(pkt4.giaddr == 0.0.0.0,
+                    '',
+                    ' connected via relay at address: ' + addrtotext(pkt4.giaddr) +
+                    ifelse(option[82].option[1].exists,
+                        ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'),
+                        '') +
+                    ifelse(option[82].option[2].exists,
+                        ', remote-id: ' + hexstring(option[82].option[2].hex, ':'),
+                        '') +
+                    ifelse(option[82].option[6].exists,
+                        ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'),
+                        '')),
+                '')"
+    }</pre>
+    </details><br>
+
+
+This will log the following data on request and renew:
+
+::
+
+   Address: 192.2.1.100 has been assigned for 6735 seconds to a device with hardware address: hwtype=1 08:00:2b:02:3f:4e, client-id: 17:34:e2:ff:09:92:54 connected via relay at address: 192.2.16.33, circuit-id: 68:6f:77:64:79, remote-id: 87:f6:79:77:ef, subscriber-id: 1a:2b:3c:4d:5e:6f
+
+
+This will log the following data on release and decline:
+
+::
+
+   Address: 192.2.1.100 has been released from a device with hardware address: hwtype=1 08:00:2b:02:3f:4e, client-id: 17:34:e2:ff:09:92:54 connected via relay at address: 192.2.16.33, circuit-id: 68:6f:77:64:79, remote-id: 87:f6:79:77:ef, subscriber-id: 1a:2b:3c:4d:5e:6f
+
+
+Similar result can be obtained if configuring ``request-parser-format`` only.
+
+Examples:
+
+
+.. code-block:: json
+
+    {
+        "request-parser-format": "ifelse(pkt4.msgtype == 3, 'Address: ' + ifelse(option[50].exists, addrtotext(option[50].hex), addrtotext(pkt4.ciaddr)) + ' has been assigned' + ifelse(option[51].exists, ' for ' + uint32totext(option[51].hex) + ' seconds', '') + ' to a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') + ifelse(option[61].exists, ', client-id: ' + hexstring(option[61].hex, ':'), '') + ifelse(pkt4.giaddr == 0.0.0.0, '', ' connected via relay at address: ' + addrtotext(pkt4.giaddr) + ifelse(option[82].option[1].exists, ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'), '') + ifelse(option[82].option[2].exists, ', remote-id: ' + hexstring(option[82].option[2].hex, ':'), '') + ifelse(option[82].option[6].exists, ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'), '')), ifelse(pkt4.msgtype == 4 or pkt4.msgtype == 7, 'Address: ' + ifelse(option[50].exists, addrtotext(option[50].hex), addrtotext(pkt4.ciaddr)) + ' has been released from a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') + ifelse(option[61].exists, ', client-id: ' + hexstring(option[61].hex, ':'), '') + ifelse(pkt4.giaddr == 0.0.0.0, '', ' connected via relay at address: ' + addrtotext(pkt4.giaddr) + ifelse(option[82].option[1].exists, ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'), '') + ifelse(option[82].option[2].exists, ', remote-id: ' + hexstring(option[82].option[2].hex, ':'), '') + ifelse(option[82].option[6].exists, ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'), '')), ''))"
+    }
+
+.. raw:: html
+
+    <details><summary>Expand here!</summary>
+    <pre>{
+        "request-parser-format":
+            "ifelse(pkt4.msgtype == 3,
+                'Address: ' +
+                ifelse(option[50].exists,
+                    addrtotext(option[50].hex),
+                    addrtotext(pkt4.ciaddr)) +
+                ' has been assigned' +
+                ifelse(option[51].exists,
+                    ' for ' + uint32totext(option[51].hex) + ' seconds',
+                    '') +
+                ' to a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') +
+                ifelse(option[61].exists,
+                    ', client-id: ' + hexstring(option[61].hex, ':'),
+                    '') +
+                ifelse(pkt4.giaddr == 0.0.0.0,
+                    '',
+                    ' connected via relay at address: ' + addrtotext(pkt4.giaddr) +
+                    ifelse(option[82].option[1].exists,
+                        ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'),
+                        '') +
+                    ifelse(option[82].option[2].exists,
+                        ', remote-id: ' + hexstring(option[82].option[2].hex, ':'),
+                        '') +
+                    ifelse(option[82].option[6].exists,
+                        ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'),
+                        '')),
+                ifelse(pkt4.msgtype == 4 or pkt4.msgtype == 7,
+                    'Address: ' +
+                    ifelse(option[50].exists,
+                        addrtotext(option[50].hex),
+                        addrtotext(pkt4.ciaddr)) +
+                    ' has been released from a device with hardware address: hwtype=' + substring(hexstring(pkt4.htype, ''), 7, 1) + ' ' + hexstring(pkt4.mac, ':') +
+                    ifelse(option[61].exists,
+                        ', client-id: ' + hexstring(option[61].hex, ':'),
+                        '') +
+                    ifelse(pkt4.giaddr == 0.0.0.0,
+                        '',
+                        ' connected via relay at address: ' + addrtotext(pkt4.giaddr) +
+                        ifelse(option[82].option[1].exists,
+                            ', circuit-id: ' + hexstring(option[82].option[1].hex, ':'),
+                            '') +
+                        ifelse(option[82].option[2].exists,
+                            ', remote-id: ' + hexstring(option[82].option[2].hex, ':'),
+                            '') +
+                        ifelse(option[82].option[6].exists,
+                            ', subscriber-id: ' + hexstring(option[82].option[6].hex, ':'),
+                            '')),
+                    ''))"
+    }</pre>
+    </details><br>
+
+
 DHCPv6 Log Entries
 ~~~~~~~~~~~~~~~~~~
 
-For DHCPv6 the library creates entries based on lease management actions
-intercepted by lease6_select (for new leases), lease6_renew (for
-renewed leases), and lease6_rebind (for rebound leases).
+For DHCPv6, the library creates entries based on REQUEST, RENEW, RELEASE,
+DECLINE messages et.al. and their responses. The resulting packets and leases
+are taken into account, intercepted through the following hook points:
+* pkt6_receive
+* leases6_committed
+* pkt6_send
+* lease6_release
+* lease6_decline
 
 An entry is a single string with no embedded end-of-line markers and a
 prepended timestamp, and has the following sections:
@@ -713,17 +1113,18 @@ Where:
    "%Y-%m-%d %H:%M:%S %Z" strftime format ("%Z" is the time zone name).
 
 -  address - the leased IPv6 address or prefix given out and whether it
-   was assigned or renewed.
+   was assigned, renewed or released.
 
 -  duration - the lease lifetime expressed in days (if present), hours,
    minutes, and seconds. A lease lifetime of 0xFFFFFFFF will be denoted
-   with the text "infinite duration".
+   with the text "infinite duration". This information is not given
+   when the lease is released.
 
 -  device-id - the client's DUID and hardware address (if present).
 
 -  relay-info - for relayed packets the content of relay agent messages,
-   remote-id (code 37), subscriber-id (code 38), and interface-id (code
-   18) options, if present. Note that interface-id option, if present,
+   remote-id (code 37), subscriber-id (code 38), and interface-id (code 18)
+   options, if present. Note that interface-id option, if present,
    identifies the whole interface the relay agent received the message
    on. This typically translates to a single link in the network, but
    it depends on the specific network topology. Nevertheless, this is
@@ -739,6 +1140,15 @@ present in the log file):
 
    2018-01-06 01:02:03 PST Address:2001:db8:1:: has been assigned for 0 hrs 11 mins 53 secs
    to a device with DUID: 17:34:e2:ff:09:92:54 and hardware address: hwtype=1 08:00:2b:02:3f:4e
+   (from Raw Socket) connected via relay at address: fe80::abcd for client on link address: 3001::1,
+   hop count: 1, identified by remote-id: 01:02:03:04:0a:0b:0c:0d:0e:0f and subscriber-id: 1a:2b:3c:4d:5e:6f
+
+or for a release:
+
+::
+
+   2018-01-06 01:02:03 PST Address:2001:db8:1:: has been released
+   from a device with DUID: 17:34:e2:ff:09:92:54 and hardware address: hwtype=1 08:00:2b:02:3f:4e
    (from Raw Socket) connected via relay at address: fe80::abcd for client on link address: 3001::1,
    hop count: 1, identified by remote-id: 01:02:03:04:0a:0b:0c:0d:0e:0f and subscriber-id: 1a:2b:3c:4d:5e:6f
 
@@ -803,133 +1213,212 @@ Examples:
 
    2018-01-06 01:02:11 PST Administrator deleted a lease for a device identified by: duid of 1a:1b:1c:1d:1e:1f:20:21:22:23:24
 
-.. _forensic-log-configuration:
+The ``request-parser-format`` and ``response-parser-format`` can be used to
+extract and log data from the incoming packet and server response packet
+respectively. The configured value is an evaluated parsed expression returning a
+string. A list of tokens is described in the server classification process.
+Use with caution as this might affect server performance.
+If any of them is configured, the default logging format is not used.
+If both of them are configured, the resulting log message is constructed by
+concatenating the logged data extracted from the request and the logged data
+extracted from the response.
 
-Configuring the Forensic Log Hooks
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+Some data might be available in the request or in the response only and some
+data might differ in the incoming packet from the one in the response packet.
 
-To use this functionality, the hook library must be included in the
-configuration of the desired DHCP server modules. The legal_log library
-is able to save logs to a text file or a database (created using
-``kea-admin`` see :ref:`mysql-database-create`, :ref:`pgsql-database-create`).
-Library is installed alongside the Kea libraries in
-``[kea-install-dir]/var/lib/kea`` where ``kea-install-dir`` is determined
-by the "--prefix" option of the configure script. It defaults to
-``/usr/local``. Assuming the default value, configuring kea-dhcp4 to load
-the legal_log library could be done with the following Kea4 configuration:
+Examples:
 
-::
 
-   "Dhcp4": {
-       "hooks-libraries": [
-           {
-               "library": "/usr/local/lib/kea/hooks/libdhcp_legal_log.so",
-               "parameters": {
-                   "path": "/var/lib/kea/log",
-                   "base-name": "kea-forensic4"
-               }
-           },
-           ...
-       ]
-   }
+.. code-block:: json
 
-To configure it for kea-dhcp6, the commands are:
+    {
+        "request-parser-format": "ifelse(pkt6.msgtype == 8 or pkt6.msgtype == 9, ifelse(option[3].option[5].exists, 'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), '') + ifelse(option[25].option[26].exists, 'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), ''), '')",
+        "response-parser-format": "ifelse(pkt6.msgtype == 7, ifelse(option[3].option[5].exists, 'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been assigned for ' + uint32totext(substring(option[3].option[5].hex, 20, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), '') + ifelse(option[25].option[26].exists, 'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been assigned for ' + uint32totext(substring(option[25].option[26].hex, 4, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), ''), '')"
+    }
 
-::
+.. raw:: html
 
-   "Dhcp6": {
-       "hooks-libraries": [
-           {
-               "library": "/usr/local/lib/kea/hooks/libdhcp_legal_log.so",
-               "parameters": {
-                   "path": "/var/lib/kea/log",
-                   "base-name": "kea-forensic6"
-               }
-           },
-           ...
-       ]
-   }
+    <details><summary>Expand here!</summary>
+    <pre>{
+        "request-parser-format":
+            "ifelse(pkt6.msgtype == 8 or pkt6.msgtype == 9,
+                ifelse(option[3].option[5].exists,
+                    'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') +
+                    ifelse(relay6[0].peeraddr == '',
+                        '',
+                        ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                        ifelse(relay6[0].option[37].exists,
+                            ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[38].exists,
+                            ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[18].exists,
+                            ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                            '')),
+                    '') +
+                ifelse(option[25].option[26].exists,
+                    'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') +
+                    ifelse(relay6[0].peeraddr == '',
+                        '',
+                        ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                        ifelse(relay6[0].option[37].exists,
+                            ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[38].exists,
+                            ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[18].exists,
+                            ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                            '')),
+                    ''),
+                '')",
+        "response-parser-format":
+            "ifelse(pkt6.msgtype == 7,
+                ifelse(option[3].option[5].exists,
+                    'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been assigned for ' + uint32totext(substring(option[3].option[5].hex, 20, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') +
+                    ifelse(relay6[0].peeraddr == '',
+                        '',
+                        ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                        ifelse(relay6[0].option[37].exists,
+                            ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[38].exists,
+                            ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[18].exists,
+                            ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                            '')),
+                    '') +
+                ifelse(option[25].option[26].exists,
+                    'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been assigned for ' + uint32totext(substring(option[25].option[26].hex, 4, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') +
+                    ifelse(relay6[0].peeraddr == '',
+                        '',
+                        ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                        ifelse(relay6[0].option[37].exists,
+                            ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[38].exists,
+                            ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[18].exists,
+                            ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                            '')),
+                    ''),
+                '')"
+    }</pre>
+    </details><br>
 
-Two hooks library parameters for text file are supported:
 
--  path - the directory in which the forensic file(s) will be written.
-   The default value is ``[prefix]/var/lib/kea``. The directory must exist.
-
--  base-name - an arbitrary value which is used in conjunction with the
-   current system date to form the current forensic file name. It
-   defaults to ``kea-legal``.
-
-Additional parameters for the database connection can be specified, e.g:
-
-::
-
-    "Dhcp6": {
-       "hooks-libraries": [
-           {
-               "library": "/usr/local/lib/kea/hooks/libdhcp_legal_log.so",
-               "parameters": {
-                   "name":"database-name",
-                   "password":"passwd",
-                   "type":"mysql",
-                   "user":"user-name"
-               }
-           },
-           ...
-       ]
-   }
-
-For more specific information about database related parameters please refer to
-:ref:`database-configuration6` and :ref:`database-configuration4`.
-
-If it is desired to restrict forensic logging to certain subnets, the
-"legal-logging" boolean parameter can be specified within a user context
-of these subnets. For example:
-
-::
-
-   "Dhcpv4" {
-       "subnet4": [
-           {
-               "subnet": "192.0.2.0/24",
-               "pools": [
-                   {
-                        "pool": "192.0.2.1 - 192.0.2.200"
-                   }
-               ],
-               "user-context": {
-                   "legal-logging": false
-               }
-           }
-       ]
-   }
-
-This configuration disables legal logging for the subnet "192.0.2.0/24". If the
-"legal-logging" parameter is not specified, it defaults to 'true', which
-enables legal logging for the subnet.
-
-The following example demonstrates how to selectively disable legal
-logging for an IPv6 subnet:
+This will log the following data on request, renew and rebind for NA:
 
 ::
 
-   "Dhcpv6": {
-       "subnet6": [
-           {
-               "subnet": "2001:db8:1::/64",
-               "pools": [
-                    {
-                        "pool": "2001:db8:1::1-2001:db8:1::ffff"
-                    }
-               ],
-               "user-context": {
-                   "legal-logging": false
-               }
-           }
-       ]
-   }
+   Address: 2001:db8:1:: has been assigned for 713 seconds to a device with DUID: 17:34:e2:ff:09:92:54 connected via relay at address: fe80::abcd for client on link address: 3001::1, remote-id: 01:02:03:04:0a:0b:0c:0d:0e:0f, subscriber-id: 1a:2b:3c:4d:5e:6f, connected at location interface-id: 72:65:6c:61:79:31:3a:65:74:68:30
 
-See :ref:`dhcp4-user-contexts` and :ref:`dhcp6-user-contexts` to
-learn more about user contexts in Kea configuration.
+
+This will log the following data on request, renew and rebind for PD:
+
+::
+
+   Prefix: 2001:db8:1::/64 has been assigned for 713 seconds to a device with DUID: 17:34:e2:ff:09:92:54 connected via relay at address: fe80::abcd for client on link address: 3001::1, remote-id: 01:02:03:04:0a:0b:0c:0d:0e:0f, subscriber-id: 1a:2b:3c:4d:5e:6f, connected at location interface-id: 72:65:6c:61:79:31:3a:65:74:68:30
+
+
+This will log the following data on release and decline for NA:
+
+::
+
+   Address: 2001:db8:1:: has been released from a device with DUID: 17:34:e2:ff:09:92:54 connected via relay at address: fe80::abcd for client on link address: 3001::1, remote-id: 01:02:03:04:0a:0b:0c:0d:0e:0f, subscriber-id: 1a:2b:3c:4d:5e:6f, connected at location interface-id: 72:65:6c:61:79:31:3a:65:74:68:30
+
+
+This will log the following data on release and decline for PD:
+
+::
+
+   Prefix: 2001:db8:1::/64 has been released from a device with DUID: 17:34:e2:ff:09:92:54 connected via relay at address: fe80::abcd for client on link address: 3001::1, remote-id: 01:02:03:04:0a:0b:0c:0d:0e:0f, subscriber-id: 1a:2b:3c:4d:5e:6f, connected at location interface-id: 72:65:6c:61:79:31:3a:65:74:68:30
+
+
+Similar result can be obtained if configuring ``request-parser-format`` only.
+
+Examples:
+
+
+.. code-block:: json
+
+    {
+        "request-parser-format": "ifelse(pkt6.msgtype == 3 or pkt6.msgtype == 5 or pkt6.msgtype == 6, ifelse(option[3].option[5].exists, 'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been assigned for ' + uint32totext(substring(option[3].option[5].hex, 20, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), '') + ifelse(option[25].option[26].exists, 'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been assigned for ' + uint32totext(substring(option[25].option[26].hex, 4, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), ''), ifelse(pkt6.msgtype == 8 or pkt6.msgtype == 9, ifelse(option[3].option[5].exists, 'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), '') + ifelse(option[25].option[26].exists, 'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') + ifelse(relay6[0].peeraddr == '', '', ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) + ifelse(relay6[0].option[37].exists, ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'), '') + ifelse(relay6[0].option[38].exists, ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'), '') + ifelse(relay6[0].option[18].exists, ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'), '')), ''), ''))"
+    }
+
+.. raw:: html
+
+    <details><summary>Expand here!</summary>
+    <pre>{
+        "request-parser-format":
+            "ifelse(pkt6.msgtype == 3 or pkt6.msgtype == 5 or pkt6.msgtype == 6,
+                ifelse(option[3].option[5].exists,
+                    'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been assigned for ' + uint32totext(substring(option[3].option[5].hex, 20, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') +
+                    ifelse(relay6[0].peeraddr == '',
+                        '',
+                        ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                        ifelse(relay6[0].option[37].exists,
+                            ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[38].exists,
+                            ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[18].exists,
+                            ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                            '')),
+                    '') +
+                ifelse(option[25].option[26].exists,
+                    'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been assigned for ' + uint32totext(substring(option[25].option[26].hex, 4, 4)) + ' seconds to a device with DUID: ' + hexstring(option[1].hex, ':') +
+                    ifelse(relay6[0].peeraddr == '',
+                        '',
+                        ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                        ifelse(relay6[0].option[37].exists,
+                            ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[38].exists,
+                            ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                            '') +
+                        ifelse(relay6[0].option[18].exists,
+                            ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                            '')),
+                    ''),
+                ifelse(pkt6.msgtype == 8 or pkt6.msgtype == 9,
+                    ifelse(option[3].option[5].exists,
+                        'Address: ' + addrtotext(substring(option[3].option[5].hex, 0, 16)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') +
+                        ifelse(relay6[0].peeraddr == '',
+                            '',
+                            ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                            ifelse(relay6[0].option[37].exists,
+                                ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                                '') +
+                            ifelse(relay6[0].option[38].exists,
+                                ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                                '') +
+                            ifelse(relay6[0].option[18].exists,
+                                ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                                '')),
+                        '') +
+                    ifelse(option[25].option[26].exists,
+                        'Prefix: ' + addrtotext(substring(option[25].option[26].hex, 9, 16)) + '/' + uint8totext(substring(option[25].option[26].hex, 8, 1)) + ' has been released from a device with DUID: ' + hexstring(option[1].hex, ':') +
+                        ifelse(relay6[0].peeraddr == '',
+                            '',
+                            ' connected via relay at address: ' + addrtotext(relay6[0].peeraddr) + ' for client on link address: ' + addrtotext(relay6[0].linkaddr) +
+                            ifelse(relay6[0].option[37].exists,
+                                ', remote-id: ' + hexstring(relay6[0].option[37].hex, ':'),
+                                '') +
+                            ifelse(relay6[0].option[38].exists,
+                                ', subscriber-id: ' + hexstring(relay6[0].option[38].hex, ':'),
+                                '') +
+                            ifelse(relay6[0].option[18].exists,
+                                ', connected at location interface-id: ' + hexstring(relay6[0].option[18].hex, ':'),
+                                '')),
+                        ''),
+                    ''))"
+    }</pre>
+    </details><br>
 
 .. _forensic-log-database:
 
@@ -965,14 +1454,24 @@ from a CQL database:
     2018-01-06 01:02:03.227000+0000 | Address: 192.2.1.100 has been renewed ...
     ...
    (12 rows)
-   $
+
+Like all the other database-centric features, forensic logging supports database
+connection recovery which can be enabled by setting the ``on-fail`` parameter.
+If not specified, the ``on-fail`` parameter defaults to ``serve-retry-continue``
+as opposed to the case of lease manager, host manager and config backend where
+it defaults to ``stop-retry-exit``. In this case, the server will continue
+serving clients and it will not shut down even if the recovery mechanism fails.
+If the ``on-fail`` is set to ``serve-retry-exit``, the server will shut down if
+the connection to the database backend is not restored according to the
+``max-reconnect-tries`` and ``reconnect-wait-time`` parameters, but it will
+continue serving clients while this mechanism is activated.
 
 .. _flex-id:
 
 flex_id: Flexible Identifiers for Host Reservations
 ===================================================
 
-This section describes a hook application dedicated to generate flexible
+This section describes a hook application dedicated to generating flexible
 identifiers for host reservations. The Kea software provides a way to handle
 host reservations that include addresses, prefixes, options, client
 classes, and other features. The reservation can be based on hardware
@@ -1203,7 +1702,7 @@ This library allows you to define an action to take, for a given option,
 based upon on the result of an expression.  These actions are carried
 out during the final stages of constructing a query response packet,
 just before it is sent to the client. The three actions currently
-supported are  ``add``, ``supersede``, and ``remove``.
+supported are ``add``, ``supersede``, and ``remove``.
 
 The syntax used for the action expressions is the same syntax used
 for client classification and the Flex Identifier hook library
@@ -1227,7 +1726,7 @@ true.
 The option to which an action applies may be specified by either its
 numeric code or its name.. At least the code or the name must be
 specified. The option space is the DHCPv4 or DHCPv6 spaces depending
-of the server where the hook library is loaded. Other spaces as vendor
+on the server where the hook library is loaded. Other spaces as vendor
 spaces could be supported in a further version.
 
 The library is available since Kea 1.7.1 and can be loaded in a
@@ -1240,7 +1739,7 @@ expression.
 ::
 
     "Dhcp4": {
-        "hook_libraries": [
+        "hooks-libraries": [
             {   "library": "/usr/local/lib/libdhcp_flex_option.so",
                 "parameters": {
                     "options": [
@@ -1262,6 +1761,16 @@ name followed by .boot for content.
 
 The flexible option library supports both DHCPv4 and DHCPv6.
 
+Since Kea 1.9.0, the add and supersede actions take an optional csv-format
+boolean parameter. If not specified or configured to false, the option data is
+set using the raw value of the evaluated expression. When it is configured
+to true, this value is parsed using the option definition from the option data
+specified in the configuration file. This eases option setting for options
+using complex record formats or fully qualified domain names.
+
+For instance if the expression evaluation returns "example.com" and
+the option is defined with the fqdn type the domain name will be
+encoded into DNS binary format.
 
 
 .. _host-cmds:
@@ -1295,9 +1804,12 @@ host reservation), reservation-get (which returns an existing reservation
 if specified criteria are matched), reservation-get-all (which returns
 all reservations in a specified subnet), reservation-get-page (a variant
 of reservation-get-all which returns all reservations in a specified
-subnet by pages), reservation-get-by-hostname (which returns all reservations
+subnet by pages and since Kea version 1.9.0 all reservations),
+reservation-get-by-hostname (which returns all reservations
 with a specified hostname and optionally in a subnet) since Kea version
-1.7.1, and reservation-del (which attempts to delete a
+1.7.1, reservation-get-by-id (which returns all reservations with a
+specified identifier) since Kea version 1.9.0,
+and reservation-del (which attempts to delete a
 reservation matching specified criteria). To use commands that change
 the reservation information (currently these are reservation-add and
 reservation-del, but this rule applies to other commands that may be
@@ -1338,7 +1850,9 @@ The subnet-id Parameter
 Prior to diving into the individual commands, it is worth discussing the
 parameter, ``subnet-id``. Currently this parameter is mandatory for all of the
 commands supplied by this library with the exception of
-reservation-get-by-hostname where it is optional.
+reservation-get-by-hostname where it is optional, and since Kea 1.9.0
+reservation-get-page where it is optional and reservation-get-by-id
+where it is forbidden.
 In previous versions of Kea, reservations had
 to belong to a specific subnet; as of Kea 1.5.0, reservations may
 be specified globally. In other words, they are not specific to any
@@ -1349,6 +1863,12 @@ host commands, it is necessary to explicitly identify the scope to which
 the reservation belongs. This is done via the ``subnet-id`` parameter.
 For global reservations, use a value of zero (0). For reservations
 scoped to a specific subnet, use that subnet's ID.
+
+On the other hand when the subnet id is not specified in the command
+parameters it is added to each host in responses. If the subnet id
+has the unused special value this means the host entry belongs only
+to the other IP version (i.e. IPv6 in DHCPv4 server or IPv4 in DHCPv6
+server) and this entry is ignored.
 
 .. _command-reservation-add:
 
@@ -1365,7 +1885,7 @@ value of zero (0) to add a global reservation, or the id of the subnet
 to which the reservation should be added. An example command can be as
 simple as:
 
-::
+.. code-block:: json
 
    {
        "command": "reservation-add",
@@ -1380,56 +1900,54 @@ simple as:
 
 but it can also take many more parameters, for example:
 
-::
+.. code-block:: json
 
    {
        "command": "reservation-add",
        "arguments": {
-           "reservation":
-               {
-                   "subnet-id":1,
-                   "client-id": "01:0a:0b:0c:0d:0e:0f",
-                   "ip-address": "192.0.2.205",
-                   "next-server": "192.0.2.1",
-                   "server-hostname": "hal9000",
-                   "boot-file-name": "/dev/null",
-                   "option-data": [
-                       {
-                           "name": "domain-name-servers",
-                           "data": "10.1.1.202,10.1.1.203"
-                       }
-                   ],
-                   "client-classes": [ "special_snowflake", "office" ]
-               }
+           "reservation": {
+               "subnet-id": 1,
+               "client-id": "01:0a:0b:0c:0d:0e:0f",
+               "ip-address": "192.0.2.205",
+               "next-server": "192.0.2.1",
+               "server-hostname": "hal9000",
+               "boot-file-name": "/dev/null",
+               "option-data": [
+                   {
+                       "name": "domain-name-servers",
+                       "data": "10.1.1.202,10.1.1.203"
+                   }
+               ],
+               "client-classes": [ "special_snowflake", "office" ]
+           }
        }
    }
 
 Here is an example of a complex IPv6 reservation:
 
-::
+.. code-block:: json
 
    {
        "command": "reservation-add",
        "arguments": {
-           "reservation":
-               {
-                   "subnet-id":1,
-                   "duid": "01:02:03:04:05:06:07:08:09:0A",
-                   "ip-addresses": [ "2001:db8:1:cafe::1" ],
-                   "prefixes": [ "2001:db8:2:abcd::/64" ],
-                   "hostname": "foo.example.com",
-                   "option-data": [
-                       {
-                           "name": "vendor-opts",
-                           "data": "4491"
-                       },
-                       {
-                           "name": "tftp-servers",
-                           "space": "vendor-4491",
-                           "data": "3000:1::234"
-                       }
-                   ]
-               }
+           "reservation": {
+               "subnet-id": 1,
+               "duid": "01:02:03:04:05:06:07:08:09:0A",
+               "ip-addresses": [ "2001:db8:1:cafe::1" ],
+               "prefixes": [ "2001:db8:2:abcd::/64" ],
+               "hostname": "foo.example.com",
+               "option-data": [
+                   {
+                       "name": "vendor-opts",
+                       "data": "4491"
+                   },
+                   {
+                       "name": "tftp-servers",
+                       "space": "vendor-4491",
+                       "data": "3000:1::234"
+                   }
+               ]
+           }
        }
    }
 
@@ -1616,6 +2134,7 @@ uses parameters providing the mandatory subnet-id. Use a value of zero
 (0) to fetch global reservations. The second mandatory parameter is the
 page size limit. Optional source-index and from host id, both defaulting
 to 0, are used to chain page queries.
+Since Kea version 1.9.0 the subnet id parameter is optional.
 
 The usage of from and source-index parameters requires additional
 explanation. For the first call, those parameters should not be specified
@@ -1807,6 +2326,72 @@ For a reference, see :ref:`command-reservation-get-by-hostname`.
    the hostname column in the hosts table uses a case-insensitive
    collation as explained in the :ref:`mysql-database` section of
    :ref:`admin`.
+
+.. _command-reservation-get-by-id:
+
+The reservation-get-by-id Command
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``reservation-get-by-id`` can be used to query the host database and
+retrieve all reservations with a specified identifier (identifier-type
+and identifier parameters) independently of subnets. The syntax for
+parameters is the same as for ref:`command-reservation-get`.
+The subnet-id parameter is forbidden to avoid confusion.
+This command is available since Kea version 1.9.0.
+
+For instance, retrieving host reservations for the 01:02:03:04:05:06 MAC
+address:
+
+::
+
+   {
+       "command": "reservation-get-by-id",
+       "arguments": {
+           "identifier-type": "hw-address",
+           "identifier": "01:02:03:04:05:06"
+        }
+    }
+
+returns some IPv4 hosts:
+
+::
+
+   {
+       "arguments": {
+           "hosts": [
+               {
+                   "boot-file-name": "bootfile.efi",
+                   "client-classes": [ ],
+                   "hostname": "foo.example.org",
+                   "hw-address": "01:02:03:04:05:06",
+                   "ip-address": "192.0.2.100",
+                   "next-server": "192.0.0.2",
+                   "option-data": [ ],
+                   "server-hostname": "server-hostname.example.org",
+                   "subnet-id": 123
+               },
+               ...
+               {
+                   "boot-file-name": "bootfile.efi",
+                   "client-classes": [ ],
+                   "hostname": "bar.example.org",
+                   "hw-address": "01:02:03:04:05:06",
+                   "ip-address": "192.0.2.200",
+                   "next-server": "192.0.0.2",
+                   "option-data": [ ],
+                   "server-hostname": "server-hostname.example.org",
+                   "subnet-id": 345
+               }
+           ]
+       },
+       "result": 0,
+       "text": "5 IPv4 host(s) found."
+   }
+
+The response returned by ``reservation-get-by-id`` can be long
+in particular when responses are not limited to a subnet.
+
+For a reference, see :ref:`command-reservation-get-by-id`.
 
 .. _command-reservation-del:
 
@@ -2531,7 +3116,17 @@ An example response could look as follows:
                    "ip-address": "0.0.0.0"
                },
                "renew-timer": 60,
-               "reservation-mode": "all",
+               # "reservation-mode": "all",
+               # It is replaced by the "reservations-global"
+               # "reservations-in-subnet" and "reservations-out-of-pool"
+               # parameters.
+               # Specify if the server should lookup global reservations.
+               "reservations-global": false,
+               # Specify if the server should lookup in-subnet reservations.
+               "reservations-in-subnet": true,
+               # Specify if the server can assume that all reserved addresses
+               # are out-of-pool.
+               "reservations-out-of-pool": false,
                "subnet4": [
                    {
                        "subnet": "192.0.2.0/24",
@@ -2804,6 +3399,7 @@ following:
 The ``network6-subnet-del`` command uses exactly the same syntax for
 both the command and the response.
 
+
 .. include:: hooks-bootp.rst
 .. include:: hooks-class-cmds.rst
 .. include:: hooks-cb-cmds.rst
@@ -2811,6 +3407,8 @@ both the command and the response.
 .. include:: hooks-stat-cmds.rst
 .. include:: hooks-radius.rst
 .. include:: hooks-host-cache.rst
+.. include:: hooks-lease-query.rst
+.. include:: hooks-run-script.rst
 
 
 .. _user-context-hooks:
@@ -2837,13 +3435,13 @@ operations, for example.
 
 If user context is supported in a given context, the parser translates
 "comment" entries into user context with a "comment" entry. The pretty
-print of a configuration does the opposite operation and puts "comment"
-entries at the beginning of maps, as that seems to be the common usage.
+print of a configuration did the opposite operation and put "comment"
+entries at the beginning of maps, but this was withdrawn in 1.7.9.
 
 As of Kea 1.3, the structures that allow user contexts are pools of all
 types (addresses and prefixes) and subnets. Kea 1.4 extended user
-context support to the global scope, interfaces config, shared networks,
-subnets, client classes, option datas and definitions, host
-reservations, control socket, dhcp ddns, loggers and server id. These
-are supported in both DHCPv4 and DHCPv6, with the exception of server id
+context support to the global scope, interfaces configuration, shared networks,
+subnets, client classes, option data and definitions, host
+reservations, control socket, dhcp ddns, loggers and server ID. These
+are supported in both DHCPv4 and DHCPv6, with the exception of server ID
 which is DHCPv6 only.

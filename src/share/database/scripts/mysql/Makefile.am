@@ -1,37 +1,38 @@
 SUBDIRS = .
 
-sqlscriptsdir = ${datarootdir}/${PACKAGE_NAME}/scripts/mysql
-sqlscripts_DATA = dhcpdb_create.mysql
-sqlscripts_DATA += dhcpdb_drop.mysql
-sqlscripts_DATA += upgrade_1.0_to_2.0.sh
-sqlscripts_DATA += upgrade_2.0_to_3.0.sh
-sqlscripts_DATA += upgrade_3.0_to_4.0.sh
-sqlscripts_DATA += upgrade_4.0_to_4.1.sh
-sqlscripts_DATA += upgrade_4.1_to_5.0.sh
-sqlscripts_DATA += upgrade_5.0_to_5.1.sh
-sqlscripts_DATA += upgrade_5.1_to_5.2.sh
-sqlscripts_DATA += upgrade_5.2_to_6.0.sh
-sqlscripts_DATA += upgrade_6.0_to_7.0.sh
-sqlscripts_DATA += upgrade_7.0_to_8.0.sh
-sqlscripts_DATA += upgrade_8.0_to_8.1.sh
-sqlscripts_DATA += upgrade_8.1_to_8.2.sh
-sqlscripts_DATA += upgrade_8.2_to_9.0.sh
-sqlscripts_DATA += upgrade_9.0_to_9.1.sh
-sqlscripts_DATA += wipe_data.sh
+mysqldir = ${datarootdir}/${PACKAGE_NAME}/scripts/mysql
 
-DISTCLEANFILES = upgrade_1.0_to_2.0.sh
-DISTCLEANFILES += upgrade_2.0_to_3.0.sh
-DISTCLEANFILES += upgrade_3.0_to_4.0.sh
-DISTCLEANFILES += upgrade_4.0_to_4.1.sh
-DISTCLEANFILES += upgrade_4.1_to_5.0.sh
-DISTCLEANFILES += upgrade_5.0_to_5.1.sh
-DISTCLEANFILES += upgrade_5.1_to_5.2.sh
-DISTCLEANFILES += upgrade_5.2_to_6.0.sh
-DISTCLEANFILES += upgrade_6.0_to_7.0.sh
-DISTCLEANFILES += upgrade_7.0_to_8.0.sh
-DISTCLEANFILES += upgrade_8.1_to_8.2.sh
-DISTCLEANFILES += upgrade_8.2_to_9.0.sh
-DISTCLEANFILES += upgrade_9.0_to_9.1.sh
-DISTCLEANFILES += wipe_data.sh
+# non-executable
+mysql_DATA  =
+mysql_DATA += dhcpdb_create.mysql
+mysql_DATA += dhcpdb_drop.mysql
 
-EXTRA_DIST = ${sqlscripts_DATA}
+# executable
+mysql_SCRIPTS  =
+mysql_SCRIPTS += upgrade_001.0_to_002.0.sh
+mysql_SCRIPTS += upgrade_002.0_to_003.0.sh
+mysql_SCRIPTS += upgrade_003.0_to_004.0.sh
+mysql_SCRIPTS += upgrade_004.0_to_004.1.sh
+mysql_SCRIPTS += upgrade_004.1_to_005.0.sh
+mysql_SCRIPTS += upgrade_005.0_to_005.1.sh
+mysql_SCRIPTS += upgrade_005.1_to_005.2.sh
+mysql_SCRIPTS += upgrade_005.2_to_006.0.sh
+mysql_SCRIPTS += upgrade_006.0_to_007.0.sh
+mysql_SCRIPTS += upgrade_007.0_to_008.0.sh
+mysql_SCRIPTS += upgrade_008.0_to_008.1.sh
+mysql_SCRIPTS += upgrade_008.1_to_008.2.sh
+mysql_SCRIPTS += upgrade_008.2_to_009.0.sh
+mysql_SCRIPTS += upgrade_009.0_to_009.1.sh
+mysql_SCRIPTS += upgrade_009.1_to_009.2.sh
+mysql_SCRIPTS += upgrade_009.2_to_009.3.sh
+mysql_SCRIPTS += upgrade_009.3_to_009.4.sh
+mysql_SCRIPTS += upgrade_009.4_to_009.5.sh
+mysql_SCRIPTS += upgrade_009.5_to_009.6.sh
+mysql_SCRIPTS += upgrade_009.6_to_010.0.sh
+mysql_SCRIPTS += upgrade_010_to_011.sh
+mysql_SCRIPTS += upgrade_011_to_012.sh
+mysql_SCRIPTS += wipe_data.sh
+
+DISTCLEANFILES = ${mysql_SCRIPTS}
+
+EXTRA_DIST = ${mysql_DATA}

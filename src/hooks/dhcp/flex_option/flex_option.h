@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,10 +8,19 @@
 #define FLEX_OPTION_H
 
 #include <cc/data.h>
+#include <dhcp/libdhcp++.h>
+#include <dhcp/option.h>
+#include <dhcp/option_definition.h>
+#include <dhcp/std_option_defs.h>
 #include <eval/evaluate.h>
 #include <eval/token.h>
-#include <string>
+#include <util/strutil.h>
+
+#include <boost/algorithm/string/split.hpp>
+#include <boost/algorithm/string/classification.hpp>
+
 #include <map>
+#include <string>
 
 namespace isc {
 namespace flex_option {
@@ -46,7 +55,8 @@ public:
         /// @brief Constructor.
         ///
         /// @param code the option code.
-        OptionConfig(uint16_t code);
+        /// @param def the option definition.
+        OptionConfig(uint16_t code, isc::dhcp::OptionDefinitionPtr def);
 
         /// @brief Destructor.
         virtual ~OptionConfig();
@@ -56,6 +66,13 @@ public:
         /// @return option code.
         uint16_t getCode() const {
             return (code_);
+        }
+
+        /// @brief Return option definition.
+        ///
+        /// @return option definition.
+        isc::dhcp::OptionDefinitionPtr getOptionDef() const {
+            return (def_);
         }
 
         /// @brief Set action.
@@ -103,6 +120,10 @@ public:
     private:
         /// @brief The code.
         uint16_t code_;
+
+        /// @brief The option definition.
+        /// @note This value is set only when csv-format is true.
+        isc::dhcp::OptionDefinitionPtr def_;
 
         /// @brief The action.
         Action action_;
@@ -153,6 +174,7 @@ public:
             std::string value;
             isc::dhcp::OptionBuffer buffer;
             isc::dhcp::OptionPtr opt = response->getOption(opt_cfg->getCode());
+            isc::dhcp::OptionDefinitionPtr def = opt_cfg->getOptionDef();
             switch (opt_cfg->getAction()) {
             case NONE:
                 break;
@@ -166,10 +188,19 @@ public:
                 if (value.empty()) {
                     break;
                 }
+                // Set the value.
+                if (def) {
+                    std::vector<std::string> split_vec =
+                            isc::util::str::tokens(value, ",", true);
+                    opt = def->optionFactory(universe, opt_cfg->getCode(),
+                                             split_vec);
+                } else {
+                    buffer.assign(value.begin(), value.end());
+                    opt.reset(new isc::dhcp::Option(universe,
+                                                    opt_cfg->getCode(),
+                                                    buffer));
+                }
                 // Add the option.
-                buffer.assign(value.begin(), value.end());
-                opt.reset(new isc::dhcp::Option(universe, opt_cfg->getCode(),
-                                                buffer));
                 response->addOption(opt);
                 logAction(ADD, opt_cfg->getCode(), value);
                 break;
@@ -184,10 +215,19 @@ public:
                     response->delOption(opt_cfg->getCode());
                     opt = response->getOption(opt_cfg->getCode());
                 }
+                // Set the value.
+                if (def) {
+                    std::vector<std::string> split_vec =
+                            isc::util::str::tokens(value, ",", true);
+                    opt = def->optionFactory(universe, opt_cfg->getCode(),
+                                             split_vec);
+                } else {
+                    buffer.assign(value.begin(), value.end());
+                    opt.reset(new isc::dhcp::Option(universe,
+                                                    opt_cfg->getCode(),
+                                                    buffer));
+                }
                 // Add the option.
-                buffer.assign(value.begin(), value.end());
-                opt.reset(new isc::dhcp::Option(universe, opt_cfg->getCode(),
-                                                buffer));
                 response->addOption(opt);
                 logAction(SUPERSEDE, opt_cfg->getCode(), value);
                 break;
@@ -233,7 +273,7 @@ private:
     /// @brief Parse an option config.
     ///
     /// @param option The element with option config.
-    /// @throw BadValue and similar exceptionson error.
+    /// @throw BadValue and similar exceptions on error.
     void parseOptionConfig(isc::data::ConstElementPtr option);
 
 };

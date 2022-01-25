@@ -87,6 +87,12 @@ This library provides the following commands:
 -  ``lease6-wipe`` - removes all leases from a specific IPv6 subnet or
    from all subnets.
 
+-  ``lease4-resend-ddns`` - resend a request to update DNS entries for
+   an existing lease.
+
+-  ``lease6-resend-ddns`` - resend a request to update DNS entries for
+   an existing lease.
+
 The lease commands library is part of the open source code and is
 available to every Kea user.
 
@@ -200,7 +206,7 @@ The commands can take several additional optional parameters:
    true.
 
 -  ``fqdn-rev`` - specifies whether the lease should be marked as if
-   reverse DNS update were conducted. Note this only affects the the
+   reverse DNS update were conducted. Note this only affects the
    data stored in the lease database, and no DNS update will be
    performed.. If configured, a DNS update to remove the PTR record will
    be conducted when the lease is removed due to expiration or being
@@ -224,7 +230,8 @@ The commands can take several additional optional parameters:
 
 -  ``state`` - specify the state of added lease, can be 0 for ``default``,
    1 for ``declined`` and 2 for ``expired-reclaimed`` state. Any other
-   value will cause error.
+   value will cause an error. Note that using 1 for a "IA_PD" lease type is
+   illegal and will be rejected.
 
 -  ``user-context`` - specifies the user context to be associated with
    this lease. It must be a JSON map.
@@ -273,17 +280,17 @@ The lease6-bulk-apply Command
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The ``lease6-bulk-apply`` was implemented to address
-the performance penalty in the High Availability when a single DHCPv6
-transaction resulted in multiple lease updates sent to the partner if
+the performance penalty in the High-Availability mode when a single DHCPv6
+transaction resulted in multiple lease updates sent to the partner, if
 multiple address and/or prefix leases were allocated. Consider the case
 when a DHCPv6 client requests the assignment of two IPv6 addresses and two IPv6
-prefixes. That may result in allocation of 4 leases. In addition, the
-DHCPv6 may assign different address than requested by the client during
-the renew or rebind and delete the leases previously used by this client.
-The are 6 of lease changes sent between the HA partners is in this case.
-Sending these updates in individual commands, e.g. ``lease6-update``
-is highly inefficient and produces unnecessary delays in communication
-between the HA partners and in sending the response to the DHCPv6 client.
+prefixes: that may result in allocation of four leases. In addition,
+DHCPv6 may assign a different address than the one requested by the client during
+the renew or rebind stage, and delete the leases previously used by this client.
+There are six lease changes sent between the HA partners in this case.
+Sending these updates in individual commands, e.g. via ``lease6-update``,
+is highly inefficient and produces unnecessary delays in communication,
+both between the HA partners and in sending the response to the DHCPv6 client.
 
 The ``lease6-bulk-apply`` command deals with this
 problem by aggregating all lease changes in a single command. Both
@@ -292,7 +299,7 @@ The receiving server iterates over the deleted leases and deletes them
 from its lease database. Next, it iterates over the new/updated leases
 and adds them to the database or updates them if they already exist.
 
-Even though the High Avialability is the major application for
+Even though High Availability is the major application for
 this command, it can be freely used in all cases when it is desired to
 send multiple lease changes in a single command.
 
@@ -334,11 +341,11 @@ or update two other leases in the database:
        }
    }
 
-If any of the leases is malformed, no leases changes are applied
-to the lease database. If the leases are well formed but there is a
+If any of the leases are malformed, no lease changes are applied
+to the lease database. If the leases are well-formed but there is a
 failure to apply any of the lease changes to the database, the command
-will continue to be processed for other leases. All the leases for which
-the command was unable to apply the changes in the database will be
+continues to be processed for other leases. All the leases for which
+the command was unable to apply the changes in the database are
 listed in the response. For example:
 
 ::
@@ -376,7 +383,7 @@ returned codes are the same as the results returned for the commands.
 In particular, the result of 1 indicates an error while processing the
 lease, e.g. a communication error with the database. The result of 3
 indicates that an attempt to delete the lease was unsuccessful because
-such lease doesn't exist (empty result).
+such a lease doesn't exist (empty result).
 
 .. _command-lease4-get:
 
@@ -469,7 +476,7 @@ is assumed.
 
 ``leaseX-get`` returns a result that indicates a result of the operation
 and lease details, if found. It has one of the following values: 0
-(success), 1 (error), or 2 (empty). An empty result means that a query
+(success), 1 (error), or 3 (empty). An empty result means that a query
 has been completed properly, but the object (a lease in this case) has
 not been found. The lease parameters, if found, are returned as
 arguments.
@@ -582,7 +589,9 @@ following format:
    restriction on the number of leases returned as a result of this
    command.
 
-.. _lease-get-page-cmds:
+.. _command-lease4-get-page:
+
+.. _command-lease6-get-page:
 
 The lease4-get-page, lease6-get-page Commands
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -715,8 +724,8 @@ leases were found.
 
 .. _command-lease6-get-by-hostname:
 
-The lease4-get-by-*, lease6-get-by-* Commands
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+The lease4-get-by-\*, lease6-get-by-\* Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 ``leaseX-get-by-Y`` can be used to query the lease database and
 retrieve all existing leases with a specified hardware address (IPv4
@@ -746,7 +755,7 @@ An example of the ``lease6-get-by-hostname`` is:
     }
 
 The by key is the only parameter. The returned response contains a detailed
-list of leases in the same format than ``leaseX-get-all``. This list can be
+list of leases in the same format as ``leaseX-get-all``. This list can be
 empty and usually is never large.
 
 .. _command-lease4-del:
@@ -769,7 +778,7 @@ a pair of values: the type and the actual identifier. The currently
 supported identifiers are "hw-address" (IPv4 only), "client-id" (IPv4
 only), and "duid" (IPv6 only).
 
-An example command for deleting a lease by address is:
+An example command for deleting a lease by address is
 
 ::
 
@@ -792,6 +801,28 @@ An example IPv4 lease deletion by "hw-address" is:
        "subnet-id": 44
      }
    }
+
+
+As of Kea 1.7.10, a new parameter, ``update-ddns``, is supported (IPv4 and IPv6).
+When true it instructs the server to queue a request to kea-dhcp-ddns to
+remove DNS entries after the lease is successfully deleted if:
+
+- DDNS updating is enabled. (i.e. "dhcp-ddns":{ "enable-updates": true })
+- The lease's hostname is not empty.
+- At least one of the lease's DNS direction flags (fdqn_fwd or fdqn_rev) is true.
+
+This parameter defaults to false. An example of its use is shown below:
+
+::
+
+   {
+       "command": "lease4-del",
+       "arguments": {
+           "ip-address": "192.0.2.202",
+           "update-ddns": true
+       }
+   }
+
 
 ``leaseX-del`` returns a result that indicates the outcome of the
 operation. It has one of the following values: 0 (success), 1 (error),
@@ -892,7 +923,7 @@ An example of ``lease6-wipe`` is:
    }
 
 The commands return a text description of the number of leases removed,
-plus the status code 0 (success) if any leases were removed or 2 (empty)
+plus the status code 0 (success) if any leases were removed or 3 (empty)
 if there were no leases. Status code 1 (error) may be returned if the
 parameters are incorrect or some other exception is encountered.
 
@@ -901,3 +932,62 @@ all configured subnets. Also, the subnet-id parameter may be omitted. If
 not specified, leases from all subnets are wiped.
 
 Note: not all backends support this command.
+
+.. _command-lease4-resend-ddns:
+
+.. _command-lease6-resend-ddns:
+
+The lease4-resend-ddns, lease6-resend-ddns Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``lease4-resend-ddns`` or ``lease6-resend-ddns`` can be used to generate
+a request to kea-dhcp-ddns to update the DNS entries for an existing
+lease.  The desired lease is selected by a single parameter, "ip-address".
+In order for an update request to be generated, DDNS updating must be enabled
+and DNS entries must have already been made (or attempted) for the lease.
+In other words all of the following must be true:
+
+- DDNS updating must be enabled. (i.e. "dhcp-ddns":{ "enable-updates": true"})
+- The lease's hostname must not be empty.
+- At least one of the lease's DNS direction flags (fdqn_fwd or fdqn_rev) must be true.
+
+An example ``lease4-resend-ddns`` command for getting a lease using an IPv4
+address is:
+
+::
+
+   {
+       "command": "lease4-resend-ddns",
+       "arguments": {
+           "ip-address": "192.0.2.1"
+       }
+   }
+
+An example of the ``lease6-resend-ddns`` query is:
+
+::
+
+   {
+     "command": "lease6-resend-ddns",
+     "arguments": {
+       "ip-address": "2001:db8:1::1"
+     }
+   }
+
+``leaseX-resend-ddns`` returns a result that indicates a result of the operation.
+It has one of the following values: 0 (success), 1 (error), or 3 (empty). An empty
+result means that a query has been completed properly, but the object (a lease in
+this case) has not been found.
+
+A successful result does not mean that DNS has been successfully updated. It
+indicates that a request to update DNS has been successfully created and
+queued for transmission to kea-dhcp-ddns.
+
+An example result returned when the lease was found:
+
+::
+
+   {
+     "result": 0,
+     "text": "NCR generated for: 2001:db8:1::1, hostname: example.com."
+   }

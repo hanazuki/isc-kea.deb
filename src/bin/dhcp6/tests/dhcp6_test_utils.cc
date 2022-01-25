@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,13 +6,14 @@
 
 #include <config.h>
 #include <gtest/gtest.h>
+#include <cc/command_interpreter.h>
 #include <dhcp/option6_status_code.h>
 #include <dhcp6/tests/dhcp6_test_utils.h>
 #include <dhcp6/json_config_parser.h>
 #include <dhcp/tests/pkt_captures.h>
 #include <log/logger_support.h>
+#include <dhcpsrv/cfg_multi_threading.h>
 #include <util/pointer_util.h>
-#include <cc/command_interpreter.h>
 #include <stats/stats_mgr.h>
 #include <cstdio>
 #include <sstream>
@@ -22,6 +23,7 @@ using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::asiolink;
 using namespace isc::stats;
+using namespace isc::util;
 
 namespace isc {
 namespace dhcp {
@@ -42,7 +44,7 @@ BaseServerTest::~BaseServerTest() {
 
     // Remove default lease file.
     std::ostringstream s2;
-    s2 << CfgMgr::instance().getDataDir() << "/" << "kea-leases6.csv";
+    s2 << CfgMgr::instance().getDataDir() << "/kea-leases6.csv";
     static_cast<void>(::remove(s2.str().c_str()));
 
     // Revert to original data directory.
@@ -53,16 +55,14 @@ BaseServerTest::~BaseServerTest() {
 }
 
 Dhcpv6SrvTest::Dhcpv6SrvTest()
-    : NakedDhcpv6SrvTest(), srv_(0) {
-    subnet_ = isc::dhcp::Subnet6Ptr
-        (new isc::dhcp::Subnet6(isc::asiolink::IOAddress("2001:db8:1::"),
-                                48, 1000, 2000, 3000, 4000));
+    : NakedDhcpv6SrvTest(), srv_(0), multi_threading_(false) {
+    subnet_ = isc::dhcp::Subnet6Ptr(new isc::dhcp::Subnet6(isc::asiolink::IOAddress("2001:db8:1::"),
+                                                           48, 1000, 2000, 3000, 4000));
     subnet_->setIface("eth0");
 
-    pool_ = isc::dhcp::Pool6Ptr
-        (new isc::dhcp::Pool6(isc::dhcp::Lease::TYPE_NA,
-                              isc::asiolink::IOAddress("2001:db8:1:1::"),
-                              64));
+    pool_ = isc::dhcp::Pool6Ptr(new isc::dhcp::Pool6(isc::dhcp::Lease::TYPE_NA,
+                                isc::asiolink::IOAddress("2001:db8:1:1::"),
+                                64));
     subnet_->addPool(pool_);
 
     isc::dhcp::CfgMgr::instance().clear();
@@ -71,12 +71,21 @@ Dhcpv6SrvTest::Dhcpv6SrvTest()
     isc::dhcp::CfgMgr::instance().commit();
 
     // configure PD pool
-    pd_pool_ = isc::dhcp::Pool6Ptr
-        (new isc::dhcp::Pool6(isc::dhcp::Lease::TYPE_PD,
-                              isc::asiolink::IOAddress("2001:db8:1:2::"),
-                              64, 80));
+    pd_pool_ = isc::dhcp::Pool6Ptr(new isc::dhcp::Pool6(isc::dhcp::Lease::TYPE_PD,
+                                   isc::asiolink::IOAddress("2001:db8:1:2::"),
+                                   64, 80));
     subnet_->addPool(pd_pool_);
+
+    // Reset the thread pool.
+    MultiThreadingMgr::instance().apply(false, 0, 0);
 }
+
+Dhcpv6SrvTest::~Dhcpv6SrvTest() {
+    isc::dhcp::CfgMgr::instance().clear();
+
+    // Reset the thread pool.
+    MultiThreadingMgr::instance().apply(false, 0, 0);
+};
 
 // Checks that server response (ADVERTISE or REPLY) contains proper IA_NA option
 // It returns IAADDR option for each chaining with checkIAAddr method.
@@ -210,6 +219,7 @@ Dhcpv6SrvTest::createMessage(uint8_t message_type, Lease::Type lease_type,
     Pkt6Ptr msg = Pkt6Ptr(new Pkt6(message_type, 1234));
     msg->setRemoteAddr(IOAddress("fe80::abcd"));
     msg->setIface("eth0");
+    msg->setIndex(ETH0_INDEX);
     msg->addOption(createIA(lease_type, addr, prefix_len, iaid));
     return (msg);
 }
@@ -338,6 +348,7 @@ Dhcpv6SrvTest::testRenewBasic(Lease::Type type,
         req.reset(new Pkt6(message_type, 1234));
         req->setRemoteAddr(IOAddress("fe80::abcd"));
         req->setIface("eth0");
+        req->setIndex(ETH0_INDEX);
 
         // from createIA
         uint16_t code;
@@ -433,8 +444,8 @@ Dhcpv6SrvTest::testRenewBasic(Lease::Type type,
     // equality or difference by 1 between cltt and expected is ok.
     EXPECT_GE(1, abs(cltt - expected));
 
-    Lease6Ptr lease(new Lease6());
-    lease->addr_ = renew_addr;
+    Lease6Ptr lease = LeaseMgrFactory::instance().getLease6(type,
+                                                            IOAddress(renew_addr));
     EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 }
 
@@ -757,8 +768,7 @@ Dhcpv6SrvTest::testReleaseReject(Lease::Type type, const IOAddress& addr) {
     EXPECT_EQ(1, stat->getInteger().first);
 
     // Finally, let's cleanup the database
-    lease.reset(new Lease6());
-    lease->addr_ = addr;
+    lease = LeaseMgrFactory::instance().getLease6(type, addr);
     EXPECT_TRUE(LeaseMgrFactory::instance().deleteLease(lease));
 }
 
@@ -808,6 +818,8 @@ Dhcpv6SrvTest::configure(const std::string& config) {
 
 void
 Dhcpv6SrvTest::configure(const std::string& config, NakedDhcpv6Srv& srv) {
+    setenv("KEA_LFC_EXECUTABLE", KEA_LFC_EXECUTABLE, 1);
+    MultiThreadingCriticalSection cs;
     ConstElementPtr json;
     try {
         json = parseJSON(config);
@@ -821,6 +833,9 @@ Dhcpv6SrvTest::configure(const std::string& config, NakedDhcpv6Srv& srv) {
     // Disable the re-detect flag
     disableIfacesReDetect(json);
 
+    // Set up multi-threading
+    configureMultiThreading(multi_threading_, json);
+
     // Configure the server and make sure the config is accepted
     EXPECT_NO_THROW(status = configureDhcp6Server(srv, json));
     ASSERT_TRUE(status);
@@ -829,16 +844,22 @@ Dhcpv6SrvTest::configure(const std::string& config, NakedDhcpv6Srv& srv) {
     ASSERT_EQ(0, rcode) << "configuration failed, test is broken: "
         << comment->str();
 
+    try {
+        CfgMultiThreading::apply(CfgMgr::instance().getStagingCfg()->getDHCPMultiThreading());
+    } catch (const std::exception& ex) {
+        ADD_FAILURE() << "Error applying multi threading settings: "
+            << ex.what();
+    }
+
     CfgMgr::instance().commit();
 }
 
 NakedDhcpv6SrvTest::NakedDhcpv6SrvTest()
-: rcode_(-1) {
+    : rcode_(-1) {
     // it's ok if that fails. There should not be such a file anyway
     static_cast<void>(remove(DUID_FILE));
 
-    const isc::dhcp::IfaceMgr::IfaceCollection& ifaces =
-        isc::dhcp::IfaceMgr::instance().getIfaces();
+    const IfaceCollection& ifaces = IfaceMgr::instance().getIfaces();
 
     // There must be some interface detected
     if (ifaces.empty()) {
@@ -847,9 +868,10 @@ NakedDhcpv6SrvTest::NakedDhcpv6SrvTest()
     }
 
     valid_iface_ = (*ifaces.begin())->getName();
+    valid_ifindex_ = (*ifaces.begin())->getIndex();
 
     // Let's wipe all existing statistics.
-    isc::stats::StatsMgr::instance().removeAll();
+    StatsMgr::instance().removeAll();
 }
 
 NakedDhcpv6SrvTest::~NakedDhcpv6SrvTest() {

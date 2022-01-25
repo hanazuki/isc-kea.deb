@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -115,10 +115,16 @@ public:
 
     /// @brief Error handler
     ///
+    /// @note The optional position for an error in a string begins by 1
+    /// so the caller should add 1 to the position of the C++ string.
+    ///
     /// @param loc location within the parsed file when experienced a problem.
     /// @param what string explaining the nature of the error.
+    /// @param pos optional position for in string errors.
     /// @throw ParseError
-    void error(const isc::agent::location& loc, const std::string& what);
+    void error(const isc::agent::location& loc,
+               const std::string& what,
+               size_t pos = 0);
 
     /// @brief Error handler
     ///
@@ -147,19 +153,49 @@ public:
     /// @return Position in format accepted by Element
     isc::data::Element::Position loc2pos(isc::agent::location& loc);
 
+    /// @brief Check if a required parameter is present
+    ///
+    /// Check if a required parameter is present in the map at the top
+    /// of the stack and raise an error when it is not.
+    ///
+    /// @param name name of the parameter to check
+    /// @param open_loc location of the opening curly bracket
+    /// @param close_loc location of the closing curly bracket
+    /// @throw ParseError
+    void require(const std::string& name,
+                 isc::data::Element::Position open_loc,
+                 isc::data::Element::Position close_loc);
+
+    /// @brief Check if a parameter is already present
+    ///
+    /// Check if a parameter is already present in the map at the top
+    /// of the stack and raise an error when it is.
+    ///
+    /// @param name name of the parameter to check
+    /// @param loc location of the current parameter
+    /// @throw ParseError
+    void unique(const std::string& name,
+                isc::data::Element::Position loc);
+
     /// @brief Defines syntactic contexts for lexical tie-ins
     typedef enum {
         ///< This one is used in pure JSON mode.
         NO_KEYWORDS,
 
-        ///< Used while parsing top level (that contains Control-agent, Logging and others)
+        ///< Used while parsing top level (that contains Control-agent)
         CONFIG,
 
         ///< Used while parsing content of Agent.
         AGENT,
 
-        ///< Used while parsing content of Logging.
-        LOGGING,
+        ///< Used while parsing Control-agent/Authentication.
+        AUTHENTICATION,
+
+        ///< Used while parsing Control-agent/Authentication/type.
+        AUTH_TYPE,
+
+        ///< Used while parsing Control-agent/Authentication/clients.
+        CLIENTS,
 
         ///< Used while parsing Control-agent/control-sockets.
         CONTROL_SOCKETS,
@@ -178,7 +214,6 @@ public:
 
         ///< Used while parsing Control-agent/loggers/output_options structures.
         OUTPUT_OPTIONS
-
     } LexerContext;
 
     /// @brief File name
@@ -261,7 +296,7 @@ public:
     isc::data::ElementPtr parseCommon();
 };
 
-}; // end of isc::eval namespace
-}; // end of isc namespace
+} // end of isc::eval namespace
+} // end of isc namespace
 
 #endif

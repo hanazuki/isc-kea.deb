@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2018 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -168,21 +168,6 @@ public:
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
     virtual Lease4Collection getLease4(const ClientId& clientid) const override;
-
-    /// @brief Returns IPv4 lease for the specified client identifier, HW
-    /// address and subnet identifier.
-    ///
-    /// @param client_id A client identifier.
-    /// @param hwaddr hardware address.
-    /// @param subnet_id A subnet identifier.
-    ///
-    /// @return A pointer to the lease or NULL if the lease is not found.
-    ///
-    /// @throw isc::NotImplemented On every call as this method is currently
-    /// not implemented for the CQL backend.
-    virtual Lease4Ptr getLease4(const ClientId& client_id,
-                                const HWAddr& hwaddr,
-                                SubnetID subnet_id) const override;
 
     /// @brief Returns existing IPv4 lease for specified client-id
     ///
@@ -410,6 +395,15 @@ public:
     ///        exist.
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The UPDATE query uses IF expire = ? to update the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and UPDATE with
+    /// different expiration time.
     virtual void updateLease4(const Lease4Ptr& lease4) override;
 
     /// @brief Updates IPv6 lease.
@@ -423,6 +417,15 @@ public:
 
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The UPDATE query uses IF expire = ? to update the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and UPDATE with
+    /// different expiration time.
     virtual void updateLease6(const Lease6Ptr& lease6) override;
 
     /// @brief Deletes an IPv4 lease.
@@ -430,6 +433,15 @@ public:
     /// @param lease IPv4 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The DELETE query uses IF expire = ? to delete the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and DELETE with
+    /// different expiration time.
     bool deleteLease(const Lease4Ptr& lease) override final;
 
     /// @brief Deletes an IPv6 lease.
@@ -437,6 +449,15 @@ public:
     /// @param lease IPv6 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note The DELETE query uses IF expire = ? to delete the lease only if
+    /// the value matches the one received on the SELECT query, effectively
+    /// enforcing no update on the lease between SELECT and DELETE with
+    /// different expiration time.
     bool deleteLease(const Lease6Ptr& lease) override final;
 
     /// @brief Deletes all expired and reclaimed DHCPv4 leases.

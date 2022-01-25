@@ -1,13 +1,13 @@
-/* Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
    file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 %skeleton "lalr1.cc" /* -*- C++ -*- */
-%require "3.0.0"
+%require "3.3.0"
 %defines
-%define parser_class_name {EvalParser}
+%define api.parser.class {EvalParser}
 %define api.prefix {eval}
 %define api.token.constructor
 %define api.value.type variant
@@ -73,8 +73,16 @@ using namespace isc::eval;
   ALL "all"
   COMA ","
   CONCAT "concat"
+  PLUS "+"
   IFELSE "ifelse"
   TOHEXSTRING "hexstring"
+  ADDRTOTEXT "addrtotext"
+  INT8TOTEXT "int8totext"
+  INT16TOTEXT "int16totext"
+  INT32TOTEXT "int32totext"
+  UINT8TOTEXT "uint8totext"
+  UINT16TOTEXT "uint16totext"
+  UINT32TOTEXT "uint32totext"
   PKT6 "pkt6"
   MSGTYPE "msgtype"
   TRANSID "transid"
@@ -105,6 +113,7 @@ using namespace isc::eval;
 %type <TokenPkt4::FieldType> pkt4_field
 %type <TokenPkt6::FieldType> pkt6_field
 
+%left PLUS
 %left OR
 %left AND
 %precedence NOT
@@ -356,6 +365,11 @@ string_expr : STRING
                       TokenPtr conc(new TokenConcat());
                       ctx.expression.push_back(conc);
                   }
+            | string_expr PLUS string_expr
+                  {
+                      TokenPtr conc(new TokenConcat());
+                      ctx.expression.push_back(conc);
+                  }
             | IFELSE "(" bool_expr "," string_expr "," string_expr ")"
                   {
                       TokenPtr cond(new TokenIfElse());
@@ -365,6 +379,41 @@ string_expr : STRING
                   {
                       TokenPtr tohex(new TokenToHexString());
                       ctx.expression.push_back(tohex);
+                  }
+            | ADDRTOTEXT "(" string_expr ")"
+                  {
+                      TokenPtr addrtotext(new TokenIpAddressToText());
+                      ctx.expression.push_back(addrtotext);
+                  }
+            | INT8TOTEXT "(" string_expr ")"
+                  {
+                      TokenPtr int8totext(new TokenInt8ToText());
+                      ctx.expression.push_back(int8totext);
+                  }
+            | INT16TOTEXT "(" string_expr ")"
+                  {
+                      TokenPtr int16totext(new TokenInt16ToText());
+                      ctx.expression.push_back(int16totext);
+                  }
+            | INT32TOTEXT "(" string_expr ")"
+                  {
+                      TokenPtr int32totext(new TokenInt32ToText());
+                      ctx.expression.push_back(int32totext);
+                  }
+            | UINT8TOTEXT "(" string_expr ")"
+                  {
+                      TokenPtr uint8totext(new TokenUInt8ToText());
+                      ctx.expression.push_back(uint8totext);
+                  }
+            | UINT16TOTEXT "(" string_expr ")"
+                  {
+                      TokenPtr uint16totext(new TokenUInt16ToText());
+                      ctx.expression.push_back(uint16totext);
+                  }
+            | UINT32TOTEXT "(" string_expr ")"
+                  {
+                      TokenPtr uint32totext(new TokenUInt32ToText());
+                      ctx.expression.push_back(uint32totext);
                   }
             | VENDOR "." ENTERPRISE
                 {
@@ -425,6 +474,7 @@ string_expr : STRING
                     TokenPtr integer(new TokenInteger($1));
                     ctx.expression.push_back(integer);
                 }
+            | "(" string_expr ")"
             ;
 
 integer_expr : INTEGER

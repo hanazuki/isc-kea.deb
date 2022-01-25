@@ -59,7 +59,7 @@ The classification process is conducted in several steps:
     following its client class or global (or, for option 43, last
     resort) definition.
 
-5.  When the incoming packet belongs the special class, `DROP`, it is
+5.  When the incoming packet belongs to the special class, `DROP`, it is
     dropped and an informational message is logged with the packet
     information.
 
@@ -85,17 +85,22 @@ The classification process is conducted in several steps:
     class. After a subnet is selected, the server determines whether
     there is a reservation for a given client. Therefore, it is not
     possible to use KNOWN/UNKNOWN classes to select a shared network or
-    a subnet, nor to make DROP class dependent of KNOWN/UNKNOWN classes.
+    a subnet.
 
-9.  If needed, addresses and prefixes from pools are assigned, possibly
+9.  When the incoming packet belongs to the special class, `DROP`, it is
+    dropped and an informational message is logged with the packet
+    information. Since Kea version 1.9.8 it is allowed to make DROP
+    class dependent on KNOWN/UNKNOWN classes.
+
+10. If needed, addresses and prefixes from pools are assigned, possibly
     based on the class information when some pools are reserved for
     class members.
 
-10. Classes marked as "required" are evaluated in the order in which
+11. Classes marked as "required" are evaluated in the order in which
     they are listed: first the shared network, then the subnet, and
     finally the pools that assigned resources belong to.
 
-11. Options are assigned, again possibly based on the class information
+12. Options are assigned, again possibly based on the class information
     in the order that classes were associated with the incoming packet.
     For DHCPv4 private and code 43 options, this includes class local
     option definitions.
@@ -377,7 +382,7 @@ Notes:
    relay from which to extract the information, with a value of 0
    indicating the relay closest to the DHCPv6 server. Negative values
    allow specifying relays counted from the DHCPv6 client, -1 indicating
-   the relay closest to the client. In general, negative "nest" level is
+   the relay closest to the client. In general, a negative "nest" level is
    the same as the number of relays + "nest" level. If the requested
    encapsulation doesn't exist, an empty string "" is returned. This
    expression is allowed in DHCPv6 only.
@@ -452,6 +457,10 @@ Notes:
    |                       |                         | concatenation of the  |
    |                       |                         | strings               |
    +-----------------------+-------------------------+-----------------------+
+   | Concat (operator +)   | 'foo' + 'bar'           | Return the            |
+   |                       |                         | concatenation of the  |
+   |                       |                         | strings               |
+   +-----------------------+-------------------------+-----------------------+
    | Ifelse                | ifelse('foo' ==         | Return the branch     |
    |                       | 'bar','us','them')      | value according to    |
    |                       |                         | the condition         |
@@ -460,6 +469,52 @@ Notes:
    |                       |                         | a hexadecimal string, |
    |                       |                         | e.g. 0a:1b:2c:3e      |
    +-----------------------+-------------------------+-----------------------+
+
+.. table:: List of Conversion to Text Expressions
+
+   +-----------------------+---------------------------+------------------------+
+   | Name                  | Example                   | Description            |
+   +=======================+===========================+========================+
+   | AddressToText         | addrtotext (192.10.0.1)   | Represent the 4 bytes  |
+   |                       | addrtotext (2003:db8::)   | of an IPv4 address or  |
+   |                       |                           | the 16 bytes of an     |
+   |                       |                           | IPv6 address in human  |
+   |                       |                           | readable format        |
+   +-----------------------+---------------------------+------------------------+
+   | Int8ToText            | int8totext (-1)           | Represents the 8 bit   |
+   |                       |                           | signed integer in text |
+   |                       |                           | format                 |
+   +-----------------------+---------------------------+------------------------+
+   | Int16ToText           | int16totext (-1)          | Represents the 16 bit  |
+   |                       |                           | signed integer in text |
+   |                       |                           | format                 |
+   +-----------------------+---------------------------+------------------------+
+   | Int32ToText           | int32totext (-1)          | Represents the 32 bit  |
+   |                       |                           | signed integer in text |
+   |                       |                           | format                 |
+   +-----------------------+---------------------------+------------------------+
+   | UInt8ToText           | uint8totext (255)         | Represents the 8 bit   |
+   |                       |                           | unsigned integer in    |
+   |                       |                           | text format            |
+   +-----------------------+---------------------------+------------------------+
+   | UInt16ToText          | uint16totext (65535)      | Represents the 16 bit  |
+   |                       |                           | unsigned integer in    |
+   |                       |                           | text format            |
+   +-----------------------+---------------------------+------------------------+
+   | UInt32ToText          | uint32totext (4294967295) | Represents the 32 bit  |
+   |                       |                           | unsigned integer in    |
+   |                       |                           | text format            |
+   +-----------------------+---------------------------+------------------------+
+
+Notes:
+
+The conversion operators can be used to transform data from binary to the text
+representation. The only requirement is that the input data type length matches
+an expected value.
+The AddressToText token expects 4 bytes for IPv4 addresses or 16 bytes for IPv6
+addresses. The Int8ToText and UInt8ToText expect 1 byte, the Int16ToText and
+UInt16ToText expect 2 bytes and Int32ToText and UInt32ToText expect 4 bytes.
+For all conversion tokens, if the data length is 0, the result string is empty.
 
 Logical operators
 -----------------
@@ -504,6 +559,26 @@ of its two arguments. For instance:
 
            concat('foo', 'bar') == 'foobar'
 
+For user convenience Kea version 1.9.8 added an associative operator
+version of the concat function. For instance:
+::
+
+           'abc' + 'def' + 'ghi' + 'jkl' + '...'
+
+is the same as:
+::
+
+           concat(concat(concat(concat('abc', 'def'), 'ghi'), 'jkl'), '...')
+
+or:
+::
+
+           concat('abc', concat('def', concat('ghi', concat('jkl', '...'))))
+
+or:
+::
+
+           'abcdefghijkl...'
 
 Ifelse
 ------

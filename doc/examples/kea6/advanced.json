@@ -23,7 +23,7 @@
         "re-detect": true
     },
 
-    // We need to specify the the database used to store leases. As of
+    // We need to specify the database used to store leases. As of
     // September 2016, four database backends are supported: MySQL,
     // PostgreSQL, Cassandra, and the in-memory database, Memfile.
     // We will use memfile  because it doesn't require any prior set up.
@@ -41,7 +41,7 @@
         //        otherwise load the lease as is. This is the default value.
         // fix - attempt to fix the lease by finding appropriate subnet-id value.
         //       if there is no suitable subnet, the lease is loaded as is.
-        // fix-del - attempt to fix the lease by findind appropriate subnet-id
+        // fix-del - attempt to fix the lease by finding appropriate subnet-id
         //           value. If there is no suitable subnet, the lease is deleted.
         // del - delete leases that have incorrect subnet-id values.
         "lease-checks": "fix-del"
@@ -133,7 +133,7 @@
             "prefix-len": 48,
             "delegated-len": 64,
             "excluded-prefix": "2001:db8:abcd:1234::",
-            "excluded-prefix-len": 62,
+            "excluded-prefix-len": 72,
 
             // Another user-context for this PD pool. Again, you can put
             // anything you want in there as long as it's valid JSON and

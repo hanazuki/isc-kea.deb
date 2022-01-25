@@ -1,24 +1,31 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <asiolink/io_address.h>
+#include <dhcp/dhcp6.h>
+#include <dhcp/option.h>
 #include <dhcpsrv/shared_network.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/subnet_id.h>
 #include <dhcpsrv/triplet.h>
 #include <exceptions/exceptions.h>
 #include <testutils/test_to_element.h>
+#include <testutils/multi_threading_utils.h>
+
 #include <gtest/gtest.h>
 #include <cstdint>
+#include <string>
 #include <vector>
 
 using namespace isc;
 using namespace isc::asiolink;
 using namespace isc::dhcp;
+using namespace isc::test;
 
 namespace {
 
@@ -49,8 +56,14 @@ TEST(SharedNetwork4Test, defaults) {
     EXPECT_TRUE(network->getT2().unspecified());
     EXPECT_EQ(0, network->getT2().get());
 
-    EXPECT_TRUE(network->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, network->getHostReservationMode().get());
+    EXPECT_TRUE(network->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(network->getReservationsGlobal().get());
+
+    EXPECT_TRUE(network->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(network->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(network->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(network->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(network->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(network->getCalculateTeeTimes().get());
@@ -90,6 +103,9 @@ TEST(SharedNetwork4Test, defaults) {
 
     EXPECT_TRUE(network->getHostnameCharReplacement().unspecified());
     EXPECT_TRUE(network->getHostnameCharReplacement().empty());
+
+    EXPECT_TRUE(network->getDdnsUpdateOnRenew().unspecified());
+    EXPECT_FALSE(network->getDdnsSendUpdates().get());
 }
 
 // This test verifies that shared network can be given a name and that
@@ -124,7 +140,8 @@ TEST(SharedNetwork4Test, addSubnet4) {
 
     // Retrieve the subnet from the network and make sure it is returned
     // as expected.
-    Subnet4Ptr returned_subnet = network->getAllSubnets()->front();
+    ASSERT_FALSE(network->getAllSubnets()->empty());
+    Subnet4Ptr returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     EXPECT_EQ(subnet->getID(), returned_subnet->getID());
     SharedNetwork4Ptr network1;
@@ -180,16 +197,23 @@ TEST(SharedNetwork4Test, replaceSubnet4) {
 
     // Subnets did not changed.
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    Subnet4Ptr returned_subnet = network->getAllSubnets()->at(0);
-    ASSERT_TRUE(returned_subnet);
-    EXPECT_EQ(15, returned_subnet->getID());
-    returned_subnet = network->getAllSubnets()->at(2);
-    ASSERT_TRUE(returned_subnet);
-    EXPECT_EQ(10, returned_subnet->getID());
-    // Finish by the second subnet.
-    returned_subnet = network->getAllSubnets()->at(1);
+    auto returned_it = network->getAllSubnets()->begin();
+    Subnet4Ptr returned_subnet = *returned_it;
     ASSERT_TRUE(returned_subnet);
     EXPECT_EQ(1, returned_subnet->getID());
+    ++returned_it;
+    returned_subnet = *returned_it;
+    ASSERT_TRUE(returned_subnet);
+    EXPECT_EQ(10, returned_subnet->getID());
+    ++returned_it;
+    returned_subnet = *returned_it;
+    ASSERT_TRUE(returned_subnet);
+    EXPECT_EQ(15, returned_subnet->getID());
+
+    // Reset the returned subnet to the subnet with subnet id 1.
+    returned_subnet = *network->getAllSubnets()->begin();
+    ASSERT_TRUE(returned_subnet);
+    ASSERT_EQ(1, returned_subnet->getID());
 
     // Create another subnet with the same ID than the second subnet.
     subnet.reset(new Subnet4(IOAddress("192.168.0.0"), 24, 100, 200, 300,
@@ -205,7 +229,7 @@ TEST(SharedNetwork4Test, replaceSubnet4) {
     EXPECT_FALSE(network1);
 
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    returned_subnet = network->getAllSubnets()->at(1);
+    returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     ASSERT_EQ(1, returned_subnet->getID());
     EXPECT_EQ(100, returned_subnet->getT1());
@@ -216,12 +240,13 @@ TEST(SharedNetwork4Test, replaceSubnet4) {
     EXPECT_TRUE(network == network1);
 
     // Other subnets did not changed.
-    returned_subnet = network->getAllSubnets()->at(0);
-    ASSERT_TRUE(returned_subnet);
-    EXPECT_EQ(15, returned_subnet->getID());
-    returned_subnet = network->getAllSubnets()->at(2);
+    returned_it = network->getAllSubnets()->begin();
+    returned_subnet = *++returned_it;
     ASSERT_TRUE(returned_subnet);
     EXPECT_EQ(10, returned_subnet->getID());
+    returned_subnet = *++returned_it;
+    ASSERT_TRUE(returned_subnet);
+    EXPECT_EQ(15, returned_subnet->getID());
 
     // Create another network and try to replace a subnet to it. It should fail
     // because the subnet is already associated with the first network.
@@ -233,7 +258,7 @@ TEST(SharedNetwork4Test, replaceSubnet4) {
                              SubnetID(1)));
     EXPECT_TRUE(network->replace(subnet));
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    returned_subnet = network->getAllSubnets()->at(1);
+    returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     ASSERT_EQ(1, returned_subnet->getID());
     EXPECT_EQ("192.168.10.0/24", returned_subnet->toText());
@@ -243,7 +268,7 @@ TEST(SharedNetwork4Test, replaceSubnet4) {
                              SubnetID(1)));
     EXPECT_FALSE(network->replace(subnet));
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    returned_subnet = network->getAllSubnets()->at(1);
+    returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     ASSERT_EQ(1, returned_subnet->getID());
     EXPECT_EQ("192.168.10.0/24", returned_subnet->toText());
@@ -272,7 +297,7 @@ TEST(SharedNetwork4Test, delSubnet4) {
     ASSERT_NO_THROW(network->del(subnet1->getID()));
     // We should be left with only one subnet.
     ASSERT_EQ(1, network->getAllSubnets()->size());
-    Subnet4Ptr subnet_returned = network->getAllSubnets()->front();
+    Subnet4Ptr subnet_returned = *network->getAllSubnets()->begin();
     ASSERT_TRUE(subnet_returned);
     EXPECT_EQ(subnet2->getID(), subnet_returned->getID());
 
@@ -440,6 +465,89 @@ TEST(SharedNetwork4Test, getPreferredSubnet) {
     EXPECT_EQ(subnet3->getID(), preferred->getID());
 }
 
+// This test verifies that preferred subnet is returned based on the timestamp
+// when the subnet was last used and allowed client classes.
+TEST(SharedNetwork4Test, getPreferredSubnetMultiThreading) {
+    MultiThreadingTest mt(true);
+    SharedNetwork4Ptr network(new SharedNetwork4("frog"));
+
+    // Create four subnets.
+    Subnet4Ptr subnet1(new Subnet4(IOAddress("10.0.0.0"), 8, 10, 20, 30,
+                                   SubnetID(1)));
+    Subnet4Ptr subnet2(new Subnet4(IOAddress("192.0.2.0"), 24, 10, 20, 30,
+                                   SubnetID(2)));
+    Subnet4Ptr subnet3(new Subnet4(IOAddress("172.16.25.0"), 24, 10, 20, 30,
+                                   SubnetID(3)));
+    Subnet4Ptr subnet4(new Subnet4(IOAddress("172.16.28.0"), 24, 10, 20, 30,
+                                   SubnetID(4)));
+
+    // Associate first two subnets with classes.
+    subnet1->allowClientClass("class1");
+    subnet2->allowClientClass("class1");
+
+    std::vector<Subnet4Ptr> subnets;
+    subnets.push_back(subnet1);
+    subnets.push_back(subnet2);
+    subnets.push_back(subnet3);
+    subnets.push_back(subnet4);
+
+    // Subnets have unique IDs so they should successfully be added to the
+    // network.
+    for (auto i = 0; i < subnets.size(); ++i) {
+        ASSERT_NO_THROW(network->add(subnets[i]))
+            << "failed to add subnet with id " << subnets[i]->getID()
+            << " to shared network";
+    }
+
+    Subnet4Ptr preferred;
+
+    // Initially, for every subnet we should get the same subnet as the preferred
+    // one, because none of them have been used.
+    for (auto i = 0; i < subnets.size(); ++i) {
+        preferred = network->getPreferredSubnet(subnets[i]);
+        EXPECT_EQ(subnets[i]->getID(), preferred->getID());
+    }
+
+    // Allocating an address from subnet2 updates the last allocated timestamp
+    // for this subnet, which makes this subnet preferred over subnet1.
+    subnet2->setLastAllocated(Lease::TYPE_V4, IOAddress("192.0.2.25"));
+    preferred = network->getPreferredSubnet(subnet1);
+    EXPECT_EQ(subnet2->getID(), preferred->getID());
+
+    // If selected is subnet2, the same is returned.
+    preferred = network->getPreferredSubnet(subnet2);
+    EXPECT_EQ(subnet2->getID(), preferred->getID());
+
+    // Even though the subnet1 has been most recently used, the preferred
+    // subnet is subnet3 in this case, because of the client class
+    // mismatch.
+    preferred = network->getPreferredSubnet(subnet3);
+    EXPECT_EQ(subnet3->getID(), preferred->getID());
+
+    // Same for subnet4.
+    preferred = network->getPreferredSubnet(subnet4);
+    EXPECT_EQ(subnet4->getID(), preferred->getID());
+
+    // Allocate an address from the subnet3. This makes it preferred to
+    // subnet4.
+    subnet3->setLastAllocated(Lease::TYPE_V4, IOAddress("172.16.25.23"));
+
+    // If the selected is subnet1, the preferred subnet is subnet2, because
+    // it has the same set of classes as subnet1. The subnet3 can't be
+    // preferred here because of the client class mismatch.
+    preferred = network->getPreferredSubnet(subnet1);
+    EXPECT_EQ(subnet2->getID(), preferred->getID());
+
+    // If we select subnet4, the preferred subnet is subnet3 because
+    // it was used more recently.
+    preferred = network->getPreferredSubnet(subnet4);
+    EXPECT_EQ(subnet3->getID(), preferred->getID());
+
+    // Repeat the test for subnet3 being a selected subnet.
+    preferred = network->getPreferredSubnet(subnet3);
+    EXPECT_EQ(subnet3->getID(), preferred->getID());
+}
+
 // This test verifies that subnetsIncludeMatchClientId() works as expected.
 TEST(SharedNetwork4Test, subnetsIncludeMatchClientId) {
     SharedNetwork4Ptr network(new SharedNetwork4("frog"));
@@ -475,36 +583,6 @@ TEST(SharedNetwork4Test, subnetsIncludeMatchClientId) {
     // Put the second subnet in the class.
     subnet2->allowClientClass("class1");
     EXPECT_TRUE(SharedNetwork4::subnetsIncludeMatchClientId(subnet1, classes));
-}
-
-// This test verifies that subnetsAllHRGlobal() works as expected.
-TEST(SharedNetwork4Test, subnetsAllHRGlobal) {
-    SharedNetwork4Ptr network(new SharedNetwork4("frog"));
-    Subnet4Ptr bad;
-
-    // Empty shared network is right.
-    ASSERT_NO_THROW(bad = network->subnetsAllHRGlobal());
-    EXPECT_FALSE(bad);
-
-    // Create a subnet and add it to the shared network.
-    Subnet4Ptr subnet(new Subnet4(IOAddress("10.0.0.0"), 8, 10, 20, 30,
-                                  SubnetID(1)));
-    ASSERT_NO_THROW(network->add(subnet));
-
-    // Default host reservation mode is ALL.
-    bad.reset();
-    ASSERT_NO_THROW(bad = network->subnetsAllHRGlobal());
-    ASSERT_TRUE(bad);
-    EXPECT_EQ(1, bad->getID());
-    EXPECT_EQ("10.0.0.0/8", bad->toText());
-
-    // Set the HR mode to global.
-    subnet->setHostReservationMode(Network::HR_GLOBAL);
-
-    // Now the shared network is all global.
-    bad.reset();
-    ASSERT_NO_THROW(bad = network->subnetsAllHRGlobal());
-    EXPECT_FALSE(bad);
 }
 
 // This test verifies operations on the network's relay list
@@ -546,7 +624,9 @@ TEST(SharedNetwork4Test, unparse) {
     network->addRelayAddress(IOAddress("192.168.2.1"));
     network->setAuthoritative(false);
     network->setMatchClientId(false);
-    network->setHostReservationMode(Network::HR_ALL);
+    network->setReservationsGlobal(false);
+    network->setReservationsInSubnet(true);
+    network->setReservationsOutOfPool(false);
 
     // Add several subnets.
     Subnet4Ptr subnet1(new Subnet4(IOAddress("10.0.0.0"), 8, 10, 20, 30,
@@ -560,7 +640,6 @@ TEST(SharedNetwork4Test, unparse) {
     network->add(subnet2);
 
     std::string expected = "{\n"
-        "    \"comment\": \"bar\",\n"
         "    \"authoritative\": false,\n"
         "    \"interface\": \"eth1\",\n"
         "    \"match-client-id\": false,\n"
@@ -572,7 +651,9 @@ TEST(SharedNetwork4Test, unparse) {
         "    },\n"
         "    \"renew-timer\": 100,\n"
         "    \"require-client-classes\": [ \"foo\" ],\n"
-        "    \"reservation-mode\": \"all\","
+        "    \"reservations-global\": false,\n"
+        "    \"reservations-in-subnet\": true,\n"
+        "    \"reservations-out-of-pool\": false,\n"
         "    \"subnet4\": [\n"
         "      {\n"
         "        \"4o6-interface\": \"\",\n"
@@ -605,7 +686,7 @@ TEST(SharedNetwork4Test, unparse) {
         "        \"valid-lifetime\": 30\n"
         "      }\n"
         "    ],\n"
-        "    \"user-context\": { \"foo\": 1 },\n"
+        "    \"user-context\": { \"comment\": \"bar\", \"foo\": 1 },\n"
         "    \"valid-lifetime\": 200\n"
         "}\n";
 
@@ -686,8 +767,14 @@ TEST(SharedNetwork6Test, defaults) {
     EXPECT_TRUE(network->getT2().unspecified());
     EXPECT_EQ(0, network->getT2().get());
 
-    EXPECT_TRUE(network->getHostReservationMode().unspecified());
-    EXPECT_EQ(Network::HR_ALL, network->getHostReservationMode().get());
+    EXPECT_TRUE(network->getReservationsGlobal().unspecified());
+    EXPECT_FALSE(network->getReservationsGlobal().get());
+
+    EXPECT_TRUE(network->getReservationsInSubnet().unspecified());
+    EXPECT_TRUE(network->getReservationsInSubnet().get());
+
+    EXPECT_TRUE(network->getReservationsOutOfPool().unspecified());
+    EXPECT_FALSE(network->getReservationsOutOfPool().get());
 
     EXPECT_TRUE(network->getCalculateTeeTimes().unspecified());
     EXPECT_FALSE(network->getCalculateTeeTimes().get());
@@ -761,7 +848,7 @@ TEST(SharedNetwork6Test, addSubnet6) {
 
     // Retrieve the subnet from the network and make sure it is returned
     // as expected.
-    Subnet6Ptr returned_subnet = network->getAllSubnets()->front();
+    Subnet6Ptr returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     EXPECT_EQ(subnet->getID(), returned_subnet->getID());
     SharedNetwork6Ptr network1;
@@ -817,16 +904,23 @@ TEST(SharedNetwork6Test, replaceSubnet6) {
 
     // Subnets did not changed.
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    Subnet6Ptr returned_subnet = network->getAllSubnets()->at(0);
-    ASSERT_TRUE(returned_subnet);
-    EXPECT_EQ(15, returned_subnet->getID());
-    returned_subnet = network->getAllSubnets()->at(2);
-    ASSERT_TRUE(returned_subnet);
-    EXPECT_EQ(10, returned_subnet->getID());
-    // Finish by the second subnet.
-    returned_subnet = network->getAllSubnets()->at(1);
+    auto returned_it = network->getAllSubnets()->begin();
+    Subnet6Ptr returned_subnet = *returned_it;
     ASSERT_TRUE(returned_subnet);
     EXPECT_EQ(1, returned_subnet->getID());
+    ++returned_it;
+    returned_subnet = *returned_it;
+    ASSERT_TRUE(returned_subnet);
+    EXPECT_EQ(10, returned_subnet->getID());
+    ++returned_it;
+    returned_subnet = *returned_it;
+    ASSERT_TRUE(returned_subnet);
+    EXPECT_EQ(15, returned_subnet->getID());
+
+    // Reset the returned subnet to the subnet with subnet id 1.
+    returned_subnet = *network->getAllSubnets()->begin();
+    ASSERT_TRUE(returned_subnet);
+    ASSERT_EQ(1, returned_subnet->getID());
 
     // Create another subnet with the same ID than the second subnet.
     subnet.reset(new Subnet6(IOAddress("2001:db8:2::"), 64, 100, 200, 300, 400,
@@ -843,7 +937,7 @@ TEST(SharedNetwork6Test, replaceSubnet6) {
     EXPECT_FALSE(network1);
 
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    returned_subnet = network->getAllSubnets()->at(1);
+    returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     ASSERT_EQ(1, returned_subnet->getID());
     EXPECT_EQ(100, returned_subnet->getT1());
@@ -855,12 +949,13 @@ TEST(SharedNetwork6Test, replaceSubnet6) {
     EXPECT_TRUE(network == network1);
 
     // Other subnets did not changed.
-    returned_subnet = network->getAllSubnets()->at(0);
-    ASSERT_TRUE(returned_subnet);
-    EXPECT_EQ(15, returned_subnet->getID());
-    returned_subnet = network->getAllSubnets()->at(2);
+    returned_it = network->getAllSubnets()->begin();
+    returned_subnet = *++returned_it;
     ASSERT_TRUE(returned_subnet);
     EXPECT_EQ(10, returned_subnet->getID());
+    returned_subnet = *++returned_it;
+    ASSERT_TRUE(returned_subnet);
+    EXPECT_EQ(15, returned_subnet->getID());
 
     // Create another network and try to replace a subnet to it. It should fail
     // because the subnet is already associated with the first network.
@@ -872,7 +967,7 @@ TEST(SharedNetwork6Test, replaceSubnet6) {
                              400, SubnetID(1)));
     EXPECT_TRUE(network->replace(subnet));
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    returned_subnet = network->getAllSubnets()->at(1);
+    returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     ASSERT_EQ(1, returned_subnet->getID());
     EXPECT_EQ("2001:db8:10::/64", returned_subnet->toText());
@@ -882,7 +977,7 @@ TEST(SharedNetwork6Test, replaceSubnet6) {
                              SubnetID(1)));
     EXPECT_FALSE(network->replace(subnet));
     ASSERT_EQ(3, network->getAllSubnets()->size());
-    returned_subnet = network->getAllSubnets()->at(1);
+    returned_subnet = *network->getAllSubnets()->begin();
     ASSERT_TRUE(returned_subnet);
     ASSERT_EQ(1, returned_subnet->getID());
     EXPECT_EQ("2001:db8:10::/64", returned_subnet->toText());
@@ -911,7 +1006,7 @@ TEST(SharedNetwork6Test, delSubnet6) {
     ASSERT_NO_THROW(network->del(subnet1->getID()));
     // We should be left with only one subnet.
     ASSERT_EQ(1, network->getAllSubnets()->size());
-    Subnet6Ptr subnet_returned = network->getAllSubnets()->front();
+    Subnet6Ptr subnet_returned = *network->getAllSubnets()->begin();
     ASSERT_TRUE(subnet_returned);
     EXPECT_EQ(subnet2->getID(), subnet_returned->getID());
 
@@ -1012,6 +1107,103 @@ TEST(SharedNetwork6Test, getPreferredSubnet) {
     Subnet6Ptr subnet4(new Subnet6(IOAddress("3000:1::"), 64, 10, 20, 30,
                                    40, SubnetID(4)));
 
+    // Associate first two subnets with classes.
+    subnet1->allowClientClass("class1");
+    subnet2->allowClientClass("class1");
+
+    std::vector<Subnet6Ptr> subnets;
+    subnets.push_back(subnet1);
+    subnets.push_back(subnet2);
+    subnets.push_back(subnet3);
+    subnets.push_back(subnet4);
+
+    // Subnets have unique IDs so they should successfully be added to the
+    // network.
+    for (auto i = 0; i < subnets.size(); ++i) {
+        ASSERT_NO_THROW(network->add(subnets[i]))
+            << "failed to add subnet with id " << subnets[i]->getID()
+            << " to shared network";
+    }
+
+    Subnet6Ptr preferred;
+
+    // Initially, for every subnet we should get the same subnet as the preferred
+    // one, because none of them have been used.
+    for (auto i = 0; i < subnets.size(); ++i) {
+        preferred = network->getPreferredSubnet(subnets[i], Lease::TYPE_NA);
+        EXPECT_EQ(subnets[i]->getID(), preferred->getID());
+        preferred = network->getPreferredSubnet(subnets[i], Lease::TYPE_TA);
+        EXPECT_EQ(subnets[i]->getID(), preferred->getID());
+        preferred = network->getPreferredSubnet(subnets[i], Lease::TYPE_PD);
+        EXPECT_EQ(subnets[i]->getID(), preferred->getID());
+    }
+
+    // Allocating an address from subnet2 updates the last allocated timestamp
+    // for this subnet, which makes this subnet preferred over subnet1.
+    subnet2->setLastAllocated(Lease::TYPE_NA, IOAddress("2001:db8:1:2::"));
+    preferred = network->getPreferredSubnet(subnet1, Lease::TYPE_NA);
+    EXPECT_EQ(subnet2->getID(), preferred->getID());
+
+    // If selected is subnet2, the same is returned.
+    preferred = network->getPreferredSubnet(subnet2, Lease::TYPE_NA);
+    EXPECT_EQ(subnet2->getID(), preferred->getID());
+
+    // The preferred subnet is dependent on the lease type. For the PD
+    // we should get the same subnet as selected.
+    preferred = network->getPreferredSubnet(subnet1, Lease::TYPE_PD);
+    EXPECT_EQ(subnet1->getID(), preferred->getID());
+
+    // Although, if we pick a prefix from the subnet2, we should get the
+    // subnet2 as preferred instead.
+    subnet2->setLastAllocated(Lease::TYPE_PD, IOAddress("3000:1234::"));
+    preferred = network->getPreferredSubnet(subnet1, Lease::TYPE_PD);
+    EXPECT_EQ(subnet2->getID(), preferred->getID());
+
+    // Even though the subnet1 has been most recently used, the preferred
+    // subnet is subnet3 in this case, because of the client class
+    // mismatch.
+    preferred = network->getPreferredSubnet(subnet3, Lease::TYPE_NA);
+    EXPECT_EQ(subnet3->getID(), preferred->getID());
+
+    // Same for subnet4.
+    preferred = network->getPreferredSubnet(subnet4, Lease::TYPE_NA);
+    EXPECT_EQ(subnet4->getID(), preferred->getID());
+
+    // Allocate an address from the subnet3. This makes it preferred to
+    // subnet4.
+    subnet3->setLastAllocated(Lease::TYPE_NA, IOAddress("2001:db8:2:1234::"));
+
+    // If the selected is subnet1, the preferred subnet is subnet2, because
+    // it has the same set of classes as subnet1. The subnet3 can't be
+    // preferred here because of the client class mismatch.
+    preferred = network->getPreferredSubnet(subnet1, Lease::TYPE_NA);
+    EXPECT_EQ(subnet2->getID(), preferred->getID());
+
+    // If we select subnet4, the preferred subnet is subnet3 because
+    // it was used more recently.
+    preferred = network->getPreferredSubnet(subnet4, Lease::TYPE_NA);
+    EXPECT_EQ(subnet3->getID(), preferred->getID());
+
+    // Repeat the test for subnet3 being a selected subnet.
+    preferred = network->getPreferredSubnet(subnet3, Lease::TYPE_NA);
+    EXPECT_EQ(subnet3->getID(), preferred->getID());
+}
+
+// This test verifies that preferred subnet is returned based on the timestamp
+// when the subnet was last used and allowed client classes.
+TEST(SharedNetwork6Test, getPreferredSubnetMultiThreading) {
+    MultiThreadingTest mt(true);
+    SharedNetwork6Ptr network(new SharedNetwork6("frog"));
+
+    // Create four subnets.
+    Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 64, 10, 20, 30,
+                                   40, SubnetID(1)));
+    Subnet6Ptr subnet2(new Subnet6(IOAddress("3000::"), 16, 10, 20, 30, 40,
+                                   SubnetID(2)));
+    Subnet6Ptr subnet3(new Subnet6(IOAddress("2001:db8:2::"), 64, 10, 20, 30,
+                                   40, SubnetID(3)));
+    Subnet6Ptr subnet4(new Subnet6(IOAddress("3000:1::"), 64, 10, 20, 30,
+                                   40, SubnetID(4)));
 
     // Associate first two subnets with classes.
     subnet1->allowClientClass("class1");
@@ -1095,36 +1287,6 @@ TEST(SharedNetwork6Test, getPreferredSubnet) {
     EXPECT_EQ(subnet3->getID(), preferred->getID());
 }
 
-// This test verifies that subnetsAllHRGlobal() works as expected.
-TEST(SharedNetwork6Test, subnetsAllHRGlobal) {
-    SharedNetwork6Ptr network(new SharedNetwork6("frog"));
-    Subnet6Ptr bad;
-
-    // Empty shared network is right.
-    ASSERT_NO_THROW(bad = network->subnetsAllHRGlobal());
-    EXPECT_FALSE(bad);
-
-    // Create a subnet and add it to the shared network.
-    Subnet6Ptr subnet(new Subnet6(IOAddress("2001:db8:1::"), 64, 10, 20, 30,
-                                  40, SubnetID(1)));
-    ASSERT_NO_THROW(network->add(subnet));
-
-    // Default host reservation mode is ALL.
-    bad.reset();
-    ASSERT_NO_THROW(bad = network->subnetsAllHRGlobal());
-    ASSERT_TRUE(bad);
-    EXPECT_EQ(1, bad->getID());
-    EXPECT_EQ("2001:db8:1::/64", bad->toText());
-
-    // Set the HR mode to global.
-    subnet->setHostReservationMode(Network::HR_GLOBAL);
-
-    // Now the shared network is all global.
-    bad.reset();
-    ASSERT_NO_THROW(bad = network->subnetsAllHRGlobal());
-    EXPECT_FALSE(bad);
-}
-
 // This test verifies operations on the network's relay list
 TEST(SharedNetwork6Test, relayInfoList) {
     SharedNetwork6Ptr network(new SharedNetwork6("frog"));
@@ -1132,7 +1294,7 @@ TEST(SharedNetwork6Test, relayInfoList) {
     EXPECT_FALSE(network->hasRelays());
     EXPECT_FALSE(network->hasRelayAddress(IOAddress("2001:db8:2::1")));
 
-    // Add realy addresses to the network.
+    // Add relay addresses to the network.
     network->addRelayAddress(IOAddress("2001:db8:2::1"));
     network->addRelayAddress(IOAddress("2001:db8:2::2"));
     network->addRelayAddress(IOAddress("2001:db8:2::3"));
@@ -1164,7 +1326,17 @@ TEST(SharedNetwork6Test, unparse) {
     network->addRelayAddress(IOAddress("2001:db8:1::8"));
 
     network->setRapidCommit(true);
-    network->setHostReservationMode(Network::HR_ALL);
+    network->setReservationsGlobal(false);
+    network->setReservationsInSubnet(true);
+    network->setReservationsOutOfPool(false);
+
+    // Include interface-id at shared network level. After unparsing the
+    // network we should only see it at shared network level and not at
+    // the subnet level.
+    std::string iface_id_value = "vlan102";
+    OptionBuffer iface_id_buffer(iface_id_value.begin(), iface_id_value.end());
+    OptionPtr iface_id_opt(new Option(Option::V6, D6O_INTERFACE_ID, iface_id_buffer));
+    network->setInterfaceId(iface_id_opt);
 
     // Add several subnets.
     Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 64, 10, 20, 30,
@@ -1173,11 +1345,21 @@ TEST(SharedNetwork6Test, unparse) {
                                    SubnetID(2)));
     subnet2->addRelayAddress(IOAddress("2001:db8:1::8"));
 
+    // Set subnet specific interface-id for subnet2. This is to ensure that
+    // the subnet specific value is not overridden by shared network specific
+    // value.
+    std::string subnet_interface_id_value = "vlan222";
+    OptionBuffer subnet_iface_id_buffer(subnet_interface_id_value.begin(),
+                                        subnet_interface_id_value.end());
+    OptionPtr subnet_iface_id_opt(new Option(Option::V6, D6O_INTERFACE_ID, subnet_iface_id_buffer));
+    subnet2->setInterfaceId(subnet_iface_id_opt);
+
     network->add(subnet1);
     network->add(subnet2);
 
     std::string expected = "{\n"
         "    \"interface\": \"eth1\",\n"
+        "    \"interface-id\": \"vlan102\",\n"
         "    \"name\": \"frog\",\n"
         "    \"option-data\": [ ],\n"
         "    \"preferred-lifetime\": 200,\n"
@@ -1188,7 +1370,9 @@ TEST(SharedNetwork6Test, unparse) {
         "    },\n"
         "    \"renew-timer\": 100,\n"
         "    \"require-client-classes\": [ \"foo\" ],\n"
-        "    \"reservation-mode\": \"all\","
+        "    \"reservations-global\": false,\n"
+        "    \"reservations-in-subnet\": true,\n"
+        "    \"reservations-out-of-pool\": false,\n"
         "    \"subnet6\": [\n"
         "      {\n"
         "        \"id\": 1,\n"
@@ -1206,6 +1390,7 @@ TEST(SharedNetwork6Test, unparse) {
         "      },\n"
         "      {\n"
         "        \"id\": 2,\n"
+        "        \"interface-id\": \"vlan222\",\n"
         "        \"option-data\": [ ],\n"
         "        \"pd-pools\": [ ],\n"
         "        \"pools\": [ ],\n"
@@ -1320,6 +1505,5 @@ TEST(SharedNetworkFetcherTest, getSharedNetwork6ByName) {
     ASSERT_TRUE(network);
     EXPECT_EQ("network2", network->getName());
 }
-
 
 } // end of anonymous namespace

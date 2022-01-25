@@ -1,7 +1,7 @@
 # Kea Contributor's Guide
 
 So you found a bug in Kea or plan to develop an extension and want to send us a patch? Great! This
-page will explain how to contribute your changes smoothly.
+document will explain how to contribute your changes smoothly.
 
 Here's a quick list of how to contribute a patch:
 
@@ -21,7 +21,61 @@ Here's a quick list of how to contribute a patch:
    to the issue and will review your code. Please make sure you respond to comments. It's likely
    you'll be asked to update the code.
 
-For a much more detailed description with details, see the text below.
+For a much more detailed description with details, see the sections below.
+
+## Ideas for beginners
+
+If you're not an experienced C++ programmer, you can still help Kea in many ways. To help newcomers get
+involved in the project, we try to mark easy tickets with `beginner` label. Examples of such tasks may be
+elimination of compilation warnings, adding or fixing logging messages, improving the build
+system to not leave unnecessary files, conduct some experiments and improve documentation. You can see the
+list of all tickets with that label [here](https://gitlab.isc.org/isc-projects/kea/-/issues?scope=all&utf8=%E2%9C%93&state=opened&label_name[]=beginner).
+
+Don't be discouraged if a ticket that looks interesting to you is not marked for beginners. It may require
+a bit of DHCP protocol or C++ programming knowledge, but they're definitely all doable. If in doubt, ask on
+[kea-dev](https://lists.isc.org/mailman/listinfo/kea-dev) list for suggestions or guidance.
+
+## A bit of a legal warning
+
+With the modern open source movement, it is very easy to contribute patches and people often don't think
+about the legal implications. Is the code you're about to contribute really yours? If you work
+for a company and you developed it during your work hours, it's likely to be owned by the company you work
+for. Are they OK with you contributing this? Are they OK with the fact that this will be open source and other
+users and companies, even possibly a competitor, may use it?
+
+Kea adopted Developer Certificate of Origin, which is a nice half a page document by Linux foundation. You can
+read it on [developercertificate.org page](https://developercertificate.org/). By contributing your patch, you confirm that you follow
+and agree with DCO.
+
+Here's the text:
+
+```
+Developer's Certificate of Origin 1.1
+
+By making a contribution to this project, I certify that:
+
+(a) The contribution was created in whole or in part by me and I
+    have the right to submit it under the open source license
+    indicated in the file; or
+
+(b) The contribution is based upon previous work that, to the best
+    of my knowledge, is covered under an appropriate open source
+    license and I have the right under that license to submit that
+    work with modifications, whether created in whole or in part
+    by me, under the same open source license (unless I am
+    permitted to submit under a different license), as indicated
+    in the file; or
+
+(c) The contribution was provided directly to me by some other
+    person who certified (a), (b) or (c) and I have not modified
+    it.
+
+(d) I understand and agree that this project and the contribution
+    are public and that a record of the contribution (including all
+    personal information I submit with it, including my sign-off) is
+    maintained indefinitely and may be redistributed consistent with
+    this project or the open source license(s) involved.
+```
 
 ## Writing a patch
 
@@ -38,9 +92,10 @@ compiles. This may seem obvious, but there's more to it. You have surely checked
 your system, but Kea is a portable software. Besides Linux, it is compiled and used on relatively
 uncommon systems like OpenBSD. Will your code compile and work there? What about endianness? It is
 likely that you used a regular x86 architecture machine to write your patch, but the software is
-expected to run on many other architectures. You may take a look at [system specific build
-notes](https://kb.isc.org/docs/installing-kea). For a complete list of systems we build on, you may
-take a look at the [Jenkins build farm](https://jenkins.isc.org/).
+expected to run on many other architectures, such as arm64. You may take a look at [system specific build
+notes](https://kb.isc.org/docs/installing-kea).
+
+### Coding guidelines
 
 Does your patch conform to [Kea coding
 guidelines](https://gitlab.isc.org/isc-projects/kea/wikis/coding-guidelines)?  You can submit a
@@ -48,6 +103,39 @@ patch that does not adhere to them, but that will reduce its chances of being ac
 deviations are minor, one of the Kea engineers who does the review will likely fix the issues.
 However, if there are lots of issues, the reviewer may simply reject the patch and ask you to fix it
 before re-submitting.
+
+Placed in the root of the repository are files that formally describe the coding
+guidelines above as close as possible. They are `.clang-format` and
+`.uncrustify.cfg` used by `clang-format` and `uncrustify` respectively. If you
+want to format code automatically, you will need to have at least one of these
+tools installed. Since by default, these tools look for the closest style file
+located in one of the parent directories or, otherwise, in a default location,
+there are a couple of helpful scripts i.e. `./tools/clang-format.sh` and
+`./tools/uncrustify.sh` to assure you that the Kea-owned file is used. They
+accept any number of customized parameters that would be passed to the
+underlying tool followed by any number of files and/or directories. Passing
+directories will have all non-generated C++ files under it formatted.
+
+IDEs often offer support for code formatting tools. For example, in Visual
+Studio Code, you may install `Clang-Format` and `crustless` through the Command
+Palette (`Ctrl + Shift + P` by default), `Extensions: Install Extensions`.
+Then open a source file, select code that you want formatted, open the Command
+Palette, and choose `Format Selection`. You might go through an onboarding step
+where you choose the formatter in the case you have both installed, but that
+should be it.
+
+When using these tools, it can be tempting to format entire files at once. In
+the interest of preserving git history as much as possible, it is recommended
+that you only format code that you have added or changed. This is much easier
+done in an IDE, but as long as the tool supports it, it can be done using the
+provided scripts e.g.:
+
+```bash
+./tools/clang-format.sh --lines=13:37 ./src/lib/dhcpsrv/alloc_engine.cc
+```
+
+Uncrustify does not seem to have a line-range-limiting option at the time of
+this writing.
 
 ## Running unit-tests
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,11 +6,12 @@
 
 #include <config.h>
 
-#include <yang/adaptor_option.h>
 #include <dhcp/dhcp4.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/option_data_types.h>
 #include <dhcp/option_space.h>
+#include <testutils/gtest_utils.h>
+#include <yang/adaptor_option.h>
 
 #include <gtest/gtest.h>
 
@@ -27,7 +28,7 @@ TEST(AdaptorOptionTest, setSpaceNoSpace) {
     string config = "{\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorOption::setSpace(json, "foo"));
     EXPECT_FALSE(copied->equals(*json));
@@ -43,7 +44,7 @@ TEST(AdaptorOptionTest, setSpace) {
         " \"space\": \"dhcp4\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     EXPECT_NO_THROW(AdaptorOption::setSpace(json, "foo"));
     EXPECT_TRUE(copied->equals(*json));
@@ -55,7 +56,7 @@ TEST(AdaptorOptionTest, checkType) {
         " \"type\": \"string\"\n"
         "}";
     ConstElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     EXPECT_NO_THROW(AdaptorOption::checkType(json));
 }
 
@@ -64,7 +65,7 @@ TEST(AdaptorOptionTest, checkTypeNoType) {
     string config = "{\n"
         "}";
     ConstElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     EXPECT_THROW(AdaptorOption::checkType(json), MissingKey);
 }
 
@@ -74,7 +75,7 @@ TEST(AdaptorOptionTest, checkCode) {
         " \"code\": 123\n"
         "}";
     ConstElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     EXPECT_NO_THROW(AdaptorOption::checkCode(json));
 }
 
@@ -83,7 +84,7 @@ TEST(AdaptorOptionTest, checkCodeNoCode) {
     string config = "{\n"
         "}";
     ConstElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     EXPECT_THROW(AdaptorOption::checkCode(json), MissingKey);
 }
 
@@ -95,9 +96,9 @@ TEST(AdaptorOptionTest, collect) {
         " \"space\": \"bar\"\n"
         "}";
     ConstElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     OptionCodes codes;
-    ASSERT_NO_THROW(AdaptorOption::collect(json, codes));
+    ASSERT_NO_THROW_LOG(AdaptorOption::collect(json, codes));
     EXPECT_EQ(1, codes.size());
     EXPECT_EQ(123, codes["bar@foo"]);
     EXPECT_THROW(codes.at("foo@bar"), out_of_range);
@@ -111,9 +112,9 @@ TEST(AdaptorOptionTest, collectKnown) {
         " \"space\": \"bar\"\n"
         "}";
     ConstElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     OptionCodes codes = { { "bar@foo", 111 } };
-    ASSERT_NO_THROW(AdaptorOption::collect(json, codes));
+    ASSERT_NO_THROW_LOG(AdaptorOption::collect(json, codes));
     EXPECT_EQ(1, codes.size());
     EXPECT_EQ(111, codes["bar@foo"]);
 }
@@ -126,7 +127,7 @@ TEST(AdaptorOptionTest, setCodeNoCode) {
         " \"space\": \"bar\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     OptionCodes codes = { { "bar@foo", 123 } };
     EXPECT_NO_THROW(AdaptorOption::setCode(json, codes));
@@ -143,7 +144,7 @@ TEST(AdaptorOptionTest, setCode) {
         " \"code\": \"dhcp4\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     ConstElementPtr copied = copy(json);
     OptionCodes codes;
     EXPECT_NO_THROW(AdaptorOption::setCode(json, codes));
@@ -156,7 +157,7 @@ TEST(AdaptorOptionTest, setCodeNoName) {
         " \"space\": \"bar\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     OptionCodes codes;
     EXPECT_THROW(AdaptorOption::setCode(json, codes), MissingKey);
 }
@@ -171,7 +172,7 @@ TEST(AdaptorOptionTest, setCodeNotInMap) {
         " \"space\": \"bar\"\n"
         "}";
     ElementPtr json;
-    ASSERT_NO_THROW(json = Element::fromJSON(config));
+    ASSERT_NO_THROW_LOG(json = Element::fromJSON(config));
     OptionCodes codes;
     EXPECT_THROW(AdaptorOption::setCode(json, codes), MissingKey);
 }
@@ -185,15 +186,15 @@ public:
 // Verifies that initCodesInternal works as expected.
 TEST(AdaptorOptionTest, initCodesInternal) {
     const OptionDefParams DEFS[] = {
-        { "subnet-mask", DHO_SUBNET_MASK, OPT_IPV4_ADDRESS_TYPE,
-          false, 0, 0, "" },
-        { "time-offset", DHO_TIME_OFFSET, OPT_INT32_TYPE,
+        { "subnet-mask", DHO_SUBNET_MASK, DHCP4_OPTION_SPACE,
+          OPT_IPV4_ADDRESS_TYPE, false, 0, 0, "" },
+        { "time-offset", DHO_TIME_OFFSET, DHCP4_OPTION_SPACE, OPT_INT32_TYPE,
           false, 0, 0, "" }
     };
     const size_t DEFS_SIZE = sizeof(DEFS) / sizeof(DEFS[0]);
     OptionCodes codes;
-    ASSERT_NO_THROW(TestAdaptorOption::initCodesInternal(codes,
-                                                         "dhcp4",
+    ASSERT_NO_THROW_LOG(TestAdaptorOption::initCodesInternal(codes,
+                                                         DHCP4_OPTION_SPACE,
                                                          DEFS,
                                                          DEFS_SIZE));
     ASSERT_EQ(2, codes.size());
@@ -204,7 +205,7 @@ TEST(AdaptorOptionTest, initCodesInternal) {
 // Verifies that initCodes works as expected with DHCPv4.
 TEST(AdaptorOptionTest, initCodes4) {
     OptionCodes codes;
-    ASSERT_NO_THROW(AdaptorOption::initCodes(codes, DHCP4_OPTION_SPACE));
+    ASSERT_NO_THROW_LOG(AdaptorOption::initCodes(codes, DHCP4_OPTION_SPACE));
     EXPECT_EQ(DHO_SUBNET_MASK, codes["dhcp4@subnet-mask"]);
     EXPECT_EQ(DHO_TIME_OFFSET, codes["dhcp4@time-offset"]);
     EXPECT_THROW(codes.at("dhcp6@clientid"), out_of_range);
@@ -220,7 +221,7 @@ TEST(AdaptorOptionTest, initCodes4) {
 // Verifies that initCodes works as expected with DHCPv6.
 TEST(AdaptorOptionTest, initCodes6) {
     OptionCodes codes;
-    ASSERT_NO_THROW(AdaptorOption::initCodes(codes, DHCP6_OPTION_SPACE));
+    ASSERT_NO_THROW_LOG(AdaptorOption::initCodes(codes, DHCP6_OPTION_SPACE));
     EXPECT_EQ(D6O_CLIENTID, codes["dhcp6@clientid"]);
     EXPECT_EQ(D6O_SERVERID, codes["dhcp6@serverid"]);
     EXPECT_THROW(codes.at("dhcp4@subnet-mask"), out_of_range);
@@ -237,4 +238,4 @@ TEST(AdaptorOptionTest, initCodes6) {
     EXPECT_EQ(ISC_V6_4O6_INTERFACE, codes["vendor-2495@4o6-interface"]);
 }
 
-}; // end of anonymous namespace
+} // end of anonymous namespace

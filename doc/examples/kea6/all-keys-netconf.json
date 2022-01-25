@@ -500,7 +500,7 @@
                 // Shared network specific ma xpreferred lifetime.
                 "max-preferred-lifetime": 2500,
 
-                // Boolen flag indicating if the server can respond to
+                // Boolean flag indicating if the server can respond to
                 // a Solicit message including a Rapid Commit option with
                 // the Reply message (See DHCPv6 rapid commit).
                 "rapid-commit": false,
@@ -596,7 +596,7 @@
                                 "excluded-prefix": "2001:db8::",
 
                                 // Excluded prefix (length) from client assignments.
-                                "excluded-prefix-len": 48,
+                                "excluded-prefix-len": 72,
 
                                 // Prefix pool level list of DHCP options.
                                 "option-data": [],
@@ -655,7 +655,7 @@
                         // Subnet specific max referred lifetime.
                         "max-preferred-lifetime": 2500,
 
-                        // Boolen flag indicating if the server can respond to
+                        // Boolean flag indicating if the server can respond to
                         // a Solicit message including a Rapid Commit option with
                         // the Reply message (See DHCPv6 rapid commit).
                         "rapid-commit": false,
@@ -763,8 +763,7 @@
 
         // Configuration control (currently not used, i.e. this syntax
         // is already defined but corresponding feature is not implemented).
-        "config-control":
-        {
+        "config-control": {
             // Only configuration databases entry is defined.
             "config-databases": [
                 {
@@ -784,8 +783,7 @@
         "server-tag": "my DHCPv6 server",
 
         // DHCP queue control parameters.
-        "dhcp-queue-control":
-        {
+        "dhcp-queue-control": {
             // Enable queue is mandatory.
             "enable-queue": true,
 

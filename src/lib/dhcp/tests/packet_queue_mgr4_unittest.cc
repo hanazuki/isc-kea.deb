@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,7 +20,7 @@ using namespace isc::dhcp::test;
 
 /// @brief Convenience function for construction a dhcp-queue-control element map
 ///
-/// @param queue_type logical name of the queue implemenation type
+/// @param queue_type logical name of the queue implementation type
 /// @param capacity maximum queue capacity
 /// @param enable_queue bool value to ascribe to the 'enable-queue' parameter, defaults to true
 data::ElementPtr
@@ -61,7 +61,7 @@ public:
                 std::string queue_type ;
                 try {
                     queue_type = data::SimpleParser::getString(parameters, "queue-type");
-                } catch (std::exception& ex) {
+                } catch (const std::exception& ex) {
                     isc_throw(InvalidQueueParameter,
                               "queue-type missing or invalid: " << ex.what());
                 }
@@ -112,7 +112,7 @@ TEST_F(PacketQueueMgr4Test, defaultQueue) {
                       << default_queue_type_ << "\", \"size\": 0 }");
 }
 
-// Verifies that PQM registry and creation of custome queue implementations.
+// Verifies that PQM registry and creation of custom queue implementations.
 TEST_F(PacketQueueMgr4Test, customQueueType) {
 
     // Verify that we cannot create a queue for a non-existant type

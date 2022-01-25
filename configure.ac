@@ -4,10 +4,9 @@
 AC_PREREQ([2.69])
 
 # For released versions, this is in x.y.z format.
-# For GIT versions, this is x.y.z-git, where x.y.z denotes the software
-# version that was used as a base + changes that were made later, but
-# are not released yet.
-AC_INIT(kea,1.7.5, kea-dev@lists.isc.org)
+# For GIT versions, this is x.y.z-git, where x.y.z denotes the next development
+# version that is worked on and that is to be released.
+AC_INIT(kea,2.0.1, kea-dev@lists.isc.org)
 AC_CONFIG_SRCDIR(README)
 
 # serial-tests is not available in automake version before 1.13, so
@@ -29,8 +28,11 @@ AC_CONFIG_MACRO_DIR([m4macros])
 AC_CANONICAL_HOST
 AC_CANONICAL_BUILD
 
-# Checks for programs.
+# Check for compilers.
 AC_PROG_CXX
+
+# Check for preprocessors.
+AC_PROG_CXXCPP
 
 # Check for exact Kea version.
 AC_MSG_CHECKING(whether this is a tarball or git source)
@@ -41,7 +43,7 @@ else
         KEA_SRCID="tarball"
         AC_MSG_RESULT("tarball")
 fi
-# Export EXTENDED_VERSION to config.h
+# Export KEA_SRCID to config.h
 # This will be either "tarball" or "git abcd".
 # We do not want to put this in a config.h, because it messes up ccache
 # horribly. When building different branches, the commit-id is different
@@ -49,6 +51,16 @@ fi
 # content, ccache can't use cached content and thus has to do full compilation.
 # Now it is in kea_version.h and config.status substitutes it.
 AC_SUBST(KEA_SRCID)
+
+# Check whether the version is a development one (odd minor).
+AC_MSG_CHECKING(whether this is a development or stable version)
+PACKAGE_VERSION_MINOR=`echo $PACKAGE_VERSION | cut -d '.' -f 2`
+PACKAGE_VERSION_TYPE="stable"
+if expr "$PACKAGE_VERSION_MINOR" % 2 = 1; then
+        PACKAGE_VERSION_TYPE="development"
+fi
+# Export PACKAGE_VERSION_TYPE to kea_version.h
+AC_SUBST(PACKAGE_VERSION_TYPE)
 
 # Find a separator for path_replacer
 for sep in "+" "," ";" "&" "__NONE__"; do
@@ -67,12 +79,18 @@ AC_SUBST(SEP)
 # pkg-config can be required.
 AC_PATH_PROG([PKG_CONFIG], [pkg-config])
 
+# check against BusyBox ps not supporting ps -p.
+ps -p 1234 2>&1 > /dev/null | grep 'unrecognized option: p'
+if test $? -eq 0; then
+        AC_MSG_WARN("ps does not support -p. It is likely the BusyBox ps: please install a full ps like procps")
+fi
+
 # Enable low-performing debugging facilities? This option optionally
 # enables some debugging aids that perform slowly and hence aren't built
 # by default.
 AC_ARG_ENABLE([debug],
-  AS_HELP_STRING([--enable-debug],
-    [enable debugging (default is no)]),
+  [AS_HELP_STRING([--enable-debug],
+    [enable debugging (default is no)])],
   [case "${enableval}" in
     yes) debug_enabled=yes ;;
     no)  debug_enabled=no ;;
@@ -156,6 +174,21 @@ AC_COMPILE_IFELSE(
     [Define to 1 if std::is_base_of is available])],
     [AC_MSG_RESULT(no)])
 
+# Check if system and steady clocks use the same duration type.
+AC_MSG_CHECKING([for different std::chrono::duration types])
+AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM(
+        [#include <chrono>
+        #include <type_traits>]
+        [static_assert(!std::is_same<
+                           std::chrono::system_clock::duration,
+                           std::chrono::steady_clock::duration
+                                    >::value, "");])],
+    [AC_MSG_RESULT(yes)],
+    [AC_MSG_RESULT(no)
+    AC_DEFINE([CHRONO_SAME_DURATION], [1],
+    [Define to 1 if system and steady clocks use the same duration type])])
+
 dnl Determine if we are using GNU sed
 GNU_SED=no
 $SED --version 2> /dev/null | grep GNU > /dev/null 2>&1
@@ -233,6 +266,23 @@ CXX_VERSION=`$CXX --version 2> /dev/null | head -1`
 KEA_CXXFLAGS="$KEA_CXXFLAGS -Qunused-arguments"
 fi
 
+# Comparison function based on the sort command that works with decimal numbers
+# in a portable manner to the detriment of expr, test and most other commands.
+less_than() {
+    # Equal means not less than.
+    if test "${1}" = "${2}"; then
+        return 1
+    fi
+
+    # Sort numerically, check the first item against ${1}.
+    if test "$(printf '%s\n%s\n' "${1}" "${2}" | sort -V | head -n 1)" = "${1}"; then
+        return 0
+    fi
+
+    # ${2} is smaller than ${1}.
+    return 1
+}
+
 # gcc/clang specific settings:
 if test "X$GXX" = "Xyes"; then
 CXX_VERSION=`$CXX --version 2> /dev/null | head -1`
@@ -240,14 +290,14 @@ KEA_CXXFLAGS="$KEA_CXXFLAGS -Wall -Wextra -Wnon-virtual-dtor -Wwrite-strings -Wo
 # gcc 4.4 would emit warnings about breaking strict aliasing rules.
 # See https://gcc.gnu.org/bugzilla/show_bug.cgi?id=41874
 CXX_DUMP_VERSION=`$CXX -dumpversion | cut -f1-2 -d.`
-if expr "$CXX_DUMP_VERSION" \< "4.5" > /dev/null; then
+if less_than "$CXX_DUMP_VERSION" "4.5"; then
        WARNING_GCC_44_STRICT_ALIASING_CFLAG="-fno-strict-aliasing"
 fi
 AC_SUBST(WARNING_GCC_44_STRICT_ALIASING_CFLAG)
-CPPP="$CPP"
+CPPP="$CXXCPP"
 # gcc 5 preprocessor requires -P for checking its output
-if expr "$CXX_DUMP_VERSION" \> "5" > /dev/null; then
-       CPPP="$CPP -P"
+if less_than "5" "$CXX_DUMP_VERSION"; then
+       CPPP="$CPPP -P"
 fi
 
 case "$host" in
@@ -265,6 +315,14 @@ case "$host" in
 esac
 KEA_CXXFLAGS="$KEA_CXXFLAGS $MULTITHREADING_FLAG"
 
+dumpmachine=`$CXX -dumpmachine`
+case "$dumpmachine" in
+*-musl)
+        AC_MSG_WARN("Detected musl libc: musl dlclose() is a noop")
+        AC_DEFINE([LIBC_MUSL], [1], [Define to 1 if libc is musl])
+        ;;
+esac
+
 # Disable -Werror by default. Only use it if specifically enabled.
 # The usage of this flag is:
 #
@@ -281,7 +339,7 @@ KEA_CXXFLAGS="$KEA_CXXFLAGS $MULTITHREADING_FLAG"
 
 werror_extras=
 AC_ARG_WITH(werror,
-    AC_HELP_STRING([--with-werror], [Compile using -Werror (default=no)]),
+    AS_HELP_STRING([--with-werror],[Compile using -Werror (default=no)]),
     [
      case "${withval}" in
          yes) with_werror=1 ;;
@@ -302,12 +360,16 @@ if test $with_werror = 1; then
    AC_MSG_CHECKING(for in-TU anonymous namespace breakage)
    # We use struct, not class, here, because some compilers complain about
    # "unused private members", causing a false positive.
-   AC_TRY_COMPILE([namespace { struct Foo {}; }
-   namespace isc {struct Bar {Foo foo_;};} ],,
-        [AC_MSG_RESULT(no)
-         werror_ok=1
-         KEA_CXXFLAGS="$KEA_CXXFLAGS -Werror"],
-        [AC_MSG_RESULT(yes)])
+   AC_COMPILE_IFELSE(
+    [AC_LANG_PROGRAM([[
+      namespace { struct Foo {}; }
+      namespace isc { struct Bar { Foo foo_; }; }
+    ]], [[]])],
+    [AC_MSG_RESULT(no)
+     werror_ok=1
+     KEA_CXXFLAGS="$KEA_CXXFLAGS -Werror"],
+    [AC_MSG_RESULT(yes)]
+   )
    CXXFLAGS="$CXXFLAGS_SAVED"
 fi
 
@@ -340,8 +402,8 @@ fi                              dnl GXX = yes
 # allow building programs with static link.  we need to make it selective
 # because loadable modules cannot be statically linked.
 AC_ARG_ENABLE([static-link],
-AC_HELP_STRING([--enable-static-link],
-  [build programs with static link [[default=no]]]),
+  [AS_HELP_STRING([--enable-static-link],
+    [build programs with static link [[default=no]]])],
   [enable_static_link=yes], [enable_static_link=no])
 AM_CONDITIONAL(USE_STATIC_LINK, test $enable_static_link = yes)
 AM_COND_IF([USE_STATIC_LINK], [AC_DEFINE([USE_STATIC_LINK], [1], [Was Kea statically linked?])])
@@ -377,17 +439,20 @@ case "$host" in
         # In OS X 10.9 (and possibly any future versions?) pthread_cond_destroy
         # doesn't work as documented, which makes some of unit tests fail.
         AC_MSG_CHECKING([OS X versions where destroying locked locks do not fail])
-        AC_TRY_COMPILE(
-        [#include <Availability.h>],
-        [#ifdef __MAC_OS_X_VERSION_MIN_REQUIRED
-         #if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
-         #error " OS X >= 10.9"
-         #endif
-         #endif
-         return 1;],
-        [AC_MSG_RESULT([OS X < 10.9])],
-        [AC_MSG_RESULT([OS X >= 10.9])
-         kea_undefined_pthread_behavior=yes])
+        AC_COMPILE_IFELSE(
+         [AC_LANG_PROGRAM([[
+          #include <Availability.h>
+         ]], [[
+          #ifdef __MAC_OS_X_VERSION_MIN_REQUIRED
+          #if __MAC_OS_X_VERSION_MIN_REQUIRED >= 1090
+          #error " OS X >= 10.9"
+          #endif
+          #endif
+          return 1;
+         ]])],
+         [AC_MSG_RESULT([OS X < 10.9])],
+         [AC_MSG_RESULT([OS X >= 10.9])
+          kea_undefined_pthread_behavior=yes])
         ;;
 *-freebsd*)
         # On FreeBSD10.1 pthread_cond_destroy doesn't work as documented, which
@@ -422,9 +487,9 @@ case "$host" in
 esac
 
 # Made perfdhcp optional.
-AC_ARG_ENABLE(perfdhcp, [AC_HELP_STRING([--enable-perfdhcp],
-  [enable perfdhcp, a DHCP benchmarking tool [default=no]])],
-  enable_perfdhcp=$enableval, enable_perfdhcp=no)
+AC_ARG_ENABLE(perfdhcp, [AS_HELP_STRING([--enable-perfdhcp],
+              [enable perfdhcp, a DHCP benchmarking tool [default=no]])],
+              enable_perfdhcp=$enableval, enable_perfdhcp=no)
 
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG=
 if test "x$enable_perfdhcp" != xno ; then
@@ -468,7 +533,7 @@ AC_SEARCH_LIBS(dlsym, [dl])
 # Checks for typedefs, structures, and compiler characteristics.
 AC_HEADER_STDBOOL
 AC_TYPE_SIZE_T
-
+AC_TYPE_SSIZE_T
 
 # Detect OS type (it may be used to do OS-specific things, e.g.
 # interface detection in DHCP)
@@ -531,16 +596,23 @@ AM_CONDITIONAL(OS_OPENBSD, test $BSD_TYPE = OpenBSD)
 
 
 AC_MSG_CHECKING(for sa_len in struct sockaddr)
-AC_TRY_COMPILE([
-#include <sys/types.h>
-#include <sys/socket.h>],
-[struct sockaddr sa; sa.sa_len = 0; return (0);],
-        [AC_MSG_RESULT(yes)
-        AC_DEFINE(HAVE_SA_LEN, 1, [Define to 1 if sockaddr has a sa_len member, and corresponding sin_len and sun_len])],
-        AC_MSG_RESULT(no))
+AC_COMPILE_IFELSE(
+  [AC_LANG_PROGRAM([[
+    #include <sys/types.h>
+    #include <sys/socket.h>
+  ]], [[
+    struct sockaddr sa;
+    sa.sa_len = 0;
+    return (0);
+  ]])],
+  [AC_MSG_RESULT(yes)
+   AC_DEFINE(HAVE_SA_LEN, 1, [Define to 1 if sockaddr has a sa_len member, and corresponding sin_len and sun_len])],
+  [AC_MSG_RESULT(no)]
+)
 
-AC_MSG_CHECKING(for usuable C++11 regex)
-AC_TRY_RUN([
+usable_regex=
+AC_MSG_CHECKING(for usable C++11 regex)
+AC_RUN_IFELSE([AC_LANG_SOURCE([[
 #include <regex>
 #include <iostream>
 int main() {
@@ -548,10 +620,18 @@ int main() {
   const std::string string = "This should match!";
   const auto result = std::regex_search(string, regex);
   return result ? EXIT_SUCCESS : EXIT_FAILURE;
-}],
+}]])],
         [AC_MSG_RESULT(yes)
-        AC_DEFINE(USE_REGEX, 1, [Define to 1 if C++11 regex is usable])],
-        AC_MSG_RESULT(no))
+         usable_regex="yes"],
+        [AC_MSG_RESULT(no)
+         usable_regex="no"],
+        [AC_MSG_RESULT(cross compiling)])
+# When cross-compiling we don't have any way to check if regex is
+# usable or not.
+# Let's be optimistic and assume it is by testing only the negative case.
+if test "x$usable_regex" != "xno" ; then
+        AC_DEFINE(USE_REGEX, 1, [Define to 1 if C++11 regex is usable])
+fi
 
 # Run the gtest detection routines. This supports --with-gtest and --with-gtest-source
 # parameters. If specified, those will set the HAVE_GTEST, HAVE_GTEST_SOURCE,
@@ -585,9 +665,9 @@ defaultdirs="/usr /usr/local /usr/pkg /opt /opt/local"
 # the software is not built with MySQL support enabled.
 mysql_config="no"
 AC_ARG_WITH([mysql],
-  AC_HELP_STRING([--with-mysql=PATH],
+  AS_HELP_STRING([--with-mysql=PATH],
     [path to the MySQL 'mysql_config' script (MySQL is used for the DHCP database)]),
-    [mysql_config="$withval"])
+  [mysql_config="$withval"])
 
 deprec_msg="no"
 AC_ARG_WITH([dhcp-mysql],,
@@ -665,9 +745,9 @@ AM_CONDITIONAL(HAVE_MYSQL, test "$MYSQL_CONFIG" != "")
 
 pg_config="no"
 AC_ARG_WITH([pgsql],
-  AC_HELP_STRING([--with-pgsql=PATH],
+  AS_HELP_STRING([--with-pgsql=PATH],
     [path to the PostgreSQL 'pg_config' script]),
-    [pg_config="$withval"])
+  [pg_config="$withval"])
 
 deprec_msg="no"
 AC_ARG_WITH([dhcp-pgsql],,
@@ -737,8 +817,8 @@ AM_CONDITIONAL(HAVE_PGSQL, test "$PG_CONFIG" != "")
 
 # allow building kea programs with static link to cassandra cpp-driver.
 AC_ARG_ENABLE([cql-static-lib],
-AS_HELP_STRING([--enable-cql-static-lib],
-    [build programs with cassandra cpp driver static library [[default=no]]]),
+  [AS_HELP_STRING([--enable-cql-static-lib],
+    [build programs with cassandra cpp driver static library [[default=no]]])],
     [enable_cql_static_lib=yes], [enable_cql_static_lib=no])
 AM_CONDITIONAL(USE_CQL_STATIC_LIB, test "$enable_cql_static_lib" = yes)
 #AC_DEFINE USE_CQL_STATIC_LIB? (unused)
@@ -750,9 +830,9 @@ fi
 
 cql_config="no"
 AC_ARG_WITH([cql],
-  AC_HELP_STRING([--with-cql=PATH],
-    [path to pkg-config or the Cassandra CQL 'cql_config' script]),
-    [cql_config="$withval"])
+  AS_HELP_STRING([--with-cql=PATH],
+    [path to pkg-config or the Cassandra CQL 'cql_config' script (deprecated)]),
+  [cql_config="$withval"])
 
 if test "${cql_config}" = "yes" ; then
     CQL_CONFIG="$PKG_CONFIG"
@@ -805,123 +885,16 @@ fi
 # ... and at the shell level, so Makefile.am can take action depending on this.
 AM_CONDITIONAL(HAVE_CQL, test "$CQL_CONFIG" != "")
 
-DISTCHECK_SYSREPO_CONFIGURE_FLAG=
-sysrepo_config="no"
-AC_ARG_WITH([sysrepo],
-  AC_HELP_STRING([--with-sysrepo=PATH],
-    [path to pkg-config or the Sysrepo 'sysrepo_config' script]),
-    [sysrepo_config="$withval"])
-
-if test "${sysrepo_config}" = "yes" ; then
-    if test "$PKG_CONFIG" = ""; then
-        AC_MSG_ERROR([--with-sysrepo specified without any parameter and pkg-config was not found. Either use --with-sysrepo=path or install pkg-config])
-    fi
-    SYSREPO_CONFIG="$PKG_CONFIG"
-    DISTCHECK_SYSREPO_CONFIGURE_FLAG="-with-sysrepo=${sysrepo_config}"
-elif test "${sysrepo_config}" != "no" ; then
-    SYSREPO_CONFIG="${sysrepo_config}"
-    DISTCHECK_SYSREPO_CONFIGURE_FLAG="-with-sysrepo=${sysrepo_config}"
-fi
-AC_SUBST(DISTCHECK_SYSREPO_CONFIGURE_FLAG)
-
-if test "$SYSREPO_CONFIG" != "" ; then
-    if test -d "$SYSREPO_CONFIG" -o ! -x "$SYSREPO_CONFIG" ; then
-        AC_MSG_ERROR([--with-sysrepo should point to a pkg-config or sysrepo_config program])
-    fi
-
-    # Let's get the configuration environment for pure Sysrepo (written in C) first
-    SYSREPO_INCLUDEDIR=`$SYSREPO_CONFIG --cflags-only-I libsysrepo`
-    SYSREPO_CPPFLAGS="$SYSREPO_INCLUDEDIR `$SYSREPO_CONFIG --cflags-only-other libsysrepo`"
-    SYSREPO_LIBS="`$SYSREPO_CONFIG --libs libsysrepo`"
-    SYSREPO_VERSION=`$SYSREPO_CONFIG --modversion libsysrepo`
-    SYSREPO_REPO=`$SYSREPO_CONFIG --variable=SR_REPOSITORY_LOC libsysrepo`
-
-    # Now get the environment for C++ bindings for Sysrepo.
-    SYSREPOCPP_INCLUDEDIR=`$SYSREPO_CONFIG --cflags-only-I libSysrepo-cpp`
-    SYSREPOCPP_CPPFLAGS="$SYSREPO_INCLUDEDIR `$SYSREPO_CONFIG --cflags-only-other libSysrepo-cpp`"
-    SYSREPOCPP_LIBS="`$SYSREPO_CONFIG --libs libSysrepo-cpp`"
-    SYSREPOCPP_VERSION=`$SYSREPO_CONFIG --modversion libSysrepo-cpp`
-
-    # If include paths are equal, there's no need to include both. But if they're different,
-    # we need both.
-    if test "${SYSREPO_INCLUDEDIR}" != "${SYSREPOCPP_INCLUDEDIR}"; then
-       SYSREPO_INCLUDEDIR="${SYSREPO_INCLUDEDIR} ${SYSREPOCPP_INCLUDEDIR}"
-    fi
-
-    if test "${SYSREPO_CPPFLAGS}" != "${SYSREPOCPP_CPPFLAGS}"; then
-       SYSREPO_CPPFLAGS="${SYSREPO_CPPFLAGS} ${SYSREPOCPP_CPPFLAGS}"
-    fi
-
-    if test "${SYSREPO_LIBS}" != "${SYSREPOCPP_LIBS}"; then
-       SYSREPO_LIBS="${SYSREPO_LIBS} ${SYSREPOCPP_LIBS}"
-    fi
-
-    AC_SUBST(SYSREPO_INCLUDEDIR)
-    AC_SUBST(SYSREPO_CPPFLAGS)
-    AC_SUBST(SYSREPO_LIBS)
-    AC_SUBST(SYSREPO_REPO)
-
-    # Check that a simple program using Sysrepo functions can compile and link.
-    CPPFLAGS_SAVED="$CPPFLAGS"
-    LIBS_SAVED="$LIBS"
-
-    CPPFLAGS="$SYSREPO_CPPFLAGS $CPPFLAGS"
-    LIBS="$SYSREPO_LIBS $LIBS"
-
-    AC_LINK_IFELSE(
-            [AC_LANG_PROGRAM([extern "C" {
-                              #include <sysrepo.h>
-                              }],
-                              [sr_conn_ctx_t *connection = NULL;
-                              sr_session_ctx_t *session = NULL;
-                              sr_connect("configure_test", SR_CONN_DEFAULT, &connection);
-                              sr_disconnect(connection);])],
-            [AC_MSG_RESULT([checking for Sysrepo headers and library... yes])],
-            [AC_MSG_RESULT([checking for Sysrepo headers and library... no])
-             AC_MSG_ERROR([Needs Sysrepo library])]
-    )
-
-    AC_LINK_IFELSE(
-        [AC_LANG_PROGRAM(
-            [#include <sysrepo-cpp/Session.hpp>],
-            [sysrepo::Connection("conn-name");])],
-        [AC_LINK_IFELSE(
-            [AC_LANG_PROGRAM(
-                [#include <sysrepo-cpp/Session.hpp>],
-                [auto is_empty = [[]](sysrepo::S_Val v){
-                    return (v->empty()); };
-                ])],
-            [AC_MSG_RESULT([checking for Sysrepo C++ bindings headers and library, new])
-             AC_DEFINE([HAVE_POST_0_7_7_SYSREPO], [1], [Using sysrepo > 0.7.7])],
-            [AC_MSG_RESULT([checking for Sysrepo C++ bindings headers and library, yes])])],
-        [AC_LINK_IFELSE(
-            [AC_LANG_PROGRAM(
-                [#include <sysrepo-cpp/Session.h>],
-                [Connection("conn-name");])],
-            [AC_MSG_RESULT([checking for Sysrepo C++ bindings headers and library... old])
-             AC_DEFINE([HAVE_PRE_0_7_6_SYSREPO], [1], [Using sysrepo < 0.7.6])],
-             [AC_MSG_RESULT([checking for Sysrepo C++ bindings headers and library... no])
-              AC_MSG_ERROR([Needs Sysrepo C++ bindings (unable to find Sysrepo-ccp library. To get it, you need to compile sysrepo with -DGEN_CPP_BINDINGS=ON.)])]
-        )]
-    )
-
-    CPPFLAGS=$CPPFLAGS_SAVED
-    LIBS=$LIBS_SAVED
-
-    # Note that Sysrepo is present in the config.h file
-    AC_DEFINE([HAVE_SYSREPO], [1], [SYSREPO is present])
-fi
-
-# ... and at the shell level, so Makefile.am can take action depending on this.
-AM_CONDITIONAL(HAVE_SYSREPO, test "$SYSREPO_CONFIG" != "")
+# Check for sysrepo.
+AX_SYSREPO
 
 # Check for log4cplus
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG=
 log4cplus_path="yes"
 AC_ARG_WITH([log4cplus],
-  AC_HELP_STRING([--with-log4cplus=PATH],
-    [specify exact directory of log4cplus library and headers]),
-    [log4cplus_path="$withval"])
+            [AS_HELP_STRING([--with-log4cplus[[=PATH]]],
+                            [optional path to the log4cplus installation directory])],
+            [log4cplus_path="$withval"])
 if test "${log4cplus_path}" = "no" ; then
     AC_MSG_ERROR([Need log4cplus])
 elif test "${log4cplus_path}" != "yes" ; then
@@ -955,7 +928,8 @@ CPPFLAGS="$LOG4CPLUS_INCLUDES $CPPFLAGS"
 LIBS_SAVED="$LIBS"
 LIBS="$LOG4CPLUS_LIBS $MULTITHREADING_FLAG $LIBS"
 
-AC_CHECK_HEADERS([log4cplus/logger.h],,AC_MSG_ERROR([Missing required header files.]))
+AC_CHECK_HEADERS([log4cplus/logger.h],,
+                 AC_MSG_ERROR([Missing required header file (logger.h) from the log4cplus package]))
 AC_LINK_IFELSE(
         [AC_LANG_PROGRAM([#include <log4cplus/logger.h>
                          ],
@@ -974,6 +948,7 @@ cat > conftest.cpp << EOF
 AUTOCONF_LOG4CPLUS_VERSION=LOG4CPLUS_VERSION_STR
 EOF
 
+# The tabulation below is NOT an error: PLEASE keep it.
 LOG4CPLUS_VERSION=`$CPPP $CPPFLAGS conftest.cpp | grep '^AUTOCONF_LOG4CPLUS_VERSION=' | $SED -e 's/^AUTOCONF_LOG4CPLUS_VERSION=//' -e 's/[[ 	]]//g' -e 's/"//g' 2> /dev/null`
 if test -z "$LOG4CPLUS_VERSION"; then
   LOG4CPLUS_VERSION="unknown"
@@ -987,7 +962,7 @@ LIBS=$LIBS_SAVED
 # Older log4cplus versions (1.2.0) don't have the initializer.h header that
 # would allow explicit initialization. Newer versions (2.0.4 for sure, possibly
 # older as well) have it and it's recommended to use it. We detect whether
-# it's present or not and do explicit initalization if possible.
+# it's present or not and do explicit initialization if possible.
 CPPFLAGS_SAVED=$CPPFLAGS
 CPPFLAGS="$LOG4CPLUS_INCLUDES $CPPFLAGS"
 LIBS_SAVED="$LIBS"
@@ -1030,6 +1005,8 @@ CPPFLAGS="$CPPFLAGS $CPPFLAGS_BOOST_THREADCONF"
 # Can be required by gtest, boost and perhaps still asio
 AC_CHECK_LIB(pthread, pthread_create,[ LDFLAGS="$LDFLAGS -lpthread" ], [])
 
+# Now that Crypto backend and Boost were done we can address TLS.
+AX_TLS
 
 #
 # Check availability of benchmark.
@@ -1065,9 +1042,11 @@ if test "x$enable_benchmark" = "xyes" ; then
             if test ! -d $BENCHMARK_SOURCE/src; then
                 BENCHMARK_SOURCE=$BENCHMARK_SOURCE/benchmark
             fi
-            AC_CHECK_FILES([$BENCHMARK_SOURCE/src/benchmark.cc],
-                [have_benchmark_source=yes],
-                [AC_MSG_ERROR([no benchmark source at $BENCHMARK_SOURCE])])
+            if test -f $BENCHMARK_SOURCE/src/benchmark.cc; then
+                have_benchmark_source=yes
+            else
+                AC_MSG_ERROR([no benchmark source at $BENCHMARK_SOURCE])
+            fi
         fi
         have_benchmark_source=yes
         BENCHMARK_CPPFLAGS=`cat \${BENCHMARK_SOURCE}/build/src/CMakeFiles/benchmark.dir/flags.make | grep CXX_DEFINES | cut -d "=" -f 2`
@@ -1167,13 +1146,9 @@ if test $enable_gtest != "no"; then
     CPPFLAGS=$CPPFLAGS_SAVED
 fi
 
-#
-# ASIO: we extensively use it as the C++ event management module.
-#
-# Use our 'coroutine' header from ext
-# CPPFLAGS="$CPPFLAGS -I\$(top_srcdir)/ext/coroutine"
+# Provide the ability to include our coroutine header or other headers from ext.
+CPPFLAGS="$CPPFLAGS -I\$(top_srcdir) -I\$(top_builddir)"
 
-#
 # Doesn't seem to be required?
 #CPPFLAGS="$CPPFLAGS -DBOOST_ASIO_HEADER_ONLY"
 #
@@ -1215,8 +1190,9 @@ AC_SUBST(PERL)
 AC_PATH_PROGS(AWK, gawk awk)
 AC_SUBST(AWK)
 
-AC_ARG_ENABLE(generate_messages, [AC_HELP_STRING([--enable-generate-messages],
-  [indicates that the messages files will be regenerated. [default=no]])],
+AC_ARG_ENABLE(generate_messages,
+  [AS_HELP_STRING([--enable-generate-messages],
+    [indicates that the messages files will be regenerated. [default=no]])],
   enable_generate_messages=$enableval, enable_generate_messages=no)
 
 AM_CONDITIONAL([GENERATE_MESSAGES], [test x$enable_generate_messages != xno])
@@ -1228,14 +1204,18 @@ if test "$cross_compiling" = "yes"; then
     fi
 fi
 
-AC_ARG_ENABLE(generate_parser, [AC_HELP_STRING([--enable-generate-parser],
-  [indicates that the parsers will be regenerated. This implies that the
-   bison and flex are required [default=no]])],
-   enable_generate_parser=$enableval, enable_generate_parser=no)
+AC_ARG_ENABLE(generate_parser,
+  [AS_HELP_STRING([--enable-generate-parser],
+    [indicates that the parsers will be regenerated. This implies that the
+     bison and flex are required [default=no]])],
+  enable_generate_parser=$enableval, enable_generate_parser=no)
 
 # Check if flex is available. Flex is not needed for building Kea sources,
-# unless you want to regenerate grammars
-AC_PROG_LEX
+# unless you want to regenerate grammars.
+# Autoconf 2.70 added an option and warns if not provided,
+m4_version_prereq([2.70],
+  [AC_PROG_LEX(noyywrap)],
+  [AC_PROG_LEX])
 
 # Check if bison is available. Bison is not needed for building Kea sources,
 # unless you want to regenerate grammars
@@ -1248,14 +1228,15 @@ if test "x$enable_generate_parser" != "xno"; then
        AC_MSG_ERROR([Flex is required for enable-generate-parser, but was not found])
     fi
 
-    if test "x$YACC" == "x"; then
+    if test "x$YACC" = "x"; then
        AC_MSG_ERROR([Bison is required for enable-generate-parser, but was not found])
     fi
 
-# Ok, let's check if we have at least 3.0.0 version of the bison. The code used
-# to generate parsers is roughly based on bison 3.0 examples.
+# Let's check if we have at least 3.3.0 version of the bison. The
+# api.parser.class is available with 3.2.91, but let's be safe and offer support
+# for minor versions, as opposed to patch versions.
    cat > bisontest.y << EOF
-%require "3.0.0"
+%require "3.3.0"
 %token X
 %%
 %start Y;
@@ -1267,7 +1248,7 @@ EOF
     if test $? -ne 0 ; then
         $YACC -V
         $RM -f bisontest.y bisontest.cc
-        AC_MSG_ERROR("Error with $YACC. Possibly incorrect version? Required at least 3.0.0.")
+        AC_MSG_ERROR("Error with $YACC. Possibly incorrect version? Required at least 3.3.0.")
     fi
     $RM -f bisontest.y bisontest.cc
 fi
@@ -1278,13 +1259,15 @@ AM_CONDITIONAL([GENERATE_PARSER], [test x$enable_generate_parser != xno])
 # It may likely work with earlier versions, but 2.7 was the oldest one we tested
 # it with. We require python only if kea-shell was enabled. It is disabled
 # by default to not introduce hard dependency on python.
-AC_ARG_ENABLE(shell, [AC_HELP_STRING([--enable-shell],
-  [enable kea-shell, a text management client for Control Agent [default=no]])],
+AC_ARG_ENABLE(shell,
+  [AS_HELP_STRING([--enable-shell],
+    [enable kea-shell, a text management client for Control Agent [default=no]])],
   enable_shell=$enableval, enable_shell=no)
 
 
-AC_ARG_ENABLE(generate_docs, [AC_HELP_STRING([--enable-generate-docs],
-  [regenerate documentation using Sphinx [default=no]])],
+AC_ARG_ENABLE(generate_docs,
+  [AS_HELP_STRING([--enable-generate-docs],
+    [regenerate documentation using Sphinx [default=no]])],
   enable_generate_docs=$enableval, enable_generate_docs=no)
 
 
@@ -1300,7 +1283,7 @@ if test "x$enable_shell" != xno -o "x$enable_generate_docs" != xno; then
   AM_PATH_PYTHON([2.7])
 
   AC_ARG_WITH(site-packages,
-           AC_HELP_STRING([--with-site-packages],
+           AS_HELP_STRING([--with-site-packages],
                           [place to install Kea Python module]),
            [pythondir=$withval;
             pkgpythondir=${pythondir}/$PACKAGE_NAME])
@@ -1331,12 +1314,34 @@ AM_CONDITIONAL(KEA_SHELL, test x$enable_shell != xno)
 AC_SUBST(DISTCHECK_KEA_SHELL_CONFIGURE_FLAG)
 AC_SUBST(PKGPYTHONDIR)
 
+# Decide if TLS is supported.
+tls_support=no
+if test "x${CRYPTO_NAME}" = "xOpenSSL"; then
+  tls_support=yes
+fi
+if test "x${CRYPTO_NAME}" = "xBotan" && test "x$BOTAN_BOOST" = "xyes"; then
+  tls_support=yes
+fi
+
+# Decide if the shell TLS test can work.
+### This will be simpler when Python 2 support will be dropped.
+ca_tls_test=no
+if test "x$enable_shell" != "xno"; then
+  major=`echo $PYTHON_VERSION | cut -d '.' -f 1`
+  if test "x$major" = "x3"; then
+    ca_tls_test="$tls_support"
+  else
+    AC_MSG_WARN("python2 kea-shell does not support HTTPS")
+  fi
+fi
+AM_CONDITIONAL(CA_TLS_TEST, test x$ca_tls_test != xno)
+
 AC_ARG_WITH([sphinx],
-  AC_HELP_STRING([--with-sphinx=PATH], [path to sphinx-build tool]),
+  AS_HELP_STRING([--with-sphinx=PATH],[path to sphinx-build tool]),
   [sphinx_path="$withval"])
 
 AC_ARG_WITH([pdflatex],
-  AC_HELP_STRING([--with-pdflatex=PATH], [path to pdflatex tool]),
+  AS_HELP_STRING([--with-pdflatex=PATH],[path to pdflatex tool]),
   [pdflatex_path="$withval"])
 PDFLATEX=no
 
@@ -1372,7 +1377,7 @@ if test "x$enable_generate_docs" != xno ; then
 
   if test -z "$PDFLATEX"; then
     PDFLATEX=no
-  elif test "x$PDFLATEX" == "xno"; then
+  elif test "x$PDFLATEX" = "xno"; then
     AC_MSG_CHECKING([for pdflatex])
     AC_MSG_RESULT([no (disabled)])
   else
@@ -1390,11 +1395,12 @@ if test "x$enable_generate_docs" != xno ; then
     AC_MSG_CHECKING([whether $SPHINXBUILD and $PDFLATEX work])
     ti=`mktemp -d`
     to=`mktemp -d`
+    oldpath=`pwd`
     echo 'hello' > $ti/contents.rst
-    sphinx-build -b latex -C $ti $to > /dev/null 2>&1
-    pushd $to > /dev/null 2>&1
+    $SPHINXBUILD -b latex -C $ti $to > /dev/null 2>&1
+    cd $to > /dev/null 2>&1
     $PDFLATEX -interaction nonstopmode [[pP]]ython.tex > /dev/null 2>&1
-    popd > /dev/null 2>&1
+    cd $oldpath > /dev/null 2>&1
     file $to/[[pP]]ython.pdf | grep PDF > /dev/null 2>&1
     if test $? -ne 0 ; then
       AC_MSG_RESULT([no - disabled building docs in PDF])
@@ -1426,12 +1432,13 @@ AM_CONDITIONAL(HAVE_PDFLATEX, test "x$PDFLATEX" != "xno")
 AM_CONDITIONAL(GENERATE_DOCS, test x$enable_generate_docs != xno)
 
 AC_ARG_ENABLE(install-configurations,
-  [AC_HELP_STRING([--disable-install-configurations],
+  [AS_HELP_STRING([--disable-install-configurations],
   [do not install configuration])], install_configurations=$enableval, install_configurations=yes)
 
 AM_CONDITIONAL(INSTALL_CONFIGURATIONS, test x$install_configurations = xyes || test x$install_configurations = xtrue)
 
-AC_ARG_ENABLE(logger-checks, [AC_HELP_STRING([--enable-logger-checks],
+AC_ARG_ENABLE(logger-checks,
+  [AS_HELP_STRING([--enable-logger-checks],
   [check logger messages [default=no]])], enable_logger_checks=$enableval, enable_logger_checks=no)
 AM_CONDITIONAL(ENABLE_LOGGER_CHECKS, test x$enable_logger_checks != xno)
 AM_COND_IF([ENABLE_LOGGER_CHECKS], [AC_DEFINE([ENABLE_LOGGER_CHECKS], [1], [Check logger messages?])])
@@ -1460,22 +1467,23 @@ if test "x$VALGRIND" != "xno"; then
    found_valgrind="found"
 fi
 
-AC_ARG_ENABLE([fuzzing], [AC_HELP_STRING([--enable-fuzzing],
+AC_ARG_ENABLE([fuzzing],
+  [AS_HELP_STRING([--enable-fuzzing],
   [indicates that the code will be built with AFL (American Fuzzy Lop) support.
    Code built this way is unusable as a regular server. [default=no]])],
-   [enable_fuzzing=$enableval], [enable_fuzzing=no])
+  [enable_fuzzing=$enableval], [enable_fuzzing=no])
 AM_CONDITIONAL([ENABLE_AFL], [test x$enable_fuzzing != xno])
 
 if test "x$enable_fuzzing" != "xno" ; then
     AC_DEFINE([ENABLE_AFL], [1], [AFL fuzzing was enabled.])
     AC_MSG_CHECKING([for AFL enabled compiler])
     AC_COMPILE_IFELSE([AC_LANG_PROGRAM([],
-					  [#ifndef __AFL_COMPILER
-					   #error AFL compiler required
-					   #endif
-					  ])],
-			 [AC_MSG_RESULT([yes])],
-			 [AC_MSG_ERROR([set CXX to afl-clang-fast++ when --enable-fuzzing is used])])
+                                          [#ifndef __AFL_COMPILER
+                                           #error AFL compiler required
+                                           #endif
+                                          ])],
+                         [AC_MSG_RESULT([yes])],
+                         [AC_MSG_ERROR([set CXX to afl-clang-fast++ when --enable-fuzzing is used])])
 fi
 
 
@@ -1488,20 +1496,27 @@ fi
 # to reset internal state of getopt(). Failing to do so will result
 # in unpredictable output from getopt().
 AC_MSG_CHECKING([whether optreset variable is defined in unistd.h])
-AC_TRY_LINK(
-    [#include <unistd.h>],
-    [extern int optreset; optreset=1;],
-    [ AC_MSG_RESULT(yes)
-      var_optreset_exists=yes],
-    [ AC_MSG_RESULT(no)
-      var_optreset_exists=no]
+AC_LINK_IFELSE(
+  [AC_LANG_PROGRAM([[
+    #include <unistd.h>
+  ]], [[
+    extern int optreset;
+    optreset=1;
+  ]])],
+  [AC_MSG_RESULT(yes)
+   var_optreset_exists=yes],
+  [AC_MSG_RESULT(no)
+   var_optreset_exists=no]
 )
 AM_CONDITIONAL(HAVE_OPTRESET, test "x$var_optreset_exists" != "xno")
 AM_COND_IF([HAVE_OPTRESET], [AC_DEFINE([HAVE_OPTRESET], [1], [Check for optreset?])])
 
+# GSS-API (from bind9)
+AX_GSS_API
+
 AC_DEFINE([CONFIG_H_WAS_INCLUDED], [1], [config.h inclusion marker])
 
-# Autoconf 2.70 has runstatedir but is not yet released.
+# Autoconf 2.70 has runstatedir.
 m4_version_prereq([2.70], [], [dnl
     AC_ARG_VAR(runstatedir, [$localstatedir/run for autoconf < 2.70])dnl
     AC_SUBST(runstatedir)dnl
@@ -1515,233 +1530,314 @@ if (echo ${runstatedir} | grep -q localstatedir); then
     runstatedir="$(eval echo ${runstatedir})"
 fi
 
-AC_CONFIG_FILES([Makefile
-                 doc/Makefile
-                 doc/sphinx/Makefile
-                 doc/devel/Makefile
-                 ext/Makefile
-                 ext/gtest/Makefile
-                 ext/coroutine/Makefile
-                 kea_version.h
-                 m4macros/Makefile
-                 src/Makefile
-                 src/bin/Makefile
-                 src/bin/admin/Makefile
-                 src/bin/admin/kea-admin
-                 src/bin/admin/tests/Makefile
-                 src/bin/admin/tests/cql_tests.sh
-                 src/bin/admin/tests/data/Makefile
-                 src/bin/admin/tests/memfile_tests.sh
-                 src/bin/admin/tests/mysql_tests.sh
-                 src/bin/admin/tests/pgsql_tests.sh
-                 src/bin/agent/Makefile
-                 src/bin/agent/tests/Makefile
-                 src/bin/agent/tests/ca_process_tests.sh
-                 src/bin/agent/tests/test_data_files_config.h
-                 src/bin/agent/tests/test_libraries.h
-                 src/bin/d2/Makefile
-                 src/bin/d2/tests/Makefile
-                 src/bin/d2/tests/d2_process_tests.sh
-                 src/bin/d2/tests/test_data_files_config.h
-                 src/bin/dhcp4/Makefile
-                 src/bin/dhcp4/tests/Makefile
-                 src/bin/dhcp4/tests/dhcp4_process_tests.sh
-                 src/bin/dhcp4/tests/marker_file.h
-                 src/bin/dhcp4/tests/test_data_files_config.h
-                 src/bin/dhcp4/tests/test_libraries.h
-                 src/bin/dhcp6/Makefile
-                 src/bin/dhcp6/tests/Makefile
-                 src/bin/dhcp6/tests/dhcp6_process_tests.sh
-                 src/bin/dhcp6/tests/marker_file.h
-                 src/bin/dhcp6/tests/test_data_files_config.h
-                 src/bin/dhcp6/tests/test_libraries.h
-                 src/bin/keactrl/Makefile
-                 src/bin/keactrl/keactrl
-                 src/bin/keactrl/keactrl.conf
-                 src/bin/keactrl/tests/Makefile
-                 src/bin/keactrl/tests/keactrl_tests.sh
-                 src/bin/lfc/Makefile
-                 src/bin/lfc/tests/Makefile
-                 src/bin/netconf/Makefile
-                 src/bin/netconf/tests/Makefile
-                 src/bin/netconf/tests/shtests/Makefile
-                 src/bin/netconf/tests/shtests/netconf_tests.sh
-                 src/bin/netconf/tests/test_data_files_config.h
-                 src/bin/netconf/tests/test_libraries.h
-                 src/bin/perfdhcp/Makefile
-                 src/bin/perfdhcp/tests/Makefile
-                 src/bin/perfdhcp/tests/testdata/Makefile
-                 src/bin/shell/Makefile
-                 src/bin/shell/kea-shell
-                 src/bin/shell/tests/Makefile
-                 src/bin/shell/tests/shell_process_tests.sh
-                 src/bin/shell/tests/shell_unittest.py
-                 src/hooks/Makefile
-                 src/hooks/dhcp/Makefile
-                 src/hooks/dhcp/bootp/Makefile
-                 src/hooks/dhcp/bootp/tests/Makefile
-                 src/hooks/dhcp/flex_option/Makefile
-                 src/hooks/dhcp/flex_option/libloadtests/Makefile
-                 src/hooks/dhcp/flex_option/tests/Makefile
-                 src/hooks/dhcp/high_availability/Makefile
-                 src/hooks/dhcp/high_availability/libloadtests/Makefile
-                 src/hooks/dhcp/high_availability/tests/Makefile
-                 src/hooks/dhcp/lease_cmds/Makefile
-                 src/hooks/dhcp/lease_cmds/tests/Makefile
-                 src/hooks/dhcp/mysql_cb/Makefile
-                 src/hooks/dhcp/mysql_cb/tests/Makefile
-                 src/hooks/dhcp/stat_cmds/Makefile
-                 src/hooks/dhcp/stat_cmds/tests/Makefile
-                 src/hooks/dhcp/user_chk/Makefile
-                 src/hooks/dhcp/user_chk/tests/Makefile
-                 src/hooks/dhcp/user_chk/tests/test_data_files_config.h
-                 src/lib/Makefile
-                 src/lib/asiodns/Makefile
-                 src/lib/asiodns/tests/Makefile
-                 src/lib/asiolink/Makefile
-                 src/lib/asiolink/testutils/Makefile
-                 src/lib/asiolink/tests/Makefile
-                 src/lib/cc/Makefile
-                 src/lib/cc/tests/Makefile
-                 src/lib/cfgrpt/Makefile
-                 src/lib/cfgrpt/tests/Makefile
-                 src/lib/config/Makefile
-                 src/lib/config/tests/Makefile
-                 src/lib/config/tests/data_def_unittests_config.h
-                 src/lib/config/tests/testdata/Makefile
-                 src/lib/config_backend/Makefile
-                 src/lib/config_backend/tests/Makefile
-                 src/lib/cryptolink/Makefile
-                 src/lib/cryptolink/tests/Makefile
-                 src/lib/database/Makefile
-                 src/lib/database/tests/Makefile
-                 src/lib/database/testutils/Makefile
-                 src/lib/dhcp/Makefile
-                 src/lib/dhcp/tests/Makefile
-                 src/lib/dhcp_ddns/Makefile
-                 src/lib/dhcp_ddns/tests/Makefile
-                 src/lib/dhcpsrv/Makefile
-                 src/lib/dhcpsrv/benchmarks/Makefile
-                 src/lib/dhcpsrv/tests/Makefile
-                 src/lib/dhcpsrv/tests/test_libraries.h
-                 src/lib/dhcpsrv/testutils/Makefile
-                 src/lib/dns/Makefile
-                 src/lib/dns/gen-rdatacode.py
-                 src/lib/dns/tests/Makefile
-                 src/lib/dns/tests/testdata/Makefile
-                 src/lib/eval/Makefile
-                 src/lib/eval/tests/Makefile
-                 src/lib/exceptions/Makefile
-                 src/lib/exceptions/tests/Makefile
-                 src/lib/hooks/Makefile
-                 src/lib/hooks/tests/Makefile
-                 src/lib/hooks/tests/marker_file.h
-                 src/lib/hooks/tests/test_libraries.h
-                 src/lib/http/Makefile
-                 src/lib/http/tests/Makefile
-                 src/lib/log/Makefile
-                 src/lib/log/compiler/Makefile
-                 src/lib/log/interprocess/Makefile
-                 src/lib/log/interprocess/tests/Makefile
-                 src/lib/log/tests/Makefile
-                 src/lib/log/tests/buffer_logger_test.sh
-                 src/lib/log/tests/console_test.sh
-                 src/lib/log/tests/destination_test.sh
-                 src/lib/log/tests/init_logger_test.sh
-                 src/lib/log/tests/local_file_test.sh
-                 src/lib/log/tests/logger_lock_test.sh
-                 src/lib/log/tests/severity_test.sh
-                 src/lib/log/tests/tempdir.h
-                 src/lib/mysql/Makefile
-                 src/lib/mysql/testutils/Makefile
-                 src/lib/mysql/tests/Makefile
-                 src/lib/pgsql/Makefile
-                 src/lib/pgsql/tests/Makefile
-                 src/lib/pgsql/testutils/Makefile
-                 src/lib/cql/Makefile
-                 src/lib/cql/tests/Makefile
-                 src/lib/cql/testutils/Makefile
-                 src/lib/process/Makefile
-                 src/lib/process/tests/Makefile
-                 src/lib/process/testutils/Makefile
-                 src/lib/stats/Makefile
-                 src/lib/stats/tests/Makefile
-                 src/lib/testutils/Makefile
-                 src/lib/testutils/dhcp_test_lib.sh
-                 src/lib/util/Makefile
-                 src/lib/util/io/Makefile
-                 src/lib/util/python/Makefile
-                 src/lib/util/python/gen_wiredata.py
-                 src/lib/util/tests/Makefile
-                 src/lib/util/tests/process_spawn_app.sh
-                 src/lib/util/unittests/Makefile
-                 src/lib/yang/Makefile
-                 src/lib/yang/pretests/Makefile
-                 src/lib/yang/tests/Makefile
-                 src/lib/yang/testutils/Makefile
-                 src/share/Makefile
-                 src/share/database/Makefile
-                 src/share/database/scripts/Makefile
-                 src/share/database/scripts/cql/Makefile
-                 src/share/database/scripts/cql/upgrade_1.0_to_2.0.sh
-                 src/share/database/scripts/cql/upgrade_2.0_to_3.0.sh
-                 src/share/database/scripts/cql/upgrade_3.0_to_4.0.sh
-                 src/share/database/scripts/cql/upgrade_4.0_to_5.0.sh
-                 src/share/database/scripts/cql/wipe_data.sh
-                 src/share/database/scripts/mysql/Makefile
-                 src/share/database/scripts/mysql/upgrade_1.0_to_2.0.sh
-                 src/share/database/scripts/mysql/upgrade_2.0_to_3.0.sh
-                 src/share/database/scripts/mysql/upgrade_3.0_to_4.0.sh
-                 src/share/database/scripts/mysql/upgrade_4.0_to_4.1.sh
-                 src/share/database/scripts/mysql/upgrade_4.1_to_5.0.sh
-                 src/share/database/scripts/mysql/upgrade_5.0_to_5.1.sh
-                 src/share/database/scripts/mysql/upgrade_5.1_to_5.2.sh
-                 src/share/database/scripts/mysql/upgrade_5.2_to_6.0.sh
-                 src/share/database/scripts/mysql/upgrade_6.0_to_7.0.sh
-                 src/share/database/scripts/mysql/upgrade_7.0_to_8.0.sh
-                 src/share/database/scripts/mysql/upgrade_8.0_to_8.1.sh
-                 src/share/database/scripts/mysql/upgrade_8.1_to_8.2.sh
-                 src/share/database/scripts/mysql/upgrade_8.2_to_9.0.sh
-                 src/share/database/scripts/mysql/upgrade_9.0_to_9.1.sh
-                 src/share/database/scripts/mysql/wipe_data.sh
-                 src/share/database/scripts/pgsql/Makefile
-                 src/share/database/scripts/pgsql/upgrade_1.0_to_2.0.sh
-                 src/share/database/scripts/pgsql/upgrade_2.0_to_3.0.sh
-                 src/share/database/scripts/pgsql/upgrade_3.0_to_3.1.sh
-                 src/share/database/scripts/pgsql/upgrade_3.1_to_3.2.sh
-                 src/share/database/scripts/pgsql/upgrade_3.2_to_3.3.sh
-                 src/share/database/scripts/pgsql/upgrade_3.3_to_4.0.sh
-                 src/share/database/scripts/pgsql/upgrade_4.0_to_5.0.sh
-                 src/share/database/scripts/pgsql/upgrade_5.0_to_5.1.sh
-                 src/share/database/scripts/pgsql/upgrade_5.1_to_6.0.sh
-                 src/share/database/scripts/pgsql/wipe_data.sh
-                 src/share/yang/Makefile
-                 src/share/yang/modules/Makefile
-                 tools/Makefile
-                 tools/path_replacer.sh
-])
+AC_CONFIG_FILES([Makefile])
+AC_CONFIG_FILES([doc/Makefile])
+AC_CONFIG_FILES([doc/sphinx/Makefile])
+AC_CONFIG_FILES([doc/devel/Makefile])
+AC_CONFIG_FILES([ext/Makefile])
+AC_CONFIG_FILES([ext/gtest/Makefile])
+AC_CONFIG_FILES([ext/coroutine/Makefile])
+AC_CONFIG_FILES([kea_version.h])
+AC_CONFIG_FILES([m4macros/Makefile])
+AC_CONFIG_FILES([src/Makefile])
+AC_CONFIG_FILES([src/bin/Makefile])
+AC_CONFIG_FILES([src/bin/admin/Makefile])
+AC_CONFIG_FILES([src/bin/admin/kea-admin],
+                [chmod +x src/bin/admin/kea-admin])
+AC_CONFIG_FILES([src/bin/admin/tests/Makefile])
+AC_CONFIG_FILES([src/bin/admin/tests/cql_tests.sh],
+                [chmod +x src/bin/admin/tests/cql_tests.sh])
+AC_CONFIG_FILES([src/bin/admin/tests/data/Makefile])
+AC_CONFIG_FILES([src/bin/admin/tests/admin_tests.sh],
+                [chmod +x src/bin/admin/tests/admin_tests.sh])
+AC_CONFIG_FILES([src/bin/admin/tests/memfile_tests.sh],
+                [chmod +x src/bin/admin/tests/memfile_tests.sh])
+AC_CONFIG_FILES([src/bin/admin/tests/mysql_tests.sh],
+                [chmod +x src/bin/admin/tests/mysql_tests.sh])
+AC_CONFIG_FILES([src/bin/admin/tests/pgsql_tests.sh],
+                [chmod +x src/bin/admin/tests/pgsql_tests.sh])
+AC_CONFIG_FILES([src/bin/agent/Makefile])
+AC_CONFIG_FILES([src/bin/agent/tests/Makefile])
+AC_CONFIG_FILES([src/bin/agent/tests/ca_process_tests.sh],
+                [chmod +x src/bin/agent/tests/ca_process_tests.sh])
+AC_CONFIG_FILES([src/bin/agent/tests/test_basic_auth_libraries.h])
+AC_CONFIG_FILES([src/bin/agent/tests/test_callout_libraries.h])
+AC_CONFIG_FILES([src/bin/agent/tests/test_data_files_config.h])
+AC_CONFIG_FILES([src/bin/d2/Makefile])
+AC_CONFIG_FILES([src/bin/d2/tests/Makefile])
+AC_CONFIG_FILES([src/bin/d2/tests/d2_process_tests.sh],
+                [chmod +x src/bin/d2/tests/d2_process_tests.sh])
+AC_CONFIG_FILES([src/bin/d2/tests/test_callout_libraries.h])
+AC_CONFIG_FILES([src/bin/d2/tests/test_configured_libraries.h])
+AC_CONFIG_FILES([src/bin/d2/tests/test_data_files_config.h])
+AC_CONFIG_FILES([src/bin/dhcp4/Makefile])
+AC_CONFIG_FILES([src/bin/dhcp4/tests/Makefile])
+AC_CONFIG_FILES([src/bin/dhcp4/tests/dhcp4_process_tests.sh],
+                [chmod +x src/bin/dhcp4/tests/dhcp4_process_tests.sh])
+AC_CONFIG_FILES([src/bin/dhcp4/tests/marker_file.h])
+AC_CONFIG_FILES([src/bin/dhcp4/tests/test_data_files_config.h])
+AC_CONFIG_FILES([src/bin/dhcp4/tests/test_libraries.h])
+AC_CONFIG_FILES([src/bin/dhcp6/Makefile])
+AC_CONFIG_FILES([src/bin/dhcp6/tests/Makefile])
+AC_CONFIG_FILES([src/bin/dhcp6/tests/dhcp6_process_tests.sh],
+                [chmod +x src/bin/dhcp6/tests/dhcp6_process_tests.sh])
+AC_CONFIG_FILES([src/bin/dhcp6/tests/marker_file.h])
+AC_CONFIG_FILES([src/bin/dhcp6/tests/test_data_files_config.h])
+AC_CONFIG_FILES([src/bin/dhcp6/tests/test_libraries.h])
+AC_CONFIG_FILES([src/bin/keactrl/Makefile])
+AC_CONFIG_FILES([src/bin/keactrl/keactrl],
+                [chmod +x src/bin/keactrl/keactrl])
+AC_CONFIG_FILES([src/bin/keactrl/keactrl.conf])
+AC_CONFIG_FILES([src/bin/keactrl/tests/Makefile])
+AC_CONFIG_FILES([src/bin/keactrl/tests/keactrl_tests.sh],
+                [chmod +x src/bin/keactrl/tests/keactrl_tests.sh])
+AC_CONFIG_FILES([src/bin/lfc/Makefile])
+AC_CONFIG_FILES([src/bin/lfc/tests/Makefile])
+AC_CONFIG_FILES([src/bin/netconf/Makefile])
+AC_CONFIG_FILES([src/bin/netconf/tests/Makefile])
+AC_CONFIG_FILES([src/bin/netconf/tests/shtests/Makefile])
+AC_CONFIG_FILES([src/bin/netconf/tests/shtests/netconf_tests.sh],
+                [chmod +x src/bin/netconf/tests/shtests/netconf_tests.sh])
+AC_CONFIG_FILES([src/bin/netconf/tests/test_data_files_config.h])
+AC_CONFIG_FILES([src/bin/netconf/tests/test_libraries.h])
+AC_CONFIG_FILES([src/bin/perfdhcp/Makefile])
+AC_CONFIG_FILES([src/bin/perfdhcp/tests/Makefile])
+AC_CONFIG_FILES([src/bin/perfdhcp/tests/testdata/Makefile])
+AC_CONFIG_FILES([src/bin/shell/Makefile])
+AC_CONFIG_FILES([src/bin/shell/kea-shell],
+                [chmod +x src/bin/shell/kea-shell])
+AC_CONFIG_FILES([src/bin/shell/tests/Makefile])
+AC_CONFIG_FILES([src/bin/shell/tests/basic_auth_tests.sh],
+                [chmod +x src/bin/shell/tests/basic_auth_tests.sh])
+AC_CONFIG_FILES([src/bin/shell/tests/shell_process_tests.sh],
+                [chmod +x src/bin/shell/tests/shell_process_tests.sh])
+AC_CONFIG_FILES([src/bin/shell/tests/shell_unittest.py],
+                [chmod +x src/bin/shell/tests/shell_unittest.py])
+AC_CONFIG_FILES([src/bin/shell/tests/tls_ca_process_tests.sh],
+                [chmod +x src/bin/shell/tests/tls_ca_process_tests.sh])
+AC_CONFIG_FILES([src/hooks/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/bootp/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/bootp/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/flex_option/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/flex_option/libloadtests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/flex_option/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/high_availability/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/high_availability/libloadtests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/high_availability/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/lease_cmds/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/lease_cmds/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/mysql_cb/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/mysql_cb/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/run_script/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/run_script/libloadtests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/run_script/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/run_script/tests/run_script_test.sh],
+                [chmod +x src/hooks/dhcp/run_script/tests/run_script_test.sh])
+AC_CONFIG_FILES([src/hooks/dhcp/stat_cmds/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/stat_cmds/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/user_chk/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/user_chk/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/user_chk/tests/test_data_files_config.h])
+AC_CONFIG_FILES([src/lib/Makefile])
+AC_CONFIG_FILES([src/lib/asiodns/Makefile])
+AC_CONFIG_FILES([src/lib/asiodns/tests/Makefile])
+AC_CONFIG_FILES([src/lib/asiolink/Makefile])
+AC_CONFIG_FILES([src/lib/asiolink/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/asiolink/tests/Makefile])
+AC_CONFIG_FILES([src/lib/asiolink/tests/process_spawn_app.sh],
+                [chmod +x src/lib/asiolink/tests/process_spawn_app.sh])
+AC_CONFIG_FILES([src/lib/cc/Makefile])
+AC_CONFIG_FILES([src/lib/cc/tests/Makefile])
+AC_CONFIG_FILES([src/lib/cfgrpt/Makefile])
+AC_CONFIG_FILES([src/lib/cfgrpt/tests/Makefile])
+AC_CONFIG_FILES([src/lib/config/Makefile])
+AC_CONFIG_FILES([src/lib/config/tests/Makefile])
+AC_CONFIG_FILES([src/lib/config/tests/data_def_unittests_config.h])
+AC_CONFIG_FILES([src/lib/config/tests/testdata/Makefile])
+AC_CONFIG_FILES([src/lib/config_backend/Makefile])
+AC_CONFIG_FILES([src/lib/config_backend/tests/Makefile])
+AC_CONFIG_FILES([src/lib/cryptolink/Makefile])
+AC_CONFIG_FILES([src/lib/cryptolink/tests/Makefile])
+AC_CONFIG_FILES([src/lib/d2srv/Makefile])
+AC_CONFIG_FILES([src/lib/d2srv/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/d2srv/tests/Makefile])
+AC_CONFIG_FILES([src/lib/database/Makefile])
+AC_CONFIG_FILES([src/lib/database/tests/Makefile])
+AC_CONFIG_FILES([src/lib/database/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/dhcp/Makefile])
+AC_CONFIG_FILES([src/lib/dhcp/tests/Makefile])
+AC_CONFIG_FILES([src/lib/dhcp_ddns/Makefile])
+AC_CONFIG_FILES([src/lib/dhcp_ddns/tests/Makefile])
+AC_CONFIG_FILES([src/lib/dhcpsrv/Makefile])
+AC_CONFIG_FILES([src/lib/dhcpsrv/benchmarks/Makefile])
+AC_CONFIG_FILES([src/lib/dhcpsrv/tests/Makefile])
+AC_CONFIG_FILES([src/lib/dhcpsrv/tests/test_libraries.h])
+AC_CONFIG_FILES([src/lib/dhcpsrv/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/dns/Makefile])
+AC_CONFIG_FILES([src/lib/dns/gen-rdatacode.py],
+                [chmod +x src/lib/dns/gen-rdatacode.py])
+AC_CONFIG_FILES([src/lib/dns/tests/Makefile])
+AC_CONFIG_FILES([src/lib/dns/tests/testdata/Makefile])
+AC_CONFIG_FILES([src/lib/eval/Makefile])
+AC_CONFIG_FILES([src/lib/eval/tests/Makefile])
+AC_CONFIG_FILES([src/lib/exceptions/Makefile])
+AC_CONFIG_FILES([src/lib/exceptions/tests/Makefile])
+AC_CONFIG_FILES([src/lib/hooks/Makefile])
+AC_CONFIG_FILES([src/lib/hooks/tests/Makefile])
+AC_CONFIG_FILES([src/lib/hooks/tests/marker_file.h])
+AC_CONFIG_FILES([src/lib/hooks/tests/test_libraries.h])
+AC_CONFIG_FILES([src/lib/http/Makefile])
+AC_CONFIG_FILES([src/lib/http/tests/Makefile])
+AC_CONFIG_FILES([src/lib/log/Makefile])
+AC_CONFIG_FILES([src/lib/log/compiler/Makefile])
+AC_CONFIG_FILES([src/lib/log/interprocess/Makefile])
+AC_CONFIG_FILES([src/lib/log/interprocess/tests/Makefile])
+AC_CONFIG_FILES([src/lib/log/tests/Makefile])
+AC_CONFIG_FILES([src/lib/log/tests/buffer_logger_test.sh],
+                [chmod +x src/lib/log/tests/buffer_logger_test.sh])
+AC_CONFIG_FILES([src/lib/log/tests/console_test.sh],
+                [chmod +x src/lib/log/tests/console_test.sh])
+AC_CONFIG_FILES([src/lib/log/tests/destination_test.sh],
+                [chmod +x src/lib/log/tests/destination_test.sh])
+AC_CONFIG_FILES([src/lib/log/tests/init_logger_test.sh],
+                [chmod +x src/lib/log/tests/init_logger_test.sh])
+AC_CONFIG_FILES([src/lib/log/tests/local_file_test.sh],
+                [chmod +x src/lib/log/tests/local_file_test.sh])
+AC_CONFIG_FILES([src/lib/log/tests/logger_lock_test.sh],
+                [chmod +x src/lib/log/tests/logger_lock_test.sh])
+AC_CONFIG_FILES([src/lib/log/tests/severity_test.sh],
+                [chmod +x src/lib/log/tests/severity_test.sh])
+AC_CONFIG_FILES([src/lib/log/tests/tempdir.h])
+AC_CONFIG_FILES([src/lib/mysql/Makefile])
+AC_CONFIG_FILES([src/lib/mysql/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/mysql/tests/Makefile])
+AC_CONFIG_FILES([src/lib/pgsql/Makefile])
+AC_CONFIG_FILES([src/lib/pgsql/tests/Makefile])
+AC_CONFIG_FILES([src/lib/pgsql/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/cql/Makefile])
+AC_CONFIG_FILES([src/lib/cql/tests/Makefile])
+AC_CONFIG_FILES([src/lib/cql/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/process/Makefile])
+AC_CONFIG_FILES([src/lib/process/tests/Makefile])
+AC_CONFIG_FILES([src/lib/process/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/stats/Makefile])
+AC_CONFIG_FILES([src/lib/stats/tests/Makefile])
+AC_CONFIG_FILES([src/lib/stats/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/testutils/Makefile])
+AC_CONFIG_FILES([src/lib/testutils/dhcp_test_lib.sh],
+                [chmod +x src/lib/testutils/dhcp_test_lib.sh])
+AC_CONFIG_FILES([src/lib/testutils/xml_reporting_test_lib.sh],
+                [chmod +x src/lib/testutils/xml_reporting_test_lib.sh])
+AC_CONFIG_FILES([src/lib/util/Makefile])
+AC_CONFIG_FILES([src/lib/util/io/Makefile])
+AC_CONFIG_FILES([src/lib/util/python/Makefile])
+AC_CONFIG_FILES([src/lib/util/python/gen_wiredata.py],
+                [chmod +x src/lib/util/python/gen_wiredata.py])
+AC_CONFIG_FILES([src/lib/util/tests/Makefile])
+AC_CONFIG_FILES([src/lib/util/unittests/Makefile])
+AC_CONFIG_FILES([src/lib/yang/Makefile])
+AC_CONFIG_FILES([src/lib/yang/pretests/Makefile])
+AC_CONFIG_FILES([src/lib/yang/tests/Makefile])
+AC_CONFIG_FILES([src/lib/yang/testutils/Makefile])
+AC_CONFIG_FILES([src/share/Makefile])
+AC_CONFIG_FILES([src/share/api/Makefile])
+AC_CONFIG_FILES([src/share/database/Makefile])
+AC_CONFIG_FILES([src/share/database/scripts/Makefile])
+AC_CONFIG_FILES([src/share/database/scripts/cql/Makefile])
+AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_1.0_to_2.0.sh],
+                [chmod +x src/share/database/scripts/cql/upgrade_1.0_to_2.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_2.0_to_3.0.sh],
+                [chmod +x src/share/database/scripts/cql/upgrade_2.0_to_3.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_3.0_to_4.0.sh],
+                [chmod +x src/share/database/scripts/cql/upgrade_3.0_to_4.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_4.0_to_5.0.sh],
+                [chmod +x src/share/database/scripts/cql/upgrade_4.0_to_5.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/cql/wipe_data.sh],
+                [chmod +x src/share/database/scripts/cql/wipe_data.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/Makefile])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_001.0_to_002.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_001.0_to_002.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_002.0_to_003.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_002.0_to_003.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_003.0_to_004.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_003.0_to_004.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_004.0_to_004.1.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_004.0_to_004.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_004.1_to_005.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_004.1_to_005.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_005.0_to_005.1.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_005.0_to_005.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_005.1_to_005.2.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_005.1_to_005.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_005.2_to_006.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_005.2_to_006.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_006.0_to_007.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_006.0_to_007.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_007.0_to_008.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_007.0_to_008.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_008.0_to_008.1.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_008.0_to_008.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_008.1_to_008.2.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_008.1_to_008.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_008.2_to_009.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_008.2_to_009.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_009.0_to_009.1.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_009.0_to_009.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_009.1_to_009.2.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_009.1_to_009.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_009.2_to_009.3.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_009.2_to_009.3.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_009.3_to_009.4.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_009.3_to_009.4.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_009.4_to_009.5.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_009.4_to_009.5.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_009.5_to_009.6.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_009.5_to_009.6.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_009.6_to_010.0.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_009.6_to_010.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_010_to_011.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_010_to_011.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_011_to_012.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_011_to_012.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/wipe_data.sh],
+                [chmod +x src/share/database/scripts/mysql/wipe_data.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/Makefile])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_1.0_to_2.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_1.0_to_2.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_2.0_to_3.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_2.0_to_3.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.0_to_3.1.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_3.0_to_3.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.1_to_3.2.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_3.1_to_3.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.2_to_3.3.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_3.2_to_3.3.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.3_to_4.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_3.3_to_4.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_4.0_to_5.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_4.0_to_5.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_5.0_to_5.1.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_5.0_to_5.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_5.1_to_6.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_5.1_to_6.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_6.0_to_6.1.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_6.0_to_6.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_6.1_to_6.2.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_6.1_to_6.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/wipe_data.sh],
+                [chmod +x src/share/database/scripts/pgsql/wipe_data.sh])
+AC_CONFIG_FILES([src/share/yang/Makefile])
+AC_CONFIG_FILES([src/share/yang/modules/Makefile])
+AC_CONFIG_FILES([src/share/yang/modules/utils/Makefile])
+AC_CONFIG_FILES([src/share/yang/modules/utils/reinstall.sh],
+                [chmod +x src/share/yang/modules/utils/reinstall.sh])
+AC_CONFIG_FILES([tools/Makefile])
+AC_CONFIG_FILES([tools/path_replacer.sh],
+                [chmod +x tools/path_replacer.sh])
+AC_CONFIG_FILES([tools/extract_bnf.sh],
+                [chmod +x tools/extract_bnf.sh])
 
-AC_CONFIG_COMMANDS([permissions], [
-           chmod +x src/bin/admin/kea-admin
-           chmod +x src/bin/dhcp4/tests/dhcp4_process_tests.sh
-           chmod +x src/bin/dhcp6/tests/dhcp6_process_tests.sh
-           chmod +x src/bin/keactrl/keactrl
-           chmod +x src/bin/keactrl/tests/keactrl_tests.sh
-           chmod +x src/bin/shell/kea-shell
-           chmod +x src/bin/shell/tests/shell_process_tests.sh
-           chmod +x src/bin/shell/tests/shell_unittest.py
-           chmod +x src/lib/dns/gen-rdatacode.py
-           chmod +x src/lib/log/tests/buffer_logger_test.sh
-           chmod +x src/lib/log/tests/console_test.sh
-           chmod +x src/lib/log/tests/destination_test.sh
-           chmod +x src/lib/log/tests/init_logger_test.sh
-           chmod +x src/lib/log/tests/local_file_test.sh
-           chmod +x src/lib/log/tests/logger_lock_test.sh
-           chmod +x src/lib/log/tests/severity_test.sh
-           chmod +x src/lib/util/python/gen_wiredata.py
-           chmod +x src/lib/util/tests/process_spawn_app.sh
-           chmod +x tools/path_replacer.sh
-])
 
 AC_OUTPUT
 
@@ -1778,6 +1874,7 @@ Package:
   Name:              ${PACKAGE_NAME}
   Version:           ${PACKAGE_VERSION}
   Extended version:  ${EXTENDED_VERSION}
+  Version type:      ${PACKAGE_VERSION_TYPE}
   OS Family:         ${OS_TYPE}
 
   Prefix:            ${prefix}
@@ -1854,6 +1951,7 @@ ${CRYPTO_NAME}:
   CRYPTO_INCLUDES: ${CRYPTO_INCLUDES}
   CRYPTO_LDFLAGS:  ${CRYPTO_LDFLAGS}
   CRYPTO_LIBS:     ${CRYPTO_LIBS}
+  TLS support:     $tls_support
 
 ${DISABLED_CRYPTO}: no
 
@@ -1904,7 +2002,7 @@ fi
 if test "$CQL_CPPFLAGS" != "" ; then
 cat >> config.report << END
 
-Cassandra CQL:
+Cassandra CQL (deprecated):
   CQL_VERSION:     ${CQL_VERSION}
   CQL_CPPFLAGS:    ${CQL_CPPFLAGS}
   CQL_LIBS:        ${CQL_LIBS}
@@ -1917,17 +2015,35 @@ Cassandra CQL:
 END
 fi
 
-if test "$SYSREPO_CPPFLAGS" != "" ; then
-cat >> config.report << END
+if "${HAVE_SYSREPO}"; then
+  cat >> config.report << END
 
 Sysrepo:
-  SYSREPO_VERSION:     ${SYSREPO_VERSION}
-  SYSREPO_CPPFLAGS:    ${SYSREPO_CPPFLAGS}
-  SYSREPO_LIBS:        ${SYSREPO_LIBS}
-  SYSREPO_REPO:        ${SYSREPO_REPO}
+  LIBYANG_VERSION:       ${LIBYANG_VERSION}
+  LIBYANG_SOVERSION:     ${LIBYANG_SOVERSION}
+  LIBYANG_INCLUDEDIR:    ${LIBYANG_INCLUDEDIR}
+  LIBYANG_CPPFLAGS:      ${LIBYANG_CPPFLAGS}
+  LIBYANG_LIBS           ${LIBYANG_LIBS}
+
+  LIBYANGCPP_VERSION:    ${LIBYANGCPP_VERSION}
+  LIBYANGCPP_INCLUDEDIR: ${LIBYANGCPP_INCLUDEDIR}
+  LIBYANGCPP_CPPFLAGS:   ${LIBYANGCPP_CPPFLAGS}
+  LIBYANGCPP_LIBS        ${LIBYANGCPP_LIBS}
+
+  SYSREPO_VERSION:       ${SYSREPO_VERSION}
+  SYSREPO_CPPFLAGS:      ${SYSREPO_CPPFLAGS}
+  SYSREPO_INCLUDEDIR:    ${SYSREPO_INCLUDEDIR}
+  SYSREPO_LIBS:          ${SYSREPO_LIBS}
+  SR_REPO_PATH:          ${SR_REPO_PATH}
+  SRPD_PLUGINS_PATH:     ${SRPD_PLUGINS_PATH}
+
+  SYSREPOCPP_VERSION:    ${SYSREPOCPP_VERSION}
+  SYSREPOCPP_CPPFLAGS:   ${SYSREPOCPP_CPPFLAGS}
+  SYSREPOCPP_INCLUDEDIR: ${SYSREPOCPP_INCLUDEDIR}
+  SYSREPOCPP_LIBS:       ${SYSREPOCPP_LIBS}
 END
 else
-cat >> config.report << END
+  cat >> config.report << END
 
 Sysrepo:
   no
@@ -1978,6 +2094,15 @@ FreeRADIUS client:
   FREERADIUS_INCLUDE:    ${FREERADIUS_INCLUDE}
   FREERADIUS_LIB:        ${FREERADIUS_LIB}
   FREERADIUS_DICTIONARY: ${FREERADIUS_DICTIONARY}
+END
+fi
+
+if test "$ENABLE_GSSAPI" = "yes"; then
+cat >> config.report << END
+
+GSS-API support:
+  GSSAPI_CFLAGS:         ${GSSAPI_CFLAGS}
+  GSSAPI_LIBS:           ${GSSAPI_LIBS}
 END
 fi
 

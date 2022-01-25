@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -54,7 +54,7 @@ public:
         timestamp_ = timestamp;
     }
 
-    /// @brief Sets timestmp to the current time.
+    /// @brief Sets timestamp to the current time.
     void updateModificationTime();
 
     /// @brief Returns timestamp.

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,9 +11,10 @@
 
 #include <exceptions/exceptions.h>
 #include <util/labeled_value.h>
-#include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
+#include <functional>
 #include <map>
+#include <mutex>
 #include <string>
 
 namespace isc {
@@ -33,7 +34,7 @@ typedef LabeledValue Event;
 typedef LabeledValuePtr EventPtr;
 
 /// @brief Defines a pointer to an instance method for handling a state.
-typedef boost::function<void()> StateHandler;
+typedef std::function<void()> StateHandler;
 
 /// @brief State machine pausing modes.
 ///
@@ -72,7 +73,7 @@ public:
     ///
     /// @code
     ///     State(SOME_INT_VAL, "SOME_INT_VAL",
-    ///            boost::bind(&StateModelDerivation::someHandler, this));
+    ///            std::bind(&StateModelDerivation::someHandler, this));
     /// @endcode
     ///
     /// @throw StateModelError if label is null or blank.
@@ -248,6 +249,8 @@ public:
 /// "done".  If the  model fails (END_ST with a FAILED_EVT) it is considered
 /// "done" and "failed".  There are several boolean status methods which may
 /// be used to check these conditions.
+/// Once the model has been started, defining new events or new states is
+/// illegal. It is possible to call startModel only once.
 ///
 /// To progress from one state to the another, state handlers invoke use
 /// the method, transition.  This method accepts a state and an event as
@@ -312,6 +315,7 @@ public:
     /// This method invokes initDictionaries method to initialize the event
     /// and state dictionaries and then starts the model execution setting
     /// the current state to the given start state, and the event to START_EVT.
+    /// This method can be called only once to start the state model.
     ///
     /// @param start_state is the state in which to begin execution.
     ///
@@ -363,10 +367,12 @@ public:
     void nopStateHandler();
 
 protected:
+
     /// @brief Initializes the event and state dictionaries.
     ///
     /// This method invokes the define and verify methods for both events and
     /// states to initialize their respective dictionaries.
+    /// This method can be called only once to initialize the state model.
     ///
     /// @throw StateModelError or others indirectly, as this method calls
     /// dictionary define and verify methods.
@@ -377,7 +383,7 @@ protected:
     /// This method is used to construct the set of valid events. Each class
     /// within a StateModel derivation hierarchy uses this method to add any
     /// events it defines to the set.  Each derivation's implementation must
-    /// also call it's superclass's implementation.  This allows each class
+    /// also call its superclass's implementation.  This allows each class
     /// within the hierarchy to make contributions to the set of defined
     /// events. Implementations use the method, defineEvent(), to add event
     /// definitions.  An example of the derivation's implementation follows:
@@ -393,9 +399,14 @@ protected:
     ///     :
     /// }
     /// @endcode
+    ///
+    /// This method is called in a thread safe context from
+    /// @ref initDictionaries.
     virtual void defineEvents();
 
     /// @brief Adds an event value and associated label to the set of events.
+    ///
+    /// This method is called in a thread safe context from @ref defineEvents.
     ///
     /// @param value is the numeric value of the event
     /// @param label is the text label of the event used in log messages and
@@ -406,6 +417,8 @@ protected:
     void defineEvent(unsigned int value, const std::string& label);
 
     /// @brief Fetches the event referred to by value.
+    ///
+    /// This method is called in a thread safe context from @ref verifyEvents.
     ///
     /// @param value is the numeric value of the event desired.
     ///
@@ -421,7 +434,7 @@ protected:
     /// event set is determined to be invalid this method should throw a
     /// StateModelError.  As with the defineEvents method, each class within
     /// a StateModel derivation hierarchy must supply an implementation
-    /// which calls it's superclass's implementation as well as verifying any
+    /// which calls its superclass's implementation as well as verifying any
     /// events added by the derivation.  Validating an event is accomplished
     /// by simply attempting to fetch an event by its value from the event set.
     /// An example of the derivation's implementation follows:
@@ -437,6 +450,9 @@ protected:
     ///     :
     /// }
     /// @endcode
+    ///
+    /// This method is called in a thread safe context from
+    /// @ref initDictionaries.
     virtual void verifyEvents();
 
     /// @brief Populates the set of states.
@@ -444,7 +460,7 @@ protected:
     /// This method is used to construct the set of valid states. Each class
     /// within a StateModel derivation hierarchy uses this method to add any
     /// states it defines to the set.  Each derivation's implementation must
-    /// also call it's superclass's implementation.  This allows each class
+    /// also call its superclass's implementation.  This allows each class
     /// within the hierarchy to make contributions to the set of defined
     /// states. Implementations use the method, defineState(), to add state
     /// definitions.  An example of the derivation's implementation follows:
@@ -456,13 +472,18 @@ protected:
     ///
     ///     // Add the states defined by the derivation.
     ///     defineState(SOME_ST, "SOME_ST",
-    ///                 boost::bind(&StateModelDerivation::someHandler, this));
+    ///                 std::bind(&StateModelDerivation::someHandler, this));
     ///     :
     /// }
     /// @endcode
+    ///
+    /// This method is called in a thread safe context from
+    /// @ref initDictionaries.
     virtual void defineStates();
 
     /// @brief Adds an state value and associated label to the set of states.
+    ///
+    /// This method is called in a thread safe context from @ref defineStates.
     ///
     /// @param value is the numeric value of the state
     /// @param label is the text label of the state used in log messages and
@@ -494,7 +515,7 @@ protected:
     /// state set is determined to be invalid this method should throw a
     /// StateModelError.  As with the defineStates method, each class within
     /// a StateModel derivation hierarchy must supply an implementation
-    /// which calls it's superclass's implementation as well as verifying any
+    /// which calls its superclass's implementation as well as verifying any
     /// states added by the derivation.  Validating an state is accomplished
     /// by simply attempting to fetch the state by its value from the state set.
     /// An example of the derivation's implementation follows:
@@ -509,6 +530,9 @@ protected:
     ///     :
     /// }
     /// @endcode
+    ///
+    /// This method is called in a thread safe context from
+    /// @ref initDictionaries.
     virtual void verifyStates();
 
     /// @brief Handler for fatal model execution errors.
@@ -594,6 +618,7 @@ protected:
     bool doOnExit();
 
 public:
+
     /// @brief Fetches the model's current state.
     ///
     /// This returns the model's notion of the current state. It is the
@@ -691,7 +716,98 @@ public:
     /// @return Returns a std::string of the format described above.
     std::string getPrevContextStr() const;
 
+protected:
+
+    /// @brief Fetches the state referred to by value.
+    ///
+    /// This method should be called in a thread safe context.
+    ///
+    /// @param value is the numeric value of the state desired.
+    ///
+    /// @return returns a constant pointer to the state if found
+    ///
+    /// @throw StateModelError if the state is not defined.
+    const StatePtr getStateInternal(unsigned int value);
+
 private:
+
+    /// @brief Sets the current state to the given state value.
+    ///
+    /// This updates the model's notion of the current state and is the
+    /// state whose handler will be executed on the next iteration of the run
+    /// loop.  This is intended primarily for internal use and testing. It is
+    /// unlikely that transitioning to a new state without a new event is of
+    /// much use.
+    /// This method should be called in a thread safe context.
+    ///
+    /// @param state the new value to assign to the current state.
+    ///
+    /// @throw StateModelError if the state is invalid.
+    void setStateInternal(unsigned int state);
+
+    /// @brief Sets the next event to the given event value.
+    ///
+    /// This updates the model's notion of the next event and is the
+    /// event that will be passed into the current state's handler on the next
+    /// iteration of the run loop.
+    /// This method should be called in a thread safe context.
+    ///
+    /// @param event the numeric event value to post as the next event.
+    ///
+    /// @throw StateModelError if the event is undefined
+    void postNextEventInternal(unsigned int event);
+
+    /// @brief Returns whether or not the model is new.
+    ///
+    /// This method should be called in a thread safe context.
+    ///
+    /// @return Boolean true if the model has not been started.
+    bool isModelNewInternal() const;
+
+    /// @brief Fetches the label associated with an event value.
+    ///
+    /// This method should be called in a thread safe context.
+    ///
+    /// @param event is the numeric event value for which the label is desired.
+    ///
+    /// @return Returns a string containing the event label or
+    /// LabeledValueSet::UNDEFINED_LABEL if the value is undefined.
+    std::string getEventLabelInternal(const int event) const;
+
+    /// @brief Fetches the label associated with an state value.
+    ///
+    /// This method should be called in a thread safe context.
+    ///
+    /// @param state is the numeric state value for which the label is desired.
+    ///
+    /// @return Returns a const char* containing the state label or
+    /// LabeledValueSet::UNDEFINED_LABEL if the value is undefined.
+    std::string getStateLabelInternal(const int state) const;
+
+    /// @brief Convenience method which returns a string rendition of the
+    /// current state and next event.
+    ///
+    /// The string will be of the form:
+    ///
+    ///   current state: [ {state} {label} ] next event: [ {event} {label} ]
+    ///
+    /// This method should be called in a thread safe context.
+    ///
+    /// @return Returns a std::string of the format described above.
+    std::string getContextStrInternal() const;
+
+    /// @brief Convenience method which returns a string rendition of the
+    /// previous state and last event.
+    ///
+    /// The string will be of the form:
+    ///
+    ///   previous state: [ {state} {label} ] last event: [ {event} {label} ]
+    ///
+    /// This method should be called in a thread safe context.
+    ///
+    /// @return Returns a std::string of the format described above.
+    std::string getPrevContextStrInternal() const;
+
     /// @brief The dictionary of valid events.
     LabeledValueSet events_;
 
@@ -721,6 +837,9 @@ private:
 
     /// @brief Indicates if the state model is paused.
     bool paused_;
+
+    /// @brief Protects against concurrent transitions.
+    boost::shared_ptr<std::mutex> mutex_;
 };
 
 /// @brief Defines a pointer to a StateModel.

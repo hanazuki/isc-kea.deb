@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -272,6 +272,14 @@ was made. The client will be offered/allocated a reserved address
 the next time it retries sending a DHCPDISCOVER/DHCPREQUEST message to
 the server.
 
+@subsection allocEngineReuse Allocation Engine Cache
+
+The allocation engine provides a cache-like feature: when a suitable
+lease already exists for a client if its age is small enough compared
+to the valid lifetime (threshold parameter) and below a configured maximum
+(max age parameter) the lease can be reused. A reusable lease is marked
+by a not zero reuseable_valid_lft_ value.
+
 @section timerManager Timer Manager
 
 The @c isc::dhcp::TimerMgr is a singleton class used throughout the
@@ -461,5 +469,23 @@ is used by DHCPv4 and DHCPv6 components.
 
 DHCPv4-over-DHCPv6 which are relayed by a DHCPv6 relay are not yet supported.
 
+@section libdhcpsrvMTConsiderations Multi-Threading Consideration for Server DHCP Library
+
+Note that for backends specific consideration is in @ref
+dhcpDatabaseBackendsMTConsiderations.
+
+Below Kea thread safe means thread safe when the multi-threading mode is
+true (when it is false packets are processed by the main thread).
+
+By default this library is not thread safe, in particular all classes used
+for configuration are not thread safe. Exceptions are:
+
+ - allocation engine allocator is Kea thread safe.
+
+ - resource handler is thread safe.
+
+ - last allocated members of subnets are Kea thread safe.
+
+ - timer manager functions are Kea thread safe.
 
 */

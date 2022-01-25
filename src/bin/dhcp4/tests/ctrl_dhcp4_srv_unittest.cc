@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,7 +21,8 @@
 #include <hooks/hooks_manager.h>
 #include <log/logger_support.h>
 #include <stats/stats_mgr.h>
-#include <util/boost_time_utils.h>
+#include <util/multi_threading_mgr.h>
+#include <util/chrono_time_utils.h>
 #include <testutils/io_utils.h>
 #include <testutils/unix_control_client.h>
 #include <testutils/sandbox.h>
@@ -52,6 +53,8 @@ using namespace isc::dhcp::test;
 using namespace isc::hooks;
 using namespace isc::stats;
 using namespace isc::test;
+using namespace isc::util;
+namespace ph = std::placeholders;
 
 namespace {
 
@@ -115,6 +118,7 @@ public:
             socket_path_ = sandbox.join("kea4.sock");
         }
         reset();
+        MultiThreadingMgr::instance().setMode(false);
     }
 
     /// @brief Destructor
@@ -127,6 +131,7 @@ public:
         CommandMgr::instance().setConnectionTimeout(TIMEOUT_DHCP_SERVER_RECEIVE_COMMAND);
 
         server_.reset();
+        MultiThreadingMgr::instance().setMode(false);
     };
 
     /// @brief Returns pointer to the server's IO service.
@@ -199,7 +204,7 @@ public:
     /// that no libraries are loaded and that any marker files are deleted.
     void reset() {
         // Unload any previously-loaded libraries.
-        HooksManager::unloadLibraries();
+        EXPECT_TRUE(HooksManager::unloadLibraries());
 
         // Get rid of any marker files.
         static_cast<void>(remove(LOAD_MARKER_FILE));
@@ -401,15 +406,19 @@ TEST_F(CtrlChannelDhcpv4SrvTest, commands) {
     result = ControlledDhcpv4Srv::processCommand("shutdown", params);
     comment = parseAnswer(rcode, result);
     EXPECT_EQ(0, rcode); // expect success
+    // Exit value should default to 0.
+    EXPECT_EQ(0, server_->getExitValue());
 
-    const pid_t pid(getpid());
-    ConstElementPtr x(new isc::data::IntElement(pid));
-    params->set("pid", x);
+    // Case 3: send shutdown command with exit-value parameter.
+    ConstElementPtr x(new isc::data::IntElement(77));
+    params->set("exit-value", x);
 
-    // Case 3: send shutdown command with 1 parameter: pid
     result = ControlledDhcpv4Srv::processCommand("shutdown", params);
     comment = parseAnswer(rcode, result);
     EXPECT_EQ(0, rcode); // expect success
+
+    // Exit value should match.
+    EXPECT_EQ(77, server_->getExitValue());
 }
 
 // Check that the "libreload" command will reload libraries
@@ -451,6 +460,54 @@ TEST_F(CtrlChannelDhcpv4SrvTest, libreload) {
     // they should append information to the loading marker file.
     EXPECT_TRUE(checkMarkerFile(UNLOAD_MARKER_FILE, "21"));
     EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "1212"));
+}
+
+// Check that the "libreload" command will fail to reload libraries which are
+// not compatible when multi-threading is enabled
+TEST_F(CtrlChannelDhcpv4SrvTest, libreloadFailMultiThreading) {
+    createUnixChannelServer();
+
+    // Ensure no marker files to start with.
+    ASSERT_FALSE(checkMarkerFileExists(LOAD_MARKER_FILE));
+    ASSERT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
+
+    // Load two libraries
+    HookLibsCollection libraries;
+    libraries.push_back(make_pair(CALLOUT_LIBRARY_1, ConstElementPtr()));
+    libraries.push_back(make_pair(CALLOUT_LIBRARY_2, ConstElementPtr()));
+    HooksManager::loadLibraries(libraries);
+
+    // Check they are loaded.
+    HookLibsCollection loaded_libraries =
+        HooksManager::getLibraryInfo();
+    ASSERT_TRUE(libraries == loaded_libraries);
+
+    // ... which also included checking that the marker file created by the
+    // load functions exists and holds the correct value (of "12" - the
+    // first library appends "1" to the file, the second appends "2"). Also
+    // check that the unload marker file does not yet exist.
+    EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "12"));
+    EXPECT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
+
+    // Enable multi-threading before libreload command which should now fail
+    // as the second library is not multi-threading compatible.
+    MultiThreadingMgr::instance().setMode(true);
+
+    // Now execute the "libreload" command.  This should cause the libraries
+    // to unload and to reload.
+    std::string response;
+    sendUnixCommand("{ \"command\": \"libreload\" }", response);
+    EXPECT_EQ("{ \"result\": 1, "
+              "\"text\": \"Failed to reload hooks libraries.\" }"
+              , response);
+
+    // Check that the libraries have unloaded and failed to reload.  The
+    // libraries are unloaded in the reverse order to which they are loaded.
+    // When they load, they should append information to the loading marker
+    // file.  Failing to load the second library will also unload the first
+    // library.
+    EXPECT_TRUE(checkMarkerFile(UNLOAD_MARKER_FILE, "211"));
+    EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "121"));
 }
 
 // This test checks which commands are registered by the DHCPv4 server.
@@ -526,7 +583,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelNegative) {
               response);
 }
 
-// Tests that the server properly responds to shtudown command sent
+// Tests that the server properly responds to shutdown command sent
 // via ControlChannel
 TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelShutdown) {
     createUnixChannelServer();
@@ -578,7 +635,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelStats) {
     s << "{ \"arguments\": { ";
     for (auto st = initial_stats.begin(); st != initial_stats.end();) {
         s << "\"" << *st << "\": [ [ 0, \"";
-        s << isc::util::ptimeToText(StatsMgr::instance().getObservation(*st)->getInteger().second);
+        s << isc::util::clockToText(StatsMgr::instance().getObservation(*st)->getInteger().second);
         s << "\" ] ]";
         if (++st != initial_stats.end()) {
             s << ", ";
@@ -610,11 +667,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelStats) {
     EXPECT_EQ("{ \"result\": 1, \"text\": \"No 'bogus' statistic found\" }",
               response);
 
-    // Check statistic-remove-all
-    sendUnixCommand("{ \"command\" : \"statistic-remove-all\", "
-                    "  \"arguments\": {}}", response);
-    EXPECT_EQ("{ \"result\": 0, \"text\": \"All statistics removed.\" }",
-              response);
+    // Check statistic-remove-all (deprecated).
 
     // Check statistic-sample-age-set
     sendUnixCommand("{ \"command\" : \"statistic-sample-age-set\", "
@@ -712,15 +765,13 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
     string control_socket_footer =
         "\"   \n} \n";
     string logger_txt =
-        "    \"Logging\": { \n"
-        "        \"loggers\": [ { \n"
+        "       ,\"loggers\": [ { \n"
         "            \"name\": \"kea\", \n"
         "            \"severity\": \"FATAL\", \n"
         "            \"output_options\": [{ \n"
         "                \"output\": \"/dev/null\" \n"
         "            }] \n"
-        "        }] \n"
-        "    } \n";
+        "        }] \n";
 
     std::ostringstream os;
 
@@ -735,9 +786,8 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
         << control_socket_header
         << socket_path_
         << control_socket_footer
-        << "}\n"                      // close dhcp4
-        << ","
         << logger_txt
+        << "}\n"                      // close dhcp4
         << "}}";
 
     // Send the config-set command
@@ -753,7 +803,8 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
         CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
     EXPECT_EQ(1, subnets->size());
 
-    OptionDefinitionPtr def = LibDHCP::getRuntimeOptionDef("dhcp4", 163);
+    OptionDefinitionPtr def =
+        LibDHCP::getRuntimeOptionDef(DHCP4_OPTION_SPACE, 163);
     ASSERT_TRUE(def);
 
     // Create a config with malformed subnet that should fail to parse.
@@ -767,7 +818,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
         << socket_path_
         << control_socket_footer
         << "}\n"                      // close dhcp4
-        "}}";
+        << "}}";
 
     // Send the config-set command
     sendUnixCommand(os.str(), response);
@@ -782,7 +833,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configSet) {
     subnets = CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
     EXPECT_EQ(1, subnets->size());
 
-    def = LibDHCP::getRuntimeOptionDef("dhcp4", 163);
+    def = LibDHCP::getRuntimeOptionDef(DHCP4_OPTION_SPACE, 163);
     ASSERT_TRUE(def);
 
     // Create a valid config with two subnets and no command channel.
@@ -889,15 +940,13 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
     string control_socket_footer =
         "\"   \n} \n";
     string logger_txt =
-        "    \"Logging\": { \n"
-        "        \"loggers\": [ { \n"
+        "       ,\"loggers\": [ { \n"
         "            \"name\": \"kea\", \n"
         "            \"severity\": \"FATAL\", \n"
         "            \"output_options\": [{ \n"
         "                \"output\": \"/dev/null\" \n"
         "            }] \n"
-        "        }] \n"
-        "    } \n";
+        "        }] \n";
 
     std::ostringstream os;
 
@@ -910,9 +959,8 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
         << control_socket_header
         << socket_path_
         << control_socket_footer
-        << "}\n"                      // close dhcp4
-        << ","
         << logger_txt
+        << "}\n"                      // close dhcp4
         << "}}";
 
     // Send the config-set command
@@ -939,7 +987,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configTest) {
         << socket_path_
         << control_socket_footer
         << "}\n"                      // close dhcp4
-        "}}";
+        << "}}";
 
     // Send the config-test command
     sendUnixCommand(os.str(), response);
@@ -1067,6 +1115,69 @@ TEST_F(CtrlChannelDhcpv4SrvTest, statusGet) {
     ASSERT_TRUE(found_reload);
     EXPECT_LE(found_reload->intValue(), 5);
     EXPECT_GE(found_reload->intValue(), 0);
+
+    auto found_multi_threading = arguments->get("multi-threading-enabled");
+    ASSERT_TRUE(found_multi_threading);
+    EXPECT_FALSE(found_multi_threading->boolValue());
+
+    auto found_thread_count = arguments->get("thread-pool-size");
+    ASSERT_FALSE(found_thread_count);
+
+    auto found_queue_size = arguments->get("packet-queue-size");
+    ASSERT_FALSE(found_queue_size);
+
+    auto found_queue_stats = arguments->get("packet-queue-statistics");
+    ASSERT_FALSE(found_queue_stats);
+
+    MultiThreadingMgr::instance().setMode(true);
+    MultiThreadingMgr::instance().setThreadPoolSize(4);
+    MultiThreadingMgr::instance().setPacketQueueSize(64);
+    sendUnixCommand("{ \"command\": \"status-get\" }", response_txt);
+    ASSERT_NO_THROW(response = Element::fromJSON(response_txt));
+    ASSERT_TRUE(response);
+    ASSERT_EQ(Element::map, response->getType());
+    EXPECT_EQ(2, response->size());
+    result = response->get("result");
+    ASSERT_TRUE(result);
+    ASSERT_EQ(Element::integer, result->getType());
+    EXPECT_EQ(0, result->intValue());
+    arguments = response->get("arguments");
+    ASSERT_EQ(Element::map, arguments->getType());
+
+    // The returned pid should be the pid of our process.
+    found_pid = arguments->get("pid");
+    ASSERT_TRUE(found_pid);
+    EXPECT_EQ(static_cast<int64_t>(getpid()), found_pid->intValue());
+
+    // It is hard to check the actual uptime (and reload) as it is based
+    // on current time. Let's just make sure it is within a reasonable
+    // range.
+    found_uptime = arguments->get("uptime");
+    ASSERT_TRUE(found_uptime);
+    EXPECT_LE(found_uptime->intValue(), 5);
+    EXPECT_GE(found_uptime->intValue(), 0);
+
+    found_reload = arguments->get("reload");
+    ASSERT_TRUE(found_reload);
+    EXPECT_LE(found_reload->intValue(), 5);
+    EXPECT_GE(found_reload->intValue(), 0);
+
+    found_multi_threading = arguments->get("multi-threading-enabled");
+    ASSERT_TRUE(found_multi_threading);
+    EXPECT_TRUE(found_multi_threading->boolValue());
+
+    found_thread_count = arguments->get("thread-pool-size");
+    ASSERT_TRUE(found_thread_count);
+    EXPECT_EQ(found_thread_count->intValue(), 4);
+
+    found_queue_size = arguments->get("packet-queue-size");
+    ASSERT_TRUE(found_queue_size);
+    EXPECT_EQ(found_queue_size->intValue(), 64);
+
+    found_queue_stats = arguments->get("packet-queue-statistics");
+    ASSERT_TRUE(found_queue_stats);
+    ASSERT_EQ(Element::list, found_queue_stats->getType());
+    EXPECT_EQ(3, found_queue_stats->size());
 }
 
 // This test verifies that the DHCP server handles config-backend-pull command
@@ -1179,7 +1290,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlLeasesReclaimRemove) {
     ASSERT_FALSE(lease1);
 }
 
-// Tests that the server properly responds to shtudown command sent
+// Tests that the server properly responds to shutdown command sent
 // via ControlChannel
 TEST_F(CtrlChannelDhcpv4SrvTest, listCommands) {
     createUnixChannelServer();
@@ -1334,6 +1445,56 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configReloadValid) {
     ::remove("test8.json");
 }
 
+// This test verifies that disable DHCP service command performs sanity check on
+// parameters.
+TEST_F(CtrlChannelDhcpv4SrvTest, dhcpDisableBadParam) {
+    createUnixChannelServer();
+    std::string response;
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-disable\","
+                    "    \"arguments\": {"
+                    "        \"max-period\": -3"
+                    "    }"
+                    "}", response);
+    ConstElementPtr rsp;
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"'max-period' must be positive "
+              "integer\" }", response);
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-disable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"\""
+                    "    }"
+                    "}", response);
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"invalid value used for 'origin' "
+              "parameter: (empty string)\" }", response);
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-disable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"test\""
+                    "    }"
+                    "}", response);
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"invalid value used for 'origin' "
+              "parameter: test\" }", response);
+}
+
 // This test verifies if it is possible to disable DHCP service via command.
 TEST_F(CtrlChannelDhcpv4SrvTest, dhcpDisable) {
     createUnixChannelServer();
@@ -1351,6 +1512,50 @@ TEST_F(CtrlChannelDhcpv4SrvTest, dhcpDisable) {
     EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
 
     EXPECT_FALSE(server_->network_state_->isServiceEnabled());
+
+    server_->network_state_->enableService(NetworkState::Origin::USER_COMMAND);
+
+    EXPECT_TRUE(server_->network_state_->isServiceEnabled());
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-disable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"user\""
+                    "    }"
+                    "}", response);
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    cfg = parseAnswer(status, rsp);
+    EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
+
+    EXPECT_FALSE(server_->network_state_->isServiceEnabled());
+
+    server_->network_state_->enableService(NetworkState::Origin::USER_COMMAND);
+
+    EXPECT_TRUE(server_->network_state_->isServiceEnabled());
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-disable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"ha-partner\""
+                    "    }"
+                    "}", response);
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    cfg = parseAnswer(status, rsp);
+    EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
+
+    EXPECT_FALSE(server_->network_state_->isServiceEnabled());
+
+    server_->network_state_->enableService(NetworkState::Origin::HA_COMMAND);
+
+    EXPECT_TRUE(server_->network_state_->isServiceEnabled());
 }
 
 // This test verifies that it is possible to disable DHCP service for a short
@@ -1383,6 +1588,42 @@ TEST_F(CtrlChannelDhcpv4SrvTest, dhcpDisableTemporarily) {
     EXPECT_TRUE(server_->network_state_->isDelayedEnableAll());
 }
 
+// This test verifies that enable DHCP service command performs sanity check on
+// parameters.
+TEST_F(CtrlChannelDhcpv4SrvTest, dhcpEnableBadParam) {
+    createUnixChannelServer();
+    std::string response;
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-enable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"\""
+                    "    }"
+                    "}", response);
+    ConstElementPtr rsp;
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"invalid value used for 'origin' "
+              "parameter: (empty string)\" }", response);
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-enable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"test\""
+                    "    }"
+                    "}", response);
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    EXPECT_EQ("{ \"result\": 1, \"text\": \"invalid value used for 'origin' "
+              "parameter: test\" }", response);
+}
+
 // This test verifies if it is possible to enable DHCP service via command.
 TEST_F(CtrlChannelDhcpv4SrvTest, dhcpEnable) {
     createUnixChannelServer();
@@ -1397,6 +1638,46 @@ TEST_F(CtrlChannelDhcpv4SrvTest, dhcpEnable) {
 
     int status;
     ConstElementPtr cfg = parseAnswer(status, rsp);
+    EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
+
+    EXPECT_TRUE(server_->network_state_->isServiceEnabled());
+
+    server_->network_state_->disableService(NetworkState::Origin::USER_COMMAND);
+
+    EXPECT_FALSE(server_->network_state_->isServiceEnabled());
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-enable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"user\""
+                    "    }"
+                    "}", response);
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    cfg = parseAnswer(status, rsp);
+    EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
+
+    EXPECT_TRUE(server_->network_state_->isServiceEnabled());
+
+    server_->network_state_->disableService(NetworkState::Origin::HA_COMMAND);
+
+    EXPECT_FALSE(server_->network_state_->isServiceEnabled());
+
+    sendUnixCommand("{"
+                    "    \"command\": \"dhcp-enable\","
+                    "    \"arguments\": {"
+                    "        \"origin\": \"ha-partner\""
+                    "    }"
+                    "}", response);
+
+    // The response should be a valid JSON.
+    EXPECT_NO_THROW(rsp = Element::fromJSON(response));
+    ASSERT_TRUE(rsp);
+
+    cfg = parseAnswer(status, rsp);
     EXPECT_EQ(CONTROL_RESULT_SUCCESS, status);
 
     EXPECT_TRUE(server_->network_state_->isServiceEnabled());
@@ -1477,8 +1758,8 @@ TEST_F(CtrlChannelDhcpv4SrvTest, longCommand) {
 
     ASSERT_NO_THROW(
         CommandMgr::instance().registerCommand("foo",
-             boost::bind(&CtrlChannelDhcpv4SrvTest::longCommandHandler,
-                         command.str(), _1, _2));
+             std::bind(&CtrlChannelDhcpv4SrvTest::longCommandHandler,
+                       command.str(), ph::_1, ph::_2));
     );
 
     createUnixChannelServer();
@@ -1536,7 +1817,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, longResponse) {
     // of a desired size.
     ASSERT_NO_THROW(
         CommandMgr::instance().registerCommand("foo",
-             boost::bind(&CtrlChannelDhcpv4SrvTest::longResponseHandler, _1, _2));
+             std::bind(&CtrlChannelDhcpv4SrvTest::longResponseHandler, ph::_1, ph::_2));
     );
 
     createUnixChannelServer();

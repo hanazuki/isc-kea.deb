@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,6 +24,12 @@
 #include <cstdint>
 #include <functional>
 #include <string>
+
+/// @brief Template to ignore unused arguments.
+namespace {
+template <typename... Args>
+inline void unused(Args const& ...) {}
+} // end of anonymous namespace
 
 namespace isc {
 namespace dhcp {
@@ -152,33 +158,6 @@ public:
         IOAddressList addresses_;
     };
 
-
-    /// @brief Specifies allowed host reservation mode.
-    ///
-    typedef enum  {
-
-        /// None - host reservation is disabled. No reservation types
-        /// are allowed.
-        HR_DISABLED,
-
-        /// Only out-of-pool reservations is allowed. This mode
-        /// allows AllocEngine to skip reservation checks when
-        /// dealing with with addresses that are in pool.
-        HR_OUT_OF_POOL,
-
-        /// Only global reservations are allowed. This mode
-        /// instructs AllocEngine to only look at global reservations.
-        HR_GLOBAL,
-
-        /// Both out-of-pool and in-pool reservations are allowed. This is the
-        /// most flexible mode, where sysadmin have biggest liberty. However,
-        /// there is a non-trivial performance penalty for it, as the
-        /// AllocEngine code has to check whether there are reservations, even
-        /// when dealing with reservations from within the dynamic pools.
-        /// @todo - should ALL include global?
-        HR_ALL
-    } HRMode;
-
     /// @brief Inheritance "mode" used when fetching an optional @c Network
     /// parameter.
     ///
@@ -203,11 +182,14 @@ public:
     /// @brief Constructor.
     Network()
         : iface_name_(), client_class_(), t1_(), t2_(), valid_(),
-          host_reservation_mode_(HR_ALL, true), cfg_option_(new CfgOption()),
+          reservations_global_(false, true), reservations_in_subnet_(true, true),
+          reservations_out_of_pool_(false, true), cfg_option_(new CfgOption()),
           calculate_tee_times_(), t1_percent_(), t2_percent_(),
           ddns_send_updates_(), ddns_override_no_update_(), ddns_override_client_update_(),
           ddns_replace_client_name_mode_(), ddns_generated_prefix_(), ddns_qualifying_suffix_(),
-          hostname_char_set_(), hostname_char_replacement_() {
+          hostname_char_set_(), hostname_char_replacement_(), store_extended_info_(),
+          cache_threshold_(), cache_max_age_(), ddns_update_on_renew_(),
+          ddns_use_conflict_resolution_() {
     }
 
     /// @brief Virtual destructor.
@@ -251,7 +233,7 @@ public:
     util::Optional<std::string>
     getIface(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getIface, iface_name_,
-                                     inheritance, "interface"));
+                                     inheritance));
     };
 
     /// @brief Sets information about relay
@@ -357,7 +339,8 @@ public:
     /// @param inheritance inheritance mode to be used.
     Triplet<uint32_t> getValid(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getValid, valid_, inheritance,
-                                     "valid-lifetime"));
+                                     "valid-lifetime", "min-valid-lifetime",
+                                     "max-valid-lifetime"));
     }
 
     /// @brief Sets new valid lifetime for a network.
@@ -395,70 +378,59 @@ public:
         t2_ = t2;
     }
 
-    /// @brief Specifies what type of Host Reservations are supported.
-    ///
-    /// Host reservations may be either in-pool (they reserve an address that
-    /// is in the dynamic pool) or out-of-pool (they reserve an address that is
-    /// not in the dynamic pool). HR may also be completely disabled for
-    /// performance reasons.
+    /// @brief Returns whether global reservations should be fetched.
     ///
     /// @param inheritance inheritance mode to be used.
-    /// @return Host reservation mode enabled.
-    util::Optional<HRMode>
-    getHostReservationMode(const Inheritance& inheritance = Inheritance::ALL) const {
-        // Inheritance for host reservations is a little different than for other
-        // parameters. The reservation at the global level is given as a string.
-        // Thus we call getProperty here without a global name to check if the
-        // host reservation mode is specified on network level only.
-        const util::Optional<HRMode>& hr_mode = getProperty<Network>(&Network::getHostReservationMode,
-                                                                     host_reservation_mode_,
-                                                                     inheritance);
-        // If HR mode is not specified at network level we need this special
-        // case code to handle conversion of the globally configured HR
-        // mode to an enum.
-        if (hr_mode.unspecified() && (inheritance != Inheritance::NONE) &&
-            (inheritance != Inheritance::PARENT_NETWORK)) {
-            // Get global reservation mode.
-            util::Optional<std::string> hr_mode_name;
-            hr_mode_name = getGlobalProperty(hr_mode_name, "reservation-mode");
-            if (!hr_mode_name.unspecified()) {
-                try {
-                    // If the HR mode is globally configured, let's convert it from
-                    // a string to enum.
-                    return (hrModeFromString(hr_mode_name.get()));
-
-                } catch (...) {
-                    // This should not really happen because the configuration
-                    // parser should have already verified the globally configured
-                    // reservation mode. However, we want to be 100% sure that this
-                    // method doesn't throw. Let's just return unspecified.
-                    return (hr_mode);
-                }
-            }
-        }
-        return (hr_mode);
+    util::Optional<bool>
+    getReservationsGlobal(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getReservationsGlobal,
+                                     reservations_global_,
+                                     inheritance,
+                                     "reservations-global"));
     }
 
-    /// @brief Sets host reservation mode.
+    /// @brief Sets whether global reservations should be fetched.
     ///
-    /// See @ref getHostReservationMode for details.
-    ///
-    /// @param mode mode to be set
-    void setHostReservationMode(const util::Optional<HRMode>& mode) {
-        host_reservation_mode_ = mode;
+    /// @param reservations_global new value of enabled/disabled.
+    void setReservationsGlobal(const util::Optional<bool>& reservations_global) {
+        reservations_global_ = reservations_global;
     }
 
-    /// @brief Attempts to convert text representation to HRMode enum.
+    /// @brief Returns whether subnet reservations should be fetched.
     ///
-    /// Allowed values are "disabled", "off" (alias for disabled),
-    /// "out-of-pool" and "all". See @c Network::HRMode for their exact meaning.
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<bool>
+    getReservationsInSubnet(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getReservationsInSubnet,
+                                     reservations_in_subnet_,
+                                     inheritance,
+                                     "reservations-in-subnet"));
+    }
+
+    /// @brief Sets whether subnet reservations should be fetched.
     ///
-    /// @param hr_mode_name Host Reservation mode in the textual form.
+    /// @param reservations_in_subnet new value of enabled/disabled.
+    void setReservationsInSubnet(const util::Optional<bool>& reservations_in_subnet) {
+        reservations_in_subnet_ = reservations_in_subnet;
+    }
+
+    /// @brief Returns whether only out-of-pool reservations are allowed.
     ///
-    /// @throw BadValue if the text cannot be converted.
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<bool>
+    getReservationsOutOfPool(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getReservationsOutOfPool,
+                                     reservations_out_of_pool_,
+                                     inheritance,
+                                     "reservations-out-of-pool"));
+    }
+
+    /// @brief Sets whether only out-of-pool reservations are allowed.
     ///
-    /// @return one of allowed HRMode values
-    static HRMode hrModeFromString(const std::string& hr_mode_name);
+    /// @param reservations_out_of_pool new value of enabled/disabled.
+    void setReservationsOutOfPool(const util::Optional<bool>& reservations_out_of_pool) {
+        reservations_out_of_pool_ = reservations_out_of_pool;
+    }
 
     /// @brief Returns pointer to the option data configuration for this network.
     CfgOptionPtr getCfgOption() {
@@ -498,7 +470,7 @@ public:
                                      inheritance, "t1-percent"));
     }
 
-    /// @brief Sets new precentage for calculating T1 (renew timer).
+    /// @brief Sets new percentage for calculating T1 (renew timer).
     ///
     /// @param t1_percent New percentage to use.
     void setT1Percent(const util::Optional<double>& t1_percent) {
@@ -514,7 +486,7 @@ public:
                                      inheritance, "t2-percent"));
     }
 
-    /// @brief Sets new precentage for calculating T2 (rebind timer).
+    /// @brief Sets new percentage for calculating T2 (rebind timer).
     ///
     /// @param t2_percent New percentage to use.
     void setT2Percent(const util::Optional<double>& t2_percent) {
@@ -554,7 +526,7 @@ public:
         ddns_override_no_update_ = ddns_override_no_update;
     }
 
-    /// @brief Returns ddns-overridie-client-update
+    /// @brief Returns ddns-override-client-update
     ///
     /// @param inheritance inheritance mode to be used.
     util::Optional<bool>
@@ -599,7 +571,7 @@ public:
                 } catch (...) {
                     // This should not really happen because the configuration
                     // parser should have already verified the globally configured
-                    // reservation mode. However, we want to be 100% sure that this
+                    // mode. However, we want to be 100% sure that this
                     // method doesn't throw. Let's just return unspecified.
                     return (mode);
                 }
@@ -681,6 +653,90 @@ public:
         hostname_char_replacement_ = hostname_char_replacement;
     }
 
+    /// @brief Returns store-extended-info
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<bool>
+    getStoreExtendedInfo(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getStoreExtendedInfo,
+                                     store_extended_info_,
+                                     inheritance, "store-extended-info"));
+    }
+
+    /// @brief Sets new store-extended-info
+    ///
+    /// @param store_extended_info New value to use.
+    void setStoreExtendedInfo(const util::Optional<bool>& store_extended_info) {
+        store_extended_info_ = store_extended_info;
+    }
+
+    /// @brief Returns percentage to use as cache threshold.
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<double>
+    getCacheThreshold(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getCacheThreshold,
+                                     cache_threshold_,
+                                     inheritance, "cache-threshold"));
+    }
+
+    /// @brief Sets cache threshold for a network.
+    ///
+    /// @param cache_threshold New cache threshold percentage to use.
+    void setCacheThreshold(const util::Optional<double>& cache_threshold) {
+        cache_threshold_ = cache_threshold;
+    }
+
+    /// @brief Returns value in seconds to use as cache maximum age.
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<uint32_t>
+    getCacheMaxAge(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getCacheMaxAge, cache_max_age_,
+                                     inheritance, "cache-max-age"));
+    }
+
+    /// @brief Sets cache max for a network.
+    ///
+    /// @param cache_max_age New cache maximum value in seconds to use.
+    void setCacheMaxAge(const util::Optional<uint32_t>& cache_max_age) {
+        cache_max_age_ = cache_max_age;
+    }
+
+    /// @brief Returns ddns-update-on-renew
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<bool>
+    getDdnsUpdateOnRenew(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getDdnsUpdateOnRenew,
+                                     ddns_update_on_renew_,
+                                     inheritance, "ddns-update-on-renew"));
+    }
+
+    /// @brief Sets new ddns-update-on-renew
+    ///
+    /// @param ddns_update_on_renew New value to use.
+    void setDdnsUpdateOnRenew(const util::Optional<bool>& ddns_update_on_renew) {
+        ddns_update_on_renew_ = ddns_update_on_renew;
+    }
+
+    /// @brief Returns ddns-use-conflict-resolution
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<bool>
+    getDdnsUseConflictResolution(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getDdnsUseConflictResolution,
+                                     ddns_use_conflict_resolution_,
+                                     inheritance, "ddns-use-conflict-resolution"));
+    }
+
+    /// @brief Sets new ddns-use-conflict-resolution
+    ///
+    /// @param ddns_use_conflict_resolution New value to use.
+    void setDdnsUseConflictResolution(const util::Optional<bool>& ddns_use_conflict_resolution) {
+        ddns_use_conflict_resolution_ = ddns_use_conflict_resolution;
+    }
+
     /// @brief Unparses network object.
     ///
     /// @return A pointer to unparsed network configuration.
@@ -704,8 +760,8 @@ protected:
     /// name. Typically, this method is invoked by @c getProperty when
     /// network specific value of the parameter is not found. In some cases
     /// it may be called by other methods. One such example is the
-    /// @c getHostReservationMode which needs to call @c getGlobalProperty
-    /// explicitly to convert the global host reservation mode value from
+    /// @c getDdnsReplaceClientNameMode which needs to call @c getGlobalProperty
+    /// explicitly to convert the global replace client name mode value from
     /// a string to an enum.
     ///
     /// @tparam ReturnType Type of the returned value, e.g.
@@ -715,12 +771,19 @@ protected:
     /// no global value is found.
     /// @param global_name Name of the global parameter which value should
     /// be returned
+    /// @param min_name Name of the min global parameter which value should
+    /// be returned for triplets
+    /// @param max_name Name of the max global parameter which value should
+    /// be returned for triplets
     ///
     /// @return Optional value fetched from the global level or the value
     /// of @c property.
     template<typename ReturnType>
     ReturnType getGlobalProperty(ReturnType property,
-                                 const std::string& global_name) const {
+                                 const std::string& global_name,
+                                 const std::string& min_name = "",
+                                 const std::string& max_name = "") const {
+        unused(min_name, max_name);
         if (!global_name.empty() && fetch_globals_fn_) {
             data::ConstElementPtr globals = fetch_globals_fn_();
             if (globals && (globals->getType() == data::Element::map)) {
@@ -729,6 +792,57 @@ protected:
                     // If there is a global parameter, convert it to the
                     // optional value of the given type and return.
                     return (data::ElementValue<typename ReturnType::ValueType>()(global_param));
+                }
+            }
+        }
+        return (property);
+    }
+
+    /// @brief The @c getGlobalProperty specialization for Triplet<T>.
+    ///
+    /// @note: use overloading vs specialization because full specialization
+    /// is not allowed in this scope.
+    ///
+    /// @tparam NumType Type of the encapsulated value(s).
+    ///
+    /// @param property Value to be returned when it is specified or when
+    /// no global value is found.
+    /// @param global_name Name of the global parameter which value should
+    /// be returned
+    /// @param min_name Name of the min global parameter which value should
+    /// be returned for triplets
+    /// @param max_name Name of the max global parameter which value should
+    /// be returned for triplets
+    ///
+    /// @return Optional value fetched from the global level or the value
+    /// of @c property.
+    template<typename NumType>
+    Triplet<NumType> getGlobalProperty(Triplet<NumType> property,
+                                       const std::string& global_name,
+                                       const std::string& min_name = "",
+                                       const std::string& max_name = "") const {
+
+        if (!global_name.empty() && fetch_globals_fn_) {
+            data::ConstElementPtr globals = fetch_globals_fn_();
+            if (globals && (globals->getType() == data::Element::map)) {
+                data::ConstElementPtr param = globals->get(global_name);
+                if (param) {
+                    NumType def_value = static_cast<NumType>(param->intValue());
+                    if (min_name.empty() || max_name.empty()) {
+                        return (def_value);
+                    } else {
+                        NumType min_value = def_value;
+                        NumType max_value = def_value;
+                        data::ConstElementPtr min_param = globals->get(min_name);
+                        if (min_param) {
+                            min_value = static_cast<NumType>(min_param->intValue());
+                        }
+                        data::ConstElementPtr max_param = globals->get(max_name);
+                        if (max_param) {
+                            max_value = static_cast<NumType>(max_param->intValue());
+                        }
+                        return (Triplet<NumType>(min_value, def_value, max_value));
+                    }
                 }
             }
         }
@@ -748,12 +862,18 @@ protected:
     /// no global value is found.
     /// @param global_name Name of the global parameter which value should
     /// be returned
+    /// @param min_name Name of the min global parameter which value should
+    /// be returned for triplets
+    /// @param max_name Name of the max global parameter which value should
+    /// be returned for triplets
     ///
     /// @return Optional value fetched from the global level or the value
     /// of @c property.
     util::Optional<asiolink::IOAddress>
     getGlobalProperty(util::Optional<asiolink::IOAddress> property,
-                      const std::string& global_name) const;
+                      const std::string& global_name,
+                      const std::string& min_name = "",
+                      const std::string& max_name = "") const;
 
     /// @brief Returns a value associated with a network using inheritance.
     ///
@@ -778,6 +898,10 @@ protected:
     /// level. This value is empty by default, which indicates that the
     /// global value for the given parameter is not supported and shouldn't
     /// be fetched.
+    /// @param min_name Name of the min global parameter which value should
+    /// be returned for triplets
+    /// @param max_name Name of the max global parameter which value should
+    /// be returned for triplets
     ///
     /// @return Optional value fetched from this instance level, parent
     /// network level or global level
@@ -785,7 +909,9 @@ protected:
     ReturnType getProperty(ReturnType(BaseType::*MethodPointer)(const Inheritance&) const,
                            ReturnType property,
                            const Inheritance& inheritance,
-                           const std::string& global_name = "") const {
+                           const std::string& global_name = "",
+                           const std::string& min_name = "",
+                           const std::string& max_name = "") const {
 
         // If no inheritance is to be used, return the value for this
         // network regardless if it is specified or not.
@@ -804,7 +930,7 @@ protected:
 
         // If global value requested, return it.
         } else if (inheritance == Inheritance::GLOBAL) {
-            return (getGlobalProperty(ReturnType(), global_name));
+            return (getGlobalProperty(ReturnType(), global_name, min_name, max_name));
         }
 
         // We use inheritance and the value is not specified on the network level.
@@ -827,7 +953,7 @@ protected:
             // can be specified on global level and there is a callback
             // that returns the global values, try to find this parameter
             // at the global scope.
-            return (getGlobalProperty(property, global_name));
+            return (getGlobalProperty(property, global_name, min_name, max_name));
         }
 
         // We haven't found the value at any level, so return the unspecified.
@@ -926,10 +1052,18 @@ protected:
     /// @brief a Triplet (min/default/max) holding allowed valid lifetime values
     Triplet<uint32_t> valid_;
 
-    /// @brief Specifies host reservation mode
+    /// @brief Enables global reservations.
+    util::Optional<bool> reservations_global_;
+
+    /// @brief Enables subnet reservations.
+    util::Optional<bool> reservations_in_subnet_;
+
+    /// @brief Enables out-of-pool reservations optimization.
     ///
-    /// See @ref HRMode type for details.
-    util::Optional<HRMode> host_reservation_mode_;
+    /// When true only out-of-pool reservations are allowed. This allows
+    /// AllocEngine to skip reservation checks when dealing with addresses
+    /// that are in pool.
+    util::Optional<bool> reservations_out_of_pool_;
 
     /// @brief Pointer to the option data configuration for this subnet.
     CfgOptionPtr cfg_option_;
@@ -970,6 +1104,22 @@ protected:
     /// @brief A string to replace invalid characters when scrubbing hostnames.
     /// Meaningful only if hostname_char_set_ is not empty.
     util::Optional<std::string> hostname_char_replacement_;
+
+    /// @brief Should Kea store additional client query data (e.g. relay-agent-info)
+    /// on the lease.
+    util::Optional<bool> store_extended_info_;
+
+    /// @brief Percentage of the lease lifetime to use as cache threshold.
+    util::Optional<double> cache_threshold_;
+
+    /// @brief Value in seconds to use as cache maximal age.
+    util::Optional<uint32_t> cache_max_age_;
+
+    /// @brief Should Kea perform updates when leases are extended
+    util::Optional<bool> ddns_update_on_renew_;
+
+    /// @brief Used to to tell kea-dhcp-ddns whether or not to use conflict resolution.
+    util::Optional<bool> ddns_use_conflict_resolution_;
 
     /// @brief Pointer to another network that this network belongs to.
     ///
@@ -1129,7 +1279,9 @@ public:
     Triplet<uint32_t>
     getPreferred(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network6>(&Network6::getPreferred, preferred_,
-                                      inheritance, "preferred-lifetime"));
+                                      inheritance, "preferred-lifetime",
+                                      "min-preferred-lifetime",
+                                      "max-preferred-lifetime"));
     }
 
     /// @brief Sets new preferred lifetime for a network.

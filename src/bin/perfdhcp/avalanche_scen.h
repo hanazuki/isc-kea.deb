@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -30,7 +30,7 @@ struct EnumClassHash
 /// \brief Avalanche Scenario class.
 ///
 /// This class is used to run the performance test where DHCP server
-/// is first loaded with indicated bumer of Discover or Solicit messages
+/// is first loaded with indicated buffer of Discover or Solicit messages
 /// and then the class is waiting till receiving all required responses.
 /// Full DORA and SARR message sequences are expected.
 class AvalancheScen : public AbstractScen {

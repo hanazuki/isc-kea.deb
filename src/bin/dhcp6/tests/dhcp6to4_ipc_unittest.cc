@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -58,6 +58,19 @@ public:
 
         // Reset the flag which we expect to be set in the callout.
         callback_pkt_options_copy_ = false;
+    }
+
+    /// @brief Destructor
+    ///
+    /// Various cleanups.
+    virtual ~Dhcp6to4IpcTest() {
+        Dhcp6to4Ipc::client_port = 0;
+        HooksManager::preCalloutsLibraryHandle().deregisterAllCallouts("buffer6_send");
+        callback_pkt_.reset();
+        bool status = HooksManager::unloadLibraries();
+        if (!status) {
+            std::cerr << "(fixture dtor) unloadLibraries failed" << std::endl;
+        }
     }
 
     /// @brief Configure DHCP4o6 port.
@@ -157,6 +170,7 @@ TEST_F(Dhcp6to4IpcTest, receive) {
     Pkt6Ptr pkt(new Pkt6(DHCPV6_DHCPV4_RESPONSE, 1234));
     pkt->addOption(createDHCPv4MsgOption());
     pkt->setIface("eth0");
+    pkt->setIndex(ETH0_INDEX);
     pkt->setRemoteAddr(IOAddress("2001:db8:1::123"));
     ASSERT_NO_THROW(pkt->pack());
 
@@ -180,6 +194,7 @@ TEST_F(Dhcp6to4IpcTest, receive) {
     EXPECT_EQ(forwarded->getType(), pkt->getType());
     EXPECT_TRUE(forwarded->getOption(D6O_DHCPV4_MSG));
     EXPECT_EQ("eth0", forwarded->getIface());
+    EXPECT_EQ(ETH0_INDEX, forwarded->getIndex());
     EXPECT_EQ("2001:db8:1::123", forwarded->getRemoteAddr().toText());
 
     // Verify statistics
@@ -224,6 +239,7 @@ TEST_F(Dhcp6to4IpcTest, DISABLED_receiveRelayed) {
     relay.hop_count_ = 1;
     pkt->relay_info_.push_back(relay);
     pkt->setIface("eth0");
+    pkt->setIndex(ETH0_INDEX);
     pkt->setRemoteAddr(IOAddress("2001:db8:1::123"));
     ASSERT_NO_THROW(pkt->pack());
 
@@ -243,6 +259,7 @@ TEST_F(Dhcp6to4IpcTest, DISABLED_receiveRelayed) {
     EXPECT_EQ(forwarded->getType(), pkt->getType());
     EXPECT_TRUE(forwarded->getOption(D6O_DHCPV4_MSG));
     EXPECT_EQ("eth0", forwarded->getIface());
+    EXPECT_EQ(ETH0_INDEX, forwarded->getIndex());
     EXPECT_EQ("2001:db8:1::123", forwarded->getRemoteAddr().toText());
     EXPECT_EQ(DHCP6_CLIENT_PORT, forwarded->getRemotePort());
 
@@ -275,6 +292,7 @@ TEST_F(Dhcp6to4IpcTest, clientPort) {
     Pkt6Ptr pkt(new Pkt6(DHCPV6_DHCPV4_RESPONSE, 1234));
     pkt->addOption(createDHCPv4MsgOption());
     pkt->setIface("eth0");
+    pkt->setIndex(ETH0_INDEX);
     pkt->setRemoteAddr(IOAddress("2001:db8:1::123"));
     ASSERT_NO_THROW(pkt->pack());
 
@@ -295,9 +313,6 @@ TEST_F(Dhcp6to4IpcTest, clientPort) {
 
     // Verify the packet received.
     EXPECT_EQ(ipc.client_port, forwarded->getRemotePort());
-
-    // Reset the value in case tests are not in order.
-    ipc.client_port = 0;
 }
 
 } // end of anonymous namespace

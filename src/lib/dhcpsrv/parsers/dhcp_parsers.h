@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,6 +20,7 @@
 #include <dhcpsrv/cfg_mac_source.h>
 #include <dhcpsrv/srv_config.h>
 #include <dhcpsrv/parsers/base_network_parser.h>
+#include <dhcpsrv/parsers/option_data_parser.h>
 #include <cc/simple_parser.h>
 #include <exceptions/exceptions.h>
 #include <util/optional.h>
@@ -54,7 +55,7 @@ typedef boost::shared_ptr<OptionStorage> OptionStoragePtr;
 template<typename ValueType>
 class ValueStorage {
 public:
-    /// @brief  Stores the the parameter, its value and the position in the
+    /// @brief  Stores the parameter, its value and the position in the
     /// store.
     ///
     /// If the parameter does not exist in the store, then it will be added,
@@ -221,8 +222,6 @@ public:
     void parse(SrvConfig& srv_cfg, isc::data::ConstElementPtr value);
 };
 
-typedef std::pair<isc::dhcp::OptionDefinitionPtr, std::string> OptionDefinitionTuple;
-
 /// @brief Parser for a single option definition.
 ///
 /// This parser creates an instance of a single option definition.
@@ -236,11 +235,10 @@ public:
     /// @brief Parses an entry that describes single option definition.
     ///
     /// @param option_def a configuration entry to be parsed.
-    /// @return tuple (option definition, option space) of the parsed structure
+    /// @return option definition of the parsed structure.
     ///
     /// @throw DhcpConfigError if parsing was unsuccessful.
-    OptionDefinitionTuple
-    parse(isc::data::ConstElementPtr option_def);
+    OptionDefinitionPtr parse(isc::data::ConstElementPtr option_def);
 
 private:
     /// @brief Address family: @c AF_INET or @c AF_INET6.
@@ -328,6 +326,18 @@ protected:
     virtual PoolPtr poolMaker(isc::asiolink::IOAddress &min,
                               isc::asiolink::IOAddress &max,
                               int32_t ptype = 0) = 0;
+
+    /// @brief Returns an instance of the @c OptionDataListParser to
+    /// be used in parsing the option-data structure.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for option data.
+    ///
+    /// @param address_family AF_INET (for DHCPv4) or AF_INET6 (for DHCPv6).
+    ///
+    /// @return an instance of the @c OptionDataListParser.
+    virtual boost::shared_ptr<OptionDataListParser>
+    createOptionDataListParser(const uint16_t address_family) const;
 };
 
 /// @brief Parser for IPv4 pool definitions.
@@ -382,10 +392,21 @@ public:
     /// @throw isc::dhcp::DhcpConfigError when pool parsing fails
     virtual void parse(PoolStoragePtr pools,
                        isc::data::ConstElementPtr pools_list) = 0;
+
+protected:
+
+    /// @brief Returns an instance of the @c PoolParser to be used in
+    /// parsing the address pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c PoolParser.
+    virtual boost::shared_ptr<PoolParser> createPoolConfigParser() const = 0;
 };
 
 /// @brief Specialization of the pool list parser for DHCPv4
-class Pools4ListParser : PoolsListParser {
+class Pools4ListParser : public PoolsListParser {
 public:
 
     /// @brief parses the actual structure
@@ -396,6 +417,17 @@ public:
     /// @param pools_list a list of pool structures
     /// @throw isc::dhcp::DhcpConfigError when pool parsing fails
     void parse(PoolStoragePtr pools, data::ConstElementPtr pools_list);
+
+protected:
+
+    /// @brief Returns an instance of the @c Pool4Parser to be used in
+    /// parsing the address pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c Pool4Parser.
+    virtual boost::shared_ptr<PoolParser> createPoolConfigParser() const;
 };
 
 /// @brief parser for additional relay information
@@ -502,7 +534,7 @@ protected:
     virtual void initSubnet(isc::data::ConstElementPtr params,
                             isc::asiolink::IOAddress addr, uint8_t len) = 0;
 
-private:
+protected:
 
     /// @brief Create a new subnet using a data from child parsers.
     ///
@@ -511,7 +543,24 @@ private:
     /// failed.
     void createSubnet(isc::data::ConstElementPtr data);
 
-protected:
+    /// @brief Returns an instance of the @c OptionDataListParser to
+    /// be used in parsing the option-data structure.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for option data.
+    ///
+    /// @return an instance of the @c OptionDataListParser.
+    virtual boost::shared_ptr<OptionDataListParser> createOptionDataListParser() const;
+
+    /// @brief Returns an instance of the @c PoolsListParser to be used
+    /// in parsing the address pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c PoolsListParser.
+    virtual boost::shared_ptr<PoolsListParser>
+    createPoolsListParser() const = 0;
 
     /// Storage for pools belonging to this subnet.
     PoolStoragePtr pools_;
@@ -565,6 +614,23 @@ protected:
     /// @param len is the prefix length
     void initSubnet(data::ConstElementPtr params,
                     asiolink::IOAddress addr, uint8_t len);
+
+    /// @brief Verifies the host reservation address is in the subnet range
+    ///
+    /// @param subnet pointer to the subnet
+    /// @param host pointer to the host reservation
+    /// @throw DhcpConfigError when the address is not in the subnet range.
+    void validateResv(const Subnet4Ptr& subnet, ConstHostPtr host);
+
+    /// @brief Returns an instance of the @c Pools4ListParser to be used
+    /// in parsing the address pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c Pools4ListParser.
+    virtual boost::shared_ptr<PoolsListParser>
+    createPoolsListParser() const;
 };
 
 /// @brief this class parses list of DHCP4 subnets
@@ -580,6 +646,10 @@ public:
     /// @param check_iface Check if the specified interface exists in
     /// the system.
     Subnets4ListConfigParser(bool check_iface = true);
+
+    /// @brief Virtual destructor.
+    virtual ~Subnets4ListConfigParser() {
+    }
 
     /// @brief parses contents of the list
     ///
@@ -601,6 +671,15 @@ public:
                  data::ConstElementPtr subnets_list);
 
 protected:
+
+    /// @brief Returns an instance of the @c Subnet4ConfigParser to be
+    /// used in parsing the subnets.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the subnets.
+    ///
+    /// @return an instance of the @c Subnet4ConfigParser.
+    virtual boost::shared_ptr<Subnet4ConfigParser> createSubnetConfigParser() const;
 
     /// Check if the specified interface exists in the system.
     bool check_iface_;
@@ -639,7 +718,7 @@ protected:
 };
 
 /// @brief Specialization of the pool list parser for DHCPv6
-class Pools6ListParser : PoolsListParser {
+class Pools6ListParser : public PoolsListParser {
 public:
 
     /// @brief parses the actual structure
@@ -650,6 +729,17 @@ public:
     /// @param pools_list a list of pool structures
     /// @throw isc::dhcp::DhcpConfigError when pool parsing fails
     void parse(PoolStoragePtr pools, data::ConstElementPtr pools_list);
+
+protected:
+
+    /// @brief Returns an instance of the @c Pool6Parser to be used in
+    /// parsing the address pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c Pool6Parser.
+    virtual boost::shared_ptr<PoolParser> createPoolConfigParser() const;
 };
 
 /// @brief Parser for IPv6 prefix delegation definitions.
@@ -676,6 +766,10 @@ public:
     ///
     PdPoolParser();
 
+    /// @brief Virtual destructor.
+    virtual ~PdPoolParser() {
+    }
+
     /// @brief Builds a prefix delegation pool from the given configuration
     ///
     /// This function parses configuration entries and creates an instance
@@ -688,7 +782,17 @@ public:
     /// @throw DhcpConfigError if configuration parsing fails.
     void parse(PoolStoragePtr pools, data::ConstElementPtr pd_pool_);
 
-private:
+protected:
+
+    /// @brief Returns an instance of the @c OptionDataListParser to
+    /// be used in parsing the option-data structure.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for option data.
+    ///
+    /// @return an instance of the @c OptionDataListParser.
+    virtual boost::shared_ptr<OptionDataListParser>
+    createOptionDataListParser() const;
 
     /// Pointer to the created pool object.
     isc::dhcp::Pool6Ptr pool_;
@@ -712,8 +816,12 @@ private:
 /// This parser iterates over a list of prefix delegation pool entries and
 /// creates pool instances for each one. If the parsing is successful, the
 /// collection of pools is committed to the provided storage.
-class PdPoolsListParser : public PoolsListParser {
+class PdPoolsListParser : public isc::data::SimpleParser {
 public:
+
+    /// @brief Virtual destructor.
+    virtual ~PdPoolsListParser() {
+    }
 
     /// @brief Parse configuration entries.
     ///
@@ -726,6 +834,18 @@ public:
     ///
     /// @throw DhcpConfigError if configuration parsing fails.
     void parse(PoolStoragePtr pools, data::ConstElementPtr pd_pool_list);
+
+protected:
+
+    /// @brief Returns an instance of the @c PdPoolParser to be used in
+    /// parsing the prefix delegation pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c PdPool6Parser.
+    virtual boost::shared_ptr<PdPoolParser>
+    createPdPoolConfigParser() const;
 };
 
 /// @anchor Subnet6ConfigParser
@@ -771,6 +891,33 @@ protected:
     /// @param len is the prefix length
     void initSubnet(isc::data::ConstElementPtr params,
                     isc::asiolink::IOAddress addr, uint8_t len);
+
+    /// @brief Verifies host reservation addresses are in the subnet range
+    ///
+    /// @param subnet pointer to the subnet
+    /// @param host pointer to the host reservation
+    /// @throw DhcpConfigError when an address is not in the subnet range.
+    void validateResvs(const Subnet6Ptr& subnet, ConstHostPtr host);
+
+    /// @brief Returns an instance of the @c Pools6ListParser to be used
+    /// in parsing the address pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c Pools6ListParser.
+    virtual boost::shared_ptr<PoolsListParser>
+    createPoolsListParser() const;
+
+    /// @brief Returns an instance of the @c PdPools6ListParser to be used
+    /// in parsing the prefix delegation pools.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the pools.
+    ///
+    /// @return an instance of the @c PdPools6ListParser.
+    virtual boost::shared_ptr<PdPoolsListParser>
+    createPdPoolsListParser() const;
 };
 
 
@@ -788,6 +935,10 @@ public:
     /// the system.
     Subnets6ListConfigParser(bool check_iface = true);
 
+    /// @brief Virtual destructor.
+    virtual ~Subnets6ListConfigParser() {
+    }
+
     /// @brief parses contents of the list
     ///
     /// Iterates over all entries on the list, parses its content
@@ -803,13 +954,20 @@ public:
     ///
     /// @param [out] subnets Container where parsed subnets will be stored.
     /// @param subnets_list pointer to a list of IPv6 subnets
-    /// @param check_iface Check if the specified interface exists in
-    /// the system.
     /// @return Number of subnets created.
     size_t parse(Subnet6Collection& subnets,
                  data::ConstElementPtr subnets_list);
 
 protected:
+
+    /// @brief Returns an instance of the @c Subnet6ConfigParser to be
+    /// used in parsing the subnets.
+    ///
+    /// This function can be overridden in the child classes to supply
+    /// a custom parser for the subnets.
+    ///
+    /// @return an instance of the @c Subnet6ConfigParser.
+    virtual boost::shared_ptr<Subnet6ConfigParser> createSubnetConfigParser() const;
 
     /// Check if the specified interface exists in the system.
     bool check_iface_;
@@ -887,7 +1045,7 @@ private:
     getMode(isc::data::ConstElementPtr scope, const std::string& name);
 };
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace
 
 #endif // DHCP_PARSERS_H

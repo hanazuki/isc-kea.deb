@@ -49,6 +49,14 @@ Compilation and Installation of the RADIUS Hook
 The following section describes how to compile and install the software
 on CentOS 7.0. Other systems may differ slightly.
 
+.. note::
+
+   Starting with Kea 1.7.0, ISC now provides Kea software and hooks in convenient to use
+   native DEB and RPM packages. This includes the RADIUS hook and the required patched version
+   of the FreeRADIUS client library. The software compilation for RADIUS is complicated. unless
+   you have specific reasons to compile it yourself, you should seriously consider using
+   native packages.
+
 STEP 1: Install dependencies
 
 Several tools are needed to build the dependencies and Kea itself. The
@@ -89,7 +97,7 @@ Once installed, the FreeRADIUS client will be installed in
 It can be installed in a different directory; if so,
 make sure to add that path to the configure script when compiling Kea.
 
-STEP 3: Install recent BOOST version
+STEP 3: Install a recent BOOST version
 
 Kea requires a reasonably recent Boost version. Unfortunately, the
 version available in CentOS 7 is too old, so a newer Boost version is
@@ -102,8 +110,8 @@ To download and compile Boost 1.65, please use the following commands:
 
 .. code-block:: console
 
-   $ wget -nd https://dl.bintray.com/boostorg/release/1.65.1/source/boost_1_65_1.tar.gz
-   $ tar zxvf boost_1_65_1.tar.gz
+   $ wget -nd https://boostorg.jfrog.io/artifactory/main/release/1.65.1/source/boost_1_65_1.tar.gz
+   $ tar -zxvf boost_1_65_1.tar.gz
    $ cd boost_1_65_1/
    $ ./bootstrap.sh
    $ ./b2 --without-python
@@ -112,6 +120,14 @@ To download and compile Boost 1.65, please use the following commands:
 Note that the b2 script may optionally take extra parameters; one of
 them specifies the destination path where the sources are to be
 compiled.
+
+Alternatively, some systems provide newer boost packages. For example, 
+CentOS 7 provides ``boost169-devel``. If you install it with 
+``yum install boost169-devel``, you will need to point Kea to it with:
+
+.. code-block:: console
+
+   $ ./configure --with-boost-include=/usr/include/boost169 --with-boost-lib-dir=/usr/lib64/boost169
 
 STEP 4: Compile and install Kea
 
@@ -123,13 +139,13 @@ Choice 1: get from github
 
 .. code-block:: console
 
-   $ git clone https://github.com/isc-projects/kea
+   $ git clone https://github.com/isc-projects/kea.git
 
 Choice 2: get a tarball and extract it
 
 .. parsed-literal::
 
-   $ tar zxvf kea-|release|.tar.gz
+   $ tar -zxvf kea-|release|.tar.gz
 
 The next step is to extract the premium Kea package that contains the
 RADIUS repository into the Kea sources. After the tarball is extracted,
@@ -138,7 +154,7 @@ the Kea sources should have a premium/ subdirectory.
 .. parsed-literal::
 
      $ cd kea
-     $ tar zxvf ../kea-premium-radius-|release|.tar.gz
+     $ tar -zxvf ../kea-premium-radius-|release|.tar.gz
 
 Once this is done, verify that the Kea sources look similar to this:
 
@@ -275,7 +291,7 @@ Please make sure that the compilation includes the following:
 -  FreeRADIUS client directories printed and pointing to the right
    directories;
 -  Boost version at least 1.65.1. The versions available in CentOS 7
-   (1.48 and and 1.53) are too old.
+   (1.48 and 1.53) are too old.
 
 Once the configuration is complete, compile Kea using make. If the
 system has more than one core, using the "-j N"
@@ -355,7 +371,9 @@ flags, which correspond to FreeRADIUS client library options:
    feature when running in this mode.
 
 -  ``dictionary`` (default set by configure at build time) - is the
-   attribute and value dictionary. Note that it is a critical parameter.
+   attribute and value dictionary. Note that it is a critical parameter. You
+   may find dictionary examples in the FreeRADIUS repository under the etc
+   directory.
 
 -  ``extract-duid`` (default true) - extracts the embedded duid from an
    RFC 4361-compliant DHCPv4 client-id. Implied by client-id-printable.
@@ -502,7 +520,7 @@ following snippet could be used:
                "expr": "hexstring(pkt4.mac,':')"
            }
            ] # End of attributes
-       } # End of access
+       }, # End of access
 
        # Accounting parameters.
        "accounting": {
@@ -519,6 +537,47 @@ following snippet could be used:
        }
 
    }
+
+Customization is sometimes required for certain attributes by devices belonging
+to various vendors. This is a great way to leverage the expression evaluation
+mechanism. For example, MAC addresses which you might use as a convenience
+value for the User-Name attribute most likely will appear in colon-hexadecimal
+notation ``de:ad:be:ef:ca:fe``, but it might need to be expressed in:
+
+* hyphen-hexadecimal notation ``de-ad-be-ef-ca-fe``
+
+.. code-block:: json
+
+   {
+      "parameters": {
+         "access": {
+            "attributes": [
+               {
+                  "name": "User-Name",
+                  "expr": "hexstring(pkt4.mac, '-')"
+               }
+            ]
+         }
+      }
+   }
+
+* period-separated hexadecimal notation ``dead.beef.cafe``, preferred by Cisco devices
+
+.. code-block:: json
+
+   {
+      "parameters": {
+         "access": {
+            "attributes": [
+               {
+                  "name": "User-Name",
+                  "expr": "concat(concat(concat(substring(hexstring(pkt4.mac, ''), 0, 4), '.'), concat(substring(hexstring(pkt4.mac, ''), 4, 4), '.'), concat(substring(hexstring(pkt4.mac, ''), 8, 4), '.'))"
+               }
+            ]
+         }
+      }
+   }
+
 
 For the RADIUS hooks library to operate properly in DHCPv4,
 the Host Cache hooks library must also be loaded. The reason for this

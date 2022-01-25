@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,9 +24,8 @@ namespace util {
 // been replaced by forward slashes.
 
 void
-Filename::split(const string& full_name, string& directory,
-    string& name, string& extension) const
-{
+Filename::split(const string& full_name, string& directory, string& name,
+                string& extension) const {
     directory = name = extension = "";
     if (!full_name.empty()) {
 

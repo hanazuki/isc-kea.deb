@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -55,7 +55,7 @@ a new zone has been created, etc.</dd>
 <dt>DEBUG</dt>
 <dd>Debug messages are output at this severity.  Each message also
 has a debug level associated with it, ranging from 0 (the default)
-for high-level messages and level 99 (the maximum) for the the lowest
+for high-level messages and level 99 (the maximum) for the lowest
 level.</dd>
 </dl>
 
@@ -140,7 +140,7 @@ associated with it (e.g. "unable to open %1 for input"), after which it
 substitutes any message parameters (in this example, the name of the file
 where the write operation failed) and logs the result to the destination.
 
-In Kea, a the default text for each message is linked into the
+In Kea, the default text for each message is linked into the
 program.  Each program is able to read a locally-defined message file
 when it starts, updating the stored definitions with site-specific text.
 When the message is logged, the updated text is output. However, the
@@ -158,7 +158,7 @@ an executable or library) are:
 
 <ol>
 <li>Create a message file.  This defines messages by an identification
-string and and text that explains the message in more detail.  Ideally the
+string and text that explains the message in more detail.  Ideally the
 file should have a file type of ".mes".</li>
 
 <li>Run it through the message compiler to produce the files for your
@@ -682,4 +682,17 @@ loggers.  As the loggers are independent and the severity levels
 independent, fine-tuning of what and what is not recorded can be achieved.</li>
 
 </ol>
+
+@section logMTConsiderations Multi-Threading Consideration for Logging
+
+Logging is thread safe: messages emitted at the same time do not mix.
+
+When the KEA_LOCKFILE_DIR environment variable is not set to none
+Logging to files is multi-process safe too: for instance two servers
+can be configured to put log messages in the same file.
+
+The @c isc::log::Logger class initializes its implementation in a lazy
+(i.e. on demand) but thread safe way so it is always initialized at most
+once even in a multi-threaded environment.
+
 */

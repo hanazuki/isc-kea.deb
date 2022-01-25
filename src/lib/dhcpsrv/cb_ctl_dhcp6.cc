@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 #include <dhcpsrv/cb_ctl_dhcp6.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/dhcpsrv_log.h>
+#include <dhcpsrv/host_mgr.h>
 #include <dhcpsrv/parsers/simple_parser6.h>
 #include <hooks/callout_handle.h>
 #include <hooks/hooks_manager.h>
@@ -77,6 +78,10 @@ CBControlDHCPv6::databaseConfigApply(const db::BackendSelector& backend_selector
             // Add defaults.
             external_cfg->applyDefaultsConfiguredGlobals(SimpleParser6::GLOBAL6_DEFAULTS);
 
+            // Sanity check it.
+            external_cfg->sanityChecksLifetime("preferred-lifetime");
+            external_cfg->sanityChecksLifetime("valid-lifetime");
+
             // Now that we successfully fetched the new global parameters, let's
             // remove existing ones and merge them into the current configuration.
             cfg->clearConfiguredGlobals();
@@ -100,6 +105,12 @@ CBControlDHCPv6::databaseConfigApply(const db::BackendSelector& backend_selector
                                                         AuditEntry::ModificationType::DELETE));
             for (auto entry = range.first; entry != range.second; ++entry) {
                 cfg->getCfgOption()->del((*entry)->getObjectId());
+            }
+
+            range = index.equal_range(boost::make_tuple("dhcp6_client_class",
+                                                        AuditEntry::ModificationType::DELETE));
+            for (auto entry = range.first; entry != range.second; ++entry) {
+                cfg->getClientClassDictionary()->removeClass((*entry)->getObjectId());
             }
 
             range = index.equal_range(boost::make_tuple("dhcp6_shared_network",
@@ -140,39 +151,75 @@ CBControlDHCPv6::databaseConfigApply(const db::BackendSelector& backend_selector
     SrvConfigPtr external_cfg = CfgMgr::instance().createExternalCfg();
 
     // First let's fetch the globals and add them to external config.
-    if (!globals_fetched && fetchConfigElement(audit_entries, "dhcp6_global_parameter")) {
+    AuditEntryCollection updated_entries;
+    if (!globals_fetched && !audit_entries.empty()) {
+        updated_entries = fetchConfigElement(audit_entries, "dhcp6_global_parameter");
+    }
+    if (!globals_fetched && (audit_entries.empty() || !updated_entries.empty())) {
         data::StampedValueCollection globals;
         globals = getMgr().getPool()->getModifiedGlobalParameters6(backend_selector, server_selector,
                                                                    lb_modification_time);
         addGlobalsToConfig(external_cfg, globals);
+        globals_fetched = true;
     }
 
     // Now we fetch the option definitions and add them.
-    if (fetchConfigElement(audit_entries, "dhcp6_option_def")) {
+    if (!audit_entries.empty()) {
+        updated_entries = fetchConfigElement(audit_entries, "dhcp6_option_def");
+    }
+    if (audit_entries.empty() || !updated_entries.empty()) {
         OptionDefContainer option_defs =
             getMgr().getPool()->getModifiedOptionDefs6(backend_selector, server_selector,
                                                        lb_modification_time);
         for (auto option_def = option_defs.begin(); option_def != option_defs.end(); ++option_def) {
-            external_cfg->getCfgOptionDef()->add((*option_def), (*option_def)->getOptionSpaceName());
+            if (!audit_entries.empty() && !hasObjectId(updated_entries, (*option_def)->getId())) {
+                continue;
+            }
+            external_cfg->getCfgOptionDef()->add(*option_def);
         }
     }
 
     // Next fetch the options. They are returned as a container of OptionDescriptors.
-    if (fetchConfigElement(audit_entries, "dhcp6_options")) {
+    if (!audit_entries.empty()) {
+        updated_entries = fetchConfigElement(audit_entries, "dhcp6_options");
+    }
+    if (audit_entries.empty() || !updated_entries.empty()) {
         OptionContainer options = getMgr().getPool()->getModifiedOptions6(backend_selector,
                                                                           server_selector,
                                                                           lb_modification_time);
         for (auto option = options.begin(); option != options.end(); ++option) {
+            if (!audit_entries.empty() && !hasObjectId(updated_entries, (*option).getId())) {
+                continue;
+            }
             external_cfg->getCfgOption()->add((*option), (*option).space_name_);
         }
     }
 
+    // Fetch client classes. They are returned in a ClientClassDictionary.
+    if (!audit_entries.empty()) {
+        updated_entries = fetchConfigElement(audit_entries, "dhcp6_client_class");
+    }
+    if (audit_entries.empty() || !updated_entries.empty()) {
+        ClientClassDictionary client_classes = getMgr().getPool()->getAllClientClasses6(backend_selector,
+                                                                                        server_selector);
+        // Match expressions are not initialized for classes returned from the config backend.
+        // We have to ensure to initialize them before they can be used by the server.
+        client_classes.initMatchExpr(AF_INET6);
+        external_cfg->setClientClassDictionary(boost::make_shared<ClientClassDictionary>(client_classes));
+    }
+
     // Now fetch the shared networks.
-    if (fetchConfigElement(audit_entries, "dhcp6_shared_network")) {
+    if (!audit_entries.empty()) {
+        updated_entries = fetchConfigElement(audit_entries, "dhcp6_shared_network");
+    }
+    if (audit_entries.empty() || !updated_entries.empty()) {
         SharedNetwork6Collection networks =
             getMgr().getPool()->getModifiedSharedNetworks6(backend_selector, server_selector,
                                                            lb_modification_time);
         for (auto network = networks.begin(); network != networks.end(); ++network) {
+            if (!audit_entries.empty() && !hasObjectId(updated_entries, (*network)->getId())) {
+                continue;
+            }
             // In order to take advantage of the dynamic inheritance of global
             // parameters to a shared network we need to set a callback function
             // for each network to allow for fetching global parameters.
@@ -184,11 +231,17 @@ CBControlDHCPv6::databaseConfigApply(const db::BackendSelector& backend_selector
     }
 
     // Next we fetch subnets.
-    if (fetchConfigElement(audit_entries, "dhcp6_subnet")) {
+    if (!audit_entries.empty()) {
+        updated_entries = fetchConfigElement(audit_entries, "dhcp6_subnet");
+    }
+    if (audit_entries.empty() || !updated_entries.empty()) {
         Subnet6Collection subnets = getMgr().getPool()->getModifiedSubnets6(backend_selector,
                                                                             server_selector,
                                                                             lb_modification_time);
         for (auto subnet = subnets.begin(); subnet != subnets.end(); ++subnet) {
+            if (!audit_entries.empty() && !hasObjectId(updated_entries, (*subnet)->getID())) {
+                continue;
+            }
             // In order to take advantage of the dynamic inheritance of global
             // parameters to a subnet we need to set a callback function for each
             // subnet to allow for fetching global parameters.
@@ -200,15 +253,40 @@ CBControlDHCPv6::databaseConfigApply(const db::BackendSelector& backend_selector
     }
 
     if (audit_entries.empty()) {
+        // If we're configuring the server after startup, we do not apply the
+        // ip-reservations-unique setting here. It will be applied when the
+        // configuration is committed.
+        auto const& cfg = CfgMgr::instance().getStagingCfg();
+        external_cfg->sanityChecksLifetime(*cfg, "preferred-lifetime");
+        external_cfg->sanityChecksLifetime(*cfg, "valid-lifetime");
         CfgMgr::instance().mergeIntoStagingCfg(external_cfg->getSequence());
-
     } else {
+        if (globals_fetched) {
+            // ip-reservations-unique parameter requires special handling because
+            // setting it to false may be unsupported by some host backends.
+            bool ip_unique = true;
+            auto ip_unique_param = external_cfg->getConfiguredGlobal("ip-reservations-unique");
+            if (ip_unique_param && (ip_unique_param->getType() == Element::boolean)) {
+                ip_unique = ip_unique_param->boolValue();
+            }
+            // First try to use the new setting to configure the HostMgr because it
+            // may fail if the backend does not support it.
+            if (!HostMgr::instance().setIPReservationsUnique(ip_unique)) {
+                // The new setting is unsupported by the backend, so do not apply this
+                // setting at all.
+                LOG_WARN(dhcpsrv_logger, DHCPSRV_CFGMGR_IPV6_RESERVATIONS_NON_UNIQUE_IGNORED);
+                external_cfg->addConfiguredGlobal("ip-reservations-unique", Element::create(true));
+            }
+        }
+        auto const& cfg = CfgMgr::instance().getCurrentCfg();
+        external_cfg->sanityChecksLifetime(*cfg, "preferred-lifetime");
+        external_cfg->sanityChecksLifetime(*cfg, "valid-lifetime");
         CfgMgr::instance().mergeIntoCurrentCfg(external_cfg->getSequence());
     }
     LOG_INFO(dhcpsrv_logger, DHCPSRV_CFGMGR_CONFIG6_MERGED);
 
     if (!audit_entries.empty() &&
-        HooksManager::getHooksManager().calloutsPresent(hooks_.hook_index_cb6_updated_)) {
+        HooksManager::calloutsPresent(hooks_.hook_index_cb6_updated_)) {
         CalloutHandlePtr callout_handle = HooksManager::createCalloutHandle();
 
         // Use the RAII wrapper to make sure that the callout handle state is

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,7 +38,7 @@ CfgSubnets6::add(const Subnet6Ptr& subnet) {
 
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE, DHCPSRV_CFGMGR_ADD_SUBNET6)
               .arg(subnet->toText());
-    static_cast<void>(subnets_.push_back(subnet));
+    static_cast<void>(subnets_.insert(subnet));
 }
 
 Subnet6Ptr
@@ -161,7 +161,7 @@ CfgSubnets6::merge(CfgOptionDefPtr cfg_def, CfgSharedNetworks6Ptr networks,
         }
 
         // Add the "other" subnet to the our collection of subnets.
-        static_cast<void>(subnets_.push_back(*other_subnet));
+        static_cast<void>(subnets_.insert(*other_subnet));
 
         // If it belongs to a shared network, find the network and
         // add the subnet to it
@@ -395,16 +395,22 @@ CfgSubnets6::removeStatistics() {
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
                                              "assigned-nas"));
 
+        stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
+                                             "cumulative-assigned-nas"));
+
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id, "total-pds"));
 
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
                                              "assigned-pds"));
 
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
+                                             "cumulative-assigned-pds"));
+
+        stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
                                              "declined-addresses"));
 
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
-                                             "declined-reclaimed-addresses"));
+                                             "reclaimed-declined-addresses"));
 
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
                                              "reclaimed-leases"));
@@ -430,11 +436,23 @@ CfgSubnets6::updateStatistics() {
                                                   "total-pds"),
                             static_cast<int64_t>
                             ((*subnet6)->getPoolCapacity(Lease::TYPE_PD)));
+
+        const std::string& name_nas =
+            StatsMgr::generateName("subnet", subnet_id, "cumulative-assigned-nas");
+        if (!stats_mgr.getObservation(name_nas)) {
+            stats_mgr.setValue(name_nas, static_cast<int64_t>(0));
+        }
+
+        const std::string& name_pds =
+            StatsMgr::generateName("subnet", subnet_id, "cumulative-assigned-pds");
+        if (!stats_mgr.getObservation(name_pds)) {
+            stats_mgr.setValue(name_pds, static_cast<int64_t>(0));
+        }
     }
 
     // Only recount the stats if we have subnets.
     if (subnets_.begin() != subnets_.end()) {
-            LeaseMgrFactory::instance().recountLeaseStats6();
+        LeaseMgrFactory::instance().recountLeaseStats6();
     }
 }
 

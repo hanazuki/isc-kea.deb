@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,7 +9,10 @@
 #include <eval/dependency.h>
 #include <dhcpsrv/client_class_def.h>
 #include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/parsers/client_class_def_parser.h>
 #include <boost/foreach.hpp>
+
+#include <queue>
 
 using namespace isc::data;
 
@@ -21,9 +24,10 @@ namespace dhcp {
 ClientClassDef::ClientClassDef(const std::string& name,
                                const ExpressionPtr& match_expr,
                                const CfgOptionPtr& cfg_option)
-    : name_(name), match_expr_(match_expr), required_(false),
-      depend_on_known_(false), cfg_option_(cfg_option),
-      next_server_(asiolink::IOAddress::IPV4_ZERO_ADDRESS()) {
+    : UserContext(), CfgToElement(), StampedElement(), name_(name),
+      match_expr_(match_expr), required_(false), depend_on_known_(false),
+      cfg_option_(cfg_option), next_server_(asiolink::IOAddress::IPV4_ZERO_ADDRESS()),
+      valid_(), preferred_() {
 
     // Name can't be blank
     if (name_.empty()) {
@@ -32,7 +36,6 @@ ClientClassDef::ClientClassDef(const std::string& name,
 
     // We permit an empty expression for now.  This will likely be useful
     // for automatic classes such as vendor class.
-
     // For classes without options, make sure we have an empty collection
     if (!cfg_option_) {
         cfg_option_.reset(new CfgOption());
@@ -40,9 +43,11 @@ ClientClassDef::ClientClassDef(const std::string& name,
 }
 
 ClientClassDef::ClientClassDef(const ClientClassDef& rhs)
-    : name_(rhs.name_), match_expr_(ExpressionPtr()), required_(false),
-      depend_on_known_(false), cfg_option_(new CfgOption()),
-      next_server_(asiolink::IOAddress::IPV4_ZERO_ADDRESS()) {
+    : UserContext(rhs), CfgToElement(rhs), StampedElement(rhs), name_(rhs.name_),
+      match_expr_(ExpressionPtr()), test_(rhs.test_), required_(rhs.required_),
+      depend_on_known_(rhs.depend_on_known_), cfg_option_(new CfgOption()),
+      next_server_(rhs.next_server_), sname_(rhs.sname_),
+      filename_(rhs.filename_), valid_(rhs.valid_), preferred_(rhs.preferred_) {
 
     if (rhs.match_expr_) {
         match_expr_.reset(new Expression());
@@ -50,18 +55,13 @@ ClientClassDef::ClientClassDef(const ClientClassDef& rhs)
     }
 
     if (rhs.cfg_option_def_) {
+        cfg_option_def_.reset(new CfgOptionDef());
         rhs.cfg_option_def_->copyTo(*cfg_option_def_);
     }
 
     if (rhs.cfg_option_) {
         rhs.cfg_option_->copyTo(*cfg_option_);
     }
-
-    required_ = rhs.required_;
-    depend_on_known_ = rhs.depend_on_known_;
-    next_server_ = rhs.next_server_;
-    sname_ = rhs.sname_;
-    filename_ = rhs.filename_;
 }
 
 ClientClassDef::~ClientClassDef() {
@@ -183,16 +183,50 @@ ClientClassDef:: toElement() const {
     }
     // Set option-data
     result->set("option-data", cfg_option_->toElement());
-    if (family != AF_INET) {
-        // Other parameters are DHCPv4 specific
-        return (result);
+
+    if (family == AF_INET) {
+        // V4 only
+        // Set next-server
+        result->set("next-server", Element::create(next_server_.toText()));
+        // Set server-hostname
+        result->set("server-hostname", Element::create(sname_));
+        // Set boot-file-name
+        result->set("boot-file-name", Element::create(filename_));
+    } else {
+        // V6 only
+        // Set preferred-lifetime
+        if (!preferred_.unspecified()) {
+            result->set("preferred-lifetime",
+                        Element::create(static_cast<long long>(preferred_.get())));
+        }
+
+        if (preferred_.getMin() < preferred_.get()) {
+            result->set("min-preferred-lifetime",
+                        Element::create(static_cast<long long>(preferred_.getMin())));
+        }
+
+        if (preferred_.getMax() > preferred_.get()) {
+            result->set("max-preferred-lifetime",
+                        Element::create(static_cast<long long>(preferred_.getMax())));
+        }
     }
-    // Set next-server
-    result->set("next-server", Element::create(next_server_.toText()));
-    // Set server-hostname
-    result->set("server-hostname", Element::create(sname_));
-    // Set boot-file-name
-    result->set("boot-file-name", Element::create(filename_));
+
+    // Set valid-lifetime
+    if (!valid_.unspecified()) {
+        result->set("valid-lifetime",
+                    Element::create(static_cast<long long>(valid_.get())));
+
+        if (valid_.getMin() < valid_.get()) {
+            result->set("min-valid-lifetime",
+                        Element::create(static_cast<long long>(valid_.getMin())));
+        }
+
+        if (valid_.getMax() > valid_.get()) {
+            result->set("max-valid-lifetime",
+                        Element::create(static_cast<long long>(valid_.getMax())));
+        }
+    }
+
     return (result);
 }
 
@@ -229,7 +263,9 @@ ClientClassDictionary::addClass(const std::string& name,
                                 ConstElementPtr user_context,
                                 asiolink::IOAddress next_server,
                                 const std::string& sname,
-                                const std::string& filename) {
+                                const std::string& filename,
+                                const Triplet<uint32_t>& valid,
+                                const Triplet<uint32_t>& preferred) {
     ClientClassDefPtr cclass(new ClientClassDef(name, match_expr, cfg_option));
     cclass->setTest(test);
     cclass->setRequired(required);
@@ -239,6 +275,8 @@ ClientClassDictionary::addClass(const std::string& name,
     cclass->setNextServer(next_server);
     cclass->setSname(sname);
     cclass->setFilename(filename);
+    cclass->setValid(valid);
+    cclass->setPreferred(preferred);
     addClass(cclass);
 }
 
@@ -265,7 +303,7 @@ ClientClassDictionary::findClass(const std::string& name) const {
         return (*it).second;
     }
 
-    return(ClientClassDefPtr());
+    return (ClientClassDefPtr());
 }
 
 void
@@ -280,9 +318,30 @@ ClientClassDictionary::removeClass(const std::string& name) {
     map_->erase(name);
 }
 
+void
+ClientClassDictionary::removeClass(const uint64_t id) {
+    // Class id equal to 0 means it wasn't set.
+    if (id == 0) {
+        return;
+    }
+    for (ClientClassDefList::iterator this_class = list_->begin();
+         this_class != list_->end(); ++this_class) {
+        if ((*this_class)->getId() == id) {
+            map_->erase((*this_class)->getName());
+            list_->erase(this_class);
+            break;
+        }
+    }
+}
+
 const ClientClassDefListPtr&
 ClientClassDictionary::getClasses() const {
     return (list_);
+}
+
+bool
+ClientClassDictionary::empty() const {
+    return (list_->empty());
 }
 
 bool
@@ -328,6 +387,25 @@ ClientClassDictionary::equals(const ClientClassDictionary& other) const {
     return (true);
 }
 
+void
+ClientClassDictionary::initMatchExpr(uint16_t family) {
+    std::queue<ExpressionPtr> expressions;
+    for (auto c : *list_) {
+        ExpressionPtr match_expr = boost::make_shared<Expression>();
+        if (!c->getTest().empty()) {
+            ExpressionParser parser;
+            parser.parse(match_expr, Element::create(c->getTest()), family);
+        }
+        expressions.push(match_expr);
+    }
+    // All expressions successfully initialized. Let's set them for the
+    // client classes in the dictionary.
+    for (auto c : *list_) {
+        c->setMatchExpr(expressions.front());
+        expressions.pop();
+    }
+}
+
 ElementPtr
 ClientClassDictionary::toElement() const {
     ElementPtr result = Element::createList();
@@ -337,6 +415,19 @@ ClientClassDictionary::toElement() const {
         result->add((*this_class)->toElement());
     }
     return (result);
+}
+
+ClientClassDictionary&
+ClientClassDictionary::operator=(const ClientClassDictionary& rhs) {
+    if (this != &rhs) {
+        list_->clear();
+        map_->clear();
+        for (auto cclass : *(rhs.list_)) {
+            ClientClassDefPtr copy(new ClientClassDef(*cclass));
+            addClass(copy);
+        }
+    }
+    return (*this);
 }
 
 std::list<std::string>

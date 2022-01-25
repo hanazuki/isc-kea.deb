@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,7 +9,7 @@
 
 #include <cc/data.h>
 #include <exceptions/exceptions.h>
-#include <boost/function.hpp>
+#include <functional>
 #include <map>
 #include <string>
 
@@ -79,7 +79,7 @@ public:
     /// @param name name of the commands
     /// @param params parameters specific to the command
     /// @return response (created with createAnswer())
-    typedef boost::function<isc::data::ConstElementPtr (const std::string& name,
+    typedef std::function<isc::data::ConstElementPtr (const std::string& name,
         const isc::data::ConstElementPtr& params)> CommandHandler;
 
     /// @brief Defines extended command handler type.
@@ -92,7 +92,7 @@ public:
     /// @param params parameters specific to the command
     /// @param original original control command.
     /// @return response (created with createAnswer())
-    typedef boost::function<isc::data::ConstElementPtr (const std::string& name,
+    typedef std::function<isc::data::ConstElementPtr (const std::string& name,
         const isc::data::ConstElementPtr& params,
         const isc::data::ConstElementPtr& original)> ExtendedCommandHandler;
 
@@ -112,9 +112,15 @@ public:
     /// After the command has been handled, callouts for the hook point,
     /// "command-processed" will be invoked.
     ///
+    /// This method is virtual so it can be overridden in derived classes to
+    /// pre-process command and post-process response if necessary.
+    ///
+    /// This method is an entry point for dealing with a command. Internally
+    /// it calls @c BaseCommandMgr::handleCommand.
+    ///
     /// @param cmd Pointer to the data element representing command in JSON
     /// format.
-    isc::data::ConstElementPtr
+    virtual isc::data::ConstElementPtr
     processCommand(const isc::data::ConstElementPtr& cmd);
 
     /// @brief Registers specified command handler for a given command

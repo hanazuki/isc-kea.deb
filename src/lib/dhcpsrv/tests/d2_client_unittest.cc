@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -118,7 +118,6 @@ TEST(D2ClientConfigTest, constructorsAndAccessors) {
 
     // Verify what toElement returns.
     std::string expected = "{\n"
-        "\"comment\": \"bar\",\n"
         "\"enable-updates\": true,\n"
         "\"server-ip\": \"127.0.0.1\",\n"
         "\"server-port\": 477,\n"
@@ -127,7 +126,7 @@ TEST(D2ClientConfigTest, constructorsAndAccessors) {
         "\"max-queue-size\": 2048,\n"
         "\"ncr-protocol\": \"UDP\",\n"
         "\"ncr-format\": \"JSON\",\n"
-        "\"user-context\": { \"foo\": 1 }\n"
+        "\"user-context\": { \"foo\": 1, \"comment\": \"bar\" }\n"
         "}\n";
     runToElementTest<D2ClientConfig>(expected, *d2_client_config);
 
@@ -147,7 +146,7 @@ TEST(D2ClientConfigTest, constructorsAndAccessors) {
     Optional<std::string> opt_hostname_char_set("", true);
     Optional<std::string> opt_hostname_char_replacement("", true);
 
-    // Veeify that constructor handles optional hostname char stuff.
+    // Verify that constructor handles optional hostname char stuff.
     ASSERT_NO_THROW(d2_client_config.reset(new
                                            D2ClientConfig(enable_updates,
                                                           server_ip,
@@ -341,6 +340,13 @@ TEST(D2ClientMgr, ipv6Config) {
 /// @brief Test class for execerising manager functions that are
 /// influenced by DDNS parameters.
 class D2ClientMgrParamsTest : public ::testing::Test {
+public:
+    /// @brief Constructor
+    D2ClientMgrParamsTest() = default;
+
+    /// @brief Destructor
+    virtual ~D2ClientMgrParamsTest() = default;
+
 private:
     /// @brief Prepares the class for a test.
     virtual void SetUp() {
@@ -657,6 +663,59 @@ TEST_F(D2ClientMgrParamsTest, qualifyName) {
     qualified_name = mgr.qualifyName("somehost.", *ddns_params_, do_not_dot);
     EXPECT_EQ("somehost", qualified_name);
 
+}
+
+/// @brief Tests the qualifyName method's ability to avoid duplicating
+/// qualifying suffix.
+TEST_F(D2ClientMgrParamsTest, qualifyNameWithoutDuplicatingSuffix) {
+    D2ClientMgr mgr;
+    bool do_dot = true;
+
+    // Create enabled configuration
+    subnet_->setDdnsSendUpdates(true);
+    subnet_->setDdnsOverrideNoUpdate(false);
+    subnet_->setDdnsOverrideClientUpdate(false);
+    subnet_->setDdnsReplaceClientNameMode(D2ClientConfig::RCM_NEVER);
+    subnet_->setDdnsGeneratedPrefix("prefix");
+    subnet_->setDdnsQualifyingSuffix("suffix.com");
+    subnet_->setHostnameCharSet("");
+    subnet_->setHostnameCharReplacement("");
+
+    // Verify that the qualifying suffix does not get appended when the
+    // input name has the suffix but no trailing dot.
+    std::string partial_name = "somehost.suffix.com";
+    std::string qualified_name = mgr.qualifyName(partial_name, *ddns_params_, do_dot);
+    EXPECT_EQ("somehost.suffix.com.", qualified_name);
+
+    // Verify that the qualifying suffix does not get appended when the
+    // input name has the suffix and a trailing dot.
+    partial_name = "somehost.suffix.com.";
+    qualified_name = mgr.qualifyName(partial_name, *ddns_params_, do_dot);
+    EXPECT_EQ("somehost.suffix.com.", qualified_name);
+
+    // Verify that the qualifying suffix does get appended when the
+    // input name has the suffix embedded in it but does not begin
+    // at a label boundary.
+    partial_name = "somehost.almostsuffix.com";
+    qualified_name = mgr.qualifyName(partial_name, *ddns_params_, do_dot);
+    EXPECT_EQ("somehost.almostsuffix.com.suffix.com.", qualified_name);
+
+    // Verify that the qualifying suffix does get appended when the
+    // input name has the suffix embedded in it.
+    partial_name = "somehost.suffix.com.org";
+    qualified_name = mgr.qualifyName(partial_name, *ddns_params_, do_dot);
+    EXPECT_EQ("somehost.suffix.com.org.suffix.com.", qualified_name);
+
+    // Verify that the qualifying suffix does not get appended when the
+    // input name is the suffix itself.
+    partial_name = "suffix.com";
+    qualified_name = mgr.qualifyName(partial_name, *ddns_params_, do_dot);
+    EXPECT_EQ("suffix.com.", qualified_name);
+
+    subnet_->setDdnsQualifyingSuffix("one.two.suffix.com");
+    partial_name = "two.suffix.com";
+    qualified_name = mgr.qualifyName(partial_name, *ddns_params_, do_dot);
+    EXPECT_EQ("two.suffix.com.one.two.suffix.com.", qualified_name);
 }
 
 /// @brief Tests the generateFdqn method's ability to construct FQDNs
@@ -1098,7 +1157,7 @@ TEST_F(D2ClientMgrParamsTest, sanitizeFqdnV4) {
 /// @brief Tests v6 FQDN name sanitizing
 /// @todo This test currently verifies that Option6ClientFqdn::DomainName
 /// downcases strings used to construct it.  For some reason, currently
-/// uknown, Option4ClientFqdn preserves the case, while Option6ClientFqdn
+/// unknown, Option4ClientFqdn preserves the case, while Option6ClientFqdn
 /// downcases it (see setDomainName() in both classes.  See Trac #5700.
 TEST_F(D2ClientMgrParamsTest, sanitizeFqdnV6) {
     D2ClientMgr mgr;

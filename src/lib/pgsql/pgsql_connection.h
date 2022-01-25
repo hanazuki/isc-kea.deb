@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,6 +6,7 @@
 #ifndef PGSQL_CONNECTION_H
 #define PGSQL_CONNECTION_H
 
+#include <asiolink/io_service.h>
 #include <database/database_connection.h>
 
 #include <libpq-fe.h>
@@ -17,9 +18,9 @@
 namespace isc {
 namespace db {
 
-/// @brief Define PostgreSQL backend version: 6.0
+/// @brief Define PostgreSQL backend version: 6.2
 const uint32_t PG_SCHEMA_VERSION_MAJOR = 6;
-const uint32_t PG_SCHEMA_VERSION_MINOR = 0;
+const uint32_t PG_SCHEMA_VERSION_MINOR = 2;
 
 // Maximum number of parameters that can be used a statement
 // @todo This allows us to use an initializer list (since we can't
@@ -304,8 +305,15 @@ public:
     /// @brief Constructor
     ///
     /// Initialize PgSqlConnection object with parameters needed for connection.
-    PgSqlConnection(const ParameterMap& parameters)
-        : DatabaseConnection(parameters) {
+    ///
+    /// @param parameters Specify the connection details.
+    /// @param io_accessor The IOService accessor function.
+    /// @param callback The connection recovery callback.
+    PgSqlConnection(const ParameterMap& parameters,
+                    IOServiceAccessorPtr io_accessor = IOServiceAccessorPtr(),
+                    DbCallback callback = DbCallback())
+        : DatabaseConnection(parameters, callback),
+          io_service_accessor_(io_accessor), io_service_() {
     }
 
     /// @brief Destructor
@@ -397,10 +405,8 @@ public:
     ///
     /// If the error is recoverable, the function will throw a DbOperationError.
     /// If the error is deemed unrecoverable, such as a loss of connectivity
-    /// with the server, the function will call invokeDbLostCallback(). If the
-    /// invocation returns false then either there is no callback registered
-    /// or the callback has elected not to attempt to reconnect, and a
-    /// DbUnrecoverableError is thrown.
+    /// with the server, the function will call startRecoverDbConnection() which
+    /// will start the connection recovery.
     ///
     /// If the invocation returns true, this indicates the calling layer will
     /// attempt recovery, and the function throws a DbOperationError to allow
@@ -411,7 +417,25 @@ public:
     ///
     /// @throw isc::db::DbOperationError Detailed PostgreSQL failure
     void checkStatementError(const PgSqlResult& r,
-                             PgSqlTaggedStatement& statement) const;
+                             PgSqlTaggedStatement& statement);
+
+    /// @brief The recover connection
+    ///
+    /// This function starts the recover process of the connection.
+    ///
+    /// @note The recover function must be run on the IO Service thread.
+    void startRecoverDbConnection() {
+        if (callback_) {
+            if (!io_service_ && io_service_accessor_) {
+                io_service_ = (*io_service_accessor_)();
+                io_service_accessor_.reset();
+            }
+
+            if (io_service_) {
+                io_service_->post(std::bind(callback_, reconnectCtl()));
+            }
+        }
+    }
 
     /// @brief PgSql connection handle
     ///
@@ -434,9 +458,20 @@ public:
         return (conn_);
     }
 
+    /// @brief Accessor function which returns the IOService that can be used to
+    /// recover the connection.
+    ///
+    /// This accessor is used to lazy retrieve the IOService when the connection
+    /// is lost. It is useful to retrieve it at a later time to support hook
+    /// libraries which create managers on load and set IOService later on by
+    /// using the dhcp4_srv_configured and dhcp6_srv_configured hooks.
+    IOServiceAccessorPtr io_service_accessor_;
+
+    /// @brief IOService object, used for all ASIO operations.
+    isc::asiolink::IOServicePtr io_service_;
 };
 
-}; // end of isc::db namespace
-}; // end of isc namespace
+} // end of isc::db namespace
+} // end of isc namespace
 
 #endif // PGSQL_CONNECTION_H

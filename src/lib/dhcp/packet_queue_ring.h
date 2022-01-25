@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,7 +9,6 @@
 
 #include <dhcp/packet_queue.h>
 
-#include <boost/function.hpp>
 #include <boost/circular_buffer.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <sstream>
@@ -91,7 +90,7 @@ public:
     /// provides an opportunity to examine and discard packets from
     /// the queue prior to dequeuing the next packet to be
     /// processed.  Derivations are expected to provide implementations
-    /// based on their own requirements.  The default implemenation is to
+    /// based on their own requirements.  The default implementation is to
     /// to simply return without skipping any packets.
     ///
     /// @return The number of packets discarded.

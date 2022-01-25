@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -395,7 +395,7 @@ public:
 
     /// \brief Add an RDATA to the RRset (string version).
     ///
-    /// This method constructs an Rdata object from the the given
+    /// This method constructs an Rdata object from the given
     /// \c rdata_str in presentation format and adds it to the \c RRset.
     ///
     /// \param rdata_str RDATA string in presentation format.

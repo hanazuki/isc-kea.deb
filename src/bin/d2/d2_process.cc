@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,19 +8,45 @@
 #include <asiolink/asio_wrapper.h>
 #include <cc/command_interpreter.h>
 #include <config/command_mgr.h>
-#include <d2/d2_log.h>
-#include <d2/d2_cfg_mgr.h>
 #include <d2/d2_controller.h>
 #include <d2/d2_process.h>
+#include <d2srv/d2_cfg_mgr.h>
+#include <d2srv/d2_log.h>
+#include <d2srv/d2_stats.h>
+#include <d2srv/d2_tsig_key.h>
+#include <hooks/hooks.h>
+#include <hooks/hooks_manager.h>
 
+using namespace isc::hooks;
 using namespace isc::process;
+
+namespace {
+
+/// Structure that holds registered hook indexes.
+struct D2ProcessHooks {
+    int hooks_index_d2_srv_configured_;
+
+    /// Constructor that registers hook points for the D2 server.
+    D2ProcessHooks() {
+        hooks_index_d2_srv_configured_ = HooksManager::registerHook("d2_srv_configured");
+    }
+
+};
+
+// Declare a Hooks object. As this is outside any function or method, it
+// will be instantiated (and the constructor run) when the module is loaded.
+// As a result, the hook indexes will be defined before any method in this
+// module is called.
+D2ProcessHooks Hooks;
+
+}
 
 namespace isc {
 namespace d2 {
 
 // Setting to 80% for now. This is an arbitrary choice and should probably
 // be configurable.
-const unsigned int D2Process::QUEUE_RESTART_PERCENT =  80;
+const unsigned int D2Process::QUEUE_RESTART_PERCENT = 80;
 
 D2Process::D2Process(const char* name, const asiolink::IOServicePtr& io_service)
     : DProcessBase(name, io_service, DCfgMgrBasePtr(new D2CfgMgr())),
@@ -37,7 +63,10 @@ D2Process::D2Process(const char* name, const asiolink::IOServicePtr& io_service)
     // Pass in both queue manager and configuration manager.
     // Pass in IOService for DNS update transaction IO event processing.
     D2CfgMgrPtr tmp = getD2CfgMgr();
-    update_mgr_.reset(new D2UpdateMgr(queue_mgr_,  tmp,  getIoService()));
+    update_mgr_.reset(new D2UpdateMgr(queue_mgr_, tmp, getIoService()));
+
+    // Initialize stats manager.
+    D2Stats::init();
 };
 
 void
@@ -65,7 +94,7 @@ D2Process::run() {
             // process finished ones.
             update_mgr_->sweep();
 
-            // Wait on IO event(s)  - block until one or more of the following
+            // Wait on IO event(s) - block until one or more of the following
             // has occurred:
             //   a. NCR message has been received
             //   b. Transaction IO has completed
@@ -87,9 +116,9 @@ D2Process::run() {
                    "Process run method failed: " << ex.what());
     }
 
-    // @todo - if queue isn't empty, we may need to persist its contents
-    // this might be the place to do it, once there is a persistence mgr.
-    // This may also be better in checkQueueStatus.
+    /// @todo - if queue isn't empty, we may need to persist its contents
+    /// this might be the place to do it, once there is a persistence mgr.
+    /// This may also be better in checkQueueStatus.
 
     controller->deregisterCommands();
 
@@ -109,7 +138,7 @@ D2Process::runIO() {
     // method.  This is a handy method which runs all ready handlers without
     // blocking.
     asiolink::IOServicePtr& io = getIoService();
-    boost::asio::io_service& asio_io_service  = io->get_io_service();
+    boost::asio::io_service& asio_io_service = io->get_io_service();
 
     // Poll runs all that are ready. If none are ready it returns immediately
     // with a count of zero.
@@ -208,11 +237,11 @@ isc::data::ConstElementPtr
 D2Process::configure(isc::data::ConstElementPtr config_set, bool check_only) {
     LOG_DEBUG(d2_logger, isc::log::DBGLVL_TRACE_BASIC, DHCP_DDNS_CONFIGURE)
         .arg(check_only ? "check" : "update")
-        .arg(config_set->str());
+        .arg(getD2CfgMgr()->redactConfig(config_set)->str());
 
     isc::data::ConstElementPtr answer;
     answer = getCfgMgr()->simpleParseConfig(config_set, check_only,
-                boost::bind(&D2Process::reconfigureCommandChannel, this));
+                std::bind(&D2Process::reconfigureCommandChannel, this));
     if (check_only) {
         return (answer);
     }
@@ -237,10 +266,39 @@ D2Process::configure(isc::data::ConstElementPtr config_set, bool check_only) {
     // the method we are in now is invoked as part of the configuration event
     // callback.  This means you can't wait for events here, you are already
     // in one.
-    // (@todo NOTE This could be turned into a bitmask of flags if we find other
-    // things that need reconfiguration.  It might also be useful if we
-    // did some analysis to decide what if anything we need to do.)
+    /// (@todo NOTE This could be turned into a bitmask of flags if we find other
+    /// things that need reconfiguration.  It might also be useful if we
+    /// did some analysis to decide what if anything we need to do.)
     reconf_queue_flag_ = true;
+
+    // This hook point notifies hooks libraries that the configuration of the
+    // D2 server has completed. It provides the hook library with the pointer
+    // to the common IO service object, new server configuration in the JSON
+    // format and with the pointer to the configuration storage where the
+    // parsed configuration is stored.
+    std::string error("");
+    if (HooksManager::calloutsPresent(Hooks.hooks_index_d2_srv_configured_)) {
+        CalloutHandlePtr callout_handle = HooksManager::createCalloutHandle();
+
+        callout_handle->setArgument("io_context", getIoService());
+        callout_handle->setArgument("json_config", config_set);
+        callout_handle->setArgument("server_config",
+                                    getD2CfgMgr()->getD2CfgContext());
+        callout_handle->setArgument("error", error);
+
+        HooksManager::callCallouts(Hooks.hooks_index_d2_srv_configured_,
+                                   *callout_handle);
+
+        // The config can be rejected by a hook.
+        if (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_DROP) {
+            callout_handle->getArgument("error", error);
+            LOG_ERROR(d2_logger, DHCP_DDNS_CONFIGURED_CALLOUT_DROP)
+                .arg(error);
+            reconf_queue_flag_ = false;
+            answer = isc::config::createAnswer(1, error);
+            return (answer);
+        }
+    }
 
     // If we are here, configuration was valid, at least it parsed correctly
     // and therefore contained no invalid values.
@@ -253,10 +311,10 @@ D2Process::checkQueueStatus() {
     switch (queue_mgr_->getMgrState()){
     case D2QueueMgr::RUNNING:
         if (reconf_queue_flag_ || shouldShutdown()) {
-            // If we need to reconfigure the queue manager or we have been
-            // told to shutdown, then stop listening first.  Stopping entails
-            // canceling active listening which may generate an IO event, so
-            // instigate the stop and get out.
+            /// If we need to reconfigure the queue manager or we have been
+            /// told to shutdown, then stop listening first.  Stopping entails
+            /// canceling active listening which may generate an IO event, so
+            /// instigate the stop and get out.
             try {
                 LOG_DEBUG(d2_logger, isc::log::DBGLVL_START_SHUT,
                           DHCP_DDNS_QUEUE_MGR_STOPPING)
@@ -272,9 +330,9 @@ D2Process::checkQueueStatus() {
         break;
 
     case D2QueueMgr::STOPPED_QUEUE_FULL: {
-            // Resume receiving once the queue has decreased by twenty
-            // percent.  This is an arbitrary choice. @todo this value should
-            // probably be configurable.
+            /// Resume receiving once the queue has decreased by twenty
+            /// percent.  This is an arbitrary choice.
+            /// @todo this value should probably be configurable.
             size_t threshold = (((queue_mgr_->getMaxQueueSize()
                                 * QUEUE_RESTART_PERCENT)) / 100);
             if (queue_mgr_->getQueueSize() <= threshold) {
@@ -292,13 +350,13 @@ D2Process::checkQueueStatus() {
         }
 
     case D2QueueMgr::STOPPED_RECV_ERROR:
-        // If the receive error is not due to some fallout from shutting
-        // down then we will attempt to recover by reconfiguring the listener.
-        // This will close and destruct the current listener and make a new
-        // one with new resources.
-        // @todo This may need a safety valve such as retry count or a timer
-        // to keep from endlessly retrying over and over, with little time
-        // in between.
+        /// If the receive error is not due to some fallout from shutting
+        /// down then we will attempt to recover by reconfiguring the listener.
+        /// This will close and destruct the current listener and make a new
+        /// one with new resources.
+        /// @todo This may need a safety valve such as retry count or a timer
+        /// to keep from endlessly retrying over and over, with little time
+        /// in between.
         if (!shouldShutdown()) {
             LOG_INFO (d2_logger, DHCP_DDNS_QUEUE_MGR_RECOVERING);
             reconfigureQueueMgr();
@@ -306,10 +364,10 @@ D2Process::checkQueueStatus() {
         break;
 
     case D2QueueMgr::STOPPING:
-        // We are waiting for IO to cancel, so this is a NOP.
-        // @todo Possible timer for self-defense?  We could conceivably
-        // get into a condition where we never get the event, which would
-        // leave us stuck in stopping.  This is hugely unlikely but possible?
+        /// We are waiting for IO to cancel, so this is a NOP.
+        /// @todo Possible timer for self-defense?  We could conceivably
+        /// get into a condition where we never get the event, which would
+        /// leave us stuck in stopping.  This is hugely unlikely but possible?
         break;
 
     default:
@@ -333,9 +391,9 @@ D2Process::reconfigureQueueMgr() {
     // queue manager in INITTED state, which is fine.
     // What we don't want is to continually attempt to reconfigure so set
     // the flag false now.
-    // @todo This method assumes only 1 type of listener.  This will change
-    // to support at least a TCP version, possibly some form of RDBMS listener
-    // as well.
+    /// @todo This method assumes only 1 type of listener.  This will change
+    /// to support at least a TCP version, possibly some form of RDBMS listener
+    /// as well.
     reconf_queue_flag_ = false;
     try {
         // Wipe out the current listener.
@@ -344,9 +402,9 @@ D2Process::reconfigureQueueMgr() {
         // Get the configuration parameters that affect Queue Manager.
         const D2ParamsPtr& d2_params = getD2CfgMgr()->getD2Params();
 
-        // Warn the user if the server address is not the loopback.
+        /// Warn the user if the server address is not the loopback.
         /// @todo Remove this once we provide a secure mechanism.
-        std::string ip_address =  d2_params->getIpAddress().toText();
+        std::string ip_address = d2_params->getIpAddress().toText();
         if (ip_address != "127.0.0.1" && ip_address != "::1") {
             LOG_WARN(d2_logger, DHCP_DDNS_NOT_ON_LOOPBACK).arg(ip_address);
         }
@@ -365,8 +423,9 @@ D2Process::reconfigureQueueMgr() {
         }
 
         // Now start it. This assumes that starting is a synchronous,
-        // blocking call that executes quickly.  @todo Should that change then
-        // we will have to expand the state model to accommodate this.
+        // blocking call that executes quickly.
+        /// @todo Should that change then we will have to expand the state model
+        /// to accommodate this.
         queue_mgr_->startListening();
     } catch (const isc::Exception& ex) {
         // Queue manager failed to initialize and therefore not listening.
@@ -377,7 +436,7 @@ D2Process::reconfigureQueueMgr() {
 }
 
 D2Process::~D2Process() {
-};
+}
 
 D2CfgMgrPtr
 D2Process::getD2CfgMgr() {
@@ -439,5 +498,5 @@ D2Process::reconfigureCommandChannel() {
     current_control_socket_ = sock_cfg;
 }
 
-}; // namespace isc::d2
-}; // namespace isc
+} // namespace isc::d2
+} // namespace isc

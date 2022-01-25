@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -180,6 +180,24 @@ public:
     /// @brief Removes all backends from the pool.
     void delAllBackends() {
         pool_->delAllBackends();
+    }
+
+    /// @brief Delete a config backend manager.
+    ///
+    /// Delete the first instance of a config database manager which matches
+    /// specific parameters.
+    /// This should have the effect of closing the database connection.
+    ///
+    /// @param db_type Backend to remove.
+    /// @param dbaccess Database access string being a collection of
+    /// key=value pairs.
+    /// @param if_unusable Flag which indicates if the config backend should be
+    /// deleted only if it is unusable.
+    /// @return false when not removed because it is not found or because it is
+    /// still usable (if_unusable is true), true otherwise.
+    bool delBackend(const std::string& db_type, const std::string& dbaccess,
+                    bool if_unusable) {
+        return (pool_->del(db_type, dbaccess, if_unusable));
     }
 
     /// @brief Returns underlying config backend pool.

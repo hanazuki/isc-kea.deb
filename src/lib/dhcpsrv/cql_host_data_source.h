@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2018 Deutsche Telekom AG.
 //
 // Author: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -73,7 +73,7 @@ public:
     /// - tcp-keepalive no
     /// - tcp-nodelay no
     ///
-    /// For details regarding those paraemters, see
+    /// For details regarding those parameters, see
     /// @ref isc::db::CqlConnection::openDatabase.
     ///
     /// Finally, all the CQL commands are pre-compiled.
@@ -105,11 +105,11 @@ public:
     /// @param host pointer to the new @ref Host being added.
     virtual void add(const HostPtr& host) override;
 
-    /// @brief Attempts to delete a host by (subnet-id, address)
+    /// @brief Attempts to delete hosts by (subnet-id, address)
     ///
     /// This method supports both v4 and v6.
     ///
-    /// @param subnet_id subnet identfier.
+    /// @param subnet_id subnet identifier.
     /// @param addr specified address.
     /// @return true if deletion was successful, false if the host was not
     ///     there.
@@ -232,8 +232,6 @@ public:
 
     /// @brief Returns range of hosts in a DHCPv4 subnet.
     ///
-    /// Not implemented.
-    ///
     /// @param subnet_id Subnet identifier.
     /// @param source_index Index of the source (unused).
     /// @param lower_host_id Host identifier used as lower bound for the
@@ -249,8 +247,6 @@ public:
 
     /// @brief Returns range of hosts in a DHCPv6 subnet.
     ///
-    /// Not implemented.
-    ///
     /// @param subnet_id Subnet identifier.
     /// @param source_index Index of the source (unused).
     /// @param lower_host_id Host identifier used as lower bound for the
@@ -261,6 +257,32 @@ public:
     virtual ConstHostCollection
     getPage6(const SubnetID& subnet_id,
              size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const override;
+
+    /// @brief Returns range of hosts.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of const @c Host objects (may be empty).
+    virtual ConstHostCollection
+    getPage4(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const override;
+
+    /// @brief Returns range of hosts.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of const @c Host objects (may be empty).
+    virtual ConstHostCollection
+    getPage6(size_t& source_index,
              uint64_t lower_host_id,
              const HostPageSize& page_size) const override;
 
@@ -306,6 +328,21 @@ public:
     get4(const SubnetID& subnet_id,
          const asiolink::IOAddress& address) const override;
 
+    /// @brief Returns all hosts connected to the IPv4 subnet and having
+    /// a reservation for a specified address.
+    ///
+    /// This backend does not support a configuration in which multiple
+    /// reservations can be created for a single IPv4 address, so it
+    /// always returns 1 or 0 hosts.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv4 address.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll4(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const override;
+
     /// @brief Returns a @ref Host connected to an IPv6 subnet.
     ///
     /// @param subnet_id subnet identifier to filter by
@@ -343,6 +380,21 @@ public:
     virtual ConstHostPtr
     get6(const SubnetID& subnet_id,
          const asiolink::IOAddress& address) const override;
+
+    /// @brief Returns all hosts connected to the IPv6 subnet and having
+    /// a reservation for a specified address or delegated prefix (lease).
+    ///
+    /// This backend does not support a configuration in which multiple
+    /// reservations can be created for a single IPv6 address, so it
+    /// always returns 1 or 0 hosts.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv6 address.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll6(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const override;
 
     /// @brief Returns a collection of all the hosts.
     ///
@@ -388,6 +440,24 @@ public:
     ///
     /// Rolls back all pending database operations  (no-op for Cassandra)
     virtual void rollback() override;
+
+    /// @brief Controls whether IP reservations are unique or non-unique.
+    ///
+    /// In a typical case, the IP reservations are unique and backends verify
+    /// prior to adding a host reservation to the database that the reservation
+    /// for a given IP address does not exist. In some cases it may be required
+    /// to allow non-unique IP reservations, e.g. in the case when a host has
+    /// several interfaces and independently of which interface is used by this
+    /// host to communicate with the DHCP server the same IP address should be
+    /// assigned. In this case the @c unique value should be set to false to
+    /// disable the checks for uniqueness on the backend side.
+    ///
+    /// @param unique boolean flag indicating if the IP reservations must be
+    /// unique within the subnet or can be non-unique.
+    /// @return true when addresses must be unique, false otherwise because
+    /// this backend does not support specifying the same IP address in multiple
+    /// host reservations.
+    virtual bool setIPReservationsUnique(const bool unique) override;
 
 private:
     /// @brief Pointer to the implementation of the @ref CqlHostDataSource.

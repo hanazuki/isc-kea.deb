@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -46,27 +46,33 @@ private:
     }
 };
 
+} // namespace
+
+namespace isc {
+namespace hooks {
 /// @brief Public library manager collection class
 ///
 /// This is an instance of the LibraryManagerCollection class but with the
 /// protected methods made public for test purposes.
 
-class PublicLibraryManagerCollection
-                : public isc::hooks::LibraryManagerCollection {
+class PublicLibraryManagerCollection : public LibraryManagerCollection {
 public:
     /// @brief Constructor
     ///
     /// @param List of libraries that this collection will manage.  The order
     ///        of the libraries is important.
     PublicLibraryManagerCollection(const HookLibsCollection& libraries)
-        : LibraryManagerCollection(libraries)
-    {}
+        : LibraryManagerCollection(libraries) {
+    }
 
     /// Public methods that call protected methods on the superclass.
     using LibraryManagerCollection::unloadLibraries;
 };
 
+} // namespace hooks
+} // namespace isc
 
+namespace {
 // This is effectively the same test as for LibraryManager, but using the
 // LibraryManagerCollection object.
 

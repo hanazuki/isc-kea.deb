@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,15 +6,19 @@
 
 #include <config.h>
 
+#include <cfgrpt/config_report.h>
 #include <config/command_mgr.h>
 #include <d2/d2_controller.h>
 #include <d2/d2_process.h>
 #include <d2/parser_context.h>
+#include <stats/stats_mgr.h>
 
 #include <stdlib.h>
 
 using namespace isc::config;
 using namespace isc::process;
+using namespace isc::stats;
+namespace ph = std::placeholders;
 
 namespace isc {
 namespace d2 {
@@ -53,31 +57,44 @@ D2Controller::registerCommands() {
     // These are the commands always supported by the D2 server.
     // Please keep the list in alphabetic order.
     CommandMgr::instance().registerCommand(BUILD_REPORT_COMMAND,
-        boost::bind(&D2Controller::buildReportHandler, this, _1, _2));
+        std::bind(&D2Controller::buildReportHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(CONFIG_GET_COMMAND,
-        boost::bind(&D2Controller::configGetHandler, this, _1, _2));
+        std::bind(&D2Controller::configGetHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(CONFIG_RELOAD_COMMAND,
-        boost::bind(&D2Controller::configReloadHandler, this, _1, _2));
+        std::bind(&D2Controller::configReloadHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(CONFIG_SET_COMMAND,
-        boost::bind(&D2Controller::configSetHandler, this, _1, _2));
+        std::bind(&D2Controller::configSetHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(CONFIG_TEST_COMMAND,
-        boost::bind(&D2Controller::configTestHandler, this, _1, _2));
+        std::bind(&D2Controller::configTestHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(CONFIG_WRITE_COMMAND,
-        boost::bind(&D2Controller::configWriteHandler, this, _1, _2));
+        std::bind(&D2Controller::configWriteHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(SHUT_DOWN_COMMAND,
-        boost::bind(&D2Controller::shutdownHandler, this, _1, _2));
+        std::bind(&D2Controller::shutdownHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(STATUS_GET_COMMAND,
-        boost::bind(&DControllerBase::statusGetHandler, this, _1, _2));
+        std::bind(&DControllerBase::statusGetHandler, this, ph::_1, ph::_2));
 
     CommandMgr::instance().registerCommand(VERSION_GET_COMMAND,
-        boost::bind(&D2Controller::versionGetHandler, this, _1, _2));
+        std::bind(&D2Controller::versionGetHandler, this, ph::_1, ph::_2));
+
+    // Register statistic related commands.
+    CommandMgr::instance().registerCommand("statistic-get",
+        std::bind(&StatsMgr::statisticGetHandler, ph::_1, ph::_2));
+
+    CommandMgr::instance().registerCommand("statistic-get-all",
+        std::bind(&StatsMgr::statisticGetAllHandler, ph::_1, ph::_2));
+
+    CommandMgr::instance().registerCommand("statistic-reset",
+        std::bind(&StatsMgr::statisticResetHandler, ph::_1, ph::_2));
+
+    CommandMgr::instance().registerCommand("statistic-reset-all",
+        std::bind(&StatsMgr::statisticResetAllHandler, ph::_1, ph::_2));
 }
 
 void
@@ -94,6 +111,10 @@ D2Controller::deregisterCommands() {
         CommandMgr::instance().deregisterCommand(CONFIG_TEST_COMMAND);
         CommandMgr::instance().deregisterCommand(CONFIG_WRITE_COMMAND);
         CommandMgr::instance().deregisterCommand(SHUT_DOWN_COMMAND);
+        CommandMgr::instance().deregisterCommand("statistic-get");
+        CommandMgr::instance().deregisterCommand("statistic-get-all");
+        CommandMgr::instance().deregisterCommand("statistic-reset");
+        CommandMgr::instance().deregisterCommand("statistic-reset-all");
         CommandMgr::instance().deregisterCommand(STATUS_GET_COMMAND);
         CommandMgr::instance().deregisterCommand(VERSION_GET_COMMAND);
 
@@ -101,8 +122,6 @@ D2Controller::deregisterCommands() {
         // What to do? Simply ignore...
     }
 }
-
-
 
 isc::data::ConstElementPtr
 D2Controller::parseFile(const std::string& file_name) {
@@ -121,6 +140,9 @@ D2Controller::parseFile(const std::string& file_name) {
 D2Controller::~D2Controller() {
 }
 
+// Refer to config_report so it will be embedded in the binary.
+const char* const* d2_config_report = isc::detail::config_report;
+
 std::string
 D2Controller::getVersionAddendum() {
     std::stringstream stream;
@@ -130,5 +152,5 @@ D2Controller::getVersionAddendum() {
 
 }
 
-}; // end namespace isc::d2
-}; // end namespace isc
+} // end namespace isc::d2
+} // end namespace isc

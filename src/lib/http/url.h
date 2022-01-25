@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -77,11 +77,21 @@ public:
 
     /// @brief Returns path.
     ///
+    /// @return URL path
     /// @throw InvalidOperation if URL is invalid.
     std::string getPath() const;
 
     /// @brief Returns textual representation of the URL.
+    ///
+    /// @return Text version of the URL.
     std::string toText() const;
+
+    /// @brief Returns the raw, unparsed URL string.
+    ///
+    /// @return Unparsed URL string.
+    const std::string& rawUrl() const {
+        return (url_);
+    }
 
 private:
 

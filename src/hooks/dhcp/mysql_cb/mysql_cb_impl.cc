@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,6 +15,7 @@
 #include <cstdint>
 #include <utility>
 
+using namespace isc::asiolink;
 using namespace isc::cb;
 using namespace isc::data;
 using namespace isc::db;
@@ -22,6 +23,8 @@ using namespace isc::util;
 
 namespace isc {
 namespace dhcp {
+
+isc::asiolink::IOServicePtr MySqlConfigBackendImpl::io_service_ = isc::asiolink::IOServicePtr();
 
 MySqlConfigBackendImpl::
 ScopedAuditRevision::ScopedAuditRevision(MySqlConfigBackendImpl* impl,
@@ -42,8 +45,12 @@ ScopedAuditRevision::~ScopedAuditRevision() {
 }
 
 MySqlConfigBackendImpl::
-MySqlConfigBackendImpl(const DatabaseConnection::ParameterMap& parameters)
-    : conn_(parameters), audit_revision_created_(false) {
+MySqlConfigBackendImpl(const DatabaseConnection::ParameterMap& parameters,
+                       const DbCallback db_reconnect_callback)
+    : conn_(parameters,
+            IOServiceAccessorPtr(new IOServiceAccessor(MySqlConfigBackendImpl::getIOService)),
+            db_reconnect_callback), timer_name_(""),
+      audit_revision_ref_count_(0), parameters_(parameters) {
     // Test schema version first.
     std::pair<uint32_t, uint32_t> code_version(MYSQL_SCHEMA_VERSION_MAJOR,
                                                MYSQL_SCHEMA_VERSION_MINOR);
@@ -58,18 +65,6 @@ MySqlConfigBackendImpl(const DatabaseConnection::ParameterMap& parameters)
 
     // Open the database.
     conn_.openDatabase();
-
-    // Enable autocommit. In case transaction is explicitly used, this
-    // setting will be overwritten for the transaction. However, there are
-    // cases when lack of autocommit could cause transactions to hang
-    // until commit or rollback is explicitly called. This already
-    // caused issues for some unit tests which were unable to cleanup
-    // the database after the test because of pending transactions.
-    // Use of autocommit will eliminate this problem.
-    my_bool result = mysql_autocommit(conn_.mysql_, 1);
-    if (result != MLM_FALSE) {
-        isc_throw(DbOperationError, mysql_error(conn_.mysql_));
-    }
 }
 
 MySqlConfigBackendImpl::~MySqlConfigBackendImpl() {
@@ -157,7 +152,7 @@ MySqlConfigBackendImpl::createAuditRevision(const int index,
                                             const std::string& log_message,
                                             const bool cascade_transaction) {
     // Do not touch existing audit revision in case of the cascade update.
-    if (audit_revision_created_) {
+    if (++audit_revision_ref_count_ > 1) {
         return;
     }
 
@@ -180,18 +175,21 @@ MySqlConfigBackendImpl::createAuditRevision(const int index,
         MySqlBinding::createInteger<uint8_t>(static_cast<uint8_t>(cascade_transaction))
     };
     conn_.insertQuery(index, in_bindings);
-    audit_revision_created_ = true;
 }
 
 void
 MySqlConfigBackendImpl::clearAuditRevision() {
-    audit_revision_created_ = false;
+    if (audit_revision_ref_count_ <= 0) {
+        isc_throw(Unexpected, "attempted to clear audit revision that does not exist - coding error");
+    }
+    --audit_revision_ref_count_;
 }
 
 void
 MySqlConfigBackendImpl::getRecentAuditEntries(const int index,
                                               const db::ServerSelector& server_selector,
                                               const boost::posix_time::ptime& modification_time,
+                                              const uint64_t& modification_id,
                                               AuditEntryCollection& audit_entries) {
     // Create the output bindings for receiving the data.
     MySqlBindingCollection out_bindings = {
@@ -200,6 +198,7 @@ MySqlConfigBackendImpl::getRecentAuditEntries(const int index,
         MySqlBinding::createInteger<uint64_t>(), // object_id
         MySqlBinding::createInteger<uint8_t>(), // modification_type
         MySqlBinding::createTimestamp(), // modification_time
+        MySqlBinding::createInteger<uint64_t>(), // revision_id
         MySqlBinding::createString(AUDIT_ENTRY_LOG_MESSAGE_BUF_LENGTH) // log_message
     };
 
@@ -207,10 +206,11 @@ MySqlConfigBackendImpl::getRecentAuditEntries(const int index,
 
     for (auto tag : tags) {
 
-        // There is only one input binding, modification time.
+        // There are only a few input bindings
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(tag.get()),
-            MySqlBinding::createTimestamp(modification_time)
+            MySqlBinding::createTimestamp(modification_time),
+            MySqlBinding::createInteger<uint64_t>(modification_id)
         };
 
         // Execute select.
@@ -227,7 +227,8 @@ MySqlConfigBackendImpl::getRecentAuditEntries(const int index,
                                    out_bindings[2]->getInteger<uint64_t>(),
                                    mod_type,
                                    out_bindings[4]->getTimestamp(),
-                                   out_bindings[5]->getStringOrDefault(""));
+                                   out_bindings[5]->getInteger<uint64_t>(),
+                                   out_bindings[6]->getStringOrDefault(""));
             audit_entries.insert(audit_entry);
         });
     }
@@ -407,7 +408,7 @@ MySqlConfigBackendImpl::getOptionDefs(const int index,
 
     // Run select query.
     conn_.selectQuery(index, in_bindings, out_bindings,
-                      [&local_option_defs, &last_def_id]
+                      [this, &local_option_defs, &last_def_id]
                       (MySqlBindingCollection& out_bindings) {
         // Get pointer to last fetched option definition.
         OptionDefinitionPtr last_def;
@@ -423,52 +424,7 @@ MySqlConfigBackendImpl::getOptionDefs(const int index,
 
             last_def_id = out_bindings[0]->getInteger<uint64_t>();
 
-            // Check array type, because depending on this value we have to use
-            // different constructor.
-            bool array_type = static_cast<bool>(out_bindings[6]->getInteger<uint8_t>());
-            if (array_type) {
-                // Create array option.
-                last_def = OptionDefinition::create(out_bindings[2]->getString(),
-                                                    out_bindings[1]->getInteger<uint16_t>(),
-                                                    static_cast<OptionDataType>
-                                                    (out_bindings[4]->getInteger<uint8_t>()),
-                                                    array_type);
-            } else {
-                // Create non-array option.
-                last_def = OptionDefinition::create(out_bindings[2]->getString(),
-                                                    out_bindings[1]->getInteger<uint16_t>(),
-                                                    static_cast<OptionDataType>
-                                                    (out_bindings[4]->getInteger<uint8_t>()),
-                                                    out_bindings[7]->getStringOrDefault("").c_str());
-            }
-
-            // space
-            last_def->setOptionSpaceName(out_bindings[3]->getStringOrDefault(""));
-
-            // id
-            last_def->setId(last_def_id);
-
-            // record_types
-            ElementPtr record_types_element = out_bindings[8]->getJSON();
-            if (record_types_element) {
-                if (record_types_element->getType() != Element::list) {
-                    isc_throw(BadValue, "invalid record_types value "
-                              << out_bindings[8]->getString());
-                }
-                // This element must contain a list of integers specifying
-                // types of the record fields.
-                for (auto i = 0; i < record_types_element->size(); ++i) {
-                    auto type_element = record_types_element->get(i);
-                    if (type_element->getType() != Element::integer) {
-                        isc_throw(BadValue, "record type values must be integers");
-                    }
-                    last_def->addRecordField(static_cast<OptionDataType>
-                                             (type_element->intValue()));
-                }
-            }
-
-            // Update modification time.
-            last_def->setModificationTime(out_bindings[5]->getTimestamp());
+            last_def = processOptionDefRow(out_bindings.begin());
 
             // server_tag
             ServerTag last_def_server_tag(out_bindings[10]->getString());
@@ -517,12 +473,13 @@ MySqlConfigBackendImpl::getOptionDefs(const int index,
 void
 MySqlConfigBackendImpl::createUpdateOptionDef(const db::ServerSelector& server_selector,
                                               const OptionDefinitionPtr& option_def,
-                                              const std::string& space,
-                                              const int& get_option_def_code_space,
+                                              const std::string& /*space*/,
+                                              const int& /*get_option_def_code_space*/,
                                               const int& insert_option_def,
                                               const int& update_option_def,
                                               const int& create_audit_revision,
-                                              const int& insert_option_def_server) {
+                                              const int& insert_option_def_server,
+                                              const std::string& client_class_name) {
 
     if (server_selector.amUnassigned()) {
         isc_throw(NotImplemented, "managing configuration for no particular server"
@@ -538,20 +495,23 @@ MySqlConfigBackendImpl::createUpdateOptionDef(const db::ServerSelector& server_s
     MySqlBindingPtr record_types_binding = record_types->empty() ?
         MySqlBinding::createNull() : MySqlBinding::createString(record_types->str());
 
+    MySqlBindingPtr client_class_binding = client_class_name.empty() ?
+        MySqlBinding::createNull() : MySqlBinding::createString(client_class_name);
+
     MySqlBindingCollection in_bindings = {
         MySqlBinding::createInteger<uint16_t>(option_def->getCode()),
         MySqlBinding::createString(option_def->getName()),
-        MySqlBinding::createString(option_def->getOptionSpaceName().empty() ?
-                                   space : option_def->getOptionSpaceName()),
+        MySqlBinding::createString(option_def->getOptionSpaceName()),
         MySqlBinding::createInteger<uint8_t>(static_cast<uint8_t>(option_def->getType())),
         MySqlBinding::createTimestamp(option_def->getModificationTime()),
         MySqlBinding::createBool(option_def->getArrayType()),
         MySqlBinding::createString(option_def->getEncapsulatedSpace()),
         record_types_binding,
         createInputContextBinding(option_def),
+        client_class_binding,
         MySqlBinding::createString(tag),
         MySqlBinding::createInteger<uint16_t>(option_def->getCode()),
-        MySqlBinding::createString(option_def->getOptionSpaceName())
+        MySqlBinding::createString(option_def->getOptionSpaceName()),
     };
 
     MySqlTransaction transaction(conn_);
@@ -896,6 +856,58 @@ MySqlConfigBackendImpl::processOptionRow(const Option::Universe& universe,
     }
 
     return (desc);
+}
+
+OptionDefinitionPtr
+MySqlConfigBackendImpl::processOptionDefRow(MySqlBindingCollection::iterator first_binding) {
+    OptionDefinitionPtr def;
+
+    // Check array type, because depending on this value we have to use
+    // different constructor.
+    bool array_type = static_cast<bool>((*(first_binding + 6))->getInteger<uint8_t>());
+    if (array_type) {
+        // Create array option.
+        def = OptionDefinition::create((*(first_binding + 2))->getString(),
+                                       (*(first_binding + 1))->getInteger<uint16_t>(),
+                                       (*(first_binding + 3))->getString(),
+                                       static_cast<OptionDataType>
+                                       ((*(first_binding + 4))->getInteger<uint8_t>()),
+                                       array_type);
+    } else {
+        // Create non-array option.
+        def = OptionDefinition::create((*(first_binding + 2))->getString(),
+                                       (*(first_binding + 1))->getInteger<uint16_t>(),
+                                       (*(first_binding + 3))->getString(),
+                                       static_cast<OptionDataType>
+                                       ((*(first_binding + 4))->getInteger<uint8_t>()),
+                                       (*(first_binding + 7))->getStringOrDefault("").c_str());
+    }
+
+    // id
+    def->setId((*(first_binding))->getInteger<uint64_t>());
+
+    // record_types
+    ElementPtr record_types_element = (*(first_binding + 8))->getJSON();
+    if (record_types_element) {
+        if (record_types_element->getType() != Element::list) {
+            isc_throw(BadValue, "invalid record_types value "
+                      << (*(first_binding + 8))->getString());
+        }
+        // This element must contain a list of integers specifying
+        // types of the record fields.
+        for (auto i = 0; i < record_types_element->size(); ++i) {
+            auto type_element = record_types_element->get(i);
+            if (type_element->getType() != Element::integer) {
+                isc_throw(BadValue, "record type values must be integers");
+            }
+            def->addRecordField(static_cast<OptionDataType>(type_element->intValue()));
+        }
+    }
+
+    // Update modification time.
+    def->setModificationTime((*(first_binding + 5))->getTimestamp());
+
+    return (def);
 }
 
 void

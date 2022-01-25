@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -971,7 +971,7 @@ TEST_F(HostTest, toText) {
                                        IOAddress("2001:db8:1::1")));
     );
 
-    // Add invisble user context
+    // Add invisible user context
     std::string user_context = "{ \"foo\": \"bar\" }";
     host->setContext(Element::fromJSON(user_context));
 
@@ -1093,24 +1093,24 @@ TEST_F(HostTest, unparse) {
     EXPECT_EQ("{ "
               "\"boot-file-name\": \"\", "
               "\"client-classes\": [  ], "
-              "\"comment\": \"a host reservation\", "
               "\"hostname\": \"myhost.example.com\", "
               "\"hw-address\": \"01:02:03:04:05:06\", "
               "\"ip-address\": \"192.0.2.3\", "
               "\"next-server\": \"0.0.0.0\", "
               "\"option-data\": [  ], "
-              "\"server-hostname\": \"\" "
+              "\"server-hostname\": \"\", "
+              "\"user-context\": { \"comment\": \"a host reservation\" } "
               "}",
               host->toElement4()->str());
 
     EXPECT_EQ("{ "
               "\"client-classes\": [  ], "
-              "\"comment\": \"a host reservation\", "
               "\"hostname\": \"myhost.example.com\", "
               "\"hw-address\": \"01:02:03:04:05:06\", "
               "\"ip-addresses\": [ \"2001:db8:1::cafe\", \"2001:db8:1::1\" ], "
               "\"option-data\": [  ], "
-              "\"prefixes\": [ \"2001:db8:1:1::/64\", \"2001:db8:1:2::/64\" ] "
+              "\"prefixes\": [ \"2001:db8:1:1::/64\", \"2001:db8:1:2::/64\" ], "
+              "\"user-context\": { \"comment\": \"a host reservation\" } "
               "}",
               host->toElement6()->str());
 
@@ -1122,23 +1122,23 @@ TEST_F(HostTest, unparse) {
     EXPECT_EQ("{ "
               "\"boot-file-name\": \"\", "
               "\"client-classes\": [  ], "
-              "\"comment\": \"a host reservation\", "
               "\"hostname\": \"\", "
               "\"hw-address\": \"01:02:03:04:05:06\", "
               "\"next-server\": \"0.0.0.0\", "
               "\"option-data\": [  ], "
-              "\"server-hostname\": \"\" "
+              "\"server-hostname\": \"\", "
+              "\"user-context\": { \"comment\": \"a host reservation\" } "
               "}",
               host->toElement4()->str());
 
     EXPECT_EQ("{ "
               "\"client-classes\": [  ], "
-              "\"comment\": \"a host reservation\", "
               "\"hostname\": \"\", "
               "\"hw-address\": \"01:02:03:04:05:06\", "
               "\"ip-addresses\": [ \"2001:db8:1::cafe\", \"2001:db8:1::1\" ], "
               "\"option-data\": [  ], "
-              "\"prefixes\": [ \"2001:db8:1:1::/64\", \"2001:db8:1:2::/64\" ] "
+              "\"prefixes\": [ \"2001:db8:1:1::/64\", \"2001:db8:1:2::/64\" ], "
+              "\"user-context\": { \"comment\": \"a host reservation\" } "
               "}",
               host->toElement6()->str());
 
@@ -1237,7 +1237,7 @@ TEST_F(HostTest, hostId) {
     EXPECT_EQ(12345, host->getHostId());
 }
 
-// Tets verifies if we can modify the host keys.
+// Test verifies if we can modify the host keys.
 TEST_F(HostTest, keys) {
     HostPtr host;
     ASSERT_NO_THROW(host.reset(new Host("01:02:03:04:05:06", "hw-address",

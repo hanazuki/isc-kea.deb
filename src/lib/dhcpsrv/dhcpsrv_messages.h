@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/dhcpsrv/dhcpsrv_messages.mes on Thu Dec 05 2019 16:13
+// File created from ../../../src/lib/dhcpsrv/dhcpsrv_messages.mes
 
 #ifndef DHCPSRV_MESSAGES_H
 #define DHCPSRV_MESSAGES_H
@@ -21,6 +21,9 @@ extern const isc::log::MessageID DHCPSRV_CFGMGR_DDNS_PARAMETER_IGNORED;
 extern const isc::log::MessageID DHCPSRV_CFGMGR_DDNS_PARAMETER_MOVED;
 extern const isc::log::MessageID DHCPSRV_CFGMGR_DEL_SUBNET4;
 extern const isc::log::MessageID DHCPSRV_CFGMGR_DEL_SUBNET6;
+extern const isc::log::MessageID DHCPSRV_CFGMGR_IPV4_RESERVATIONS_NON_UNIQUE_IGNORED;
+extern const isc::log::MessageID DHCPSRV_CFGMGR_IPV6_RESERVATIONS_NON_UNIQUE_IGNORED;
+extern const isc::log::MessageID DHCPSRV_CFGMGR_IP_RESERVATIONS_UNIQUE_DUPLICATES_POSSIBLE;
 extern const isc::log::MessageID DHCPSRV_CFGMGR_NEW_SUBNET4;
 extern const isc::log::MessageID DHCPSRV_CFGMGR_NEW_SUBNET6;
 extern const isc::log::MessageID DHCPSRV_CFGMGR_NO_SUBNET4;
@@ -85,6 +88,7 @@ extern const isc::log::MessageID DHCPSRV_CQL_LEASE_EXCEPTION_THROWN;
 extern const isc::log::MessageID DHCPSRV_CQL_ROLLBACK;
 extern const isc::log::MessageID DHCPSRV_CQL_UPDATE_ADDR4;
 extern const isc::log::MessageID DHCPSRV_CQL_UPDATE_ADDR6;
+extern const isc::log::MessageID DHCPSRV_DEPRECATED;
 extern const isc::log::MessageID DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET;
 extern const isc::log::MessageID DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION;
 extern const isc::log::MessageID DHCPSRV_DHCP_DDNS_HANDLER_NULL;
@@ -119,7 +123,6 @@ extern const isc::log::MessageID DHCPSRV_MEMFILE_GET6_DUID;
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_ADDR4;
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_ADDR6;
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_CLIENTID;
-extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_CLIENTID_HWADDR_SUBID;
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_EXPIRED4;
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_EXPIRED6;
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_HOSTNAME4;
@@ -189,6 +192,13 @@ extern const isc::log::MessageID DHCPSRV_MYSQL_GET_VERSION;
 extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB;
 extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_GET_VERSION;
 extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_READONLY;
+extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED;
+extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE;
+extern const isc::log::MessageID DHCPSRV_MYSQL_HOST_DB_RECONNECT_FAILED;
+extern const isc::log::MessageID DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED;
+extern const isc::log::MessageID DHCPSRV_MYSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE;
+extern const isc::log::MessageID DHCPSRV_MYSQL_LEASE_DB_RECONNECT_FAILED;
+extern const isc::log::MessageID DHCPSRV_MYSQL_NEGATIVE_LEASES_STAT;
 extern const isc::log::MessageID DHCPSRV_MYSQL_ROLLBACK;
 extern const isc::log::MessageID DHCPSRV_MYSQL_START_TRANSACTION;
 extern const isc::log::MessageID DHCPSRV_MYSQL_UPDATE_ADDR4;
@@ -229,6 +239,13 @@ extern const isc::log::MessageID DHCPSRV_PGSQL_GET_VERSION;
 extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB;
 extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_GET_VERSION;
 extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_READONLY;
+extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_FAILED;
+extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_RECONNECT_ATTEMPT_SCHEDULE;
+extern const isc::log::MessageID DHCPSRV_PGSQL_HOST_DB_RECONNECT_FAILED;
+extern const isc::log::MessageID DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED;
+extern const isc::log::MessageID DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE;
+extern const isc::log::MessageID DHCPSRV_PGSQL_LEASE_DB_RECONNECT_FAILED;
+extern const isc::log::MessageID DHCPSRV_PGSQL_NEGATIVE_LEASES_STAT;
 extern const isc::log::MessageID DHCPSRV_PGSQL_ROLLBACK;
 extern const isc::log::MessageID DHCPSRV_PGSQL_START_TRANSACTION;
 extern const isc::log::MessageID DHCPSRV_PGSQL_UPDATE_ADDR4;

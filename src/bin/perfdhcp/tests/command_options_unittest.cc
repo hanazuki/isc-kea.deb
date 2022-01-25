@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -239,6 +239,8 @@ TEST_F(CommandOptionsTest, Defaults) {
     EXPECT_FALSE(opt.isRapidCommit());
     EXPECT_FALSE(opt.isUseFirst());
     EXPECT_FALSE(opt.getAddrUnique());
+    EXPECT_EQ(-1, opt.getIncreaseElapsedTime());
+    EXPECT_EQ(-1, opt.getWaitForElapsedTime());
     EXPECT_EQ(0, opt.getTemplateFiles().size());
     EXPECT_EQ(0, opt.getTransactionIdOffset().size());
     EXPECT_EQ(0, opt.getRandomOffset().size());
@@ -274,6 +276,13 @@ TEST_F(CommandOptionsTest, UseFirst) {
     CommandOptions opt;
     EXPECT_NO_THROW(process(opt, "perfdhcp -1 -B -l ethx all"));
     EXPECT_TRUE(opt.isUseFirst());
+}
+
+TEST_F(CommandOptionsTest, UseCleanOutput) {
+    CommandOptions opt;
+    EXPECT_NO_THROW(process(opt, "perfdhcp -6 -C, -l ethx all"));
+    EXPECT_TRUE(opt.getCleanReport());
+    EXPECT_EQ(",", opt.getCleanReportSeparator());
 }
 
 TEST_F(CommandOptionsTest, UseRelayV6) {
@@ -402,14 +411,11 @@ TEST_F(CommandOptionsTest, ReleaseRate) {
     // be accepted.
     EXPECT_THROW(process(opt, "perfdhcp -6 -F 10 -l ethx all"),
                  isc::InvalidParameter);
-    // Currently the -F<release-rate> can be specified for IPv6 mode
-    // only.
-    EXPECT_THROW(process(opt, "perfdhcp -4 -r 10 -F 10 -l ethx all"),
-                 isc::InvalidParameter);
+    // -F<release-rate> should be usable in IPv6 mode.
+    EXPECT_NO_THROW(process(opt, "perfdhcp -4 -r 10 -F 10 -l ethx all"));
     // Release rate should be specified.
     EXPECT_THROW(process(opt, "perfdhcp -6 -r 10 -F -l ethx all"),
                  isc::InvalidParameter);
-
     // -F and -i are mutually exclusive
     EXPECT_THROW(process(opt, "perfdhcp -6 -r 10 -F 10 -l ethx -i all"),
                  isc::InvalidParameter);
@@ -767,7 +773,7 @@ TEST_F(CommandOptionsTest, Interface) {
     // here it is called by CommandOptions object internally
     // so this function is covered by the test.
     dhcp::IfaceMgr& iface_mgr = dhcp::IfaceMgr::instance();
-    const dhcp::IfaceMgr::IfaceCollection& ifaces = iface_mgr.getIfaces();
+    const dhcp::IfaceCollection& ifaces = iface_mgr.getIfaces();
     std::string iface_name;
     CommandOptions opt;
     // The local loopback interface should be available.
@@ -832,6 +838,49 @@ TEST_F(CommandOptionsTest, LoadMacsFromFile) {
     EXPECT_EQ(4, m.size());
 }
 
+TEST_F(CommandOptionsTest, LoadRelay4AddrFromFile) {
+    CommandOptions opt;
+    std::string relay_addr_list_full_path = getFullPath("relay4-list.txt");
+    std::ostringstream cmd;
+    cmd << "perfdhcp -4 -J " << relay_addr_list_full_path << " abc";
+    EXPECT_NO_THROW(process(opt, cmd.str()));
+    EXPECT_EQ(relay_addr_list_full_path, opt.getRelayAddrListFile());
+    EXPECT_TRUE(opt.checkMultiSubnet());
+    EXPECT_EQ(5, opt.getRelayAddrList().size());
+}
+
+TEST_F(CommandOptionsTest, LoadRelay6AddrFromFile) {
+    CommandOptions opt;
+    std::string relay_addr_list_full_path = getFullPath("relay6-list.txt");
+    std::ostringstream cmd;
+    cmd << "perfdhcp -6 -J " << relay_addr_list_full_path << " abc";
+    EXPECT_NO_THROW(process(opt, cmd.str()));
+    EXPECT_EQ(relay_addr_list_full_path, opt.getRelayAddrListFile());
+    EXPECT_TRUE(opt.checkMultiSubnet());
+    EXPECT_EQ(2, opt.getRelayAddrList().size());
+}
+
+TEST_F(CommandOptionsTest, RelayAddr6ForVersion4) {
+    CommandOptions opt;
+    std::string relay_addr_list_full_path = getFullPath("relay6-list.txt");
+    std::ostringstream cmd;
+    cmd << "perfdhcp -4 -J " << relay_addr_list_full_path << " abc";
+    EXPECT_THROW(process(opt, cmd.str()), isc::InvalidParameter);
+    EXPECT_FALSE(opt.checkMultiSubnet());
+    EXPECT_EQ(0, opt.getRelayAddrList().size());
+}
+
+TEST_F(CommandOptionsTest, RelayAddr4ForVersion6) {
+    CommandOptions opt;
+    std::string relay_addr_list_full_path = getFullPath("relay4-list.txt");
+    std::ostringstream cmd;
+    cmd << "perfdhcp -6 -J " << relay_addr_list_full_path << " abc";
+    EXPECT_THROW(process(opt, cmd.str()), isc::InvalidParameter);
+    EXPECT_FALSE(opt.checkMultiSubnet());
+    EXPECT_EQ(0, opt.getRelayAddrList().size());
+}
+
+
 TEST_F(CommandOptionsTest, LoadMacsFromFileNegativeCases) {
     CommandOptions opt;
     // Negative test cases
@@ -840,4 +889,12 @@ TEST_F(CommandOptionsTest, LoadMacsFromFileNegativeCases) {
     // -M option can't use with -b option
     EXPECT_THROW(process(opt, "perfdhcp -M foo -b mac=1234 all"),
                  isc::InvalidParameter);
+}
+
+TEST_F(CommandOptionsTest, ElapsedTime) {
+    CommandOptions opt;
+    EXPECT_NO_THROW(process(opt, "perfdhcp -y 3 -Y 10 192.168.0.1"));
+
+    EXPECT_EQ(3, opt.getIncreaseElapsedTime());
+    EXPECT_EQ(10, opt.getWaitForElapsedTime());
 }

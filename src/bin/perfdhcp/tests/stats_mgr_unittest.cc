@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -558,15 +558,41 @@ TEST_F(StatsMgrTest, PrintStats) {
     // timestamps.
     EXPECT_THROW(stats_mgr->printTimestamps(), isc::InvalidOperation);
 
-    // Now, we create another statistics manager instance and enable
-    // packets archiving mode.
+    // Now, we create another statistics manager instance and enable timestamp
+    // printing, thus also enabling packets archiving mode.
     CommandOptionsHelper::process(opt, "perfdhcp -x t 127.0.0.1");
-    boost::shared_ptr<StatsMgr> stats_mgr2(new StatsMgr(opt));
-    stats_mgr2->addExchangeStats(ExchangeType::SA);
+    stats_mgr.reset(new StatsMgr(opt));
+    stats_mgr->addExchangeStats(ExchangeType::SA);
 
     // Timestamps should now get printed because packets have been preserved.
-    EXPECT_NO_THROW(stats_mgr2->printTimestamps());
+    EXPECT_NO_THROW(stats_mgr->printTimestamps());
+
+    // Create another statistics manager instance and enable lease printing for
+    // v4, thus also enabling packets archiving mode.
+    CommandOptionsHelper::process(opt, "perfdhcp -4 -x l 127.0.0.1");
+    stats_mgr.reset(new StatsMgr(opt));
+    stats_mgr->addExchangeStats(ExchangeType::RNA);
+    stats_mgr->addExchangeStats(ExchangeType::RLA);
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::DO));
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::RA));
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::RNA));
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::RLA));
+
+    // Leases should now get printed because packets have been preserved.
+    EXPECT_NO_THROW(stats_mgr->printLeases());
+
+    // For v6 this time.
+    CommandOptionsHelper::process(opt, "perfdhcp -6 -x l 127.0.0.1");
+    stats_mgr.reset(new StatsMgr(opt));
+    stats_mgr->addExchangeStats(ExchangeType::RN);
+    stats_mgr->addExchangeStats(ExchangeType::RL);
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::SA));
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::RR));
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::RN));
+    ASSERT_TRUE(stats_mgr->hasExchangeStats(ExchangeType::RL));
+
+    // Leases should now get printed because packets have been preserved.
+    EXPECT_NO_THROW(stats_mgr->printLeases());
 }
 
-
-}
+}  // namespace

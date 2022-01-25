@@ -1,13 +1,13 @@
-/* Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
    file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 %skeleton "lalr1.cc" /* -*- C++ -*- */
-%require "3.0.0"
+%require "3.3.0"
 %defines
-%define parser_class_name {D2Parser}
+%define api.parser.class {D2Parser}
 %define api.prefix {d2_parser_}
 %define api.token.constructor
 %define api.value.type variant
@@ -17,7 +17,7 @@
 {
 #include <string>
 #include <cc/data.h>
-#include <d2/d2_config.h>
+#include <d2srv/d2_config.h>
 #include <boost/lexical_cast.hpp>
 #include <d2/parser_context_decl.h>
 
@@ -37,7 +37,7 @@ using namespace std;
 
 
 %define api.token.prefix {TOKEN_}
-// Tokens in an order which makes sense and related to the intented use.
+// Tokens in an order which makes sense and related to the intended use.
 // Actual regexps for tokens are defined in d2_lexer.ll.
 %token
   END  0  "end of file"
@@ -48,10 +48,6 @@ using namespace std;
   LCURLY_BRACKET "{"
   RCURLY_BRACKET "}"
   NULL_TYPE "null"
-
-  DHCP6 "Dhcp6"
-  DHCP4 "Dhcp4"
-  CONTROL_AGENT "Control-agent"
 
   DHCPDDNS "DhcpDdns"
   IP_ADDRESS "ip-address"
@@ -79,7 +75,10 @@ using namespace std;
   SOCKET_TYPE "socket-type"
   SOCKET_NAME "socket-name"
 
-  LOGGING "Logging"
+  HOOKS_LIBRARIES "hooks-libraries"
+  LIBRARY "library"
+  PARAMETERS "parameters"
+
   LOGGERS "loggers"
   NAME "name"
   OUTPUT_OPTIONS "output_options"
@@ -102,6 +101,7 @@ using namespace std;
   SUB_DDNS_DOMAINS
   SUB_DNS_SERVER
   SUB_DNS_SERVERS
+  SUB_HOOKS_LIBRARY
 ;
 
 %token <std::string> STRING "constant string"
@@ -131,6 +131,7 @@ start: TOPLEVEL_JSON { ctx.ctx_ = ctx.NO_KEYWORD; } sub_json
      | SUB_DDNS_DOMAINS { ctx.ctx_ = ctx.DDNS_DOMAINS; } sub_ddns_domains
      | SUB_DNS_SERVER { ctx.ctx_ = ctx.DNS_SERVERS; } sub_dns_server
      | SUB_DNS_SERVERS { ctx.ctx_ = ctx.DNS_SERVERS; } sub_dns_servers
+     | SUB_HOOKS_LIBRARY { ctx.ctx_ = ctx.HOOKS_LIBRARIES; } sub_hooks_library
      ;
 
 // ---- generic JSON parser ---------------------------------
@@ -172,11 +173,13 @@ map_content: %empty // empty map
 
 not_empty_map: STRING COLON value {
                   // map containing a single entry
+                  ctx.unique($1, ctx.loc2pos(@1));
                   ctx.stack_.back()->set($1, $3);
                   }
              | not_empty_map COMMA STRING COLON value {
                   // map consisting of a shorter map followed by
                   // comma and string:value
+                  ctx.unique($3, ctx.loc2pos(@3));
                   ctx.stack_.back()->set($3, $5);
                   }
              ;
@@ -215,36 +218,22 @@ unknown_map_entry: STRING COLON {
 };
 
 
-// This defines the top-level { } that holds Control-agent, Dhcp6, Dhcp4,
-// DhcpDdns or Logging objects.
+// This defines the top-level { } that holds only DhcpDdns object.
 syntax_map: LCURLY_BRACKET {
     // This code is executed when we're about to start parsing
     // the content of the map
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.push_back(m);
-} global_objects RCURLY_BRACKET {
+} global_object RCURLY_BRACKET {
     // map parsing completed. If we ever want to do any wrap up
     // (maybe some sanity checking), this would be the best place
     // for it.
 };
 
-// This represents top-level entries: Dhcp6, Dhcp4, DhcpDdns, Logging
-global_objects: global_object
-              | global_objects COMMA global_object
-              ;
-
-// This represents a single top level entry, e.g. Dhcp6 or DhcpDdns.
-global_object: dhcp6_json_object
-             | logging_object
-             | dhcp4_json_object
-             | dhcpddns_object
-             | control_agent_json_object
-             | unknown_map_entry
-             ;
-
 // --- dhcp ddns ---------------------------------------------
-
-dhcpddns_object: DHCPDDNS {
+// This represents the single top level entry, e.g. DhcpDdns.
+global_object: DHCPDDNS {
+    ctx.unique("DhcpDdns", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("DhcpDdns", m);
     ctx.stack_.push_back(m);
@@ -276,6 +265,7 @@ dhcpddns_param: ip_address
               | reverse_ddns
               | tsig_keys
               | control_socket
+              | hooks_libraries
               | loggers
               | user_context
               | comment
@@ -283,6 +273,7 @@ dhcpddns_param: ip_address
               ;
 
 ip_address: IP_ADDRESS {
+    ctx.unique("ip-address", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
@@ -291,6 +282,7 @@ ip_address: IP_ADDRESS {
 };
 
 port: PORT COLON INTEGER {
+    ctx.unique("port", ctx.loc2pos(@1));
     if ($3 <= 0 || $3 >= 65536 ) {
         error(@3, "port must be greater than zero but less than 65536");
     }
@@ -299,6 +291,7 @@ port: PORT COLON INTEGER {
 };
 
 dns_server_timeout: DNS_SERVER_TIMEOUT COLON INTEGER {
+    ctx.unique("dns-server-timeout", ctx.loc2pos(@1));
     if ($3 <= 0) {
         error(@3, "dns-server-timeout must be greater than zero");
     } else {
@@ -308,6 +301,7 @@ dns_server_timeout: DNS_SERVER_TIMEOUT COLON INTEGER {
 };
 
 ncr_protocol: NCR_PROTOCOL {
+    ctx.unique("ncr-protocol", ctx.loc2pos(@1));
     ctx.enter(ctx.NCR_PROTOCOL);
 } COLON ncr_protocol_value {
     ctx.stack_.back()->set("ncr-protocol", $4);
@@ -320,6 +314,7 @@ ncr_protocol_value:
   ;
 
 ncr_format: NCR_FORMAT {
+    ctx.unique("ncr-format", ctx.loc2pos(@1));
     ctx.enter(ctx.NCR_FORMAT);
 } COLON JSON {
     ElementPtr json(new StringElement("JSON", ctx.loc2pos(@4)));
@@ -380,6 +375,7 @@ comment: COMMENT {
 };
 
 forward_ddns : FORWARD_DDNS {
+    ctx.unique("forward-ddns", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("forward-ddns", m);
     ctx.stack_.push_back(m);
@@ -390,6 +386,7 @@ forward_ddns : FORWARD_DDNS {
 };
 
 reverse_ddns : REVERSE_DDNS {
+    ctx.unique("reverse-ddns", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("reverse-ddns", m);
     ctx.stack_.push_back(m);
@@ -414,6 +411,7 @@ ddns_mgr_param: ddns_domains
 
 // --- ddns-domains ----------------------------------------
 ddns_domains: DDNS_DOMAINS {
+    ctx.unique("ddns-domains", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("ddns-domains", l);
     ctx.stack_.push_back(l);
@@ -458,7 +456,7 @@ ddns_domain_params: ddns_domain_param
                   ;
 
 ddns_domain_param: ddns_domain_name
-                 | ddns_domain_key_name
+                 | ddns_key_name
                  | dns_servers
                  | user_context
                  | comment
@@ -467,6 +465,7 @@ ddns_domain_param: ddns_domain_name
 
 //  @todo NAME needs to be an FQDN sort of thing
 ddns_domain_name: NAME {
+    ctx.unique("name", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     if ($4 == "") {
@@ -478,7 +477,8 @@ ddns_domain_name: NAME {
     ctx.leave();
 };
 
-ddns_domain_key_name: KEY_NAME {
+ddns_key_name: KEY_NAME {
+    ctx.unique("key-name", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr elem(new StringElement($4, ctx.loc2pos(@4)));
@@ -491,6 +491,7 @@ ddns_domain_key_name: KEY_NAME {
 
 // --- dns-servers ----------------------------------------
 dns_servers: DNS_SERVERS {
+    ctx.unique("dns-servers", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("dns-servers", l);
     ctx.stack_.push_back(l);
@@ -533,12 +534,14 @@ dns_server_params: dns_server_param
 dns_server_param: dns_server_hostname
               | dns_server_ip_address
               | dns_server_port
+              | ddns_key_name
               | user_context
               | comment
               | unknown_map_entry
               ;
 
 dns_server_hostname: HOSTNAME {
+    ctx.unique("hostname", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     if ($4 != "") {
@@ -551,6 +554,7 @@ dns_server_hostname: HOSTNAME {
 };
 
 dns_server_ip_address: IP_ADDRESS {
+    ctx.unique("ip-address", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr s(new StringElement($4, ctx.loc2pos(@4)));
@@ -559,6 +563,7 @@ dns_server_ip_address: IP_ADDRESS {
 };
 
 dns_server_port: PORT COLON INTEGER {
+    ctx.unique("port", ctx.loc2pos(@1));
     if ($3 <= 0 || $3 >= 65536 ) {
         error(@3, "port must be greater than zero but less than 65536");
     }
@@ -573,6 +578,7 @@ dns_server_port: PORT COLON INTEGER {
 // --- tsig-keys ----------------------------------------
 // "tsig-keys" : [ ... ]
 tsig_keys: TSIG_KEYS {
+    ctx.unique("tsig-keys", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("tsig-keys", l);
     ctx.stack_.push_back(l);
@@ -628,6 +634,7 @@ tsig_key_param: tsig_key_name
               ;
 
 tsig_key_name: NAME {
+    ctx.unique("name", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     if ($4 == "") {
@@ -640,6 +647,7 @@ tsig_key_name: NAME {
 };
 
 tsig_key_algorithm: ALGORITHM {
+    ctx.unique("algorithm", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     if ($4 == "") {
@@ -651,6 +659,7 @@ tsig_key_algorithm: ALGORITHM {
 };
 
 tsig_key_digest_bits: DIGEST_BITS COLON INTEGER {
+    ctx.unique("digest-bits", ctx.loc2pos(@1));
     if ($3 < 0 || ($3 > 0  && ($3 % 8 != 0))) {
         error(@3, "TSIG key digest-bits must either be zero or a positive, multiple of eight");
     }
@@ -659,6 +668,7 @@ tsig_key_digest_bits: DIGEST_BITS COLON INTEGER {
 };
 
 tsig_key_secret: SECRET {
+    ctx.unique("secret", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     if ($4 == "") {
@@ -675,6 +685,7 @@ tsig_key_secret: SECRET {
 // --- control socket ----------------------------------------
 
 control_socket: CONTROL_SOCKET {
+    ctx.unique("control-socket", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("control-socket", m);
     ctx.stack_.push_back(m);
@@ -696,6 +707,7 @@ control_socket_param: control_socket_type
                     ;
 
 control_socket_type: SOCKET_TYPE {
+    ctx.unique("socket-type", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr stype(new StringElement($4, ctx.loc2pos(@4)));
@@ -704,6 +716,7 @@ control_socket_type: SOCKET_TYPE {
 };
 
 control_socket_name: SOCKET_NAME {
+    ctx.unique("socket-name", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr name(new StringElement($4, ctx.loc2pos(@4)));
@@ -711,57 +724,77 @@ control_socket_name: SOCKET_NAME {
     ctx.leave();
 };
 
-// ----------------------------------------------------------------
+// --- hooks libraries -----------------------------------------
 
-dhcp6_json_object: DHCP6 {
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON value {
-    ctx.stack_.back()->set("Dhcp6", $4);
-    ctx.leave();
-};
-
-dhcp4_json_object: DHCP4 {
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON value {
-    ctx.stack_.back()->set("Dhcp4", $4);
-    ctx.leave();
-};
-
-control_agent_json_object: CONTROL_AGENT {
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON value {
-    ctx.stack_.back()->set("Control-agent", $4);
-    ctx.leave();
-};
-
-// --- logging entry -----------------------------------------
-
-// This defines the top level "Logging" object. It parses
-// the following "Logging": { ... }. The ... is defined
-// by logging_params
-logging_object: LOGGING {
-    ElementPtr m(new MapElement(ctx.loc2pos(@1)));
-    ctx.stack_.back()->set("Logging", m);
-    ctx.stack_.push_back(m);
-    ctx.enter(ctx.LOGGING);
-} COLON LCURLY_BRACKET logging_params RCURLY_BRACKET {
+hooks_libraries: HOOKS_LIBRARIES {
+    ctx.unique("hooks-libraries", ctx.loc2pos(@1));
+    ElementPtr l(new ListElement(ctx.loc2pos(@1)));
+    ctx.stack_.back()->set("hooks-libraries", l);
+    ctx.stack_.push_back(l);
+    ctx.enter(ctx.HOOKS_LIBRARIES);
+} COLON LSQUARE_BRACKET hooks_libraries_list RSQUARE_BRACKET {
     ctx.stack_.pop_back();
     ctx.leave();
 };
 
-// This defines the list of allowed parameters that may appear
-// in the top-level Logging object. It can either be a single
-// parameter or several parameters separated by commas.
-logging_params: logging_param
-              | logging_params COMMA logging_param
-              ;
+hooks_libraries_list: %empty
+                    | not_empty_hooks_libraries_list
+                    ;
 
-// There's currently only one parameter defined, which is "loggers".
-logging_param: loggers;
+not_empty_hooks_libraries_list: hooks_library
+    | not_empty_hooks_libraries_list COMMA hooks_library
+    ;
 
-// "loggers", the only parameter currently defined in "Logging" object,
-// is "Loggers": [ ... ].
+hooks_library: LCURLY_BRACKET {
+    ElementPtr m(new MapElement(ctx.loc2pos(@1)));
+    ctx.stack_.back()->add(m);
+    ctx.stack_.push_back(m);
+} hooks_params RCURLY_BRACKET {
+    // The library hooks parameter is required
+    ctx.require("library", ctx.loc2pos(@1), ctx.loc2pos(@4));
+    ctx.stack_.pop_back();
+};
+
+sub_hooks_library: LCURLY_BRACKET {
+    // Parse the hooks-libraries list entry map
+    ElementPtr m(new MapElement(ctx.loc2pos(@1)));
+    ctx.stack_.push_back(m);
+} hooks_params RCURLY_BRACKET {
+    // The library hooks parameter is required
+    ctx.require("library", ctx.loc2pos(@1), ctx.loc2pos(@4));
+    // parsing completed
+};
+
+hooks_params: hooks_param
+            | hooks_params COMMA hooks_param
+            | unknown_map_entry
+            ;
+
+hooks_param: library
+           | parameters
+           ;
+
+library: LIBRARY {
+    ctx.unique("library", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr lib(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("library", lib);
+    ctx.leave();
+};
+
+parameters: PARAMETERS {
+    ctx.unique("parameters", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON map_value {
+    ctx.stack_.back()->set("parameters", $4);
+    ctx.leave();
+};
+
+// --- loggers entry -----------------------------------------
+
 loggers: LOGGERS {
+    ctx.unique("loggers", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("loggers", l);
     ctx.stack_.push_back(l);
@@ -777,7 +810,7 @@ loggers_entries: logger_entry
                | loggers_entries COMMA logger_entry
                ;
 
-// This defines a single entry defined in loggers in Logging.
+// This defines a single entry defined in loggers.
 logger_entry: LCURLY_BRACKET {
     ElementPtr l(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->add(l);
@@ -800,6 +833,7 @@ logger_param: name
             ;
 
 name: NAME {
+    ctx.unique("name", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr name(new StringElement($4, ctx.loc2pos(@4)));
@@ -808,10 +842,13 @@ name: NAME {
 };
 
 debuglevel: DEBUGLEVEL COLON INTEGER {
+    ctx.unique("debuglevel", ctx.loc2pos(@1));
     ElementPtr dl(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("debuglevel", dl);
 };
+
 severity: SEVERITY {
+    ctx.unique("severity", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
@@ -820,6 +857,7 @@ severity: SEVERITY {
 };
 
 output_options_list: OUTPUT_OPTIONS {
+    ctx.unique("output_options", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("output_options", l);
     ctx.stack_.push_back(l);
@@ -853,6 +891,7 @@ output_params: output
              ;
 
 output: OUTPUT {
+    ctx.unique("output", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
@@ -861,21 +900,25 @@ output: OUTPUT {
 };
 
 flush: FLUSH COLON BOOLEAN {
+    ctx.unique("flush", ctx.loc2pos(@1));
     ElementPtr flush(new BoolElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("flush", flush);
 }
 
 maxsize: MAXSIZE COLON INTEGER {
+    ctx.unique("maxsize", ctx.loc2pos(@1));
     ElementPtr maxsize(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxsize", maxsize);
 }
 
 maxver: MAXVER COLON INTEGER {
+    ctx.unique("maxver", ctx.loc2pos(@1));
     ElementPtr maxver(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxver", maxver);
 }
 
 pattern: PATTERN {
+    ctx.unique("pattern", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
 } COLON STRING {
     ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));

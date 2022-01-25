@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -75,6 +75,31 @@ TEST(OptionDescriptorTest, createCopy) {
     EXPECT_TRUE(desc_copy->persistent_);
     EXPECT_EQ("value", desc_copy->formatted_value_);
     EXPECT_EQ(context, desc_copy->getContext());
+}
+
+// This test verifies that the OptionDescriptor assignment operator
+// does the shallow copy.
+TEST(OptionDescriptorTest, assign) {
+    // Create a persistent option descriptor.
+    auto desc = OptionDescriptor::create(true);
+    ASSERT_TRUE(desc);
+
+    // Create another option descriptor.
+    OptionPtr option = Option::create(Option::V4, 234);
+    ElementPtr context = Element::createMap();
+    context->set("name", Element::create("value"));
+    auto desc1 = OptionDescriptor::create(option, true, "value", context);
+    ASSERT_TRUE(desc1);
+
+    // Assign the option descriptor.
+    desc = desc1;
+
+    // Check it.
+    ASSERT_TRUE(desc);
+    EXPECT_EQ(option, desc->option_);
+    EXPECT_TRUE(desc->persistent_);
+    EXPECT_EQ("value", desc->formatted_value_);
+    EXPECT_EQ(context, desc->getContext());
 }
 
 /// This class fixture for testing @c CfgOption class, holding option
@@ -273,7 +298,7 @@ TEST_F(CfgOptionTest, add) {
     EXPECT_TRUE(options->empty());
 }
 
-// This test verifies that options can be replaced with udpated content.
+// This test verifies that options can be replaced with updated content.
 TEST_F(CfgOptionTest, replace) {
     CfgOption cfg;
 
@@ -457,13 +482,13 @@ TEST_F(CfgOptionTest, validMerge) {
     CfgOption this_cfg;
     CfgOption other_cfg;
 
-    // We need to create a dictionary of defintions pass into option merge.
+    // We need to create a dictionary of definitions pass into option merge.
     CfgOptionDefPtr defs(new CfgOptionDef());
-    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint8"))), "isc");
-    defs->add((OptionDefinitionPtr(new OptionDefinition("two", 2, "uint8"))), "isc");
-    defs->add((OptionDefinitionPtr(new OptionDefinition("four", 4, "uint8"))), "isc");
-    defs->add((OptionDefinitionPtr(new OptionDefinition("three", 3, "uint8"))), "fluff");
-    defs->add((OptionDefinitionPtr(new OptionDefinition("four", 4, "uint8"))), "fluff");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "isc", "uint8"))));
+    defs->add((OptionDefinitionPtr(new OptionDefinition("two", 2, "isc", "uint8"))));
+    defs->add((OptionDefinitionPtr(new OptionDefinition("four", 4, "isc", "uint8"))));
+    defs->add((OptionDefinitionPtr(new OptionDefinition("three", 3, "fluff", "uint8"))));
+    defs->add((OptionDefinitionPtr(new OptionDefinition("four", 4, "fluff", "uint8"))));
 
     // Create our existing config, that gets merged into.
     OptionPtr option(new Option(Option::V4, 1, OptionBuffer(1, 0x01)));
@@ -559,7 +584,7 @@ TEST_F(CfgOptionTest, mergeInvalid) {
 
     // Now let's add an option definition that will force data truncated
     // error for option 1.
-    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint16"))), "isc");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "isc", "uint16"))));
 
     // When we attempt to merge, it should fail because option 1's data
     // is not valid per its definition.
@@ -579,11 +604,11 @@ TEST_F(CfgOptionTest, mergeInvalid) {
 TEST_F(CfgOptionTest, createDescriptorOptionValid) {
     // First we'll create our "known" user definitions
     CfgOptionDefPtr defs(new CfgOptionDef());
-    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "uint8"))), "isc");
-    defs->add((OptionDefinitionPtr(new OptionDefinition("two", 2, "uint8", true))), "isc");
+    defs->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "isc", "uint8"))));
+    defs->add((OptionDefinitionPtr(new OptionDefinition("two", 2, "isc", "uint8", true))));
 
     // We'll try a standard V4 option first.
-    std::string space = "dhcp4";
+    std::string space = DHCP4_OPTION_SPACE;
     std::string value = "v4.example.com";
     OptionPtr option(new Option(Option::V6, DHO_HOST_NAME));
     option->setData(value.begin(), value.end());
@@ -597,7 +622,7 @@ TEST_F(CfgOptionTest, createDescriptorOptionValid) {
     EXPECT_EQ("v4.example.com", opstr->getValue());
 
     // Next we'll try a standard V6 option.
-    space = "dhcp6";
+    space = DHCP6_OPTION_SPACE;
     std::vector<uint8_t> fqdn =
         { 2, 'v', '6', 7, 'e', 'x', 'a', 'm', 'p', 'l', 'e', 3, 'c', 'o', 'm', 0 };
     option.reset(new Option(Option::V6, D6O_AFTR_NAME));
@@ -1097,13 +1122,12 @@ TEST_F(CfgOptionTest, unparse) {
         "    \"data\": \"12121212\",\n"
         "    \"always-send\": false\n"
         "},{\n"
-        "    \"comment\": \"foo\",\n"
         "    \"code\": 101,\n"
         "    \"space\": \"dns\",\n"
         "    \"csv-format\": true,\n"
         "    \"data\": \"12, 12, 12, 12\",\n"
         "    \"always-send\": false,\n"
-        "    \"user-context\": { \"bar\": 1 }\n"
+        "    \"user-context\": { \"comment\": \"foo\", \"bar\": 1 }\n"
         "},{\n"
         "    \"code\": 13,\n"
         "    \"name\": \"status-code\",\n"

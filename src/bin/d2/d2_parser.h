@@ -1,8 +1,8 @@
-// A Bison parser, made by GNU Bison 3.4.2.
+// A Bison parser, made by GNU Bison 3.8.2.
 
 // Skeleton interface for Bison LALR(1) parsers in C++
 
-// Copyright (C) 2002-2015, 2018-2019 Free Software Foundation, Inc.
+// Copyright (C) 2002-2015, 2018-2021 Free Software Foundation, Inc.
 
 // This program is free software: you can redistribute it and/or modify
 // it under the terms of the GNU General Public License as published by
@@ -15,7 +15,7 @@
 // GNU General Public License for more details.
 
 // You should have received a copy of the GNU General Public License
-// along with this program.  If not, see <http://www.gnu.org/licenses/>.
+// along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 // As a special exception, you may create a larger work that contains
 // part or all of the Bison parser skeleton and distribute that work
@@ -38,17 +38,18 @@
 
 // C++ LALR(1) parser skeleton written by Akim Demaille.
 
-// Undocumented macros, especially those whose name start with YY_,
-// are private implementation details.  Do not rely on them.
+// DO NOT RELY ON FEATURES THAT ARE NOT DOCUMENTED in the manual,
+// especially those whose name start with YY_ or yy_.  They are
+// private implementation details that can be changed or removed.
 
 #ifndef YY_D2_PARSER_D2_PARSER_H_INCLUDED
 # define YY_D2_PARSER_D2_PARSER_H_INCLUDED
-// //                    "%code requires" blocks.
+// "%code requires" blocks.
 #line 17 "d2_parser.yy"
 
 #include <string>
 #include <cc/data.h>
-#include <d2/d2_config.h>
+#include <d2srv/d2_config.h>
 #include <boost/lexical_cast.hpp>
 #include <d2/parser_context_decl.h>
 
@@ -56,7 +57,7 @@ using namespace isc::d2;
 using namespace isc::data;
 using namespace std;
 
-#line 60 "d2_parser.h"
+#line 61 "d2_parser.h"
 
 # include <cassert>
 # include <cstdlib> // std::abort
@@ -103,44 +104,48 @@ using namespace std;
 #endif
 # include "location.hh"
 #include <typeinfo>
-#ifndef YYASSERT
+#ifndef D2_PARSER__ASSERT
 # include <cassert>
-# define YYASSERT assert
+# define D2_PARSER__ASSERT assert
 #endif
 
 
-#ifndef YY_ATTRIBUTE
-# if (defined __GNUC__                                               \
-      && (2 < __GNUC__ || (__GNUC__ == 2 && 96 <= __GNUC_MINOR__)))  \
-     || defined __SUNPRO_C && 0x5110 <= __SUNPRO_C
-#  define YY_ATTRIBUTE(Spec) __attribute__(Spec)
+#ifndef YY_ATTRIBUTE_PURE
+# if defined __GNUC__ && 2 < __GNUC__ + (96 <= __GNUC_MINOR__)
+#  define YY_ATTRIBUTE_PURE __attribute__ ((__pure__))
 # else
-#  define YY_ATTRIBUTE(Spec) /* empty */
+#  define YY_ATTRIBUTE_PURE
 # endif
 #endif
 
-#ifndef YY_ATTRIBUTE_PURE
-# define YY_ATTRIBUTE_PURE   YY_ATTRIBUTE ((__pure__))
-#endif
-
 #ifndef YY_ATTRIBUTE_UNUSED
-# define YY_ATTRIBUTE_UNUSED YY_ATTRIBUTE ((__unused__))
+# if defined __GNUC__ && 2 < __GNUC__ + (7 <= __GNUC_MINOR__)
+#  define YY_ATTRIBUTE_UNUSED __attribute__ ((__unused__))
+# else
+#  define YY_ATTRIBUTE_UNUSED
+# endif
 #endif
 
 /* Suppress unused-variable warnings by "using" E.  */
 #if ! defined lint || defined __GNUC__
-# define YYUSE(E) ((void) (E))
+# define YY_USE(E) ((void) (E))
 #else
-# define YYUSE(E) /* empty */
+# define YY_USE(E) /* empty */
 #endif
 
-#if defined __GNUC__ && ! defined __ICC && 407 <= __GNUC__ * 100 + __GNUC_MINOR__
 /* Suppress an incorrect diagnostic about yylval being uninitialized.  */
-# define YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN \
-    _Pragma ("GCC diagnostic push") \
-    _Pragma ("GCC diagnostic ignored \"-Wuninitialized\"")\
+#if defined __GNUC__ && ! defined __ICC && 406 <= __GNUC__ * 100 + __GNUC_MINOR__
+# if __GNUC__ * 100 + __GNUC_MINOR__ < 407
+#  define YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN                           \
+    _Pragma ("GCC diagnostic push")                                     \
+    _Pragma ("GCC diagnostic ignored \"-Wuninitialized\"")
+# else
+#  define YY_IGNORE_MAYBE_UNINITIALIZED_BEGIN                           \
+    _Pragma ("GCC diagnostic push")                                     \
+    _Pragma ("GCC diagnostic ignored \"-Wuninitialized\"")              \
     _Pragma ("GCC diagnostic ignored \"-Wmaybe-uninitialized\"")
-# define YY_IGNORE_MAYBE_UNINITIALIZED_END \
+# endif
+# define YY_IGNORE_MAYBE_UNINITIALIZED_END      \
     _Pragma ("GCC diagnostic pop")
 #else
 # define YY_INITIAL_VALUE(Value) Value
@@ -153,6 +158,27 @@ using namespace std;
 # define YY_INITIAL_VALUE(Value) /* Nothing. */
 #endif
 
+#if defined __cplusplus && defined __GNUC__ && ! defined __ICC && 6 <= __GNUC__
+# define YY_IGNORE_USELESS_CAST_BEGIN                          \
+    _Pragma ("GCC diagnostic push")                            \
+    _Pragma ("GCC diagnostic ignored \"-Wuseless-cast\"")
+# define YY_IGNORE_USELESS_CAST_END            \
+    _Pragma ("GCC diagnostic pop")
+#endif
+#ifndef YY_IGNORE_USELESS_CAST_BEGIN
+# define YY_IGNORE_USELESS_CAST_BEGIN
+# define YY_IGNORE_USELESS_CAST_END
+#endif
+
+# ifndef YY_CAST
+#  ifdef __cplusplus
+#   define YY_CAST(Type, Val) static_cast<Type> (Val)
+#   define YY_REINTERPRET_CAST(Type, Val) reinterpret_cast<Type> (Val)
+#  else
+#   define YY_CAST(Type, Val) ((Type) (Val))
+#   define YY_REINTERPRET_CAST(Type, Val) ((Type) (Val))
+#  endif
+# endif
 # ifndef YY_NULLPTR
 #  if defined __cplusplus
 #   if 201103L <= __cplusplus
@@ -180,7 +206,7 @@ using namespace std;
 
 #line 14 "d2_parser.yy"
 namespace isc { namespace d2 {
-#line 184 "d2_parser.h"
+#line 210 "d2_parser.h"
 
 
 
@@ -189,37 +215,49 @@ namespace isc { namespace d2 {
   class D2Parser
   {
   public:
-#ifndef D2_PARSER_STYPE
+#ifdef D2_PARSER_STYPE
+# ifdef __GNUC__
+#  pragma GCC message "bison: do not #define D2_PARSER_STYPE in C++, use %define api.value.type"
+# endif
+    typedef D2_PARSER_STYPE value_type;
+#else
   /// A buffer to store and retrieve objects.
   ///
   /// Sort of a variant, but does not keep track of the nature
   /// of the stored data, since that knowledge is available
   /// via the current parser state.
-  class semantic_type
+  class value_type
   {
   public:
     /// Type of *this.
-    typedef semantic_type self_type;
+    typedef value_type self_type;
 
     /// Empty construction.
-    semantic_type () YY_NOEXCEPT
-      : yybuffer_ ()
+    value_type () YY_NOEXCEPT
+      : yyraw_ ()
       , yytypeid_ (YY_NULLPTR)
     {}
 
     /// Construct and fill.
     template <typename T>
-    semantic_type (YY_RVREF (T) t)
+    value_type (YY_RVREF (T) t)
       : yytypeid_ (&typeid (T))
     {
-      YYASSERT (sizeof (T) <= size);
+      D2_PARSER__ASSERT (sizeof (T) <= size);
       new (yyas_<T> ()) T (YY_MOVE (t));
     }
 
+#if 201103L <= YY_CPLUSPLUS
+    /// Non copyable.
+    value_type (const self_type&) = delete;
+    /// Non copyable.
+    self_type& operator= (const self_type&) = delete;
+#endif
+
     /// Destruction, allowed only if empty.
-    ~semantic_type () YY_NOEXCEPT
+    ~value_type () YY_NOEXCEPT
     {
-      YYASSERT (!yytypeid_);
+      D2_PARSER__ASSERT (!yytypeid_);
     }
 
 # if 201103L <= YY_CPLUSPLUS
@@ -228,8 +266,8 @@ namespace isc { namespace d2 {
     T&
     emplace (U&&... u)
     {
-      YYASSERT (!yytypeid_);
-      YYASSERT (sizeof (T) <= size);
+      D2_PARSER__ASSERT (!yytypeid_);
+      D2_PARSER__ASSERT (sizeof (T) <= size);
       yytypeid_ = & typeid (T);
       return *new (yyas_<T> ()) T (std::forward <U>(u)...);
     }
@@ -239,8 +277,8 @@ namespace isc { namespace d2 {
     T&
     emplace ()
     {
-      YYASSERT (!yytypeid_);
-      YYASSERT (sizeof (T) <= size);
+      D2_PARSER__ASSERT (!yytypeid_);
+      D2_PARSER__ASSERT (sizeof (T) <= size);
       yytypeid_ = & typeid (T);
       return *new (yyas_<T> ()) T ();
     }
@@ -250,8 +288,8 @@ namespace isc { namespace d2 {
     T&
     emplace (const T& t)
     {
-      YYASSERT (!yytypeid_);
-      YYASSERT (sizeof (T) <= size);
+      D2_PARSER__ASSERT (!yytypeid_);
+      D2_PARSER__ASSERT (sizeof (T) <= size);
       yytypeid_ = & typeid (T);
       return *new (yyas_<T> ()) T (t);
     }
@@ -280,9 +318,9 @@ namespace isc { namespace d2 {
     T&
     as () YY_NOEXCEPT
     {
-      YYASSERT (yytypeid_);
-      YYASSERT (*yytypeid_ == typeid (T));
-      YYASSERT (sizeof (T) <= size);
+      D2_PARSER__ASSERT (yytypeid_);
+      D2_PARSER__ASSERT (*yytypeid_ == typeid (T));
+      D2_PARSER__ASSERT (sizeof (T) <= size);
       return *yyas_<T> ();
     }
 
@@ -291,9 +329,9 @@ namespace isc { namespace d2 {
     const T&
     as () const YY_NOEXCEPT
     {
-      YYASSERT (yytypeid_);
-      YYASSERT (*yytypeid_ == typeid (T));
-      YYASSERT (sizeof (T) <= size);
+      D2_PARSER__ASSERT (yytypeid_);
+      D2_PARSER__ASSERT (*yytypeid_ == typeid (T));
+      D2_PARSER__ASSERT (sizeof (T) <= size);
       return *yyas_<T> ();
     }
 
@@ -309,8 +347,8 @@ namespace isc { namespace d2 {
     void
     swap (self_type& that) YY_NOEXCEPT
     {
-      YYASSERT (yytypeid_);
-      YYASSERT (*yytypeid_ == *that.yytypeid_);
+      D2_PARSER__ASSERT (yytypeid_);
+      D2_PARSER__ASSERT (*yytypeid_ == *that.yytypeid_);
       std::swap (as<T> (), that.as<T> ());
     }
 
@@ -359,16 +397,19 @@ namespace isc { namespace d2 {
     }
 
   private:
-    /// Prohibit blind copies.
+#if YY_CPLUSPLUS < 201103L
+    /// Non copyable.
+    value_type (const self_type&);
+    /// Non copyable.
     self_type& operator= (const self_type&);
-    semantic_type (const self_type&);
+#endif
 
     /// Accessor to raw memory as \a T.
     template <typename T>
     T*
     yyas_ () YY_NOEXCEPT
     {
-      void *yyp = yybuffer_.yyraw;
+      void *yyp = yyraw_;
       return static_cast<T*> (yyp);
      }
 
@@ -377,7 +418,7 @@ namespace isc { namespace d2 {
     const T*
     yyas_ () const YY_NOEXCEPT
     {
-      const void *yyp = yybuffer_.yyraw;
+      const void *yyp = yyraw_;
       return static_cast<const T*> (yyp);
      }
 
@@ -409,18 +450,19 @@ namespace isc { namespace d2 {
     union
     {
       /// Strongest alignment constraints.
-      long double yyalign_me;
+      long double yyalign_me_;
       /// A buffer large enough to store any of the semantic values.
-      char yyraw[size];
-    } yybuffer_;
+      char yyraw_[size];
+    };
 
     /// Whether the content is built: if defined, the name of the stored type.
     const std::type_info *yytypeid_;
   };
 
-#else
-    typedef D2_PARSER_STYPE semantic_type;
 #endif
+    /// Backward compatibility (Bison 3.8).
+    typedef value_type semantic_type;
+
     /// Symbol locations.
     typedef location location_type;
 
@@ -442,89 +484,316 @@ namespace isc { namespace d2 {
       location_type location;
     };
 
-    /// Tokens.
+    /// Token kinds.
     struct token
     {
-      enum yytokentype
+      enum token_kind_type
       {
-        TOKEN_END = 0,
-        TOKEN_COMMA = 258,
-        TOKEN_COLON = 259,
-        TOKEN_LSQUARE_BRACKET = 260,
-        TOKEN_RSQUARE_BRACKET = 261,
-        TOKEN_LCURLY_BRACKET = 262,
-        TOKEN_RCURLY_BRACKET = 263,
-        TOKEN_NULL_TYPE = 264,
-        TOKEN_DHCP6 = 265,
-        TOKEN_DHCP4 = 266,
-        TOKEN_CONTROL_AGENT = 267,
-        TOKEN_DHCPDDNS = 268,
-        TOKEN_IP_ADDRESS = 269,
-        TOKEN_PORT = 270,
-        TOKEN_DNS_SERVER_TIMEOUT = 271,
-        TOKEN_NCR_PROTOCOL = 272,
-        TOKEN_UDP = 273,
-        TOKEN_TCP = 274,
-        TOKEN_NCR_FORMAT = 275,
-        TOKEN_JSON = 276,
-        TOKEN_USER_CONTEXT = 277,
-        TOKEN_COMMENT = 278,
-        TOKEN_FORWARD_DDNS = 279,
-        TOKEN_REVERSE_DDNS = 280,
-        TOKEN_DDNS_DOMAINS = 281,
-        TOKEN_KEY_NAME = 282,
-        TOKEN_DNS_SERVERS = 283,
-        TOKEN_HOSTNAME = 284,
-        TOKEN_TSIG_KEYS = 285,
-        TOKEN_ALGORITHM = 286,
-        TOKEN_DIGEST_BITS = 287,
-        TOKEN_SECRET = 288,
-        TOKEN_CONTROL_SOCKET = 289,
-        TOKEN_SOCKET_TYPE = 290,
-        TOKEN_SOCKET_NAME = 291,
-        TOKEN_LOGGING = 292,
-        TOKEN_LOGGERS = 293,
-        TOKEN_NAME = 294,
-        TOKEN_OUTPUT_OPTIONS = 295,
-        TOKEN_OUTPUT = 296,
-        TOKEN_DEBUGLEVEL = 297,
-        TOKEN_SEVERITY = 298,
-        TOKEN_FLUSH = 299,
-        TOKEN_MAXSIZE = 300,
-        TOKEN_MAXVER = 301,
-        TOKEN_PATTERN = 302,
-        TOKEN_TOPLEVEL_JSON = 303,
-        TOKEN_TOPLEVEL_DHCPDDNS = 304,
-        TOKEN_SUB_DHCPDDNS = 305,
-        TOKEN_SUB_TSIG_KEY = 306,
-        TOKEN_SUB_TSIG_KEYS = 307,
-        TOKEN_SUB_DDNS_DOMAIN = 308,
-        TOKEN_SUB_DDNS_DOMAINS = 309,
-        TOKEN_SUB_DNS_SERVER = 310,
-        TOKEN_SUB_DNS_SERVERS = 311,
-        TOKEN_STRING = 312,
-        TOKEN_INTEGER = 313,
-        TOKEN_FLOAT = 314,
-        TOKEN_BOOLEAN = 315
+        TOKEN_D2_PARSER_EMPTY = -2,
+    TOKEN_END = 0,                 // "end of file"
+    TOKEN_D2_PARSER_error = 256,   // error
+    TOKEN_D2_PARSER_UNDEF = 257,   // "invalid token"
+    TOKEN_COMMA = 258,             // ","
+    TOKEN_COLON = 259,             // ":"
+    TOKEN_LSQUARE_BRACKET = 260,   // "["
+    TOKEN_RSQUARE_BRACKET = 261,   // "]"
+    TOKEN_LCURLY_BRACKET = 262,    // "{"
+    TOKEN_RCURLY_BRACKET = 263,    // "}"
+    TOKEN_NULL_TYPE = 264,         // "null"
+    TOKEN_DHCPDDNS = 265,          // "DhcpDdns"
+    TOKEN_IP_ADDRESS = 266,        // "ip-address"
+    TOKEN_PORT = 267,              // "port"
+    TOKEN_DNS_SERVER_TIMEOUT = 268, // "dns-server-timeout"
+    TOKEN_NCR_PROTOCOL = 269,      // "ncr-protocol"
+    TOKEN_UDP = 270,               // "UDP"
+    TOKEN_TCP = 271,               // "TCP"
+    TOKEN_NCR_FORMAT = 272,        // "ncr-format"
+    TOKEN_JSON = 273,              // "JSON"
+    TOKEN_USER_CONTEXT = 274,      // "user-context"
+    TOKEN_COMMENT = 275,           // "comment"
+    TOKEN_FORWARD_DDNS = 276,      // "forward-ddns"
+    TOKEN_REVERSE_DDNS = 277,      // "reverse-ddns"
+    TOKEN_DDNS_DOMAINS = 278,      // "ddns-domains"
+    TOKEN_KEY_NAME = 279,          // "key-name"
+    TOKEN_DNS_SERVERS = 280,       // "dns-servers"
+    TOKEN_HOSTNAME = 281,          // "hostname"
+    TOKEN_TSIG_KEYS = 282,         // "tsig-keys"
+    TOKEN_ALGORITHM = 283,         // "algorithm"
+    TOKEN_DIGEST_BITS = 284,       // "digest-bits"
+    TOKEN_SECRET = 285,            // "secret"
+    TOKEN_CONTROL_SOCKET = 286,    // "control-socket"
+    TOKEN_SOCKET_TYPE = 287,       // "socket-type"
+    TOKEN_SOCKET_NAME = 288,       // "socket-name"
+    TOKEN_HOOKS_LIBRARIES = 289,   // "hooks-libraries"
+    TOKEN_LIBRARY = 290,           // "library"
+    TOKEN_PARAMETERS = 291,        // "parameters"
+    TOKEN_LOGGERS = 292,           // "loggers"
+    TOKEN_NAME = 293,              // "name"
+    TOKEN_OUTPUT_OPTIONS = 294,    // "output_options"
+    TOKEN_OUTPUT = 295,            // "output"
+    TOKEN_DEBUGLEVEL = 296,        // "debuglevel"
+    TOKEN_SEVERITY = 297,          // "severity"
+    TOKEN_FLUSH = 298,             // "flush"
+    TOKEN_MAXSIZE = 299,           // "maxsize"
+    TOKEN_MAXVER = 300,            // "maxver"
+    TOKEN_PATTERN = 301,           // "pattern"
+    TOKEN_TOPLEVEL_JSON = 302,     // TOPLEVEL_JSON
+    TOKEN_TOPLEVEL_DHCPDDNS = 303, // TOPLEVEL_DHCPDDNS
+    TOKEN_SUB_DHCPDDNS = 304,      // SUB_DHCPDDNS
+    TOKEN_SUB_TSIG_KEY = 305,      // SUB_TSIG_KEY
+    TOKEN_SUB_TSIG_KEYS = 306,     // SUB_TSIG_KEYS
+    TOKEN_SUB_DDNS_DOMAIN = 307,   // SUB_DDNS_DOMAIN
+    TOKEN_SUB_DDNS_DOMAINS = 308,  // SUB_DDNS_DOMAINS
+    TOKEN_SUB_DNS_SERVER = 309,    // SUB_DNS_SERVER
+    TOKEN_SUB_DNS_SERVERS = 310,   // SUB_DNS_SERVERS
+    TOKEN_SUB_HOOKS_LIBRARY = 311, // SUB_HOOKS_LIBRARY
+    TOKEN_STRING = 312,            // "constant string"
+    TOKEN_INTEGER = 313,           // "integer"
+    TOKEN_FLOAT = 314,             // "floating point"
+    TOKEN_BOOLEAN = 315            // "boolean"
+      };
+      /// Backward compatibility alias (Bison 3.6).
+      typedef token_kind_type yytokentype;
+    };
+
+    /// Token kind, as returned by yylex.
+    typedef token::token_kind_type token_kind_type;
+
+    /// Backward compatibility alias (Bison 3.6).
+    typedef token_kind_type token_type;
+
+    /// Symbol kinds.
+    struct symbol_kind
+    {
+      enum symbol_kind_type
+      {
+        YYNTOKENS = 61, ///< Number of tokens.
+        S_YYEMPTY = -2,
+        S_YYEOF = 0,                             // "end of file"
+        S_YYerror = 1,                           // error
+        S_YYUNDEF = 2,                           // "invalid token"
+        S_COMMA = 3,                             // ","
+        S_COLON = 4,                             // ":"
+        S_LSQUARE_BRACKET = 5,                   // "["
+        S_RSQUARE_BRACKET = 6,                   // "]"
+        S_LCURLY_BRACKET = 7,                    // "{"
+        S_RCURLY_BRACKET = 8,                    // "}"
+        S_NULL_TYPE = 9,                         // "null"
+        S_DHCPDDNS = 10,                         // "DhcpDdns"
+        S_IP_ADDRESS = 11,                       // "ip-address"
+        S_PORT = 12,                             // "port"
+        S_DNS_SERVER_TIMEOUT = 13,               // "dns-server-timeout"
+        S_NCR_PROTOCOL = 14,                     // "ncr-protocol"
+        S_UDP = 15,                              // "UDP"
+        S_TCP = 16,                              // "TCP"
+        S_NCR_FORMAT = 17,                       // "ncr-format"
+        S_JSON = 18,                             // "JSON"
+        S_USER_CONTEXT = 19,                     // "user-context"
+        S_COMMENT = 20,                          // "comment"
+        S_FORWARD_DDNS = 21,                     // "forward-ddns"
+        S_REVERSE_DDNS = 22,                     // "reverse-ddns"
+        S_DDNS_DOMAINS = 23,                     // "ddns-domains"
+        S_KEY_NAME = 24,                         // "key-name"
+        S_DNS_SERVERS = 25,                      // "dns-servers"
+        S_HOSTNAME = 26,                         // "hostname"
+        S_TSIG_KEYS = 27,                        // "tsig-keys"
+        S_ALGORITHM = 28,                        // "algorithm"
+        S_DIGEST_BITS = 29,                      // "digest-bits"
+        S_SECRET = 30,                           // "secret"
+        S_CONTROL_SOCKET = 31,                   // "control-socket"
+        S_SOCKET_TYPE = 32,                      // "socket-type"
+        S_SOCKET_NAME = 33,                      // "socket-name"
+        S_HOOKS_LIBRARIES = 34,                  // "hooks-libraries"
+        S_LIBRARY = 35,                          // "library"
+        S_PARAMETERS = 36,                       // "parameters"
+        S_LOGGERS = 37,                          // "loggers"
+        S_NAME = 38,                             // "name"
+        S_OUTPUT_OPTIONS = 39,                   // "output_options"
+        S_OUTPUT = 40,                           // "output"
+        S_DEBUGLEVEL = 41,                       // "debuglevel"
+        S_SEVERITY = 42,                         // "severity"
+        S_FLUSH = 43,                            // "flush"
+        S_MAXSIZE = 44,                          // "maxsize"
+        S_MAXVER = 45,                           // "maxver"
+        S_PATTERN = 46,                          // "pattern"
+        S_TOPLEVEL_JSON = 47,                    // TOPLEVEL_JSON
+        S_TOPLEVEL_DHCPDDNS = 48,                // TOPLEVEL_DHCPDDNS
+        S_SUB_DHCPDDNS = 49,                     // SUB_DHCPDDNS
+        S_SUB_TSIG_KEY = 50,                     // SUB_TSIG_KEY
+        S_SUB_TSIG_KEYS = 51,                    // SUB_TSIG_KEYS
+        S_SUB_DDNS_DOMAIN = 52,                  // SUB_DDNS_DOMAIN
+        S_SUB_DDNS_DOMAINS = 53,                 // SUB_DDNS_DOMAINS
+        S_SUB_DNS_SERVER = 54,                   // SUB_DNS_SERVER
+        S_SUB_DNS_SERVERS = 55,                  // SUB_DNS_SERVERS
+        S_SUB_HOOKS_LIBRARY = 56,                // SUB_HOOKS_LIBRARY
+        S_STRING = 57,                           // "constant string"
+        S_INTEGER = 58,                          // "integer"
+        S_FLOAT = 59,                            // "floating point"
+        S_BOOLEAN = 60,                          // "boolean"
+        S_YYACCEPT = 61,                         // $accept
+        S_start = 62,                            // start
+        S_63_1 = 63,                             // $@1
+        S_64_2 = 64,                             // $@2
+        S_65_3 = 65,                             // $@3
+        S_66_4 = 66,                             // $@4
+        S_67_5 = 67,                             // $@5
+        S_68_6 = 68,                             // $@6
+        S_69_7 = 69,                             // $@7
+        S_70_8 = 70,                             // $@8
+        S_71_9 = 71,                             // $@9
+        S_72_10 = 72,                            // $@10
+        S_value = 73,                            // value
+        S_sub_json = 74,                         // sub_json
+        S_map2 = 75,                             // map2
+        S_76_11 = 76,                            // $@11
+        S_map_value = 77,                        // map_value
+        S_map_content = 78,                      // map_content
+        S_not_empty_map = 79,                    // not_empty_map
+        S_list_generic = 80,                     // list_generic
+        S_81_12 = 81,                            // $@12
+        S_list_content = 82,                     // list_content
+        S_not_empty_list = 83,                   // not_empty_list
+        S_unknown_map_entry = 84,                // unknown_map_entry
+        S_syntax_map = 85,                       // syntax_map
+        S_86_13 = 86,                            // $@13
+        S_global_object = 87,                    // global_object
+        S_88_14 = 88,                            // $@14
+        S_sub_dhcpddns = 89,                     // sub_dhcpddns
+        S_90_15 = 90,                            // $@15
+        S_dhcpddns_params = 91,                  // dhcpddns_params
+        S_dhcpddns_param = 92,                   // dhcpddns_param
+        S_ip_address = 93,                       // ip_address
+        S_94_16 = 94,                            // $@16
+        S_port = 95,                             // port
+        S_dns_server_timeout = 96,               // dns_server_timeout
+        S_ncr_protocol = 97,                     // ncr_protocol
+        S_98_17 = 98,                            // $@17
+        S_ncr_protocol_value = 99,               // ncr_protocol_value
+        S_ncr_format = 100,                      // ncr_format
+        S_101_18 = 101,                          // $@18
+        S_user_context = 102,                    // user_context
+        S_103_19 = 103,                          // $@19
+        S_comment = 104,                         // comment
+        S_105_20 = 105,                          // $@20
+        S_forward_ddns = 106,                    // forward_ddns
+        S_107_21 = 107,                          // $@21
+        S_reverse_ddns = 108,                    // reverse_ddns
+        S_109_22 = 109,                          // $@22
+        S_ddns_mgr_params = 110,                 // ddns_mgr_params
+        S_not_empty_ddns_mgr_params = 111,       // not_empty_ddns_mgr_params
+        S_ddns_mgr_param = 112,                  // ddns_mgr_param
+        S_ddns_domains = 113,                    // ddns_domains
+        S_114_23 = 114,                          // $@23
+        S_sub_ddns_domains = 115,                // sub_ddns_domains
+        S_116_24 = 116,                          // $@24
+        S_ddns_domain_list = 117,                // ddns_domain_list
+        S_not_empty_ddns_domain_list = 118,      // not_empty_ddns_domain_list
+        S_ddns_domain = 119,                     // ddns_domain
+        S_120_25 = 120,                          // $@25
+        S_sub_ddns_domain = 121,                 // sub_ddns_domain
+        S_122_26 = 122,                          // $@26
+        S_ddns_domain_params = 123,              // ddns_domain_params
+        S_ddns_domain_param = 124,               // ddns_domain_param
+        S_ddns_domain_name = 125,                // ddns_domain_name
+        S_126_27 = 126,                          // $@27
+        S_ddns_key_name = 127,                   // ddns_key_name
+        S_128_28 = 128,                          // $@28
+        S_dns_servers = 129,                     // dns_servers
+        S_130_29 = 130,                          // $@29
+        S_sub_dns_servers = 131,                 // sub_dns_servers
+        S_132_30 = 132,                          // $@30
+        S_dns_server_list = 133,                 // dns_server_list
+        S_dns_server = 134,                      // dns_server
+        S_135_31 = 135,                          // $@31
+        S_sub_dns_server = 136,                  // sub_dns_server
+        S_137_32 = 137,                          // $@32
+        S_dns_server_params = 138,               // dns_server_params
+        S_dns_server_param = 139,                // dns_server_param
+        S_dns_server_hostname = 140,             // dns_server_hostname
+        S_141_33 = 141,                          // $@33
+        S_dns_server_ip_address = 142,           // dns_server_ip_address
+        S_143_34 = 143,                          // $@34
+        S_dns_server_port = 144,                 // dns_server_port
+        S_tsig_keys = 145,                       // tsig_keys
+        S_146_35 = 146,                          // $@35
+        S_sub_tsig_keys = 147,                   // sub_tsig_keys
+        S_148_36 = 148,                          // $@36
+        S_tsig_keys_list = 149,                  // tsig_keys_list
+        S_not_empty_tsig_keys_list = 150,        // not_empty_tsig_keys_list
+        S_tsig_key = 151,                        // tsig_key
+        S_152_37 = 152,                          // $@37
+        S_sub_tsig_key = 153,                    // sub_tsig_key
+        S_154_38 = 154,                          // $@38
+        S_tsig_key_params = 155,                 // tsig_key_params
+        S_tsig_key_param = 156,                  // tsig_key_param
+        S_tsig_key_name = 157,                   // tsig_key_name
+        S_158_39 = 158,                          // $@39
+        S_tsig_key_algorithm = 159,              // tsig_key_algorithm
+        S_160_40 = 160,                          // $@40
+        S_tsig_key_digest_bits = 161,            // tsig_key_digest_bits
+        S_tsig_key_secret = 162,                 // tsig_key_secret
+        S_163_41 = 163,                          // $@41
+        S_control_socket = 164,                  // control_socket
+        S_165_42 = 165,                          // $@42
+        S_control_socket_params = 166,           // control_socket_params
+        S_control_socket_param = 167,            // control_socket_param
+        S_control_socket_type = 168,             // control_socket_type
+        S_169_43 = 169,                          // $@43
+        S_control_socket_name = 170,             // control_socket_name
+        S_171_44 = 171,                          // $@44
+        S_hooks_libraries = 172,                 // hooks_libraries
+        S_173_45 = 173,                          // $@45
+        S_hooks_libraries_list = 174,            // hooks_libraries_list
+        S_not_empty_hooks_libraries_list = 175,  // not_empty_hooks_libraries_list
+        S_hooks_library = 176,                   // hooks_library
+        S_177_46 = 177,                          // $@46
+        S_sub_hooks_library = 178,               // sub_hooks_library
+        S_179_47 = 179,                          // $@47
+        S_hooks_params = 180,                    // hooks_params
+        S_hooks_param = 181,                     // hooks_param
+        S_library = 182,                         // library
+        S_183_48 = 183,                          // $@48
+        S_parameters = 184,                      // parameters
+        S_185_49 = 185,                          // $@49
+        S_loggers = 186,                         // loggers
+        S_187_50 = 187,                          // $@50
+        S_loggers_entries = 188,                 // loggers_entries
+        S_logger_entry = 189,                    // logger_entry
+        S_190_51 = 190,                          // $@51
+        S_logger_params = 191,                   // logger_params
+        S_logger_param = 192,                    // logger_param
+        S_name = 193,                            // name
+        S_194_52 = 194,                          // $@52
+        S_debuglevel = 195,                      // debuglevel
+        S_severity = 196,                        // severity
+        S_197_53 = 197,                          // $@53
+        S_output_options_list = 198,             // output_options_list
+        S_199_54 = 199,                          // $@54
+        S_output_options_list_content = 200,     // output_options_list_content
+        S_output_entry = 201,                    // output_entry
+        S_202_55 = 202,                          // $@55
+        S_output_params_list = 203,              // output_params_list
+        S_output_params = 204,                   // output_params
+        S_output = 205,                          // output
+        S_206_56 = 206,                          // $@56
+        S_flush = 207,                           // flush
+        S_maxsize = 208,                         // maxsize
+        S_maxver = 209,                          // maxver
+        S_pattern = 210,                         // pattern
+        S_211_57 = 211                           // $@57
       };
     };
 
-    /// (External) token type, as returned by yylex.
-    typedef token::yytokentype token_type;
+    /// (Internal) symbol kind.
+    typedef symbol_kind::symbol_kind_type symbol_kind_type;
 
-    /// Symbol type: an internal symbol number.
-    typedef int symbol_number_type;
-
-    /// The symbol type number to denote an empty symbol.
-    enum { empty_symbol = -2 };
-
-    /// Internal symbol number for tokens (subsumed by symbol_number_type).
-    typedef unsigned char token_number_type;
+    /// The number of tokens.
+    static const symbol_kind_type YYNTOKENS = symbol_kind::YYNTOKENS;
 
     /// A complete symbol.
     ///
-    /// Expects its Base type to provide access to the symbol type
-    /// via type_get ().
+    /// Expects its Base type to provide access to the symbol kind
+    /// via kind ().
     ///
     /// Provide access to semantic value and location.
     template <typename Base>
@@ -534,20 +803,53 @@ namespace isc { namespace d2 {
       typedef Base super_type;
 
       /// Default constructor.
-      basic_symbol ()
+      basic_symbol () YY_NOEXCEPT
         : value ()
         , location ()
       {}
 
 #if 201103L <= YY_CPLUSPLUS
       /// Move constructor.
-      basic_symbol (basic_symbol&& that);
+      basic_symbol (basic_symbol&& that)
+        : Base (std::move (that))
+        , value ()
+        , location (std::move (that.location))
+      {
+        switch (this->kind ())
+    {
+      case symbol_kind::S_value: // value
+      case symbol_kind::S_map_value: // map_value
+      case symbol_kind::S_ncr_protocol_value: // ncr_protocol_value
+        value.move< ElementPtr > (std::move (that.value));
+        break;
+
+      case symbol_kind::S_BOOLEAN: // "boolean"
+        value.move< bool > (std::move (that.value));
+        break;
+
+      case symbol_kind::S_FLOAT: // "floating point"
+        value.move< double > (std::move (that.value));
+        break;
+
+      case symbol_kind::S_INTEGER: // "integer"
+        value.move< int64_t > (std::move (that.value));
+        break;
+
+      case symbol_kind::S_STRING: // "constant string"
+        value.move< std::string > (std::move (that.value));
+        break;
+
+      default:
+        break;
+    }
+
+      }
 #endif
 
       /// Copy constructor.
       basic_symbol (const basic_symbol& that);
 
-      /// Constructor for valueless symbols, and symbols from each type.
+      /// Constructors for typed symbols.
 #if 201103L <= YY_CPLUSPLUS
       basic_symbol (typename Base::kind_type t, location_type&& l)
         : Base (t)
@@ -559,6 +861,7 @@ namespace isc { namespace d2 {
         , location (l)
       {}
 #endif
+
 #if 201103L <= YY_CPLUSPLUS
       basic_symbol (typename Base::kind_type t, ElementPtr&& v, location_type&& l)
         : Base (t)
@@ -572,6 +875,7 @@ namespace isc { namespace d2 {
         , location (l)
       {}
 #endif
+
 #if 201103L <= YY_CPLUSPLUS
       basic_symbol (typename Base::kind_type t, bool&& v, location_type&& l)
         : Base (t)
@@ -585,6 +889,7 @@ namespace isc { namespace d2 {
         , location (l)
       {}
 #endif
+
 #if 201103L <= YY_CPLUSPLUS
       basic_symbol (typename Base::kind_type t, double&& v, location_type&& l)
         : Base (t)
@@ -598,6 +903,7 @@ namespace isc { namespace d2 {
         , location (l)
       {}
 #endif
+
 #if 201103L <= YY_CPLUSPLUS
       basic_symbol (typename Base::kind_type t, int64_t&& v, location_type&& l)
         : Base (t)
@@ -611,6 +917,7 @@ namespace isc { namespace d2 {
         , location (l)
       {}
 #endif
+
 #if 201103L <= YY_CPLUSPLUS
       basic_symbol (typename Base::kind_type t, std::string&& v, location_type&& l)
         : Base (t)
@@ -631,41 +938,43 @@ namespace isc { namespace d2 {
         clear ();
       }
 
+
+
       /// Destroy contents, and record that is empty.
-      void clear ()
+      void clear () YY_NOEXCEPT
       {
         // User destructor.
-        symbol_number_type yytype = this->type_get ();
+        symbol_kind_type yykind = this->kind ();
         basic_symbol<Base>& yysym = *this;
         (void) yysym;
-        switch (yytype)
+        switch (yykind)
         {
        default:
           break;
         }
 
-        // Type destructor.
-switch (yytype)
+        // Value type destructor.
+switch (yykind)
     {
-      case 72: // value
-      case 76: // map_value
-      case 100: // ncr_protocol_value
+      case symbol_kind::S_value: // value
+      case symbol_kind::S_map_value: // map_value
+      case symbol_kind::S_ncr_protocol_value: // ncr_protocol_value
         value.template destroy< ElementPtr > ();
         break;
 
-      case 60: // "boolean"
+      case symbol_kind::S_BOOLEAN: // "boolean"
         value.template destroy< bool > ();
         break;
 
-      case 59: // "floating point"
+      case symbol_kind::S_FLOAT: // "floating point"
         value.template destroy< double > ();
         break;
 
-      case 58: // "integer"
+      case symbol_kind::S_INTEGER: // "integer"
         value.template destroy< int64_t > ();
         break;
 
-      case 57: // "constant string"
+      case symbol_kind::S_STRING: // "constant string"
         value.template destroy< std::string > ();
         break;
 
@@ -676,6 +985,15 @@ switch (yytype)
         Base::clear ();
       }
 
+      /// The user-facing name of this symbol.
+      std::string name () const YY_NOEXCEPT
+      {
+        return D2Parser::symbol_name (this->kind ());
+      }
+
+      /// Backward compatibility (Bison 3.6).
+      symbol_kind_type type_get () const YY_NOEXCEPT;
+
       /// Whether empty.
       bool empty () const YY_NOEXCEPT;
 
@@ -683,7 +1001,7 @@ switch (yytype)
       void move (basic_symbol& s);
 
       /// The semantic value.
-      semantic_type value;
+      value_type value;
 
       /// The location.
       location_type location;
@@ -696,124 +1014,131 @@ switch (yytype)
     };
 
     /// Type access provider for token (enum) based symbols.
-    struct by_type
+    struct by_kind
     {
+      /// The symbol kind as needed by the constructor.
+      typedef token_kind_type kind_type;
+
       /// Default constructor.
-      by_type ();
+      by_kind () YY_NOEXCEPT;
 
 #if 201103L <= YY_CPLUSPLUS
       /// Move constructor.
-      by_type (by_type&& that);
+      by_kind (by_kind&& that) YY_NOEXCEPT;
 #endif
 
       /// Copy constructor.
-      by_type (const by_type& that);
-
-      /// The symbol type as needed by the constructor.
-      typedef token_type kind_type;
+      by_kind (const by_kind& that) YY_NOEXCEPT;
 
       /// Constructor from (external) token numbers.
-      by_type (kind_type t);
+      by_kind (kind_type t) YY_NOEXCEPT;
+
+
 
       /// Record that this symbol is empty.
-      void clear ();
+      void clear () YY_NOEXCEPT;
 
-      /// Steal the symbol type from \a that.
-      void move (by_type& that);
+      /// Steal the symbol kind from \a that.
+      void move (by_kind& that);
 
       /// The (internal) type number (corresponding to \a type).
       /// \a empty when empty.
-      symbol_number_type type_get () const YY_NOEXCEPT;
+      symbol_kind_type kind () const YY_NOEXCEPT;
 
-      /// The token.
-      token_type token () const YY_NOEXCEPT;
+      /// Backward compatibility (Bison 3.6).
+      symbol_kind_type type_get () const YY_NOEXCEPT;
 
-      /// The symbol type.
-      /// \a empty_symbol when empty.
-      /// An int, not token_number_type, to be able to store empty_symbol.
-      int type;
+      /// The symbol kind.
+      /// \a S_YYEMPTY when empty.
+      symbol_kind_type kind_;
     };
 
+    /// Backward compatibility for a private implementation detail (Bison 3.6).
+    typedef by_kind by_type;
+
     /// "External" symbols: returned by the scanner.
-    struct symbol_type : basic_symbol<by_type>
+    struct symbol_type : basic_symbol<by_kind>
     {
       /// Superclass.
-      typedef basic_symbol<by_type> super_type;
+      typedef basic_symbol<by_kind> super_type;
 
       /// Empty symbol.
-      symbol_type () {}
+      symbol_type () YY_NOEXCEPT {}
 
       /// Constructor for valueless symbols, and symbols from each type.
 #if 201103L <= YY_CPLUSPLUS
       symbol_type (int tok, location_type l)
-        : super_type(token_type (tok), std::move (l))
-      {
-        YYASSERT (tok == token::TOKEN_END || tok == token::TOKEN_COMMA || tok == token::TOKEN_COLON || tok == token::TOKEN_LSQUARE_BRACKET || tok == token::TOKEN_RSQUARE_BRACKET || tok == token::TOKEN_LCURLY_BRACKET || tok == token::TOKEN_RCURLY_BRACKET || tok == token::TOKEN_NULL_TYPE || tok == token::TOKEN_DHCP6 || tok == token::TOKEN_DHCP4 || tok == token::TOKEN_CONTROL_AGENT || tok == token::TOKEN_DHCPDDNS || tok == token::TOKEN_IP_ADDRESS || tok == token::TOKEN_PORT || tok == token::TOKEN_DNS_SERVER_TIMEOUT || tok == token::TOKEN_NCR_PROTOCOL || tok == token::TOKEN_UDP || tok == token::TOKEN_TCP || tok == token::TOKEN_NCR_FORMAT || tok == token::TOKEN_JSON || tok == token::TOKEN_USER_CONTEXT || tok == token::TOKEN_COMMENT || tok == token::TOKEN_FORWARD_DDNS || tok == token::TOKEN_REVERSE_DDNS || tok == token::TOKEN_DDNS_DOMAINS || tok == token::TOKEN_KEY_NAME || tok == token::TOKEN_DNS_SERVERS || tok == token::TOKEN_HOSTNAME || tok == token::TOKEN_TSIG_KEYS || tok == token::TOKEN_ALGORITHM || tok == token::TOKEN_DIGEST_BITS || tok == token::TOKEN_SECRET || tok == token::TOKEN_CONTROL_SOCKET || tok == token::TOKEN_SOCKET_TYPE || tok == token::TOKEN_SOCKET_NAME || tok == token::TOKEN_LOGGING || tok == token::TOKEN_LOGGERS || tok == token::TOKEN_NAME || tok == token::TOKEN_OUTPUT_OPTIONS || tok == token::TOKEN_OUTPUT || tok == token::TOKEN_DEBUGLEVEL || tok == token::TOKEN_SEVERITY || tok == token::TOKEN_FLUSH || tok == token::TOKEN_MAXSIZE || tok == token::TOKEN_MAXVER || tok == token::TOKEN_PATTERN || tok == token::TOKEN_TOPLEVEL_JSON || tok == token::TOKEN_TOPLEVEL_DHCPDDNS || tok == token::TOKEN_SUB_DHCPDDNS || tok == token::TOKEN_SUB_TSIG_KEY || tok == token::TOKEN_SUB_TSIG_KEYS || tok == token::TOKEN_SUB_DDNS_DOMAIN || tok == token::TOKEN_SUB_DDNS_DOMAINS || tok == token::TOKEN_SUB_DNS_SERVER || tok == token::TOKEN_SUB_DNS_SERVERS);
-      }
+        : super_type (token_kind_type (tok), std::move (l))
 #else
       symbol_type (int tok, const location_type& l)
-        : super_type(token_type (tok), l)
-      {
-        YYASSERT (tok == token::TOKEN_END || tok == token::TOKEN_COMMA || tok == token::TOKEN_COLON || tok == token::TOKEN_LSQUARE_BRACKET || tok == token::TOKEN_RSQUARE_BRACKET || tok == token::TOKEN_LCURLY_BRACKET || tok == token::TOKEN_RCURLY_BRACKET || tok == token::TOKEN_NULL_TYPE || tok == token::TOKEN_DHCP6 || tok == token::TOKEN_DHCP4 || tok == token::TOKEN_CONTROL_AGENT || tok == token::TOKEN_DHCPDDNS || tok == token::TOKEN_IP_ADDRESS || tok == token::TOKEN_PORT || tok == token::TOKEN_DNS_SERVER_TIMEOUT || tok == token::TOKEN_NCR_PROTOCOL || tok == token::TOKEN_UDP || tok == token::TOKEN_TCP || tok == token::TOKEN_NCR_FORMAT || tok == token::TOKEN_JSON || tok == token::TOKEN_USER_CONTEXT || tok == token::TOKEN_COMMENT || tok == token::TOKEN_FORWARD_DDNS || tok == token::TOKEN_REVERSE_DDNS || tok == token::TOKEN_DDNS_DOMAINS || tok == token::TOKEN_KEY_NAME || tok == token::TOKEN_DNS_SERVERS || tok == token::TOKEN_HOSTNAME || tok == token::TOKEN_TSIG_KEYS || tok == token::TOKEN_ALGORITHM || tok == token::TOKEN_DIGEST_BITS || tok == token::TOKEN_SECRET || tok == token::TOKEN_CONTROL_SOCKET || tok == token::TOKEN_SOCKET_TYPE || tok == token::TOKEN_SOCKET_NAME || tok == token::TOKEN_LOGGING || tok == token::TOKEN_LOGGERS || tok == token::TOKEN_NAME || tok == token::TOKEN_OUTPUT_OPTIONS || tok == token::TOKEN_OUTPUT || tok == token::TOKEN_DEBUGLEVEL || tok == token::TOKEN_SEVERITY || tok == token::TOKEN_FLUSH || tok == token::TOKEN_MAXSIZE || tok == token::TOKEN_MAXVER || tok == token::TOKEN_PATTERN || tok == token::TOKEN_TOPLEVEL_JSON || tok == token::TOKEN_TOPLEVEL_DHCPDDNS || tok == token::TOKEN_SUB_DHCPDDNS || tok == token::TOKEN_SUB_TSIG_KEY || tok == token::TOKEN_SUB_TSIG_KEYS || tok == token::TOKEN_SUB_DDNS_DOMAIN || tok == token::TOKEN_SUB_DDNS_DOMAINS || tok == token::TOKEN_SUB_DNS_SERVER || tok == token::TOKEN_SUB_DNS_SERVERS);
-      }
+        : super_type (token_kind_type (tok), l)
 #endif
+      {
+#if !defined _MSC_VER || defined __clang__
+        D2_PARSER__ASSERT (tok == token::TOKEN_END
+                   || (token::TOKEN_D2_PARSER_error <= tok && tok <= token::TOKEN_SUB_HOOKS_LIBRARY));
+#endif
+      }
 #if 201103L <= YY_CPLUSPLUS
       symbol_type (int tok, bool v, location_type l)
-        : super_type(token_type (tok), std::move (v), std::move (l))
-      {
-        YYASSERT (tok == token::TOKEN_BOOLEAN);
-      }
+        : super_type (token_kind_type (tok), std::move (v), std::move (l))
 #else
       symbol_type (int tok, const bool& v, const location_type& l)
-        : super_type(token_type (tok), v, l)
-      {
-        YYASSERT (tok == token::TOKEN_BOOLEAN);
-      }
+        : super_type (token_kind_type (tok), v, l)
 #endif
+      {
+#if !defined _MSC_VER || defined __clang__
+        D2_PARSER__ASSERT (tok == token::TOKEN_BOOLEAN);
+#endif
+      }
 #if 201103L <= YY_CPLUSPLUS
       symbol_type (int tok, double v, location_type l)
-        : super_type(token_type (tok), std::move (v), std::move (l))
-      {
-        YYASSERT (tok == token::TOKEN_FLOAT);
-      }
+        : super_type (token_kind_type (tok), std::move (v), std::move (l))
 #else
       symbol_type (int tok, const double& v, const location_type& l)
-        : super_type(token_type (tok), v, l)
-      {
-        YYASSERT (tok == token::TOKEN_FLOAT);
-      }
+        : super_type (token_kind_type (tok), v, l)
 #endif
+      {
+#if !defined _MSC_VER || defined __clang__
+        D2_PARSER__ASSERT (tok == token::TOKEN_FLOAT);
+#endif
+      }
 #if 201103L <= YY_CPLUSPLUS
       symbol_type (int tok, int64_t v, location_type l)
-        : super_type(token_type (tok), std::move (v), std::move (l))
-      {
-        YYASSERT (tok == token::TOKEN_INTEGER);
-      }
+        : super_type (token_kind_type (tok), std::move (v), std::move (l))
 #else
       symbol_type (int tok, const int64_t& v, const location_type& l)
-        : super_type(token_type (tok), v, l)
-      {
-        YYASSERT (tok == token::TOKEN_INTEGER);
-      }
+        : super_type (token_kind_type (tok), v, l)
 #endif
+      {
+#if !defined _MSC_VER || defined __clang__
+        D2_PARSER__ASSERT (tok == token::TOKEN_INTEGER);
+#endif
+      }
 #if 201103L <= YY_CPLUSPLUS
       symbol_type (int tok, std::string v, location_type l)
-        : super_type(token_type (tok), std::move (v), std::move (l))
-      {
-        YYASSERT (tok == token::TOKEN_STRING);
-      }
+        : super_type (token_kind_type (tok), std::move (v), std::move (l))
 #else
       symbol_type (int tok, const std::string& v, const location_type& l)
-        : super_type(token_type (tok), v, l)
-      {
-        YYASSERT (tok == token::TOKEN_STRING);
-      }
+        : super_type (token_kind_type (tok), v, l)
 #endif
+      {
+#if !defined _MSC_VER || defined __clang__
+        D2_PARSER__ASSERT (tok == token::TOKEN_STRING);
+#endif
+      }
     };
 
     /// Build a parser object.
     D2Parser (isc::d2::D2ParserContext& ctx_yyarg);
     virtual ~D2Parser ();
+
+#if 201103L <= YY_CPLUSPLUS
+    /// Non copyable.
+    D2Parser (const D2Parser&) = delete;
+    /// Non copyable.
+    D2Parser& operator= (const D2Parser&) = delete;
+#endif
 
     /// Parse.  An alias for parse ().
     /// \returns  0 iff parsing succeeded.
@@ -845,7 +1170,11 @@ switch (yytype)
     /// Report a syntax error.
     void error (const syntax_error& err);
 
-    // Implementation of make_symbol for each symbol type.
+    /// The user-facing name of the symbol whose (internal) number is
+    /// YYSYMBOL.  No bounds checking.
+    static std::string symbol_name (symbol_kind_type yysymbol);
+
+    // Implementation of make_symbol for each token kind.
 #if 201103L <= YY_CPLUSPLUS
       static
       symbol_type
@@ -859,6 +1188,36 @@ switch (yytype)
       make_END (const location_type& l)
       {
         return symbol_type (token::TOKEN_END, l);
+      }
+#endif
+#if 201103L <= YY_CPLUSPLUS
+      static
+      symbol_type
+      make_D2_PARSER_error (location_type l)
+      {
+        return symbol_type (token::TOKEN_D2_PARSER_error, std::move (l));
+      }
+#else
+      static
+      symbol_type
+      make_D2_PARSER_error (const location_type& l)
+      {
+        return symbol_type (token::TOKEN_D2_PARSER_error, l);
+      }
+#endif
+#if 201103L <= YY_CPLUSPLUS
+      static
+      symbol_type
+      make_D2_PARSER_UNDEF (location_type l)
+      {
+        return symbol_type (token::TOKEN_D2_PARSER_UNDEF, std::move (l));
+      }
+#else
+      static
+      symbol_type
+      make_D2_PARSER_UNDEF (const location_type& l)
+      {
+        return symbol_type (token::TOKEN_D2_PARSER_UNDEF, l);
       }
 #endif
 #if 201103L <= YY_CPLUSPLUS
@@ -964,51 +1323,6 @@ switch (yytype)
       make_NULL_TYPE (const location_type& l)
       {
         return symbol_type (token::TOKEN_NULL_TYPE, l);
-      }
-#endif
-#if 201103L <= YY_CPLUSPLUS
-      static
-      symbol_type
-      make_DHCP6 (location_type l)
-      {
-        return symbol_type (token::TOKEN_DHCP6, std::move (l));
-      }
-#else
-      static
-      symbol_type
-      make_DHCP6 (const location_type& l)
-      {
-        return symbol_type (token::TOKEN_DHCP6, l);
-      }
-#endif
-#if 201103L <= YY_CPLUSPLUS
-      static
-      symbol_type
-      make_DHCP4 (location_type l)
-      {
-        return symbol_type (token::TOKEN_DHCP4, std::move (l));
-      }
-#else
-      static
-      symbol_type
-      make_DHCP4 (const location_type& l)
-      {
-        return symbol_type (token::TOKEN_DHCP4, l);
-      }
-#endif
-#if 201103L <= YY_CPLUSPLUS
-      static
-      symbol_type
-      make_CONTROL_AGENT (location_type l)
-      {
-        return symbol_type (token::TOKEN_CONTROL_AGENT, std::move (l));
-      }
-#else
-      static
-      symbol_type
-      make_CONTROL_AGENT (const location_type& l)
-      {
-        return symbol_type (token::TOKEN_CONTROL_AGENT, l);
       }
 #endif
 #if 201103L <= YY_CPLUSPLUS
@@ -1374,16 +1688,46 @@ switch (yytype)
 #if 201103L <= YY_CPLUSPLUS
       static
       symbol_type
-      make_LOGGING (location_type l)
+      make_HOOKS_LIBRARIES (location_type l)
       {
-        return symbol_type (token::TOKEN_LOGGING, std::move (l));
+        return symbol_type (token::TOKEN_HOOKS_LIBRARIES, std::move (l));
       }
 #else
       static
       symbol_type
-      make_LOGGING (const location_type& l)
+      make_HOOKS_LIBRARIES (const location_type& l)
       {
-        return symbol_type (token::TOKEN_LOGGING, l);
+        return symbol_type (token::TOKEN_HOOKS_LIBRARIES, l);
+      }
+#endif
+#if 201103L <= YY_CPLUSPLUS
+      static
+      symbol_type
+      make_LIBRARY (location_type l)
+      {
+        return symbol_type (token::TOKEN_LIBRARY, std::move (l));
+      }
+#else
+      static
+      symbol_type
+      make_LIBRARY (const location_type& l)
+      {
+        return symbol_type (token::TOKEN_LIBRARY, l);
+      }
+#endif
+#if 201103L <= YY_CPLUSPLUS
+      static
+      symbol_type
+      make_PARAMETERS (location_type l)
+      {
+        return symbol_type (token::TOKEN_PARAMETERS, std::move (l));
+      }
+#else
+      static
+      symbol_type
+      make_PARAMETERS (const location_type& l)
+      {
+        return symbol_type (token::TOKEN_PARAMETERS, l);
       }
 #endif
 #if 201103L <= YY_CPLUSPLUS
@@ -1674,6 +2018,21 @@ switch (yytype)
 #if 201103L <= YY_CPLUSPLUS
       static
       symbol_type
+      make_SUB_HOOKS_LIBRARY (location_type l)
+      {
+        return symbol_type (token::TOKEN_SUB_HOOKS_LIBRARY, std::move (l));
+      }
+#else
+      static
+      symbol_type
+      make_SUB_HOOKS_LIBRARY (const location_type& l)
+      {
+        return symbol_type (token::TOKEN_SUB_HOOKS_LIBRARY, l);
+      }
+#endif
+#if 201103L <= YY_CPLUSPLUS
+      static
+      symbol_type
       make_STRING (std::string v, location_type l)
       {
         return symbol_type (token::TOKEN_STRING, std::move (v), std::move (l));
@@ -1733,93 +2092,119 @@ switch (yytype)
 #endif
 
 
-  private:
-    /// This class is not copyable.
-    D2Parser (const D2Parser&);
-    D2Parser& operator= (const D2Parser&);
+    class context
+    {
+    public:
+      context (const D2Parser& yyparser, const symbol_type& yyla);
+      const symbol_type& lookahead () const YY_NOEXCEPT { return yyla_; }
+      symbol_kind_type token () const YY_NOEXCEPT { return yyla_.kind (); }
+      const location_type& location () const YY_NOEXCEPT { return yyla_.location; }
 
-    /// State numbers.
-    typedef int state_type;
+      /// Put in YYARG at most YYARGN of the expected tokens, and return the
+      /// number of tokens stored in YYARG.  If YYARG is null, return the
+      /// number of expected tokens (guaranteed to be less than YYNTOKENS).
+      int expected_tokens (symbol_kind_type yyarg[], int yyargn) const;
+
+    private:
+      const D2Parser& yyparser_;
+      const symbol_type& yyla_;
+    };
+
+  private:
+#if YY_CPLUSPLUS < 201103L
+    /// Non copyable.
+    D2Parser (const D2Parser&);
+    /// Non copyable.
+    D2Parser& operator= (const D2Parser&);
+#endif
+
+
+    /// Stored state numbers (used for stacks).
+    typedef short state_type;
+
+    /// The arguments of the error message.
+    int yy_syntax_error_arguments_ (const context& yyctx,
+                                    symbol_kind_type yyarg[], int yyargn) const;
 
     /// Generate an error message.
-    /// \param yystate   the state where the error occurred.
-    /// \param yyla      the lookahead token.
-    virtual std::string yysyntax_error_ (state_type yystate,
-                                         const symbol_type& yyla) const;
-
+    /// \param yyctx     the context in which the error occurred.
+    virtual std::string yysyntax_error_ (const context& yyctx) const;
     /// Compute post-reduction state.
     /// \param yystate   the current state
     /// \param yysym     the nonterminal to push on the stack
-    state_type yy_lr_goto_state_ (state_type yystate, int yysym);
+    static state_type yy_lr_goto_state_ (state_type yystate, int yysym);
 
     /// Whether the given \c yypact_ value indicates a defaulted state.
     /// \param yyvalue   the value to check
-    static bool yy_pact_value_is_default_ (int yyvalue);
+    static bool yy_pact_value_is_default_ (int yyvalue) YY_NOEXCEPT;
 
     /// Whether the given \c yytable_ value indicates a syntax error.
     /// \param yyvalue   the value to check
-    static bool yy_table_value_is_error_ (int yyvalue);
+    static bool yy_table_value_is_error_ (int yyvalue) YY_NOEXCEPT;
 
     static const short yypact_ninf_;
     static const signed char yytable_ninf_;
 
-    /// Convert a scanner token number \a t to a symbol number.
-    static token_number_type yytranslate_ (token_type t);
-
-    // Tables.
-  // YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
-  // STATE-NUM.
-  static const short yypact_[];
-
-  // YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
-  // Performed when YYTABLE does not specify something else to do.  Zero
-  // means the default is an error.
-  static const unsigned char yydefact_[];
-
-  // YYPGOTO[NTERM-NUM].
-  static const short yypgoto_[];
-
-  // YYDEFGOTO[NTERM-NUM].
-  static const short yydefgoto_[];
-
-  // YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
-  // positive, shift that token.  If negative, reduce the rule whose
-  // number is the opposite.  If YYTABLE_NINF, syntax error.
-  static const unsigned short yytable_[];
-
-  static const short yycheck_[];
-
-  // YYSTOS[STATE-NUM] -- The (internal number of the) accessing
-  // symbol of state STATE-NUM.
-  static const unsigned char yystos_[];
-
-  // YYR1[YYN] -- Symbol number of symbol that rule YYN derives.
-  static const unsigned char yyr1_[];
-
-  // YYR2[YYN] -- Number of symbols on the right hand side of rule YYN.
-  static const unsigned char yyr2_[];
-
+    /// Convert a scanner token kind \a t to a symbol kind.
+    /// In theory \a t should be a token_kind_type, but character literals
+    /// are valid, yet not members of the token_kind_type enum.
+    static symbol_kind_type yytranslate_ (int t) YY_NOEXCEPT;
 
     /// Convert the symbol name \a n to a form suitable for a diagnostic.
-    static std::string yytnamerr_ (const char *n);
-
+    static std::string yytnamerr_ (const char *yystr);
 
     /// For a symbol, its name in clear.
     static const char* const yytname_[];
+
+
+    // Tables.
+    // YYPACT[STATE-NUM] -- Index in YYTABLE of the portion describing
+    // STATE-NUM.
+    static const short yypact_[];
+
+    // YYDEFACT[STATE-NUM] -- Default reduction number in state STATE-NUM.
+    // Performed when YYTABLE does not specify something else to do.  Zero
+    // means the default is an error.
+    static const unsigned char yydefact_[];
+
+    // YYPGOTO[NTERM-NUM].
+    static const short yypgoto_[];
+
+    // YYDEFGOTO[NTERM-NUM].
+    static const short yydefgoto_[];
+
+    // YYTABLE[YYPACT[STATE-NUM]] -- What to do in state STATE-NUM.  If
+    // positive, shift that token.  If negative, reduce the rule whose
+    // number is the opposite.  If YYTABLE_NINF, syntax error.
+    static const short yytable_[];
+
+    static const short yycheck_[];
+
+    // YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
+    // state STATE-NUM.
+    static const unsigned char yystos_[];
+
+    // YYR1[RULE-NUM] -- Symbol kind of the left-hand side of rule RULE-NUM.
+    static const unsigned char yyr1_[];
+
+    // YYR2[RULE-NUM] -- Number of symbols on the right-hand side of rule RULE-NUM.
+    static const signed char yyr2_[];
+
+
 #if D2_PARSER_DEBUG
-  // YYRLINE[YYN] -- Source line where rule number YYN was defined.
-  static const unsigned short yyrline_[];
+    // YYRLINE[YYN] -- Source line where rule number YYN was defined.
+    static const short yyrline_[];
     /// Report on the debug stream that the rule \a r is going to be reduced.
-    virtual void yy_reduce_print_ (int r);
+    virtual void yy_reduce_print_ (int r) const;
     /// Print the state stack on the debug stream.
-    virtual void yystack_print_ ();
+    virtual void yy_stack_print_ () const;
 
     /// Debugging level.
     int yydebug_;
     /// Debug stream.
     std::ostream* yycdebug_;
 
-    /// \brief Display a symbol type, value and location.
+    /// \brief Display a symbol kind, value and location.
     /// \param yyo    The output stream.
     /// \param yysym  The symbol.
     template <typename Base>
@@ -1840,7 +2225,7 @@ switch (yytype)
       /// Default constructor.
       by_state () YY_NOEXCEPT;
 
-      /// The symbol type as needed by the constructor.
+      /// The symbol kind as needed by the constructor.
       typedef state_type kind_type;
 
       /// Constructor.
@@ -1852,15 +2237,16 @@ switch (yytype)
       /// Record that this symbol is empty.
       void clear () YY_NOEXCEPT;
 
-      /// Steal the symbol type from \a that.
+      /// Steal the symbol kind from \a that.
       void move (by_state& that);
 
-      /// The (internal) type number (corresponding to \a state).
-      /// \a empty_symbol when empty.
-      symbol_number_type type_get () const YY_NOEXCEPT;
+      /// The symbol kind (corresponding to \a state).
+      /// \a symbol_kind::S_YYEMPTY when empty.
+      symbol_kind_type kind () const YY_NOEXCEPT;
 
       /// The state number used to denote an empty symbol.
-      enum { empty_state = -1 };
+      /// We use the initial state, as it does not have a value.
+      enum { empty_state = 0 };
 
       /// The state.
       /// \a empty when empty.
@@ -1882,6 +2268,10 @@ switch (yytype)
       /// Assignment, needed by push_back by some old implementations.
       /// Moves the contents of that.
       stack_symbol_type& operator= (stack_symbol_type& that);
+
+      /// Assignment, needed by push_back by other implementations.
+      /// Needed by some other old implementations.
+      stack_symbol_type& operator= (const stack_symbol_type& that);
 #endif
     };
 
@@ -1891,48 +2281,38 @@ switch (yytype)
     {
     public:
       // Hide our reversed order.
-      typedef typename S::reverse_iterator iterator;
-      typedef typename S::const_reverse_iterator const_iterator;
+      typedef typename S::iterator iterator;
+      typedef typename S::const_iterator const_iterator;
       typedef typename S::size_type size_type;
+      typedef typename std::ptrdiff_t index_type;
 
-      stack (size_type n = 200)
+      stack (size_type n = 200) YY_NOEXCEPT
         : seq_ (n)
       {}
 
-      /// Random access.
-      ///
-      /// Index 0 returns the topmost element.
-      T&
-      operator[] (size_type i)
-      {
-        return seq_[size () - 1 - i];
-      }
-
-      /// Random access.
-      ///
-      /// Index 0 returns the topmost element.
-      T&
-      operator[] (int i)
-      {
-        return operator[] (size_type (i));
-      }
+#if 201103L <= YY_CPLUSPLUS
+      /// Non copyable.
+      stack (const stack&) = delete;
+      /// Non copyable.
+      stack& operator= (const stack&) = delete;
+#endif
 
       /// Random access.
       ///
       /// Index 0 returns the topmost element.
       const T&
-      operator[] (size_type i) const
+      operator[] (index_type i) const
       {
-        return seq_[size () - 1 - i];
+        return seq_[size_type (size () - 1 - i)];
       }
 
       /// Random access.
       ///
       /// Index 0 returns the topmost element.
-      const T&
-      operator[] (int i) const
+      T&
+      operator[] (index_type i)
       {
-        return operator[] (size_type (i));
+        return seq_[size_type (size () - 1 - i)];
       }
 
       /// Steal the contents of \a t.
@@ -1947,7 +2327,7 @@ switch (yytype)
 
       /// Pop elements from the stack.
       void
-      pop (int n = 1) YY_NOEXCEPT
+      pop (std::ptrdiff_t n = 1) YY_NOEXCEPT
       {
         for (; 0 < n; --n)
           seq_.pop_back ();
@@ -1961,49 +2341,53 @@ switch (yytype)
       }
 
       /// Number of elements on the stack.
-      size_type
+      index_type
       size () const YY_NOEXCEPT
       {
-        return seq_.size ();
+        return index_type (seq_.size ());
       }
 
       /// Iterator on top of the stack (going downwards).
       const_iterator
       begin () const YY_NOEXCEPT
       {
-        return seq_.rbegin ();
+        return seq_.begin ();
       }
 
       /// Bottom of the stack.
       const_iterator
       end () const YY_NOEXCEPT
       {
-        return seq_.rend ();
+        return seq_.end ();
       }
 
       /// Present a slice of the top of a stack.
       class slice
       {
       public:
-        slice (const stack& stack, int range)
+        slice (const stack& stack, index_type range) YY_NOEXCEPT
           : stack_ (stack)
           , range_ (range)
         {}
 
         const T&
-        operator[] (int i) const
+        operator[] (index_type i) const
         {
           return stack_[range_ - i];
         }
 
       private:
         const stack& stack_;
-        int range_;
+        index_type range_;
       };
 
     private:
+#if YY_CPLUSPLUS < 201103L
+      /// Non copyable.
       stack (const stack&);
+      /// Non copyable.
       stack& operator= (const stack&);
+#endif
       /// The wrapped container.
       S seq_;
     };
@@ -2031,33 +2415,30 @@ switch (yytype)
     void yypush_ (const char* m, state_type s, YY_MOVE_REF (symbol_type) sym);
 
     /// Pop \a n symbols from the stack.
-    void yypop_ (int n = 1);
+    void yypop_ (int n = 1) YY_NOEXCEPT;
 
     /// Constants.
     enum
     {
-      yyeof_ = 0,
-      yylast_ = 304,     ///< Last index in yytable_.
-      yynnts_ = 148,  ///< Number of nonterminal symbols.
-      yyfinal_ = 20, ///< Termination state number.
-      yyterror_ = 1,
-      yyerrcode_ = 256,
-      yyntokens_ = 61  ///< Number of tokens.
+      yylast_ = 307,     ///< Last index in yytable_.
+      yynnts_ = 151,  ///< Number of nonterminal symbols.
+      yyfinal_ = 22 ///< Termination state number.
     };
 
 
     // User arguments.
     isc::d2::D2ParserContext& ctx;
+
   };
 
   inline
-  D2Parser::token_number_type
-  D2Parser::yytranslate_ (token_type t)
+  D2Parser::symbol_kind_type
+  D2Parser::yytranslate_ (int t) YY_NOEXCEPT
   {
     // YYTRANSLATE[TOKEN-NUM] -- Symbol number corresponding to
     // TOKEN-NUM as returned by yylex.
     static
-    const token_number_type
+    const signed char
     translate_table[] =
     {
        0,     2,     2,     2,     2,     2,     2,     2,     2,     2,
@@ -2093,83 +2474,45 @@ switch (yytype)
       45,    46,    47,    48,    49,    50,    51,    52,    53,    54,
       55,    56,    57,    58,    59,    60
     };
-    const unsigned user_token_number_max_ = 315;
-    const token_number_type undef_token_ = 2;
+    // Last valid token kind.
+    const int code_max = 315;
 
-    if (static_cast<int> (t) <= yyeof_)
-      return yyeof_;
-    else if (static_cast<unsigned> (t) <= user_token_number_max_)
-      return translate_table[t];
+    if (t <= 0)
+      return symbol_kind::S_YYEOF;
+    else if (t <= code_max)
+      return static_cast <symbol_kind_type> (translate_table[t]);
     else
-      return undef_token_;
+      return symbol_kind::S_YYUNDEF;
   }
 
   // basic_symbol.
-#if 201103L <= YY_CPLUSPLUS
-  template <typename Base>
-  D2Parser::basic_symbol<Base>::basic_symbol (basic_symbol&& that)
-    : Base (std::move (that))
-    , value ()
-    , location (std::move (that.location))
-  {
-    switch (this->type_get ())
-    {
-      case 72: // value
-      case 76: // map_value
-      case 100: // ncr_protocol_value
-        value.move< ElementPtr > (std::move (that.value));
-        break;
-
-      case 60: // "boolean"
-        value.move< bool > (std::move (that.value));
-        break;
-
-      case 59: // "floating point"
-        value.move< double > (std::move (that.value));
-        break;
-
-      case 58: // "integer"
-        value.move< int64_t > (std::move (that.value));
-        break;
-
-      case 57: // "constant string"
-        value.move< std::string > (std::move (that.value));
-        break;
-
-      default:
-        break;
-    }
-
-  }
-#endif
-
   template <typename Base>
   D2Parser::basic_symbol<Base>::basic_symbol (const basic_symbol& that)
     : Base (that)
     , value ()
     , location (that.location)
   {
-    switch (this->type_get ())
+    switch (this->kind ())
     {
-      case 72: // value
-      case 76: // map_value
-      case 100: // ncr_protocol_value
+      case symbol_kind::S_value: // value
+      case symbol_kind::S_map_value: // map_value
+      case symbol_kind::S_ncr_protocol_value: // ncr_protocol_value
         value.copy< ElementPtr > (YY_MOVE (that.value));
         break;
 
-      case 60: // "boolean"
+      case symbol_kind::S_BOOLEAN: // "boolean"
         value.copy< bool > (YY_MOVE (that.value));
         break;
 
-      case 59: // "floating point"
+      case symbol_kind::S_FLOAT: // "floating point"
         value.copy< double > (YY_MOVE (that.value));
         break;
 
-      case 58: // "integer"
+      case symbol_kind::S_INTEGER: // "integer"
         value.copy< int64_t > (YY_MOVE (that.value));
         break;
 
-      case 57: // "constant string"
+      case symbol_kind::S_STRING: // "constant string"
         value.copy< std::string > (YY_MOVE (that.value));
         break;
 
@@ -2181,11 +2524,20 @@ switch (yytype)
 
 
 
+
+  template <typename Base>
+  D2Parser::symbol_kind_type
+  D2Parser::basic_symbol<Base>::type_get () const YY_NOEXCEPT
+  {
+    return this->kind ();
+  }
+
+
   template <typename Base>
   bool
   D2Parser::basic_symbol<Base>::empty () const YY_NOEXCEPT
   {
-    return Base::type_get () == empty_symbol;
+    return this->kind () == symbol_kind::S_YYEMPTY;
   }
 
   template <typename Base>
@@ -2193,27 +2545,27 @@ switch (yytype)
   D2Parser::basic_symbol<Base>::move (basic_symbol& s)
   {
     super_type::move (s);
-    switch (this->type_get ())
+    switch (this->kind ())
     {
-      case 72: // value
-      case 76: // map_value
-      case 100: // ncr_protocol_value
+      case symbol_kind::S_value: // value
+      case symbol_kind::S_map_value: // map_value
+      case symbol_kind::S_ncr_protocol_value: // ncr_protocol_value
         value.move< ElementPtr > (YY_MOVE (s.value));
         break;
 
-      case 60: // "boolean"
+      case symbol_kind::S_BOOLEAN: // "boolean"
         value.move< bool > (YY_MOVE (s.value));
         break;
 
-      case 59: // "floating point"
+      case symbol_kind::S_FLOAT: // "floating point"
         value.move< double > (YY_MOVE (s.value));
         break;
 
-      case 58: // "integer"
+      case symbol_kind::S_INTEGER: // "integer"
         value.move< int64_t > (YY_MOVE (s.value));
         break;
 
-      case 57: // "constant string"
+      case symbol_kind::S_STRING: // "constant string"
         value.move< std::string > (YY_MOVE (s.value));
         break;
 
@@ -2224,78 +2576,67 @@ switch (yytype)
     location = YY_MOVE (s.location);
   }
 
-  // by_type.
+  // by_kind.
   inline
-  D2Parser::by_type::by_type ()
-    : type (empty_symbol)
+  D2Parser::by_kind::by_kind () YY_NOEXCEPT
+    : kind_ (symbol_kind::S_YYEMPTY)
   {}
 
 #if 201103L <= YY_CPLUSPLUS
   inline
-  D2Parser::by_type::by_type (by_type&& that)
-    : type (that.type)
+  D2Parser::by_kind::by_kind (by_kind&& that) YY_NOEXCEPT
+    : kind_ (that.kind_)
   {
     that.clear ();
   }
 #endif
 
   inline
-  D2Parser::by_type::by_type (const by_type& that)
-    : type (that.type)
+  D2Parser::by_kind::by_kind (const by_kind& that) YY_NOEXCEPT
+    : kind_ (that.kind_)
   {}
 
   inline
-  D2Parser::by_type::by_type (token_type t)
-    : type (yytranslate_ (t))
+  D2Parser::by_kind::by_kind (token_kind_type t) YY_NOEXCEPT
+    : kind_ (yytranslate_ (t))
   {}
+
+
 
   inline
   void
-  D2Parser::by_type::clear ()
+  D2Parser::by_kind::clear () YY_NOEXCEPT
   {
-    type = empty_symbol;
+    kind_ = symbol_kind::S_YYEMPTY;
   }
 
   inline
   void
-  D2Parser::by_type::move (by_type& that)
+  D2Parser::by_kind::move (by_kind& that)
   {
-    type = that.type;
+    kind_ = that.kind_;
     that.clear ();
   }
 
   inline
-  int
-  D2Parser::by_type::type_get () const YY_NOEXCEPT
+  D2Parser::symbol_kind_type
+  D2Parser::by_kind::kind () const YY_NOEXCEPT
   {
-    return type;
+    return kind_;
   }
 
+
   inline
-  D2Parser::token_type
-  D2Parser::by_type::token () const YY_NOEXCEPT
+  D2Parser::symbol_kind_type
+  D2Parser::by_kind::type_get () const YY_NOEXCEPT
   {
-    // YYTOKNUM[NUM] -- (External) token number corresponding to the
-    // (internal) symbol number NUM (which must be that of a token).  */
-    static
-    const unsigned short
-    yytoken_number_[] =
-    {
-       0,   256,   257,   258,   259,   260,   261,   262,   263,   264,
-     265,   266,   267,   268,   269,   270,   271,   272,   273,   274,
-     275,   276,   277,   278,   279,   280,   281,   282,   283,   284,
-     285,   286,   287,   288,   289,   290,   291,   292,   293,   294,
-     295,   296,   297,   298,   299,   300,   301,   302,   303,   304,
-     305,   306,   307,   308,   309,   310,   311,   312,   313,   314,
-     315
-    };
-    return token_type (yytoken_number_[type]);
+    return this->kind ();
   }
+
 
 #line 14 "d2_parser.yy"
 } } // isc::d2
-#line 2298 "d2_parser.h"
-
+#line 2640 "d2_parser.h"
 
 
 

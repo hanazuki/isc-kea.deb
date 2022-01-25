@@ -8,7 +8,10 @@ AM_CPPFLAGS += -I$(top_srcdir)/src/bin -I$(top_builddir)/src/bin
 AM_CPPFLAGS += -DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/bin/netconf/tests\"
 AM_CPPFLAGS += -DCFG_EXAMPLES=\"$(abs_top_srcdir)/doc/examples/netconf\"
 AM_CPPFLAGS += -DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/bin/netconf/tests\"
-AM_CPPFLAGS += $(BOOST_INCLUDES) $(SYSREPO_INCLUDEDIR)
+AM_CPPFLAGS += -DSYNTAX_FILE=\"$(abs_srcdir)/../netconf_parser.yy\"
+AM_CPPFLAGS += $(BOOST_INCLUDES) $(CRYPTO_CFLAGS) $(CRYPTO_INCLUDES)
+AM_CPPFLAGS += $(SYSREPO_CPPFLAGS)
+AM_CPPFLAGS += $(SYSREPO_INCLUDEDIR)
 
 CLEANFILES = *.json *.log
 
@@ -44,7 +47,6 @@ netconf_unittests_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS)
 
 
 netconf_unittests_LDADD = $(top_builddir)/src/bin/netconf/libnetconf.la
-netconf_unittests_LDADD += $(top_builddir)/src/lib/http/libkea-http.la
 netconf_unittests_LDADD += $(top_builddir)/src/lib/process/testutils/libprocesstest.la
 netconf_unittests_LDADD += $(top_builddir)/src/lib/process/libkea-process.la
 netconf_unittests_LDADD += $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la
@@ -56,6 +58,7 @@ netconf_unittests_LDADD += $(top_builddir)/src/lib/yang/testutils/libyangtest.la
 netconf_unittests_LDADD += $(top_builddir)/src/lib/yang/libkea-yang.la
 #netconf_unittests_LDADD += $(top_builddir)/src/lib/stats/libkea-stats.la
 netconf_unittests_LDADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+netconf_unittests_LDADD += $(top_builddir)/src/lib/http/libkea-http.la
 #netconf_unittests_LDADD += $(top_builddir)/src/lib/dhcp/tests/libdhcptest.la
 netconf_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 netconf_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la

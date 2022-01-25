@@ -1,10 +1,11 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <netconf/netconf_config.h>
 #include <netconf/http_control_socket.h>
 #include <netconf/stdout_control_socket.h>
@@ -20,7 +21,10 @@
 #include <http/tests/response_test.h>
 #include <testutils/threaded_test.h>
 #include <testutils/sandbox.h>
+#include <yang/tests/sysrepo_setup.h>
+
 #include <gtest/gtest.h>
+
 #include <sstream>
 #include <thread>
 
@@ -32,6 +36,8 @@ using namespace isc::data;
 using namespace isc::http;
 using namespace isc::http::test;
 using namespace isc::test;
+
+using isc::yang::test::SysrepoSetup;
 
 namespace {
 
@@ -98,7 +104,7 @@ TEST(StdoutControlSocketTest, configTest) {
     StdoutControlSocketPtr scs(new StdoutControlSocket(cfg));
     ASSERT_TRUE(scs);
     ConstElementPtr answer;
-    ASSERT_NO_THROW(answer = scs->configTest(ConstElementPtr(), "foo"));
+    ASSERT_NO_THROW_LOG(answer = scs->configTest(ConstElementPtr(), "foo"));
 
     // Check answer.
     ASSERT_TRUE(answer);
@@ -117,7 +123,7 @@ TEST(StdoutControlSocketTest, configSet) {
     ASSERT_TRUE(tscs);
     ConstElementPtr json = Element::fromJSON("{ \"bar\": 1 }");
     ConstElementPtr answer;
-    ASSERT_NO_THROW(answer = tscs->configSet(json, "foo"));
+    ASSERT_NO_THROW_LOG(answer = tscs->configSet(json, "foo"));
 
     // Check answer.
     ASSERT_TRUE(answer);
@@ -141,11 +147,15 @@ public:
     /// @brief Constructor.
     UnixControlSocketTest()
         : ThreadedTest(), io_service_() {
+    }
+
+
+    void SetUp() override {
+        SysrepoSetup::cleanSharedMemory();
         removeUnixSocketFile();
     }
 
-    /// @brief Destructor.
-    virtual ~UnixControlSocketTest() {
+    void TearDown() override {
         if (thread_) {
             thread_->join();
             thread_.reset();
@@ -430,7 +440,7 @@ protected:
     /// @param request Pointer to the HTTP request.
     /// @return Pointer to the generated HTTP response.
     virtual HttpResponsePtr
-    createStockHttpResponse(const ConstHttpRequestPtr& request,
+    createStockHttpResponse(const HttpRequestPtr& request,
                             const HttpStatusCode& status_code) const {
         // Data is in the request context.
         HttpVersion http_version(request->context()->http_version_major_,
@@ -448,10 +458,10 @@ protected:
     /// @param request Pointer to the HTTP request.
     /// @return Pointer to an object representing HTTP response.
     virtual HttpResponsePtr
-    createDynamicHttpResponse(const ConstHttpRequestPtr& request) {
+    createDynamicHttpResponse(HttpRequestPtr request) {
         // Request must always be JSON.
-        ConstPostHttpRequestJsonPtr request_json =
-            boost::dynamic_pointer_cast<const PostHttpRequestJson>(request);
+        PostHttpRequestJsonPtr request_json =
+            boost::dynamic_pointer_cast<PostHttpRequestJson>(request);
         if (!request_json) {
             isc_throw(Unexpected, "request is not JSON");
         }
@@ -504,12 +514,12 @@ public:
 /// @brief Test fixture class for http control sockets.
 class HttpControlSocketTest : public ThreadedTest {
 public:
-    HttpControlSocketTest()
-        : ThreadedTest(), io_service_() {
+    void SetUp() override {
+        SysrepoSetup::cleanSharedMemory();
     }
 
-    /// @brief Destructor.
-    virtual ~HttpControlSocketTest() {
+    void TearDown() override {
+        SysrepoSetup::cleanSharedMemory();
         if (thread_) {
             thread_->join();
             thread_.reset();
@@ -567,7 +577,7 @@ public:
 
         // If the thread is ready to go, start the listener.
         if (listener_) {
-            ASSERT_NO_THROW(listener_->start());
+            ASSERT_NO_THROW_LOG(listener_->start());
         }
     }
 
@@ -588,7 +598,7 @@ public:
         // Thread has terminated. We can stop the HTTP
         // listener safely.
         if (listener_) {
-            ASSERT_NO_THROW(listener_->stop());
+            ASSERT_NO_THROW_LOG(listener_->stop());
         }
     }
 
@@ -597,12 +607,6 @@ public:
 
     /// @brief Pointer to listener.
     HttpListenerPtr listener_;
-
-    /// @brief Done flag (stopping thread).
-    bool done_;
-
-    /// @brief Finished flag (stopped thread).
-    bool finished_;
 };
 
 /// @brief Create the reflecting listener.
@@ -613,7 +617,7 @@ HttpControlSocketTest::createReflectListener() {
     listener_.reset(new
                 HttpListener(io_service_,
                              IOAddress(SERVER_ADDRESS), SERVER_PORT,
-                             factory,
+                             TlsContextPtr(), factory,
                              HttpListener::RequestTimeout(2000),
                              HttpListener::IdleTimeout(2000)));
 }
@@ -859,4 +863,4 @@ TEST_F(HttpControlSocketTest, partial) {
     stop();
 }
 
-}
+}  // namespace

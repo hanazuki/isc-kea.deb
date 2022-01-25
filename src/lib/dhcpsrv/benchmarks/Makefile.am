@@ -40,7 +40,7 @@ run_benchmarks_SOURCES += cql_lease_mgr_benchmark.cc
 run_benchmarks_SOURCES += cql_host_data_source_benchmark.cc
 endif
 
-run_benchmarks_CPPFLAGS  = $(AM_CPPFLAGS) $(BENCHMARK_INCLUDES) $(BENCHMARK_CPPFLAGS) -Wno-error=overloaded-virtual
+run_benchmarks_CPPFLAGS  = $(AM_CPPFLAGS) $(BENCHMARK_INCLUDES) $(BENCHMARK_CPPFLAGS)
 
 if HAVE_MYSQL
 run_benchmarks_CPPFLAGS += $(MYSQL_CPPFLAGS)
@@ -77,6 +77,7 @@ run_benchmarks_LDADD += $(top_builddir)/src/lib/eval/libkea-eval.la
 run_benchmarks_LDADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
 run_benchmarks_LDADD += $(top_builddir)/src/lib/stats/libkea-stats.la
 run_benchmarks_LDADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+run_benchmarks_LDADD += $(top_builddir)/src/lib/http/libkea-http.la
 run_benchmarks_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 run_benchmarks_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 

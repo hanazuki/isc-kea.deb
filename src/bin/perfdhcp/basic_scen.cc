@@ -1,11 +1,12 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-#include <perfdhcp/basic_scen.h>
+#include <config.h>
 
+#include <perfdhcp/basic_scen.h>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 
@@ -139,7 +140,8 @@ BasicScen::run() {
     for (;;) {
         // Calculate number of packets to be sent to stay
         // catch up with rate.
-        uint64_t packets_due = basic_rate_control_.getOutboundMessageCount();
+        uint64_t packets_due =
+            basic_rate_control_.getOutboundMessageCount(!tc_.exit_time_.is_not_a_date_time());
         if ((packets_due == 0) && options_.testDiags('i')) {
             stats_mgr.incrementCounter("shortwait");
         }
@@ -171,11 +173,11 @@ BasicScen::run() {
         // Renew packets should be sent to catch up with a desired rate.
         if (options_.getRenewRate() != 0) {
             uint64_t renew_packets_due =
-                renew_rate_control_.getOutboundMessageCount();
+                renew_rate_control_.getOutboundMessageCount(!tc_.exit_time_.is_not_a_date_time());
 
             // Send multiple renews to satisfy the desired rate.
             if (options_.getIpVersion() == 4) {
-                tc_.sendMultipleRequests(renew_packets_due);
+                tc_.sendMultipleMessages4(DHCPREQUEST, renew_packets_due);
             } else {
                 tc_.sendMultipleMessages6(DHCPV6_RENEW, renew_packets_due);
             }
@@ -183,11 +185,16 @@ BasicScen::run() {
 
         // If -F<release-rate> option was specified we have to check how many
         // Release messages should be sent to catch up with a desired rate.
-        if ((options_.getIpVersion() == 6) && (options_.getReleaseRate() != 0)) {
+        if (options_.getReleaseRate() != 0) {
             uint64_t release_packets_due =
-                release_rate_control_.getOutboundMessageCount();
+                release_rate_control_.getOutboundMessageCount(!tc_.exit_time_.is_not_a_date_time());
             // Send Release messages.
-            tc_.sendMultipleMessages6(DHCPV6_RELEASE, release_packets_due);
+
+            if (options_.getIpVersion() == 4) {
+                tc_.sendMultipleMessages4(DHCPRELEASE, release_packets_due);
+            } else {
+                tc_.sendMultipleMessages6(DHCPV6_RELEASE, release_packets_due);
+            }
         }
 
         // Report delay means that user requested printing number
@@ -234,12 +241,16 @@ BasicScen::run() {
         tc_.printTemplates();
     }
 
+    // Print any received leases.
+    if (options_.testDiags('l')) {
+        stats_mgr.printLeases();
+    }
+
     int ret_code = 0;
     // Check if any packet drops occurred.
     ret_code = stats_mgr.droppedPackets() ? 3 : 0;
     return (ret_code);
 }
 
-
-}
-}
+}  // namespace perfdhcp
+}  // namespace isc

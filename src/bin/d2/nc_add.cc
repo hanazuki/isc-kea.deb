@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,15 +6,14 @@
 
 #include <config.h>
 
-#include <d2/d2_log.h>
-#include <d2/d2_cfg_mgr.h>
 #include <d2/nc_add.h>
-
-#include <boost/function.hpp>
-#include <boost/bind.hpp>
+#include <d2srv/d2_cfg_mgr.h>
+#include <d2srv/d2_log.h>
 
 #include <util/buffer.h>
 #include <dns/rdataclass.h>
+
+#include <functional>
 
 namespace isc {
 namespace d2 {
@@ -80,30 +79,30 @@ NameAddTransaction::defineStates() {
 
     // Define NameAddTransaction states.
     defineState(READY_ST, "READY_ST",
-             boost::bind(&NameAddTransaction::readyHandler, this));
+             std::bind(&NameAddTransaction::readyHandler, this));
 
     defineState(SELECTING_FWD_SERVER_ST, "SELECTING_FWD_SERVER_ST",
-             boost::bind(&NameAddTransaction::selectingFwdServerHandler, this));
+             std::bind(&NameAddTransaction::selectingFwdServerHandler, this));
 
     defineState(SELECTING_REV_SERVER_ST, "SELECTING_REV_SERVER_ST",
-             boost::bind(&NameAddTransaction::selectingRevServerHandler, this));
+             std::bind(&NameAddTransaction::selectingRevServerHandler, this));
 
     defineState(ADDING_FWD_ADDRS_ST, "ADDING_FWD_ADDRS_ST",
-             boost::bind(&NameAddTransaction::addingFwdAddrsHandler, this));
+             std::bind(&NameAddTransaction::addingFwdAddrsHandler, this));
 
     defineState(REPLACING_FWD_ADDRS_ST, "REPLACING_FWD_ADDRS_ST",
-             boost::bind(&NameAddTransaction::replacingFwdAddrsHandler, this));
+             std::bind(&NameAddTransaction::replacingFwdAddrsHandler, this));
 
     defineState(REPLACING_REV_PTRS_ST, "REPLACING_REV_PTRS_ST",
-             boost::bind(&NameAddTransaction::replacingRevPtrsHandler, this));
+             std::bind(&NameAddTransaction::replacingRevPtrsHandler, this));
 
     defineState(PROCESS_TRANS_OK_ST, "PROCESS_TRANS_OK_ST",
-             boost::bind(&NameAddTransaction::processAddOkHandler, this));
+             std::bind(&NameAddTransaction::processAddOkHandler, this));
 
     defineState(PROCESS_TRANS_FAILED_ST, "PROCESS_TRANS_FAILED_ST",
-             boost::bind(&NameAddTransaction::processAddFailedHandler, this));
-
+             std::bind(&NameAddTransaction::processAddFailedHandler, this));
 }
+
 void
 NameAddTransaction::verifyStates() {
     // Call superclass implementation first to verify its states. These are
@@ -116,9 +115,9 @@ NameAddTransaction::verifyStates() {
     NameChangeTransaction::verifyStates();
 
     // Verify NameAddTransaction states by attempting to fetch them.
-    getState(ADDING_FWD_ADDRS_ST);
-    getState(REPLACING_FWD_ADDRS_ST);
-    getState(REPLACING_REV_PTRS_ST);
+    getStateInternal(ADDING_FWD_ADDRS_ST);
+    getStateInternal(REPLACING_FWD_ADDRS_ST);
+    getStateInternal(REPLACING_REV_PTRS_ST);
 }
 
 void
@@ -173,28 +172,25 @@ NameAddTransaction::selectingFwdServerHandler() {
 void
 NameAddTransaction::addingFwdAddrsHandler() {
     if (doOnEntry()) {
-        // Clear the request on initial transition. This allows us to reuse
-        // the request on retries if necessary.
-        clearDnsUpdateRequest();
+        // Clear the update attempts count on initial transition.
+        clearUpdateAttempts();
     }
 
     switch(getNextEvent()) {
     case SERVER_SELECTED_EVT:
-        if (!getDnsUpdateRequest()) {
-            // Request hasn't been constructed yet, so build it.
-            try {
-                buildAddFwdAddressRequest();
-            } catch (const std::exception& ex) {
-                // While unlikely, the build might fail if we have invalid
-                // data.  Should that be the case, we need to fail the
-                // transaction.
-                LOG_ERROR(d2_to_dns_logger, DHCP_DDNS_FORWARD_ADD_BUILD_FAILURE)
-                          .arg(getRequestId())
-                          .arg(getNcr()->toText())
-                          .arg(ex.what());
-                transition(PROCESS_TRANS_FAILED_ST, UPDATE_FAILED_EVT);
-                break;
-            }
+        try {
+            clearDnsUpdateRequest();
+            buildAddFwdAddressRequest();
+        } catch (const std::exception& ex) {
+            // While unlikely, the build might fail if we have invalid
+            // data.  Should that be the case, we need to fail the
+            // transaction.
+            LOG_ERROR(d2_to_dns_logger, DHCP_DDNS_FORWARD_ADD_BUILD_FAILURE)
+                .arg(getRequestId())
+                .arg(getNcr()->toText())
+                .arg(ex.what());
+            transition(PROCESS_TRANS_FAILED_ST, UPDATE_FAILED_EVT);
+            break;
         }
 
         // Call sendUpdate() to initiate the async send. Note it also sets
@@ -288,29 +284,26 @@ NameAddTransaction::addingFwdAddrsHandler() {
 void
 NameAddTransaction::replacingFwdAddrsHandler() {
     if (doOnEntry()) {
-        // Clear the request on initial transition. This allows us to reuse
-        // the request on retries if necessary.
-        clearDnsUpdateRequest();
+        // Clear the update attempts count on initial transition.
+        clearUpdateAttempts();
     }
 
     switch(getNextEvent()) {
     case FQDN_IN_USE_EVT:
     case SERVER_SELECTED_EVT:
-        if (!getDnsUpdateRequest()) {
-            // Request hasn't been constructed yet, so build it.
-            try {
-                buildReplaceFwdAddressRequest();
-            } catch (const std::exception& ex) {
-                // While unlikely, the build might fail if we have invalid
-                // data.  Should that be the case, we need to fail the
-                // transaction.
-                LOG_ERROR(d2_to_dns_logger, DHCP_DDNS_FORWARD_REPLACE_BUILD_FAILURE)
-                          .arg(getRequestId())
-                          .arg(getNcr()->toText())
-                          .arg(ex.what());
-                transition(PROCESS_TRANS_FAILED_ST, UPDATE_FAILED_EVT);
-                break;
-            }
+        try {
+            clearDnsUpdateRequest();
+            buildReplaceFwdAddressRequest();
+        } catch (const std::exception& ex) {
+            // While unlikely, the build might fail if we have invalid
+            // data.  Should that be the case, we need to fail the
+            // transaction.
+            LOG_ERROR(d2_to_dns_logger, DHCP_DDNS_FORWARD_REPLACE_BUILD_FAILURE)
+                .arg(getRequestId())
+                .arg(getNcr()->toText())
+                .arg(ex.what());
+            transition(PROCESS_TRANS_FAILED_ST, UPDATE_FAILED_EVT);
+            break;
         }
 
         // Call sendUpdate() to initiate the async send. Note it also sets
@@ -440,28 +433,25 @@ NameAddTransaction::selectingRevServerHandler() {
 void
 NameAddTransaction::replacingRevPtrsHandler() {
     if (doOnEntry()) {
-        // Clear the request on initial transition. This allows us to reuse
-        // the request on retries if necessary.
-        clearDnsUpdateRequest();
+        // Clear the update attempts count on initial transition.
+        clearUpdateAttempts();
     }
 
     switch(getNextEvent()) {
     case SERVER_SELECTED_EVT:
-        if (!getDnsUpdateRequest()) {
-            // Request hasn't been constructed yet, so build it.
-            try {
-                buildReplaceRevPtrsRequest();
-            } catch (const std::exception& ex) {
-                // While unlikely, the build might fail if we have invalid
-                // data.  Should that be the case, we need to fail the
-                // transaction.
-                LOG_ERROR(d2_to_dns_logger, DHCP_DDNS_REVERSE_REPLACE_BUILD_FAILURE)
-                          .arg(getRequestId())
-                          .arg(getNcr()->toText())
-                          .arg(ex.what());
-                transition(PROCESS_TRANS_FAILED_ST, UPDATE_FAILED_EVT);
-                break;
-            }
+        try {
+            clearDnsUpdateRequest();
+            buildReplaceRevPtrsRequest();
+        } catch (const std::exception& ex) {
+            // While unlikely, the build might fail if we have invalid
+            // data.  Should that be the case, we need to fail the
+            // transaction.
+            LOG_ERROR(d2_to_dns_logger, DHCP_DDNS_REVERSE_REPLACE_BUILD_FAILURE)
+                .arg(getRequestId())
+                .arg(getNcr()->toText())
+                .arg(ex.what());
+            transition(PROCESS_TRANS_FAILED_ST, UPDATE_FAILED_EVT);
+            break;
         }
 
         // Call sendUpdate() to initiate the async send. Note it also sets

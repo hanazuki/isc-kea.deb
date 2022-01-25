@@ -17,8 +17,8 @@ useful when debugging a problem.
 
 The logging system in Kea is configured through the loggers entry in the
 server section of your configuration file. In previous Kea releases this
-entry was in an independent Logging section; this is still supported for
-backward compatibility.
+entry was in an independent Logging section; this was still supported
+for backward compatibility until Kea 1.7.9 included.
 
 Loggers
 -------
@@ -139,6 +139,11 @@ libraries), or hooks libraries (open source or premium).
    |                                  |                        | the Control Agent              |
    |                                  |                        | inherit the settings           |
    |                                  |                        | from this logger.              |
+   +----------------------------------+------------------------+--------------------------------+
+   | ``kea-ctrl-agent.auth``          | core                   | A logger which covers          |
+   |                                  |                        | access control details, such as|
+   |                                  |                        | a result of the basic HTTP     |
+   |                                  |                        | authentication.                |
    +----------------------------------+------------------------+--------------------------------+
    | ``kea-ctrl-agent.http``          | core                   | A logger which                 |
    |                                  |                        | outputs log messages           |
@@ -464,6 +469,12 @@ libraries), or hooks libraries (open source or premium).
    |                                  |                        | is no specialized              |
    |                                  |                        | logger provided.               |
    +----------------------------------+------------------------+--------------------------------+
+   | ``kea-dhcp4.lease-query-hooks``, | libdhcp_lease_query    | This logger is used            |
+   | ``kea-dhcp6.lease-query-hooks``  | hook library           | to log messages                |
+   |                                  |                        | related to the                 |
+   |                                  |                        | operation of the               |
+   |                                  |                        | Leasequery hooks library       |
+   +----------------------------------+------------------------+--------------------------------+
 
 Note that user-defined hook libraries should not use any of the loggers
 mentioned above, but should instead define new loggers with names that
@@ -520,6 +531,8 @@ logger are inhibited.
    please make sure that the ``kea_verbose`` value is set to "no" within
    the ``keactrl`` configuration.
 
+.. _debuglevel:
+
 The debuglevel (integer) Logger
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
@@ -544,7 +557,7 @@ output), ``stderr`` (messages are printed on stderr), ``syslog``
 (messages are logged to syslog using a specified name). Any other value is
 interpreted as a filename to which messages should be written.
 
-The flush (true of false) Option
+The flush (true or false) Option
 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
 
 Flush buffers after each log message. Doing this will reduce performance
@@ -592,14 +605,14 @@ The pattern (string) Option
 This option can be used to specify the layout pattern of log messages for
 a logger. Kea logging is implemented using the Log4Cplus library and whose
 output formatting is based, conceptually, on the printf formatting from C
-and is discussed in detail in the the next section
+and is discussed in detail in the next section
 :ref:`logging-message-format`.
 
 Each output type (stdout, file, or syslog) has a default ``pattern`` which
 describes the content of its log messages. This parameter can be used to
-specifiy your own pattern.  The pattern for each logger is governed
-individually so each configured logger can have it's own pattern. Omitting
-the ``pattern`` parameter or setting it to an empty string, "", will cause
+specify a desired pattern.  The pattern for each logger is governed
+individually so each configured logger can have its own pattern. Omitting
+the ``pattern`` parameter or setting it to an empty string, "", causes
 Kea to use the default pattern for that logger's output type.
 
 In addition to the log text itself, the default patterns used for ``stdout``
@@ -636,46 +649,50 @@ below:
 
 ::
 
-    "%D{%Y-%m-%d %H:%M:%S.%q} %-5p [%c/%i] %m\n";
+    "%D{%Y-%m-%d %H:%M:%S.%q} %-5p [%c/%i.%t] %m\n";
 
-and a typical log produced by this pattern would look somethng like this:
+and a typical log produced by this pattern looks something like this:
 
 ::
 
-    2019-08-05 14:27:45.871 DEBUG [kea-dhcp4.dhcpsrv/8475] DHCPSRV_TIMERMGR_START_TIMER starting timer: reclaim-expired-leases
+    2019-08-05 14:27:45.871 DEBUG [kea-dhcp4.dhcpsrv/8475.12345] DHCPSRV_TIMERMGR_START_TIMER starting timer: reclaim-expired-leases
 
 That breaks down as like so:
 
-- %D{%Y-%m-%d %H:%M:%S.%q}
+  - ``%D{%Y-%m-%d %H:%M:%S.%q}``
     '%D' is the date and time in local time that the log message is generated,
     while everything between the curly braces, '{}' are date and time components.
     From the example log above this produces:
     ``2019-08-05 14:27:45.871``
 
-- %-5p
+  - ``%-5p``
     The severity of message, output as a minimum of five characters,
     using right-padding with spaces. In our example log: ``DEBUG``
 
-- %c
+  - ``%c``
     The log source. This includes two elements: the Kea process generating the
     message, in this case, ``kea-dhcp4``; and the component within the program
     from which the message originated, ``dhcpsrv`` (e.g.  the name of the
     library used by DHCP server implementations).
 
-- %i
+  - ``%i``
     The process ID. From the example log: ``8475``
 
-- %m
-    The log message itself. Keg log messages all begin with a message
-    identifier followed by arbitrary log text. Every message in Kea has
-    a unique identifier, which can be used as an index to the
-    `Kea Messages Manual <https://jenkins.isc.org/job/Kea_doc/messages/kea-messages.html>`__,
-    where more information can be obtained.  In our example log above, the
-    identifier is ``DHCPSRV_TIMERMGR_START_TIMER``.   The log text is typically
-    a brief description detailing the condition that caused the message to be
-    logged. In our example, the information logged,
-    ``starting timer: reclaim-expired-leases``, explains that the timer for
-    the expired lease reclamation cycle has been started.
+  - ``%t``
+    The thread ID. From the example log: ``12345``.
+    Note the format of the thread ID is OS dependent: e.g. on some systems
+    it is an address so it is displayed in hexadecimal.
+
+  - ``%m``
+    The log message itself. Kea log messages all begin with a message identifier
+    followed by arbitrary log text. Every message in Kea has a unique
+    identifier, which can be used as an index to the :ref:`kea-messages`, where
+    more information can be obtained. In our example log above, the identifier
+    is ``DHCPSRV_TIMERMGR_START_TIMER``. The log text is typically a brief
+    description detailing the condition that caused the message to be logged. In
+    our example, the information logged,
+    ``starting timer: reclaim-expired-leases``, explains that the timer for the
+    expired lease reclamation cycle has been started.
 
 .. Warning::
 
@@ -699,7 +716,7 @@ The default for pattern for syslog output is as follows:
 
 ::
 
-    "%-5p [%c] %m\n";
+    "%-5p [%c.%t] %m\n";
 
 You can see that it omits the date and time as well the process ID as this
 information is typically output by syslog.  Note that Kea uses the pattern
@@ -733,7 +750,7 @@ console using standard output.
    }
 
 In this second example, we want to store debug log messages in a file
-that is at most 2MB and keep up to eight copies of old logfiles. Once the
+that is at most 2MB and keep up to eight copies of old log files. Once the
 logfile grows to 2MB, it will be renamed and a new file will be created.
 
 ::
@@ -782,6 +799,7 @@ The following environment variables can be used to control the behavior
 of logging during startup:
 
 KEA_LOCKFILE_DIR
+
    Specifies a directory where the logging system should create its lock
    file. If not specified, it is prefix/var/run/kea, where "prefix"
    defaults to /usr/local. This variable must not end with a slash.
@@ -790,19 +808,54 @@ KEA_LOCKFILE_DIR
    the same file.
 
 KEA_LOGGER_DESTINATION
+
    Specifies logging output. There are several special values:
 
-   stdout
-      Log to standard output.
+   ``stdout``
+   Log to standard output.
 
-   stderr
-      Log to standard error.
+   ``stderr``
+   Log to standard error.
 
-   syslog[:fac]
-      Log via syslog. The optional fac (which is separated from the word
-      "syslog" by a colon) specifies the facility to be used for the log
-      messages. Unless specified, messages will be logged using the
-      facility "local0".
+   ``syslog[:fac]``
+   Log via syslog. The optional fac (which is separated from the word
+   "syslog" by a colon) specifies the facility to be used for the log
+   messages. Unless specified, messages will be logged using the
+   facility "local0".
 
    Any other value is treated as a name of the output file. If not
    specified otherwise, Kea will log to standard output.
+
+
+Logging levels
+==============
+
+All Kea servers follow the overall intention to strike a balance between letting the user
+know what is going on and not overloading the logging system with too much information as that
+could easily be used as a Denial Of Service attack.
+
+A wealth of information is available on debug level. Opposed to ``FATAL``, ``ERROR``, ``WARN`` and
+``INFO`` levels, ``DEBUG`` has additional debuglevel parameters. The following table offers a rough
+idea of what kind of information is logged on which level. Sadly, that information is not very
+consistent. Future Kea versions may attempt to improve consistency in this regard. Also,
+keep in mind that sometimes the circumstances determine if an information is logged on higher
+or lower level. For example, if packet is being dropped due to configured classification, that
+is an execution of the configured policy and would be logged on debuglevel 15. However, if the
+packet is dropped due to an exception being thrown, it is much more important, as it may indicate
+software bug, serious problems with memory, database connectivity and similar. As such it may
+be logged on much higher levels, such as ``WARN`` or even ``ERROR``.
+
+- 0 - singular messages printed during start or shutdown of the server.
+- 10 - logs information about received API commands.
+- 15 - information about reasons why a packet was dropped.
+- 40 - a lot of tracing information, including processing decisions, results
+  of expression evaluations and more.
+- 45 - similar to level 40, but with more details, e.g. the subnet being
+  selected for incoming packet.
+- 50 - evaluations of expressions, status received from hook points, lease
+  processing, packet processing details, including unpacking, packing, sending etc.
+- 55 - includes all details available, including full packet contents
+  with all options printed.
+
+The debug levels apply only to messages logged on ``DEBUG``. The debug levels are configured using
+the ``debuglevel`` option. See Section :ref:`debuglevel` for details.

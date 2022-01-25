@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -68,7 +68,7 @@ protected:
     /// @brief Mutex used to synchronize threads.
     std::mutex mutex_;
 
-    /// Condtional variable for thread waits.
+    /// Conditional variable for thread waits.
     std::condition_variable condvar_;
 
     /// Flag indicating that the thread is ready.

@@ -73,7 +73,7 @@ public:
     ///        used.  Note: although -1 is a valid argument value for
     ///        @ref isc::hooks::CalloutManager::setLibraryIndex(), in this class
     ///        it is used as a sentinel to indicate that the library index in
-    ///        @ref isc::util::CalloutManager should not be set or reset.
+    ///        @ref isc::hooks::CalloutManager should not be set or reset.
     LibraryHandle(CalloutManager& manager, int index = -1)
         : callout_manager_(manager), index_(index) {}
 
@@ -194,11 +194,18 @@ public:
     isc::data::ConstElementPtr
     getParameter(const std::string& name);
 
+    /// @brief Get configuration parameter common code.
+    ///
+    /// @return configuration parameters.
+    isc::data::ConstElementPtr getParameters();
+
     /// @brief Returns names of configuration parameters for the library.
     ///
     /// This method returns a vector of strings reflecting names of
     /// configuration parameters specified in the configuration file.
     ///
+    /// @note: kept for backward compatibility.
+    /// @return a vector with parameter entry names.
     std::vector<std::string> getParameterNames();
 
 private:
@@ -220,11 +227,6 @@ private:
     ///
     /// @param Unused - should be the object to copy.
     LibraryHandle& operator=(const LibraryHandle&);
-
-    /// @brief Get configuration parameter common code.
-    ///
-    /// @return configuration parameters.
-    isc::data::ConstElementPtr getParameters();
 
     /// Back pointer to the collection object for the library
     CalloutManager& callout_manager_;

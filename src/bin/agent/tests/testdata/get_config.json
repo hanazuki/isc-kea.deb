@@ -1,5 +1,18 @@
 {
     "Control-agent": {
+        "authentication": {
+            "clients": [
+                {
+                    "password": "1234",
+                    "user": "admin",
+                    "user-context": {
+                        "comment": "admin is authorized"
+                    }
+                }
+            ],
+            "realm": "kea-control-agent",
+            "type": "basic"
+        },
         "control-sockets": {
             "d2": {
                 "socket-name": "/tmp/kea-ddns-ctrl-socket",
@@ -9,9 +22,11 @@
                 }
             },
             "dhcp4": {
-                "comment": "socket to DHCP4 server",
                 "socket-name": "/tmp/kea4-ctrl-socket",
-                "socket-type": "unix"
+                "socket-type": "unix",
+                "user-context": {
+                    "comment": "socket to DHCP4 server"
+                }
             },
             "dhcp6": {
                 "socket-name": "/tmp/kea6-ctrl-socket",

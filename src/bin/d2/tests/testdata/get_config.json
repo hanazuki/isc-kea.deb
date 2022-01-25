@@ -8,7 +8,6 @@
         "forward-ddns": {
             "ddns-domains": [
                 {
-                    "comment": "DdnsDomain example",
                     "dns-servers": [
                         {
                             "hostname": "",
@@ -17,7 +16,10 @@
                         }
                     ],
                     "key-name": "d2.md5.key",
-                    "name": "four.example.com."
+                    "name": "four.example.com.",
+                    "user-context": {
+                        "comment": "DdnsDomain example"
+                    }
                 },
                 {
                     "dns-servers": [
@@ -31,6 +33,14 @@
                 }
             ]
         },
+        "hooks-libraries": [
+            {
+                "library": "/opt/local/ddns-server-commands.so",
+                "parameters": {
+                    "param1": "foo"
+                }
+            }
+        ],
         "ip-address": "127.0.0.1",
         "loggers": [
             {

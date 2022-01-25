@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,10 +18,6 @@
 namespace isc {
 namespace cryptolink {
 
-/// @brief Decode the HashAlgorithm enum into a name usable by Botan
-///
-/// @param algorithm algorithm to be converted
-/// @return text representation of the algorithm name
 const std::string
 btn::getHashAlgorithmName(HashAlgorithm algorithm) {
     switch (algorithm) {

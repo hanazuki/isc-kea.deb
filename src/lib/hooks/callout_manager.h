@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -170,7 +170,7 @@ public:
 
     /// @brief De-Register a callout on a hook for the current library
     ///
-    /// Searches through the functions registered by the the current library
+    /// Searches through the functions registered by the current library
     /// with the named hook and removes all entries matching the
     /// callout.
     ///
@@ -364,7 +364,7 @@ public:
 
 private:
 
-    /// @brief This method checks whether the hook_vector_ size is suffucient
+    /// @brief This method checks whether the hook_vector_ size is sufficient
     ///        and extends it if necessary.
     ///
     /// The problem is as follows: some hooks are initialized statically

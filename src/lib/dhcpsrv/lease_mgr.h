@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -143,13 +143,13 @@ public:
     /// The query created will return statistics for a single subnet
     ///
     /// @param subnet_id id of the subnet for which stats are desired
-    /// @throw BadValue if sunbet_id given is 0.
+    /// @throw BadValue if subnet_id given is 0.
     LeaseStatsQuery(const SubnetID& subnet_id);
 
     /// @brief Constructor to query for the stats for a range of subnets
     ///
     /// The query created will return statistics for the inclusive range of
-    /// subnets described by first and last sunbet IDs.
+    /// subnets described by first and last subnet IDs.
     ///
     /// @param first_subnet_id first subnet in the range of subnets
     /// @param last_subnet_id last subnet in the range of subnets
@@ -310,20 +310,6 @@ public:
     ///
     /// @return lease collection
     virtual Lease4Collection getLease4(const ClientId& clientid) const = 0;
-
-    /// @brief Returns existing IPv4 lease for a given client identifier,
-    /// HW address and subnet identifier.
-    ///
-    /// @todo Consider whether this function is needed or not. In the basic
-    /// DHCPv4 server implementation it is not used by the allocation engine.
-    ///
-    /// @param client_id A client identifier.
-    /// @param hwaddr Hardware address.
-    /// @param subnet_id A subnet identifier.
-    ///
-    /// @return A pointer to the lease or NULL if the lease is not found.
-    virtual Lease4Ptr getLease4(const ClientId& client_id, const HWAddr& hwaddr,
-                                SubnetID subnet_id) const = 0;
 
     /// @brief Returns existing IPv4 lease for specified client-id
     ///
@@ -587,10 +573,8 @@ public:
     /// per-subnet:
     /// - assigned-addresses
     /// - declined-addresses
-    /// - declined-reclaimed-addresses (reset to zero)
     /// global:
     /// - declined-addresses
-    /// - declined-reclaimed-addresses (reset to zero)
     ///
     /// It invokes the virtual method, startLeaseStatsQuery4(), which
     /// returns an instance of an LeaseStatsQuery.  The query
@@ -642,13 +626,13 @@ public:
     ///
     /// This method recalculates the following statistics:
     /// per-subnet:
-    /// - assigned-addresses
+    /// - assigned-nas
     /// - declined-addresses
-    /// - declined-reclaimed-addresses (reset to zero)
     /// - assigned-pds
     /// global:
+    /// - assigned-nas
     /// - declined-addresses
-    /// - declined-reclaimed-addresses (reset to zero)
+    /// - assigned-pds
     ///
     /// It invokes the virtual method, startLeaseStatsQuery6(), which
     /// returns an instance of an LeaseStatsQuery.  The query contains
@@ -763,6 +747,21 @@ public:
     /// support transactions, this is a no-op.
     virtual void rollback() = 0;
 
+    /// @brief Sets IO service to be used by the Lease Manager.
+    ///
+    /// @param io_service IOService object, used for all ASIO operations.
+    static void setIOService(const isc::asiolink::IOServicePtr& io_service) {
+        io_service_ = io_service;
+    }
+
+    /// @brief Returns pointer to the IO service.
+    static isc::asiolink::IOServicePtr& getIOService() {
+        return (io_service_);
+    }
+
+private:
+    /// The IOService object, used for all ASIO operations.
+    static isc::asiolink::IOServicePtr io_service_;
 };
 
 }  // namespace dhcp

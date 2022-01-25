@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -635,6 +635,16 @@ public:
         return (getCollection());
     }
 
+    ConstHostCollection getPage4(size_t&, uint64_t,
+                                 const HostPageSize&) const {
+        return (getCollection());
+    }
+
+    ConstHostCollection getPage6(size_t&, uint64_t,
+                                 const HostPageSize&) const {
+        return (getCollection());
+    }
+
     ConstHostCollection getAll4(const IOAddress&) const {
         return (getCollection());
     }
@@ -648,6 +658,11 @@ public:
         return (getOne());
     }
 
+    ConstHostCollection
+    getAll4(const SubnetID&, const asiolink::IOAddress&) const {
+        return (getCollection());
+    }
+
     ConstHostPtr get6(const SubnetID&, const Host::IdentifierType&,
                       const uint8_t*, const size_t) const {
         return (getOne());
@@ -659,6 +674,11 @@ public:
 
     ConstHostPtr get6(const SubnetID&, const IOAddress&) const {
         return (getOne());
+    }
+
+    ConstHostCollection
+    getAll6(const SubnetID&, const IOAddress&) const {
+        return (getCollection());
     }
 
     void add(const HostPtr&) {
@@ -680,6 +700,10 @@ public:
 
     std::string getType() const {
         return ("one");
+    }
+
+    bool setIPReservationsUnique(const bool) {
+        return (true);
     }
 
     /// Specific methods

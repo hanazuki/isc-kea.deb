@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,21 +10,26 @@
 #include <communication_state.h>
 #include <ha_config.h>
 #include <ha_server_type.h>
+#include <lease_update_backlog.h>
 #include <query_filter.h>
+#include <asiolink/asio_wrapper.h>
 #include <asiolink/io_service.h>
+#include <asiolink/tls_socket.h>
 #include <cc/data.h>
+#include <config/cmd_http_listener.h>
 #include <dhcp/pkt4.h>
 #include <http/response.h>
-#include <dhcp/pkt4.h>
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/network_state.h>
 #include <hooks/parking_lots.h>
 #include <http/client.h>
 #include <util/state_model.h>
+
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
 #include <functional>
 #include <map>
+#include <mutex>
 #include <vector>
 
 namespace isc {
@@ -47,7 +52,7 @@ public:
     /// Lease database synchronization failed.
     static const int HA_SYNCING_FAILED_EVT = SM_DERIVED_EVENT_MIN + 3;
 
-    /// Lease database synchroniation succeeded.
+    /// Lease database synchronization succeeded.
     static const int HA_SYNCING_SUCCEEDED_EVT = SM_DERIVED_EVENT_MIN + 4;
 
     /// ha-maintenance-notify command received.
@@ -59,6 +64,10 @@ public:
     /// ha-maintenance-cancel command received.
     static const int HA_MAINTENANCE_CANCEL_EVT = SM_DERIVED_EVENT_MIN + 7;
 
+    /// The heartbeat command failed after receiving ha-sync-complete-notify
+    /// command from the partner.
+    static const int HA_SYNCED_PARTNER_UNAVAILABLE_EVT = SM_DERIVED_EVENT_MIN + 8;
+
     /// Control result returned in response to ha-maintenance-notify.
     static const int HA_CONTROL_RESULT_MAINTENANCE_NOT_ALLOWED = 1001;
 
@@ -69,7 +78,8 @@ protected:
     ///
     /// The first argument indicates if the operation passed (when true).
     /// The second argument holds error message.
-   typedef std::function<void(const bool, const std::string&)> PostRequestCallback;
+    /// The third argument holds control status returned.
+   typedef std::function<void(const bool, const std::string&, const int)> PostRequestCallback;
 
     /// @brief Callback invoked when lease database synchronization is complete.
     ///
@@ -84,15 +94,25 @@ public:
 
     /// @brief Constructor.
     ///
+    /// It clears the DHCP state using origin HA internal command and starts the
+    /// state model in waiting state.  Creates and starts the client and the
+    /// listener (if one).
+    ///
     /// @param io_service Pointer to the IO service used by the DHCP server.
     /// @param config Parsed HA hook library configuration.
-    /// @param network_state Objec holding state of the DHCP service
+    /// @param network_state Object holding state of the DHCP service
     /// (enabled/disabled).
     /// @param server_type Server type, i.e. DHCPv4 or DHCPv6 server.
     HAService(const asiolink::IOServicePtr& io_service,
               const dhcp::NetworkStatePtr& network_state,
               const HAConfigPtr& config,
               const HAServerType& server_type = HAServerType::DHCPv4);
+
+    /// @brief Destructor.
+    ///
+    /// Stops the client and listener (if one). It clears the DHCP
+    /// state using origin HA internal command.
+    virtual ~HAService();
 
     /// @brief Returns HA server type used in object construction.
     HAServerType getServerType() const {
@@ -121,6 +141,35 @@ public:
     /// This handler disables DHCP service on the first pass. It is
     /// no-op during all subsequent passes.
     void backupStateHandler();
+
+    /// @brief Handler for the "communication-recovery" state.
+    ///
+    /// This is a handler invoked for the active servers running in
+    /// the load-balancing mode. A primary or secondary server may
+    /// transition into this state when it detects that the
+    /// communication with its partner is failing.
+    ///
+    /// If the communication is resumed before the server transitions
+    /// to the partner-down state, the server will transition back to
+    /// the load-balancing state.
+    ///
+    /// In the communication-recovery state the server remains
+    /// responsive to the DHCP clients but does not send lease updates
+    /// to the partner. Instead, it collects the lease updates and
+    /// tries to send them in bulk when it returns to the
+    /// load-balancing state.
+    ///
+    /// Transitioning into this state is only enabled when delayed-updates-limit
+    /// is non-zero.
+    ///
+    /// A server running in the hot-standby mode is never allowed to
+    /// enter this state. In this mode, even a short communication failure
+    /// may cause the primary server to transition to the partner-down
+    /// state. Consequently, two servers would be responding to
+    /// DHCP queries, possibly allocating the same addresses to two
+    /// different clients. This doesn't occur in load-balancing mode
+    /// because the address pools are required to be split.
+    void communicationRecoveryHandler();
 
     /// @brief Handler for the "hot-standby" and "load-balancing"
     /// states.
@@ -211,6 +260,15 @@ public:
     /// offline partner.
     void partnerInMaintenanceStateHandler();
 
+    /// @brief Handler for "passive-backup" state.
+    ///
+    /// This handler is invoked for the server entering the "passive-backup"
+    /// state. The primary server enters this state in the "passive-backup"
+    /// mode of operation in which there is one server responding to the
+    /// DHCP queries and zero, one or more backup servers which receive
+    /// lease updates from this server.
+    void passiveBackupStateHandler();
+
     /// @brief Handler for "ready" state.
     ///
     /// This a handler invoked for the server which finished synchronizing
@@ -252,7 +310,7 @@ public:
     /// This indicates that the HA service is disabled, typically as a result
     /// of an unrecoverable error such as detecting that clocks skew between
     /// the active HA servers being too large. This situation requires
-    /// manual intervation of an administrator. When the problem is corrected,
+    /// manual intervention of an administrator. When the problem is corrected,
     /// the HA service needs to be restarted.
     ///
     /// @note Currently, restarting the HA service requires restarting the
@@ -302,6 +360,14 @@ protected:
     ///
     /// @param state the new value to assign to the current state.
     void verboseTransition(const unsigned state);
+
+    /// @brief Returns normal operation state for the current configuration.
+    ///
+    /// @return "load-balancing" for active servers in load balancing mode,
+    /// "hot-standby" for active servers in hot-standby mode, "backup" for
+    /// backup servers and "passive-backup" for primary server in the
+    /// "passive-backup" mode.
+    int getNormalState() const;
 
 public:
 
@@ -367,7 +433,7 @@ private:
     /// This is a generic implementation of the public @c inScope method
     /// variants.
     ///
-    /// @tparam type of the pointer to the DHCP query.
+    /// @tparam QueryPtrType type of the pointer to the DHCP query.
     /// @param [out] query6 pointer to the DHCP query received. A client class
     /// will be appended to this query instance, appropriate for the server to
     /// process this query, e.g. "HA_server1" if the "server1" should process
@@ -422,6 +488,23 @@ protected:
     /// @return true if the maintenance was canceled, false otherwise.
     bool isMaintenanceCanceled() const;
 
+    /// @brief Indicates if the partner's state is invalid.
+    ///
+    /// Partner's state is invalid from the local server's perspective when the
+    /// remote server can't transition to this state if the configuration is
+    /// consistent with the local server's configuration.
+    ///
+    /// The following cases are currently checked:
+    /// - partner in communication-recovery state but this server not in the
+    ///   load balancing mode,
+    /// - partner in the hot-standby state but this server not in the hot standby
+    ///   mode,
+    /// - partner in the load-balancing state but this server not in the
+    ///   load balancing mode.
+    ///
+    /// @return true if the partner's state is invalid, false otherwise.
+    bool isPartnerStateInvalid() const;
+
 public:
 
     /// @brief Schedules asynchronous IPv4 leases updates.
@@ -455,13 +538,12 @@ public:
     /// the asynchronous updates are completed.
     ///
     /// @return Number of peers to whom lease updates have been scheduled
-    /// to be sent. This value is used to determine if the DHCP query
-    /// should be parked while waiting for the lease update to complete.
+    /// to be sent and from which we expect a response prior to unparking
+    /// the packet and sending a response to the DHCP client.
     size_t asyncSendLeaseUpdates(const dhcp::Pkt4Ptr& query,
                                  const dhcp::Lease4CollectionPtr& leases,
                                  const dhcp::Lease4CollectionPtr& deleted_leases,
                                  const hooks::ParkingLotHandlePtr& parking_lot);
-
 
     /// @brief Schedules asynchronous IPv6 lease updates.
     ///
@@ -479,8 +561,8 @@ public:
     /// the asynchronous updates are completed.
     ///
     /// @return Number of peers to whom lease updates have been scheduled
-    /// to be sent. This value is used to determine if the DHCP query
-    /// should be parked while waiting for the lease update to complete.
+    /// to be sent and from which we expect a response prior to unparking
+    /// the packet and sending a response to the DHCP client.
     size_t asyncSendLeaseUpdates(const dhcp::Pkt6Ptr& query,
                                  const dhcp::Lease6CollectionPtr& leases,
                                  const dhcp::Lease6CollectionPtr& deleted_leases,
@@ -530,6 +612,19 @@ protected:
     /// @return true if the server should send lease updates, false otherwise.
     bool shouldSendLeaseUpdates(const HAConfig::PeerConfigPtr& peer_config) const;
 
+    /// @brief Checks if the lease updates should be queued.
+    ///
+    /// If lease updates should be sent to the partner but the server is in
+    /// the communication-recovery state (temporarily unavailable) the lease
+    /// updates should be queued and later sent when the communication is
+    /// re-established. This function checks if the server is in the state
+    /// in which lease updates should be queued.
+    ///
+    /// @param peer_config pointer to the configuration of the peer to which
+    /// the updates are to be sent.
+    /// @return true if the server should queue lease updates, false otherwise.
+    bool shouldQueueLeaseUpdates(const HAConfig::PeerConfigPtr& peer_config) const;
+
 public:
 
     /// @brief Processes ha-heartbeat command and returns a response.
@@ -560,11 +655,23 @@ public:
 
     /// @brief Processes status-get command and returns a response.
     ///
-    ///
-    ///
     /// @c HAImpl::commandProcessed calls this to add information about the
     /// HA servers status into the status-get response.
     data::ConstElementPtr processStatusGet() const;
+
+    /// @brief Processes ha-reset command and returns a response.
+    ///
+    /// This method processes ha-reset command which instructs the server to
+    /// transition to the waiting state. A partner may send this command when
+    /// the communication is re-established between the servers in the
+    /// communication-recovery state and full lease database synchronization is
+    /// required. This command may also be sent by an operator if the server's
+    /// state is invalid and the reset operation may help correct the situation.
+    ///
+    /// The ha-reset takes no arguments.
+    ///
+    /// @return Pointer to a response to the ha-reset command.
+    data::ConstElementPtr processHAReset();
 
 protected:
 
@@ -723,7 +830,6 @@ protected:
                                  PostSyncCallback post_sync_action,
                                  const bool dhcp_disabled);
 
-
 public:
 
     /// @brief Processes ha-sync command and returns a response.
@@ -754,6 +860,13 @@ protected:
     ///
     /// It instructs the server to disable the DHCP service on the HA peer,
     /// fetch all leases from the peer and update the local lease database.
+    /// It sends ha-sync-complete-notify command to the partner when the
+    /// synchronization completes successfully. If the partner does not
+    /// support this command, it sends dhcp-enable command to enable
+    /// the DHCP service on the partner.
+    ///
+    /// This method creates its own instances of the HttpClient and IOService and
+    /// invokes IOService::run().
     ///
     /// @param [out] status_message status message in textual form.
     /// @param server_name name of the server to fetch leases from.
@@ -765,6 +878,67 @@ protected:
     /// in responses to control commands.
     int synchronize(std::string& status_message, const std::string& server_name,
                     const unsigned int max_period);
+
+    /// @brief Sends lease updates from backlog to partner asynchronously.
+    ///
+    /// This method checks if there are any outstanding DHCPv4 or DHCPv6 leases
+    /// in the backlog and schedules asynchronous sends of these leases. In
+    /// DHCPv6 case it sends a single lease6-bulk-apply command with all
+    /// outstanding leases. In DHCPv4 case, it sends lease4-update or lease4-delete
+    /// commands recursively (when one lease update completes successfully it
+    /// schedules sending next lease update).
+    ///
+    /// If there are no lease updates in the backlog it calls @c post_request_action
+    /// callback.
+    ///
+    /// This method is called from @c sendLeaseUpdatesFromBacklog.
+    ///
+    /// @param http_client reference to the HTTP client to be used for communication.
+    /// @param remote_config pointer to the remote server's configuration.
+    /// @param post_request_action callback to be invoked when the operation
+    /// completes. It can be used for handling errors.
+    void asyncSendLeaseUpdatesFromBacklog(http::HttpClient& http_client,
+                                          const HAConfig::PeerConfigPtr& remote_config,
+                                          PostRequestCallback post_request_action);
+
+    /// @brief Attempts to send all lease updates from the backlog synchronously.
+    ///
+    /// This method is called upon exiting communication-recovery state and before
+    /// entering the load-balancing state. It ensures that all outstanding lease
+    /// updates are sent to the partner before the server can continue normal
+    /// operation in the load-balancing state. In order to prevent collisions
+    /// between new allocations and outstanding updates this method is synchronous.
+    ///
+    /// This method creates its own instances of the HttpClient and IOService and
+    /// invokes IOService::run().
+    ///
+    /// @return boolean value indicating that the lease updates were delivered
+    /// successfully (when true) or unsuccessfully (when false).
+    bool sendLeaseUpdatesFromBacklog();
+
+    /// @brief Sends ha-reset command to partner asynchronously.
+    ///
+    /// @param http_client reference to the HTTP client to be used for communication.
+    /// @param remote_config pointer to the remote server's configuration.
+    /// @param post_request_action callback to be invoked when the operation
+    /// completes. It can be used for handling errors.
+    void asyncSendHAReset(http::HttpClient& http_client,
+                          const HAConfig::PeerConfigPtr& remote_config,
+                          PostRequestCallback post_request_action);
+
+    /// @brief Sends ha-reset command to partner synchronously.
+    ///
+    /// This method attempts to send ha-reset command to the active partner
+    /// synchronously. It may be invoked when the communication with the partner
+    /// is re-established after temporary failure. It causes the partner to
+    /// transition the partner to the waiting state. This effectively means that
+    /// the partner will synchronize its lease database with this server.
+    ///
+    /// This method creates its own instances of the HttpClient and IOService and
+    /// invokes IOService::run().
+    ///
+    /// @return true if the command was sent successfully, false otherwise.
+    bool sendHAReset();
 
 public:
 
@@ -782,12 +956,12 @@ public:
 
     /// @brief Processes ha-maintenance-notify command and returns a response.
     ///
-    /// This command attempts to tramsition the server to the in-maintenance state
+    /// This command attempts to transition the server to the in-maintenance state
     /// if the cancel flag is set to false. Such transition is not allowed if
     /// the server is currently in one of the following states:
-    /// - backup: becase maintenance is not supported for backup servers,
+    /// - backup: because maintenance is not supported for backup servers,
     /// - partner-in-maintenance: because only one server is in maintenance while
-    ///   the partner must be in parter-in-maintenance state,
+    ///   the partner must be in partner-in-maintenance state,
     /// - terminated: because the only way to resume HA service is by shutting
     ///   down the server, fixing the clock skew and restarting.
     ///
@@ -799,7 +973,7 @@ public:
     /// canceled with this operation. If it is set to false the maintenance
     /// is being started.
     ///
-    /// @return Pointer to the reponse to the ha-maintenance-notify.
+    /// @return Pointer to the response to the ha-maintenance-notify.
     data::ConstElementPtr processMaintenanceNotify(const bool cancel);
 
     /// @brief Processes ha-maintenance-start command and returns a response.
@@ -814,6 +988,9 @@ public:
     /// state and signal an error to the caller. If the partner is unavailable,
     /// this server will directly transition to the partner-down state.
     ///
+    /// This method creates its own instances of the HttpClient and IOService and
+    /// invokes IOService::run().
+    ///
     /// @return Pointer to the response to the ha-maintenance-start.
     data::ConstElementPtr processMaintenanceStart();
 
@@ -825,7 +1002,7 @@ public:
     /// previous state. It effectively means canceling the request for
     /// maintenance signaled with the ha-maintenance-start command.
     ///
-    /// In some cases canceling the maintenace is no longer possible, e.g.
+    /// In some cases canceling the maintenance is no longer possible, e.g.
     /// if the server has already got into the partner-down state. Generally,
     /// canceling the maintenance is only possible if this server is in the
     /// partner-in-maintenance state and the partner is in the in-maintenance
@@ -833,6 +1010,75 @@ public:
     ///
     /// @return Pointer to the response to the ha-maintenance-cancel.
     data::ConstElementPtr processMaintenanceCancel();
+
+    /// @brief Check client and(or) listener current thread permissions to
+    /// perform thread pool state transition.
+    ///
+    /// @throw MultiThreadingInvalidOperation if the state transition is done on
+    /// any of the worker threads.
+    void checkPermissionsClientAndListener();
+
+protected:
+
+    /// @brief Schedules asynchronous "ha-sync-complete-notify" command to the
+    /// specified server.
+    ///
+    /// @param http_client reference to the client to be used to communicate
+    /// with the other server.
+    /// @param server_name name of the server to which the command should be
+    /// sent.
+    /// @param post_request_action pointer to the function to be executed when
+    /// the request is completed.
+    void asyncSyncCompleteNotify(http::HttpClient& http_client,
+                                 const std::string& server_name,
+                                 PostRequestCallback post_request_action);
+
+public:
+
+    /// @brief Process ha-sync-complete-notify command and returns a response.
+    ///
+    /// A server finishing a lease database synchronization may notify its
+    /// partner about it with this command. This function implements reception
+    /// and processing of the command.
+    ///
+    /// It enables DHCP service unless the server is in the partner-down state.
+    /// In this state, the server will first have to check connectivity with
+    /// the partner and transition to a state in which it will send lease updates.
+    ///
+    /// @return Pointer to the response to the ha-sync-complete-notify command.
+    data::ConstElementPtr processSyncCompleteNotify();
+
+    /// @brief Start the client and(or) listener instances.
+    ///
+    /// When HA+MT is enabled it starts the client's thread pool
+    /// and the dedicated listener thread pool, if the listener exists.
+    /// It registers pauseClientAndListener() and resumeClientAndListener()
+    /// as the MultiThreading critical section entry and exit callbacks,
+    /// respectively.
+    void startClientAndListener();
+
+    /// @brief Pauses client and(or) listener thread pool operations.
+    ///
+    /// Suspends the client and listener thread pool event processing.
+    /// Has no effect in single-threaded mode or if thread pools are
+    /// not currently running.  Serves as the MultiThreading critical
+    /// section entry callback.
+    void pauseClientAndListener();
+
+    /// @brief Resumes client and(or) listener thread pool operations.
+    ///
+    /// Resumes the client and listener thread pool event processing.
+    /// Has no effect in single-threaded mode or if thread pools are
+    /// not currently paused. Serves as the MultiThreading critical
+    /// section exit callback.
+    void resumeClientAndListener();
+
+    /// @brief Stop the client and(or) listener instances.
+    ///
+    /// It unregisters the MultiThreading critical section callbacks,
+    /// closes all connections and stops the thread pools for the client
+    /// and listener, if they exist.
+    void stopClientAndListener();
 
 protected:
 
@@ -845,6 +1091,7 @@ protected:
     /// @param [out] rcode result found in the response.
     /// @return Pointer to the response arguments.
     /// @throw CtrlChannelError if response is invalid or contains an error.
+    /// @throw CommandUnsupportedError if sent command is unsupported.
     data::ConstElementPtr verifyAsyncResponse(const http::HttpResponsePtr& response,
                                               int& rcode);
 
@@ -855,9 +1102,18 @@ protected:
     ///
     /// @param ec Error status of the ASIO connect
     /// @param tcp_native_fd socket descriptor to register
-    /// @return always true. Registeration cannot fail, and if ec indicates a real
+    /// @return always true. Registration cannot fail, and if ec indicates a real
     /// error we want Connection logic to process it.
     bool clientConnectHandler(const boost::system::error_code& ec, int tcp_native_fd);
+
+    /// @brief HttpClient handshake callback handler
+    ///
+    /// Currently is never called and does nothing.
+    ///
+    /// @return always true.
+    bool clientHandshakeHandler(const boost::system::error_code&) {
+        return (true);
+    }
 
     /// @brief IfaceMgr external socket ready callback handler
     ///
@@ -865,13 +1121,13 @@ protected:
     /// flagged as ready to read.   It is installed by the invocation to
     /// register the socket with IfaceMgr made in @ref clientConnectHandler.
     ///
-    /// The handler calls @ref HttpClient::closeIfOutOfBandwidth() to catch
+    /// The handler calls @c http::HttpClient::closeIfOutOfBand() to catch
     /// and close any sockets that have gone ready outside of transactions.
     ///
     /// We do this in case the other peer closed the socket (e.g. idle timeout),
     /// as this will cause the socket to appear ready to read to the
-    /// IfaceMgr::select(). If this happens while no transcations are
-    /// in progess, we won't have anything to deal with the socket event.
+    /// IfaceMgr::select(). If this happens while no transactions are
+    /// in progress, we won't have anything to deal with the socket event.
     /// This causes IfaceMgr::select() to endlessly interrupt on the socket.
     ///
     /// @param tcp_native_fd socket descriptor of the ready socket
@@ -899,14 +1155,113 @@ protected:
     /// @brief DHCP server type.
     HAServerType server_type_;
 
-    /// @brief HTTP client instance used to send lease updates.
-    http::HttpClient client_;
+    /// @brief HTTP client instance used to send HA commands and lease updates.
+    http::HttpClientPtr client_;
+
+    /// @brief HTTP listener instance used to receive and respond to HA commands
+    /// and lease updates.
+    config::CmdHttpListenerPtr listener_;
 
     /// @brief Holds communication state with a peer.
     CommunicationStatePtr communication_state_;
 
     /// @brief Selects queries to be processed/dropped.
     QueryFilter query_filter_;
+
+    /// @brief Handle last pending request for this query.
+    ///
+    /// Search if there are pending requests for this query:
+    ///  - if there are decrement the count
+    ///  - if there were at least two return false
+    ///  - if there was none or one unpark the query
+    ///  - if there was one remove the query from the map
+    ///  - return true
+    ///
+    /// @tparam QueryPtrType Type of the pointer to the DHCP client's message,
+    /// i.e. Pkt4Ptr or Pkt6Ptr.
+    /// @param query Pointer to the DHCP client's query.
+    /// @param [out] parking_lot Parking lot where the query is parked.
+    /// This method uses this handle to unpark the packet when all asynchronous
+    /// requests have been completed.
+    /// @return When all lease updates are complete returns true, false otherwise.
+    template<typename QueryPtrType>
+    bool leaseUpdateComplete(QueryPtrType& query,
+                             const hooks::ParkingLotHandlePtr& parking_lot);
+
+    /// @brief Update pending request counter for this query.
+    ///
+    /// @tparam QueryPtrType Type of the pointer to the DHCP client's message,
+    /// i.e. Pkt4Ptr or Pkt6Ptr.
+    /// @param query Pointer to the DHCP client's query.
+    template<typename QueryPtrType>
+    void updatePendingRequest(QueryPtrType& query);
+
+    /// @brief Get the number of entries in the pending request map.
+    ///
+    /// @note Currently for testing purposes only.
+    /// @return Number of entries in the pending request map.
+    size_t pendingRequestSize();
+
+    /// @brief Get the number of scheduled requests for a given query.
+    ///
+    /// @note Currently for testing purposes only.
+    ///
+    /// If there is an entry in the pending request map for the given
+    /// query the entry is returned else zero is returned.
+    ///
+    /// @param query Pointer to the DHCP client's query.
+    /// @return Number of scheduled requests for the query or zero.
+    template<typename QueryPtrType>
+    int getPendingRequest(const QueryPtrType& query);
+
+private:
+    /// @brief Handle last pending request for this query.
+    ///
+    /// Search if there are pending requests for this query:
+    ///  - if there are decrement the count
+    ///  - if there were at least two return false
+    ///  - if there was none or one unpark the query
+    ///  - if there was one remove the query from the map
+    ///  - return true
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @tparam QueryPtrType Type of the pointer to the DHCP client's message,
+    /// i.e. Pkt4Ptr or Pkt6Ptr.
+    /// @param query Pointer to the DHCP client's query.
+    /// @param [out] parking_lot Parking lot where the query is parked.
+    /// This method uses this handle to unpark the packet when all asynchronous
+    /// requests have been completed.
+    /// @return When all lease updates are complete returns true, false otherwise.
+    template<typename QueryPtrType>
+    bool leaseUpdateCompleteInternal(QueryPtrType& query,
+                                     const hooks::ParkingLotHandlePtr& parking_lot);
+
+    /// @brief Update pending request counter for this query.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @tparam QueryPtrType Type of the pointer to the DHCP client's message,
+    /// i.e. Pkt4Ptr or Pkt6Ptr.
+    /// @param query Pointer to the DHCP client's query.
+    template<typename QueryPtrType>
+    void updatePendingRequestInternal(QueryPtrType& query);
+
+    /// @brief Get the number of scheduled requests for a given query.
+    /// @note Currently for testing purposes only.
+    ///
+    /// If there is an entry in the pending request map for the given
+    /// query the entry is returned else zero is returned.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @param query Pointer to the DHCP client's query.
+    /// @return Number of scheduled requests for the query or zero.
+    template<typename QueryPtrType>
+    int getPendingRequestInternal(const QueryPtrType& query);
+
+    /// @brief Mutex to protect the internal state.
+    std::mutex mutex_;
 
     /// @brief Map holding a number of scheduled requests for a given packet.
     ///
@@ -917,6 +1272,24 @@ protected:
     /// the number of responses received so far and unpark the packet when
     /// all responses have been received. That's what this map is used for.
     std::map<boost::shared_ptr<dhcp::Pkt>, int> pending_requests_;
+
+protected:
+
+    /// @brief Backlog of DHCP lease updates.
+    ///
+    /// Unsent lease updates are stored in this queue when the server is in
+    /// the communication-recovery state and is temporarily unable to send
+    /// lease updates to the partner.
+    LeaseUpdateBacklog lease_update_backlog_;
+
+    /// @brief An indicator that a partner sent ha-sync-complete-notify command.
+    ///
+    /// This indicator is set when the partner finished synchronization. It blocks
+    /// enabling DHCP service in the partner-down state. The server will first
+    /// send heartbeat to the partner to ensure that the communication is
+    /// re-established. If the communication remains broken, the server clears
+    /// this flag and enables DHCP service to continue the service.
+    bool sync_complete_notified_;
 };
 
 /// @brief Pointer to the @c HAService class.

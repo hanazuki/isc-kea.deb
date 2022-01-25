@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,7 +38,7 @@ CfgSubnets4::add(const Subnet4Ptr& subnet) {
 
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE, DHCPSRV_CFGMGR_ADD_SUBNET4)
               .arg(subnet->toText());
-    static_cast<void>(subnets_.push_back(subnet));
+    static_cast<void>(subnets_.insert(subnet));
 }
 
 Subnet4Ptr
@@ -159,7 +159,7 @@ CfgSubnets4::merge(CfgOptionDefPtr cfg_def, CfgSharedNetworks4Ptr networks,
         }
 
         // Add the "other" subnet to the our collection of subnets.
-        static_cast<void>(subnets_.push_back(*other_subnet));
+        static_cast<void>(subnets_.insert(*other_subnet));
 
         // If it belongs to a shared network, find the network and
         // add the subnet to it
@@ -231,21 +231,22 @@ CfgSubnets4::initSelector(const Pkt4Ptr& query) {
                 if (link_select_buf.size() == sizeof(uint32_t)) {
                     selector.option_select_ =
                         IOAddress::fromBytes(AF_INET, &link_select_buf[0]);
+                    return (selector);
                 }
             }
         }
-    } else {
-        // Or Subnet Selection option
-        OptionPtr sbnsel = query->getOption(DHO_SUBNET_SELECTION);
-        if (sbnsel) {
-            OptionCustomPtr oc =
-                boost::dynamic_pointer_cast<OptionCustom>(sbnsel);
-            if (oc) {
-                selector.option_select_ = oc->readAddress();
-            }
+    }
+    // The query does not include a RAI option or that option does
+    // not contain the link-selection sub-option. Try subnet-selection
+    // option.
+    OptionPtr sbnsel = query->getOption(DHO_SUBNET_SELECTION);
+    if (sbnsel) {
+        OptionCustomPtr oc =
+            boost::dynamic_pointer_cast<OptionCustom>(sbnsel);
+        if (oc) {
+            selector.option_select_ = oc->readAddress();
         }
     }
-
     return (selector);
 }
 
@@ -398,8 +399,8 @@ CfgSubnets4::selectSubnet(const std::string& iface,
         Subnet4Ptr subnet_selected;
 
         // First, try subnet specific interface name.
-        if (!(*subnet)->getIface().empty()) {
-            if ((*subnet)->getIface() == iface) {
+        if (!(*subnet)->getIface(Network4::Inheritance::NONE).empty()) {
+            if ((*subnet)->getIface(Network4::Inheritance::NONE) == iface) {
                 subnet_selected = (*subnet);
             }
 
@@ -409,8 +410,8 @@ CfgSubnets4::selectSubnet(const std::string& iface,
             // the interface.
             SharedNetwork4Ptr network;
             (*subnet)->getSharedNetwork(network);
-            if (network && !network->getIface().empty() &&
-                (network->getIface() == iface)) {
+            if (network &&
+                (network->getIface(Network4::Inheritance::NONE) == iface)) {
                 subnet_selected = (*subnet);
             }
         }
@@ -447,7 +448,7 @@ CfgSubnets4::getSubnet(const SubnetID id) const {
 
 Subnet4Ptr
 CfgSubnets4::selectSubnet(const IOAddress& address,
-                 const ClientClasses& client_classes) const {
+                          const ClientClasses& client_classes) const {
     for (Subnet4Collection::const_iterator subnet = subnets_.begin();
          subnet != subnets_.end(); ++subnet) {
 
@@ -485,10 +486,13 @@ CfgSubnets4::removeStatistics() {
                                              "assigned-addresses"));
 
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
+                                             "cumulative-assigned-addresses"));
+
+        stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
                                              "declined-addresses"));
 
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
-                                             "declined-reclaimed-addresses"));
+                                             "reclaimed-declined-addresses"));
 
         stats_mgr.del(StatsMgr::generateName("subnet", subnet_id,
                                              "reclaimed-leases"));
@@ -509,11 +513,16 @@ CfgSubnets4::updateStatistics() {
                                         static_cast<int64_t>
                                         ((*subnet4)->getPoolCapacity(Lease::
                                                                      TYPE_V4)));
+        const std::string& name =
+            StatsMgr::generateName("subnet", subnet_id, "cumulative-assigned-addresses");
+        if (!stats_mgr.getObservation(name)) {
+            stats_mgr.setValue(name, static_cast<int64_t>(0));
+        }
     }
 
     // Only recount the stats if we have subnets.
     if (subnets_.begin() != subnets_.end()) {
-            LeaseMgrFactory::instance().recountLeaseStats4();
+        LeaseMgrFactory::instance().recountLeaseStats4();
     }
 }
 

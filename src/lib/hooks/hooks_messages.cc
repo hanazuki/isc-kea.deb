@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/hooks/hooks_messages.mes on Wed Oct 23 2019 00:13
+// File created from ../../../src/lib/hooks/hooks_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>
@@ -19,6 +19,7 @@ extern const isc::log::MessageID HOOKS_CALLOUT_REGISTRATION = "HOOKS_CALLOUT_REG
 extern const isc::log::MessageID HOOKS_CLOSE_ERROR = "HOOKS_CLOSE_ERROR";
 extern const isc::log::MessageID HOOKS_HOOK_LIST_RESET = "HOOKS_HOOK_LIST_RESET";
 extern const isc::log::MessageID HOOKS_INCORRECT_VERSION = "HOOKS_INCORRECT_VERSION";
+extern const isc::log::MessageID HOOKS_LIBRARY_CLOSED = "HOOKS_LIBRARY_CLOSED";
 extern const isc::log::MessageID HOOKS_LIBRARY_LOADED = "HOOKS_LIBRARY_LOADED";
 extern const isc::log::MessageID HOOKS_LIBRARY_LOADING = "HOOKS_LIBRARY_LOADING";
 extern const isc::log::MessageID HOOKS_LIBRARY_MULTI_THREADING_COMPATIBLE = "HOOKS_LIBRARY_MULTI_THREADING_COMPATIBLE";
@@ -60,6 +61,7 @@ const char* values[] = {
     "HOOKS_CLOSE_ERROR", "failed to close hook library %1: %2",
     "HOOKS_HOOK_LIST_RESET", "the list of hooks has been reset",
     "HOOKS_INCORRECT_VERSION", "hook library %1 is at version %2, require version %3",
+    "HOOKS_LIBRARY_CLOSED", "hooks library %1 successfully closed",
     "HOOKS_LIBRARY_LOADED", "hooks library %1 successfully loaded",
     "HOOKS_LIBRARY_LOADING", "loading hooks library %1",
     "HOOKS_LIBRARY_MULTI_THREADING_COMPATIBLE", "hooks library %1 reports its multi-threading compatibility as %2",

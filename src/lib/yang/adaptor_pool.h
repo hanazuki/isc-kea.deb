@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -56,7 +56,7 @@ public:
 
     /// @brief Move parameters from pools to the subnet.
     ///
-    /// Move parameters from pool to its partent subnet. Currently the only
+    /// Move parameters from pool to its parent subnet. Currently the only
     /// supported model is ietf-dhcpv6-server. The parameters moved are
     /// valid-lifetime, preferred-lifetime, renew-timer, rebind-timer.
     ///

@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <perfdhcp/pkt_transform.h>
 #include <perfdhcp/localized_option.h>
+#include <perfdhcp/stats_mgr.h>
 
 #include <exceptions/exceptions.h>
 #include <dhcp/option.h>
@@ -99,6 +100,7 @@ PktTransform::unpack(const Option::Universe universe,
     try {
         PktTransform::unpackOptions(in_buffer, options);
     } catch (const isc::BadValue& e) {
+        ExchangeStats::malformed_pkts_++;
         cout << "Packet parsing failed: " << e.what() << endl;
         return (false);
     }

@@ -6,7 +6,7 @@
 // do. Comments in this configuration file sometimes refer to sections for more
 // details. These are section numbers in Kea User's Guide. The version matching
 // your software should come with your Kea package, but it is also available
-// in ISC's Knowledgebase (https://kb.isc.org/docs/kea-administrator-reference-manual; the direct link for
+// in ISC's Knowledgebase (https://kea.readthedocs.io; the direct link for
 // the stable version is https://kea.readthedocs.io/).
 //
 // This configuration file contains only DHCP DDNS daemon's configuration.
@@ -23,7 +23,7 @@
   "port": 53001,
   "control-socket": {
       "socket-type": "unix",
-      "socket-name": "/tmp/ddns-ctrl-socket"
+      "socket-name": "/tmp/kea-ddns-ctrl-socket"
   },
   "tsig-keys": [],
   "forward-ddns" : {},
@@ -43,7 +43,7 @@
                 // - stderr (prints on standard error)
                 // - syslog (logs to syslog)
                 // - syslog:name (logs to syslog using specified name)
-                // Any other value is considered a name of a time
+                // Any other value is considered a name of the file
                 "output": "@localstatedir@/log/kea-ddns.log"
 
                 // Shorter log pattern suitable for use with systemd,

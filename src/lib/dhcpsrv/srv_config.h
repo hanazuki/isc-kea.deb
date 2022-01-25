@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -40,7 +40,7 @@ namespace dhcp {
 
 class CfgMgr;
 
-/// @brief Convenience container for conveying DDNS behaviorial parameters
+/// @brief Convenience container for conveying DDNS behavioral parameters
 /// It is intended to be created per Packet exchange using the selected
 /// subnet passed into functions that require them
 class DdnsParams {
@@ -121,6 +121,34 @@ public:
     /// @return pointer to the StringSanitizer instance or an empty pointer
     /// @throw BadValue if the compilation fails.
     isc::util::str::StringSanitizerPtr getHostnameSanitizer() const;
+
+    /// @brief Returns whether or not DNS should be updated when leases renew.
+    ///
+    /// If this is true, DNS should always be updated when leases are
+    /// extended (i.e. renewed/rebound) even if the DNS information
+    /// has not changed.
+    ///
+    /// @return True if updates should always be performed.
+    bool getUpdateOnRenew() const;
+
+    /// @brief Returns whether or not keah-dhcp-ddns should use conflict resolution
+    ///
+    /// This value is communicated to D2 via the NCR.  When true, D2 should follow
+    /// follow conflict resolution steps described in RFC 4703.  If not, it should
+    /// simple add or remove entries.
+    ///
+    /// @return True if conflict resolution should be used.
+    bool getUseConflictResolution() const;
+
+    /// @brief Returns the subnet-id of the subnet associated with these parameters
+    /// @return value of subnet-id (or 0 if no subnet is associated)
+    SubnetID getSubnetId() const {
+        if (subnet_){
+            return subnet_->getID();
+        } else {
+            return 0;
+        }
+    }
 
 private:
     /// @brief Subnet from which values should be fetched.
@@ -467,6 +495,18 @@ public:
         dhcp_queue_control_ = dhcp_queue_control;
     }
 
+    /// @brief Returns DHCP multi threading information
+    /// @return pointer to the DHCP multi threading information
+    const isc::data::ConstElementPtr getDHCPMultiThreading() const {
+        return (dhcp_multi_threading_);
+    }
+
+    /// @brief Sets information about the dhcp multi threading
+    /// @param dhcp_multi_threading new dhcp multi threading information
+    void setDHCPMultiThreading(const isc::data::ConstElementPtr dhcp_multi_threading) {
+        dhcp_multi_threading_ = dhcp_multi_threading;
+    }
+
     /// @brief Returns pointer to the dictionary of global client
     /// class definitions
     ClientClassDictionaryPtr getClientClassDictionary() {
@@ -502,7 +542,7 @@ public:
     /// @brief Fetches the DDNS parameters for a given DHCPv4 subnet.
     ///
     /// Creates a DdnsParams structure which retain and thereafter
-    /// use the given subnet to fetch DDNS behaviorial parameters.
+    /// use the given subnet to fetch DDNS behavioral parameters.
     /// The values are fetched with the inheritance scope mode
     /// of Network::ALL.
     ///
@@ -513,7 +553,7 @@ public:
     /// @brief Fetches the DDNS parameters for a given DHCPv6 subnet.
     ///
     /// Creates a DdnsParams structure which retain and thereafter
-    /// use the given subnet to fetch DDNS behaviorial parameters.
+    /// use the given subnet to fetch DDNS behavioral parameters.
     /// The values are fetched with the inheritance scope mode
     /// of Network::ALL.
     ///
@@ -601,7 +641,7 @@ public:
     /// stored in the staging configuration. The other part of the
     /// configuration comes from the database. The configuration fetched
     /// from the database is stored in a separate @c SrvConfig instance
-    /// and then merged into the staging configuration prior to commiting
+    /// and then merged into the staging configuration prior to committing
     /// it.
     ///
     /// The merging strategy depends on the underlying data being merged.
@@ -614,6 +654,13 @@ public:
     /// object replaces configuration data held in this object instance.
     /// The data that do not overlap between the two objects is simply
     /// inserted into this configuration.
+    ///
+    /// Due to the nature of the client classes, i.e. they are ordered and
+    /// depend on each other, individual classes are not merged. Instead,
+    /// the new list of classes entirely replaces the existing list. It
+    /// implies that client classes should not be defined in a config
+    /// file if there are classes defined in the config backend for this
+    /// server.
     ///
     /// @warning The call to @c merge may modify the data in the @c other
     /// object. Therefore, the caller must not rely on the data held
@@ -629,6 +676,7 @@ public:
     /// - globals
     /// - option definitions
     /// - options
+    /// - client classes
     /// - via @c merge4 or @c merge6 depending on @c CfgMgr::family_:
     ///     - shared networks
     ///     - subnets
@@ -705,34 +753,6 @@ public:
         return (dhcp4o6_port_);
     }
 
-    /// @brief Sets the server thread count.
-    ///
-    /// @param threads value of the server thread count
-    void setServerThreadCount(uint32_t threads) {
-        server_threads_ = threads;
-    }
-
-    /// @brief Retrieves the server thread count.
-    ///
-    /// @return value of the server thread count
-    uint32_t getServerThreadCount() const {
-        return (server_threads_);
-    }
-
-    /// @brief Sets the server max thread queue size.
-    ///
-    /// @param size max thread queue size
-    void setServerMaxThreadQueueSize(uint32_t size) {
-        server_max_thread_queue_size_ = size;
-    }
-
-    /// @brief Retrieves the server max thread queue size.
-    ///
-    /// @return value of the max thread queue size
-    uint32_t getServerMaxThreadQueueSize() const {
-        return (server_max_thread_queue_size_);
-    }
-
     /// @brief Returns pointer to the D2 client configuration
     D2ClientConfigPtr getD2ClientConfig() {
         return (d2_client_config_);
@@ -781,6 +801,19 @@ public:
         configured_globals_->set(name, value);
     }
 
+    /// @brief Conducts sanity checks on global lifetime parameters.
+    ///
+    /// @param name Base name of the lifetime parameter.
+    void sanityChecksLifetime(const std::string& name) const;
+
+    /// @brief Conducts sanity checks on global lifetime parameters
+    /// before merge from the external configuration to the target one.
+    ///
+    /// @param target_config Target configuration.
+    /// @param name Base name of the lifetime parameter.
+    void sanityChecksLifetime(const SrvConfig& target_config,
+                              const std::string& name) const;
+
     /// @brief Moves deprecated parameters from dhcp-ddns element to global element
     ///
     /// Given a server configuration element map, the following parameters are moved
@@ -806,10 +839,45 @@ public:
     /// @param srv_elem server top level map to alter
     static void moveDdnsParams(isc::data::ElementPtr srv_elem);
 
+    /// @brief Configures the server to allow or disallow specifying multiple
+    /// hosts with the same IP address/subnet.
+    ///
+    /// This setting is applied in @c CfgDbAccess and @c CfgHosts. This function
+    /// should be called when the server is being configured using the configuration
+    /// file, config-set command or via the configuration backend.
+    ///
+    /// @param unique Boolean value indicating if it is allowed (when false)
+    /// or disallowed to specify multiple hosts with the same IP reservation.
+    void setIPReservationsUnique(const bool unique);
+
     /// @brief Unparse a configuration object
     ///
     /// @return a pointer to unparsed configuration
     virtual isc::data::ElementPtr toElement() const;
+
+    /// @brief Set lenient option parsing compatibility flag.
+    ///
+    /// @param value the boolean value to be set when configuring lenient option
+    /// parsing
+    void setLenientOptionParsing(bool const value) {
+        lenient_option_parsing_ = value;
+    }
+
+    /// @brief Get lenient option parsing compatibility flag.
+    ///
+    /// @return the configured value for lenient option parsing
+    bool getLenientOptionParsing() const {
+        return lenient_option_parsing_;
+    }
+
+    /// @brief Convenience method to propagate configuration parameters through
+    /// inversion of control.
+    ///
+    /// To be used as a last resort when CfgMgr::instance().getCurrentCfg()
+    /// can't be easily called from where the configuration parameter is used,
+    /// usually because that particular library is lower in the dependency tree.
+    /// Happens on configuration commit.
+    void configureLowerLevelLibraries() const;
 
 private:
 
@@ -930,6 +998,9 @@ private:
     /// @brief Pointer to the dhcp-queue-control information
     isc::data::ConstElementPtr dhcp_queue_control_;
 
+    /// @brief Pointer to the multi-threading information
+    isc::data::ConstElementPtr dhcp_multi_threading_;
+
     /// @brief Pointer to the dictionary of global client class definitions
     ClientClassDictionaryPtr class_dictionary_;
 
@@ -951,12 +1022,6 @@ private:
     /// this socket is bound and connected to this port and port + 1
     uint16_t dhcp4o6_port_;
 
-    /// @brief The server thread count.
-    uint32_t server_threads_;
-
-    /// @brief The server max thread queue size.
-    uint32_t server_max_thread_queue_size_;
-
     /// @brief Stores D2 client configuration
     D2ClientConfigPtr d2_client_config_;
 
@@ -965,6 +1030,11 @@ private:
 
     /// @brief Pointer to the configuration consistency settings
     CfgConsistencyPtr cfg_consist_;
+
+    /// @brief Compatibility flags
+    /// @{
+    bool lenient_option_parsing_;
+    /// @}
 };
 
 /// @name Pointers to the @c SrvConfig object.

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,9 +10,28 @@
 # This script is used to run Kea from installation directory,
 # as well as for running tests.
 
-VERSION=@PACKAGE_VERSION@
-@HAVE_SYSREPO_FALSE@have_netconf=0
-@HAVE_SYSREPO_TRUE@have_netconf=1
+# shellcheck disable=SC2034
+# SC2034: ... appears unused. Verify use (or export if used externally).
+
+# shellcheck disable=SC2039
+# SC2039: In POSIX sh, 'local' is undefined.
+
+# shellcheck disable=SC2154
+# SC2154: ... is referenced but not assigned.
+# Reason: some variables are taken from keactrl.conf
+
+# Exit with error if commands exit with non-zero and if undefined variables are
+# used.
+set -eu
+
+VERSION="@PACKAGE_VERSION@"
+
+# Set the have_netconf flag to know if netconf is available.
+if test -z '@HAVE_SYSREPO_TRUE@'; then
+    have_netconf=true
+else
+    have_netconf=false
+fi
 
 ### Logging functions ###
 
@@ -37,9 +56,9 @@ log_info() {
 # is to determine whether the keactrl command belongs to the list of
 # supported commands.
 is_in_list() {
-    local member=${1}  # Value to be checked
-    local list="${2}"  # Comma separated list of items
-    _inlist=0          # Return value: 0 if not in list, 1 otherwise.
+    local member="${1-}"  # Value to be checked
+    local list="${2-}"    # Comma separated list of items
+    _inlist=0             # Return value: 0 if not in list, 1 otherwise.
     if [ -z "${member}" ]; then
         log_error "missing ${member}"
     fi
@@ -74,7 +93,7 @@ usage() {
 #
 # shellcheck disable=SC2154
 get_pid_from_file() {
-    local proc_name=${1} # Process name.
+    local proc_name="${1}"  # Process name.
 
     local kea_config_file=
     case ${proc_name} in
@@ -95,16 +114,17 @@ get_pid_from_file() {
         ;;
     esac
 
-    # Extract the name portion of the config file
+    # Extract the name portion (from last slash to last dot) of the config file name
+    # File name and extension are documented in src/lib/util/filename.h
     local conf_name
-    conf_name=$(basename -- "${kea_config_file}" | cut -f1 -d'.')
+    conf_name=$(basename -- "${kea_config_file}" | rev | cut -f2- -d'.' | rev)
 
     # Default the directory to --localstatedir / run
     local pid_file_dir
-    pid_file_dir=@runstatedir@/@PACKAGE@
+    pid_file_dir="@runstatedir@/@PACKAGE@"
 
     # Use directory override if set (primarily for testing only)
-    if [ -n "$KEA_PIDFILE_DIR" ]; then
+    if test -n "${KEA_PIDFILE_DIR+x}"; then
         pid_file_dir=${KEA_PIDFILE_DIR}
     fi
 
@@ -112,13 +132,8 @@ get_pid_from_file() {
     _pid_file="${pid_file_dir}/${conf_name}.${proc_name}.pid"
 
     # Grab the PID if the file exists
-    if [ -e "${_pid_file}" ]; then
-        _pid=$(cat "${_pid_file}")
-        retcode=$?
-        if [ $retcode -ne 0 ]; then
-            log_error "Error reading PID file: ${_pid_file}"
-        fi
-    else
+    _pid=$(cat "${_pid_file}" 2> /dev/null || true)
+    if test -z "${_pid}"; then
         # No file, means no pid
         _pid=0;
     fi
@@ -129,7 +144,7 @@ get_pid_from_file() {
 # PID file and checking the PID it contains.  If the file does
 # not exist, the process is assumed to not be running.
 check_running() {
-    local proc_name=${1} # Process name.
+    local proc_name="${1}"  # Process name.
     # Initially mark the process as not running.
     _running=0
 
@@ -137,9 +152,7 @@ check_running() {
     get_pid_from_file "${proc_name}"
     if [ ${_pid} -gt 0 ]; then
         # Use ps to check if PID is alive
-        ps -p ${_pid} 1>/dev/null
-        retcode=$?
-        if [ $retcode -eq 0 ]; then
+        if ps -p ${_pid} 1>/dev/null; then
             # No error, so PID IS ALIVE
             _running=1
         fi
@@ -148,17 +161,15 @@ check_running() {
 
 # Sends a signal to a process based on its PID file
 send_signal() {
-    local sig=${1}        # Signal number
-    local proc_name=${2}  # Process name.
+    local sig="${1}"        # Signal number
+    local proc_name="${2}"  # Process name.
 
     get_pid_from_file "${proc_name}"
-    if [ ${_pid} -eq 0 ]; then
+    if [ "${_pid}" -eq 0 ]; then
         log_info "Skip sending signal ${sig} to process ${proc_name}: \
 process is not running"
     else
-        kill "-${sig}" "${_pid}"
-        retcode=$?
-        if [ $retcode -ne 0 ]; then
+        if ! kill "-${sig}" "${_pid}"; then
             log_error "Failed to send signal ${sig} to process ${proc_name}, PID {$_pid}."
         fi
     fi
@@ -167,21 +178,20 @@ process is not running"
 # Start the Kea process. Do not start the process if there is an instance
 # already running.
 start_server() {
-    binary_path=${1}   # Full path to the binary.
-    full_command=$*    # Binary and arguments.
+    binary_path=${1}    # Full path to the binary.
     # Extract the name of the binary from the path.
     local binary_name
     binary_name=$(basename -- "${binary_path}")
     # Use the binary name to check if the process is already running.
     check_running "${binary_name}"
     # If process is running, don't start another one. Just log a message.
-    if [ ${_running} -ne 0 ]; then
+    if [ "${_running}" -ne 0 ]; then
         log_info "${binary_name} appears to be running, see: \
 PID ${_pid}, PID file: ${_pid_file}."
     else
-        log_info "Starting ${full_command}"
+        log_info "Starting ${*}"
         # Start the process.
-        ${full_command} &
+        "${@}" &
     fi
 }
 
@@ -196,14 +206,11 @@ stop_server() {
     # Use the binary name to check if the process is already running.
     check_running "${binary_name}"
     # If process isn't running, don't start another one. Just log a message.
-    if [ ${_running} -eq 0 ]; then
+    if [ "${_running}" -eq 0 ]; then
         log_info "${binary_name} isn't running."
     else
         log_info "Stopping ${binary_name}..."
-
-        kill "-${sig}" "${_pid}"
-        retcode=$?
-        if [ $retcode -ne 0 ]; then
+        if ! kill "-${sig}" "${_pid}"; then
             log_error "Stop failed, could not send signal ${sig} \
 to process ${proc_name}, PID ${_pid}."
         fi
@@ -221,28 +228,24 @@ reload_server() {
     # Use the binary name to check if the process is already running.
     check_running "${binary_name}"
     # If process isn't running, don't start another one. Just log a message.
-    if [ ${_running} -eq 0 ]; then
+    if [ "${_running}" -eq 0 ]; then
         log_info "${binary_name} isn't running."
     else
         log_info "Reloading ${binary_name}..."
-        kill -${sig} ${_pid}
-        retcode=$?
-        if [ $retcode -ne 0 ]; then
+        if ! kill "-${sig}" "${_pid}"; then
             log_error "Reload failed, could not send signal ${sig} \
 to process ${proc_name}, PID ${_pid}."
         fi
     fi
 }
 
-# Print Kea daemon verison
+# Print Kea daemon version
 print_version() {
     name=${1}
     binary_path=${2}
 
     if [ -e "${binary_path}" ]; then
-        ver=$(${binary_path} -v)
-        retcode=$?
-        if [ $retcode -ne 0 ]; then
+        if ! ver=$(${binary_path} -v); then
             log_error "Error checking version of binary file: ${binary_path}"
         fi
     else
@@ -258,7 +261,7 @@ print_version() {
 # Check if the Kea configuration file location has been specified in the
 # keactrl configuration file. If not, it is a warning or a fatal error.
 check_kea_conf() {
-    local conf_file=${1} # Kea config file name.
+    local conf_file="${1-}"     # Kea config file name.
     if [ -z "${conf_file}" ]; then
         log_error "Configuration file for Kea not specified."
         exit 1
@@ -277,17 +280,17 @@ check_kea_conf() {
 #   and be set to yes, e.g. ${dhcp4} should be equal to yes if server name
 #   is dhcp4
 run_conditional() {
-    local server=${1}         # Server name: dhcp4, dhcp6, dhcp_ddns, ctrl_agent, netconf
-    local commands="${2}"     # Commands to execute
-    local check_file_cfg=${3} # Check if server enabled in the configuration file
-    local is_all=0            # is all servers or a specific one
+    local server="${1}"             # Server name: dhcp4, dhcp6, dhcp_ddns, ctrl_agent, netconf
+    local commands="${2}"           # Commands to execute
+    local check_file_cfg="${3}"     # Check if server enabled in the configuration file
+    local is_all=0                  # is all servers or a specific one
 
     # If keyword "all" is not on the list of servers we will have to check
     # if our specific server is on the list. If, not return.
     is_in_list "all" "${servers}"
-    if [ ${_inlist} -eq 0 ]; then
+    if [ "${_inlist}" -eq 0 ]; then
         is_in_list "${server}" "${servers}"
-        if [ ${_inlist} -eq 0 ]; then
+        if [ "${_inlist}" -eq 0 ]; then
             return
         fi
     else
@@ -298,12 +301,12 @@ run_conditional() {
 # Right now we're checking keactrl.in rather than keactrl directly. The have_netconf
 # variable is set by configure script (it's in keactrl and not in keactrl.in).
 # shellcheck disable=SC2154
-        if [ "${have_netconf}" -eq 0 ]; then
+        if ! ${have_netconf}; then
             return
         fi
         # reload is not supported for netconf.
         if [ "${command}" = "reload" ]; then
-            if [ ${is_all} -eq 1 ]; then
+            if [ "${is_all}" -eq 1 ]; then
                 return
             fi
             log_warning "netconf does not support reload"
@@ -331,12 +334,12 @@ run_conditional() {
 # Note that when the configuration is applied this location may be
 # altered and only the handful of initial messages will be logged
 # to the default file.
-if [ -z "${KEA_LOGGER_DESTINATION}" ]; then
-    prefix=@prefix@
-    export KEA_LOGGER_DESTINATION=@localstatedir@/log/kea.log
+if [ -z "${KEA_LOGGER_DESTINATION+x}" ]; then
+    prefix="@prefix@"
+    export KEA_LOGGER_DESTINATION="@localstatedir@/log/kea.log"
 fi
 
-command=${1}
+command=${1-}
 if [ -z "${command}" ]; then
     log_error "missing command"
     usage
@@ -350,31 +353,27 @@ if test "${command}" = "-v" || test "${command}" = "--version" ; then
 fi
 
 is_in_list "${command}" "start stop reload status version"
-if [ ${_inlist} -eq 0 ]; then
+if [ "${_inlist}" -eq 0 ]; then
     log_error "invalid command: ${command}"
     exit 1
 fi
 
 # Get the location of the keactrl configuration file.
-# Need to disable a false positive from shellcheck. Yes, prefix is used.
-# shellcheck disable=SC2034
-prefix=@prefix@
-# Avoid problem with localstatedir / runstatedir
-# shellcheck disable=SC2034
-localstatedir=@localstatedir@
-keactrl_conf=@sysconfdir@/@PACKAGE@/keactrl.conf
+prefix="@prefix@"
+localstatedir="@localstatedir@"
+keactrl_conf="@sysconfdir@/@PACKAGE@/keactrl.conf"
 
 servers="all"
 
 shift
-while [ -n "${1}" ]
+while test ${#} -gt 0
 do
     option=${1}
     case ${option} in
         # Override keactrl configuration file.
         -c|--ctrl-config)
             shift
-            keactrl_conf=${1}
+            keactrl_conf=${1-}
             if [ -z "${keactrl_conf}" ]; then
                 log_error "keactrl-config-file not specified"
                 usage
@@ -385,7 +384,7 @@ do
         # executed.
         -s|--server)
             shift
-            servers=$( printf "%s" "${1}" | tr "," "\n" )
+            servers=$(printf '%s' "${1-}" | tr ',' '\n')
             if [ -z "${servers}" ]; then
                 log_error "servers not specified"
                 usage
@@ -395,7 +394,7 @@ do
             for s in ${servers}
             do
                 is_in_list "${s}" "all dhcp4 dhcp6 dhcp_ddns ctrl_agent netconf"
-                if [ ${_inlist} -eq 0 ]; then
+                if [ "${_inlist}" -eq 0 ]; then
                     log_error "invalid server name: ${s}"
                     exit 1
                 fi
@@ -422,37 +421,38 @@ fi
 
 # Get location of the DHCPv4 server binary.
 # shellcheck disable=SC2154
-if [ -z "${dhcp4_srv}" ]; then
+if [ -z "${dhcp4_srv+x}" ]; then
     log_error "dhcp4_srv parameter not specified"
     exit 1
 fi
 
 # Get location of the DHCPv6 server binary.
 # shellcheck disable=SC2154
-if [ -z "${dhcp6_srv}" ]; then
+if [ -z "${dhcp6_srv+x}" ]; then
     log_error "dhcp6_srv parameter not specified"
     exit 1
 fi
 
 # Get location of the DHCP DDNS server binary.
 # shellcheck disable=SC2154
-if [ -z "${dhcp_ddns}" ]; then
+if [ -z "${dhcp_ddns+x}" ]; then
     log_error "dhcp_ddns parameter not specified"
     exit 1
 fi
 
 # Get location of the Control Agent binary.
 # shellcheck disable=SC2154
-if [ -z "${ctrl_agent_srv}" ]; then
+if [ -z "${ctrl_agent_srv+x}" ]; then
     log_error "ctrl_agent_srv parameter not specified"
     exit 1
 fi
 
 # Get location of the Netconf binary.
-# have_netconf is set by configure in keactrl, but shellcheck checks keactrl.in
-# shellcheck disable=SC2154
-if [ "${have_netconf}" -eq 1 ]; then
-    if [ -z "${netconf_srv}" ]; then
+if ${have_netconf}; then
+    # shellcheck disable=SC2154
+    # SC2154: netconf_srv is referenced but not assigned.
+    # reason: it is taken from keactrl.conf
+    if [ -z "${netconf_srv+x}" ]; then
         log_error "netconf_srv parameter not specified"
         exit 1
     fi
@@ -471,7 +471,6 @@ case ${command} in
     start)
         args=""
         # kea_verbose is set in keactrl.conf that shellcheck is unable to load.
-        # shellcheck disable=SC2154
         if [ "${kea_verbose}" = "yes" ]; then
             args="-d"
         fi
@@ -480,10 +479,8 @@ case ${command} in
         # and if they are enabled in the keactrl configuration file.
         # The variables (dhcp4_srv, dhcp6_serv, dhcp_ddns_srv etc) are set in the
         # keactrl.conf file that shellcheck is unable to read.
-        # shellcheck disable=SC2154
         run_conditional "dhcp4" "start_server ${dhcp4_srv} -c ${kea_dhcp4_config_file} ${args}" 1
         run_conditional "dhcp6" "start_server ${dhcp6_srv} -c ${kea_dhcp6_config_file} ${args}" 1
-        # shellcheck disable=SC2154
         run_conditional "dhcp_ddns" "start_server ${dhcp_ddns_srv} -c ${kea_dhcp_ddns_config_file} \
 ${args}" 1
         run_conditional "ctrl_agent" "start_server ${ctrl_agent_srv} -c ${kea_ctrl_agent_config_file} \
@@ -517,8 +514,8 @@ ${args}" 1
 
     status)
         if [ -t 1 ]; then
-            inactive="\e[91minactive\e[0m"
-            active="\e[92mactive\e[0m"
+            inactive="\033[91minactive\033[0m"
+            active="\033[92mactive\033[0m"
         else
             inactive="inactive"
             active="active"
@@ -529,33 +526,33 @@ ${args}" 1
         # correct. For details, see this fine explanation:
         # https://unix.stackexchange.com/questions/443989/whats-the-right-way-to-quote-command-arg
         check_running "$(basename -- "${dhcp4_srv}")"
-        if [ ${_running} -eq 1 ]; then
+        if [ "${_running}" -eq 1 ]; then
             kea4_status=$active
         fi
         printf "DHCPv4 server: %b\n" "${kea4_status}"
 
         kea6_status=$inactive
         check_running "$(basename -- "${dhcp6_srv}")"
-        if [ ${_running} -eq 1 ]; then
+        if [ "${_running}" -eq 1 ]; then
             kea6_status=$active
         fi
         printf "DHCPv6 server: %b\n" "${kea6_status}"
 
         d2_status=$inactive
         check_running "$(basename -- "${dhcp_ddns_srv}")"
-        if [ ${_running} -eq 1 ]; then
+        if [ "${_running}" -eq 1 ]; then
             d2_status="active"
         fi
         printf "DHCP DDNS: %b\n" "${d2_status}"
 
         agent_status=$inactive
         check_running "$(basename -- "${ctrl_agent_srv}")"
-        if [ ${_running} -eq 1 ]; then
+        if [ "${_running}" -eq 1 ]; then
             agent_status=$active
         fi
         printf "Control Agent: %b\n" "${agent_status}"
 
-        if [ "${have_netconf}" -eq 1 ]; then
+        if ${have_netconf}; then
             netconf_status=$inactive
             check_running "$(basename -- "${netconf_srv}")"
             if [ "${_running}" -eq 1 ]; then
@@ -568,7 +565,7 @@ ${args}" 1
         printf "Kea DHCPv6 configuration file: %s\n" "${kea_dhcp6_config_file}"
         printf "Kea DHCP DDNS configuration file: %s\n" "${kea_dhcp_ddns_config_file}"
         printf "Kea Control Agent configuration file: %s\n" "${kea_ctrl_agent_config_file}"
-        if [ "${have_netconf}" -eq 1 ]; then
+        if ${have_netconf}; then
             printf "Kea Netconf configuration file: %s\n" "${kea_netconf_config_file}"
         fi
         printf "keactrl configuration file: %s\n" "${keactrl_conf}"
@@ -577,7 +574,7 @@ ${args}" 1
         check_kea_conf "${kea_dhcp6_config_file}"
         check_kea_conf "${kea_dhcp_ddns_config_file}"
         check_kea_conf "${kea_ctrl_agent_config_file}"
-        if [ "${have_netconf}" -eq 1 ]; then
+        if ${have_netconf}; then
             check_kea_conf "${kea_netconf_config_file}"
         fi
 

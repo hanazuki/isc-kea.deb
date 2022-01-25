@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,6 +12,9 @@
 #include <dhcpsrv/cb_ctl_dhcp4.h>
 #include <dhcpsrv/cb_ctl_dhcp6.h>
 #include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/client_class_def.h>
+#include <dhcpsrv/host_mgr.h>
+#include <dhcpsrv/testutils/memory_host_data_source.h>
 #include <dhcpsrv/testutils/generic_backend_unittest.h>
 #include <dhcpsrv/testutils/test_config_backend_dhcp4.h>
 #include <dhcpsrv/testutils/test_config_backend_dhcp6.h>
@@ -19,7 +22,9 @@
 #include <hooks/callout_manager.h>
 #include <hooks/hooks_manager.h>
 #include <boost/date_time/posix_time/posix_time.hpp>
+#include <boost/make_shared.hpp>
 #include <gtest/gtest.h>
+#include <iostream>
 #include <map>
 #include <string>
 
@@ -33,17 +38,38 @@ using namespace isc::hooks;
 
 namespace {
 
+/// @brief Derivation of the @c MemHostDataSource which always returns
+/// @c false when setting IP reservations unique/non-unique mode.
+class NonUniqueHostDataSource : public MemHostDataSource {
+public:
+
+    /// @brief Virtual destructor.
+    virtual ~NonUniqueHostDataSource() {}
+
+    /// @brief Configure unique/non-unique IP reservations.
+    ///
+    /// @return Always false.
+    virtual bool setIPReservationsUnique(const bool) {
+        return (false);
+    }
+};
+
+/// @brief Pointer to the @c NonUniqueHostDataSource instance.
+typedef boost::shared_ptr<NonUniqueHostDataSource> NonUniqueHostDataSourcePtr;
+
 /// @brief Base class for testing derivations of the CBControlDHCP.
 class CBControlDHCPTest : public GenericBackendTest {
 public:
 
     /// @brief Constructor.
     CBControlDHCPTest()
-        : timestamp_(), object_timestamp_(), audit_entries_() {
+        : timestamp_(), object_timestamp_(), audit_entries_(),
+          modification_id_(2345) {
         CfgMgr::instance().clear();
         initTimestamps();
         callback_name_ = std::string("");
         callback_audit_entries_.reset();
+        HostMgr::create();
     }
 
     /// @brief Destructor.
@@ -54,6 +80,11 @@ public:
         // Unregister hooks.
         HooksManager::preCalloutsLibraryHandle().deregisterAllCallouts("cb4_updated");
         HooksManager::preCalloutsLibraryHandle().deregisterAllCallouts("cb6_updated");
+        bool status = HooksManager::unloadLibraries();
+        if (!status) {
+            std::cerr << "(fixture dtor) unloadLibraries failed" << std::endl;
+        }
+        HostDataSourceFactory::deregisterFactory("test");
     }
 
     /// @brief Creates new CREATE audit entry.
@@ -62,9 +93,13 @@ public:
     ///
     /// @param object_type Object type to be associated with the audit
     /// entry.
-    void addCreateAuditEntry(const std::string& object_type) {
-        AuditEntryPtr entry(new AuditEntry(object_type, 1234,
+    /// @param object_id Identifier of the object to be associated with
+    /// the audit entry.
+    void addCreateAuditEntry(const std::string& object_type,
+                             const uint64_t object_id) {
+        AuditEntryPtr entry(new AuditEntry(object_type, object_id,
                                            AuditEntry::ModificationType::CREATE,
+                                           ++modification_id_,
                                            "some log message"));
         audit_entries_.insert(entry);
     }
@@ -81,6 +116,7 @@ public:
                              const uint64_t object_id) {
         AuditEntryPtr entry(new AuditEntry(object_type, object_id,
                                            AuditEntry::ModificationType::DELETE,
+                                           ++modification_id_,
                                            "some log message"));
         audit_entries_.insert(entry);
     }
@@ -134,7 +170,7 @@ public:
     /// object types.
     ///
     /// @param object_type Object type.
-    bool fetchConfigElement(const std::string& object_type) const {
+    bool hasConfigElement(const std::string& object_type) const {
         if (!audit_entries_.empty()) {
             const auto& index = audit_entries_.get<AuditEntryObjectTypeTag>();
             auto range = index.equal_range(object_type);
@@ -198,6 +234,9 @@ public:
     /// @brief Collection of audit entries used in the unit tests.
     AuditEntryCollection audit_entries_;
 
+    /// @brief Modification id counter.
+    uint64_t modification_id_;
+
     /// @brief Callback name.
     static std::string callback_name_;
 
@@ -213,7 +252,12 @@ AuditEntryCollectionPtr CBControlDHCPTest::callback_audit_entries_;
 /// @brief Naked @c CBControlDHCPv4 class exposing protected methods.
 class TestCBControlDHCPv4 : public CBControlDHCPv4 {
 public:
-    using CBControlDHCPv4::getInitialAuditEntryTime;
+    /// @brief Constructor.
+    TestCBControlDHCPv4() {
+        CfgMgr::instance().setFamily(AF_INET);
+    }
+
+    using CBControlDHCPv4::getInitialAuditRevisionTime;
     using CBControlDHCPv4::databaseConfigApply;
 };
 
@@ -246,6 +290,7 @@ public:
         setTimestamp("dhcp4_options", timestamp_index);
         setTimestamp("dhcp4_shared_network", timestamp_index);
         setTimestamp("dhcp4_subnet", timestamp_index);
+        setTimestamp("dhcp4_client_class", timestamp_index);
     }
 
     /// @brief Creates test server configuration and stores it in a test
@@ -275,16 +320,14 @@ public:
                                                                     global_parameter));
 
         // Insert option definitions into the database.
-        OptionDefinitionPtr def(new OptionDefinition("one", 101, "uint16"));
+        OptionDefinitionPtr def(new OptionDefinition("one", 101, "isc", "uint16"));
         def->setId(1);
-        def->setOptionSpaceName("isc");
         def->setModificationTime(getTimestamp("dhcp4_option_def"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateOptionDef4(BackendSelector::UNSPEC(),
                                                               ServerSelector::ALL(),
                                                               def));
-        def.reset(new OptionDefinition("two", 102, "uint16"));
+        def.reset(new OptionDefinition("two", 102, "isc", "uint16"));
         def->setId(2);
-        def->setOptionSpaceName("isc");
         def->setModificationTime(getTimestamp("dhcp4_option_def"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateOptionDef4(BackendSelector::UNSPEC(),
                                                               ServerSelector::ALL(),
@@ -335,6 +378,21 @@ public:
         subnet->setModificationTime(getTimestamp("dhcp4_subnet"));
         mgr.getPool()->createUpdateSubnet4(BackendSelector::UNSPEC(), ServerSelector::ALL(),
                                            subnet);
+
+        // Insert client classes into the database.
+        auto expression = boost::make_shared<Expression>();
+        ClientClassDefPtr client_class = boost::make_shared<ClientClassDef>("first-class", expression);
+        client_class->setTest("substring(option[1].hex, 0, 8) == 'my-value'");
+        client_class->setId(1);
+        client_class->setModificationTime(getTimestamp("dhcp4_client_class"));
+        mgr.getPool()->createUpdateClientClass4(BackendSelector::UNSPEC(), ServerSelector::ALL(),
+                                                client_class, "");
+
+        client_class = boost::make_shared<ClientClassDef>("second-class", expression);
+        client_class->setId(2);
+        client_class->setModificationTime(getTimestamp("dhcp4_client_class"));
+        mgr.getPool()->createUpdateClientClass4(BackendSelector::UNSPEC(), ServerSelector::ALL(),
+                                                client_class, "");
     }
 
     /// @brief Deletes specified global parameter from the configuration
@@ -422,6 +480,24 @@ public:
         addDeleteAuditEntry("dhcp4_subnet", id);
     }
 
+    /// @brief Deletes specified client class from the configuration backend
+    /// and generates audit entry.
+    ///
+    /// @param name Name of the client class to be deleted.
+    void remoteDeleteClientClass(const std::string& name) {
+        auto& mgr = ConfigBackendDHCPv4Mgr::instance();
+
+        auto client_class = mgr.getPool()->getClientClass4(BackendSelector::UNSPEC(),
+                                                           ServerSelector::ALL(),
+                                                           name);
+
+        if (client_class) {
+            mgr.getPool()->deleteClientClass4(BackendSelector::UNSPEC(),
+                                              ServerSelector::ALL(),
+                                              name);
+            addDeleteAuditEntry("dhcp4_client_class", client_class->getId());
+        }
+    }
 
     /// @brief Tests the @c CBControlDHCPv4::databaseConfigApply method.
     ///
@@ -446,9 +522,9 @@ public:
         auto srv_cfg = CfgMgr::instance().getCurrentCfg();
 
         // If there is an audit entry for global parameter and the parameter
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
-        if (fetchConfigElement("dhcp4_global_parameter") &&
+        if (hasConfigElement("dhcp4_global_parameter") &&
             (getTimestamp("dhcp4_global_parameter") > lb_modification_time)) {
             checkConfiguredGlobal(srv_cfg, "foo", Element::create("bar"));
 
@@ -458,10 +534,10 @@ public:
         }
 
         // If there is an audit entry for option definition and the definition
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
         auto found_def = srv_cfg->getCfgOptionDef()->get("isc", "one");
-        if (fetchConfigElement("dhcp4_option_def") &&
+        if (hasConfigElement("dhcp4_option_def") &&
             getTimestamp("dhcp4_option_def") > lb_modification_time) {
             ASSERT_TRUE(found_def);
             EXPECT_EQ(101, found_def->getCode());
@@ -472,11 +548,11 @@ public:
         }
 
         // If there is an audit entry for an option and the option
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
         auto options = srv_cfg->getCfgOption();
-        auto found_opt = options->get("dhcp4", DHO_HOST_NAME);
-        if (fetchConfigElement("dhcp4_options") &&
+        auto found_opt = options->get(DHCP4_OPTION_SPACE, DHO_HOST_NAME);
+        if (hasConfigElement("dhcp4_options") &&
             (getTimestamp("dhcp4_options") > lb_modification_time)) {
             ASSERT_TRUE(found_opt.option_);
             EXPECT_EQ("new.example.com", found_opt.option_->toString());
@@ -486,11 +562,11 @@ public:
         }
 
         // If there is an audit entry for a shared network and the network
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
         auto networks = srv_cfg->getCfgSharedNetworks4();
         auto found_network = networks->getByName("one");
-        if (fetchConfigElement("dhcp4_shared_network") &&
+        if (hasConfigElement("dhcp4_shared_network") &&
             (getTimestamp("dhcp4_shared_network") > lb_modification_time)) {
             ASSERT_TRUE(found_network);
             EXPECT_TRUE(found_network->hasFetchGlobalsFn());
@@ -500,16 +576,29 @@ public:
         }
 
         // If there is an audit entry for a subnet and the subnet modification
-        // time is later than last audit entry time it should be merged.
+        // time is later than last audit revision time it should be merged.
         auto subnets = srv_cfg->getCfgSubnets4();
         auto found_subnet = subnets->getSubnet(1);
-        if (fetchConfigElement("dhcp4_subnet") &&
+        if (hasConfigElement("dhcp4_subnet") &&
             (getTimestamp("dhcp4_subnet") > lb_modification_time)) {
             ASSERT_TRUE(found_subnet);
             EXPECT_TRUE(found_subnet->hasFetchGlobalsFn());
 
         } else {
             EXPECT_FALSE(found_subnet);
+        }
+
+        auto client_classes = srv_cfg->getClientClassDictionary();
+        auto found_class = client_classes->findClass("first-class");
+        if (hasConfigElement("dhcp4_client_class") &&
+            (getTimestamp("dhcp4_client_class") > lb_modification_time)) {
+            ASSERT_TRUE(found_class);
+            ASSERT_TRUE(found_class->getMatchExpr());
+            EXPECT_GT(found_class->getMatchExpr()->size(), 0);
+            EXPECT_EQ("first-class", found_class->getName());
+
+        } else {
+            EXPECT_FALSE(found_class);
         }
     }
 
@@ -541,7 +630,7 @@ public:
         // as if the server is starting up and fetches the entire
         // configuration from the database.
         ctl_.databaseConfigApply(BackendSelector::UNSPEC(), ServerSelector::ALL(),
-                                 ctl_.getInitialAuditEntryTime(),
+                                 ctl_.getInitialAuditRevisionTime(),
                                  AuditEntryCollection());
         // Commit the configuration so as it is moved from the staging
         // to current.
@@ -589,8 +678,10 @@ public:
         {
             SCOPED_TRACE("global options");
             // One of the options should still be there.
-            EXPECT_TRUE(srv_cfg->getCfgOption()->get("dhcp4", DHO_TFTP_SERVER_NAME).option_);
-            auto found_opt = srv_cfg->getCfgOption()->get("dhcp4", DHO_HOST_NAME);
+            EXPECT_TRUE(srv_cfg->getCfgOption()->get(DHCP4_OPTION_SPACE,
+                                                     DHO_TFTP_SERVER_NAME).option_);
+            auto found_opt = srv_cfg->getCfgOption()->get(DHCP4_OPTION_SPACE,
+                                                          DHO_HOST_NAME);
             if (deleteConfigElement("dhcp4_options", 1)) {
                 EXPECT_FALSE(found_opt.option_);
 
@@ -632,6 +723,19 @@ public:
                 EXPECT_TRUE(found_subnet);
             }
         }
+
+        {
+            SCOPED_TRACE("client classes");
+            // One of the subnets should still be there.
+            EXPECT_TRUE(srv_cfg->getClientClassDictionary()->findClass("second-class"));
+            auto found_client_class = srv_cfg->getClientClassDictionary()->findClass("first-class");
+            if (deleteConfigElement("dhcp4_client_class", 1)) {
+                EXPECT_FALSE(found_client_class);
+
+            } else {
+                EXPECT_TRUE(found_client_class);
+            }
+        }
     }
 
     /// @brief Instance of the @c CBControlDHCPv4 used for testing.
@@ -643,11 +747,18 @@ public:
 // types are merged into the current configuration.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyAll) {
 
-    addCreateAuditEntry("dhcp4_global_parameter");
-    addCreateAuditEntry("dhcp4_option_def");
-    addCreateAuditEntry("dhcp4_options");
-    addCreateAuditEntry("dhcp4_shared_network");
-    addCreateAuditEntry("dhcp4_subnet");
+    addCreateAuditEntry("dhcp4_global_parameter", 1);
+    addCreateAuditEntry("dhcp4_global_parameter", 2);
+    addCreateAuditEntry("dhcp4_option_def", 1);
+    addCreateAuditEntry("dhcp4_option_def", 2);
+    addCreateAuditEntry("dhcp4_options", 1);
+    addCreateAuditEntry("dhcp4_options", 2);
+    addCreateAuditEntry("dhcp4_shared_network", 1);
+    addCreateAuditEntry("dhcp4_shared_network", 2);
+    addCreateAuditEntry("dhcp4_subnet", 1);
+    addCreateAuditEntry("dhcp4_subnet", 2);
+    addCreateAuditEntry("dhcp4_client_class", 1);
+    addCreateAuditEntry("dhcp4_client_class", 2);
 
     testDatabaseConfigApply(getTimestamp(-5));
 }
@@ -662,6 +773,7 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteAll) {
         remoteDeleteOption(DHO_HOST_NAME, DHCP4_OPTION_SPACE);
         remoteDeleteSharedNetwork("one");
         remoteDeleteSubnet(SubnetID(1));
+        remoteDeleteClientClass("first-class");
     });
 }
 
@@ -678,13 +790,15 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteNonExisting) {
         addDeleteAuditEntry("dhcp4_options", 3);
         addDeleteAuditEntry("dhcp4_shared_network", 3);
         addDeleteAuditEntry("dhcp4_subnet", 3);
+        addDeleteAuditEntry("dhcp4_client_class", 3);
     });
 }
 
 // This test verifies that only a global parameter is merged into
 // the current configuration.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyGlobal) {
-    addCreateAuditEntry("dhcp4_global_parameter");
+    addCreateAuditEntry("dhcp4_global_parameter", 1);
+    addCreateAuditEntry("dhcp4_global_parameter", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -701,14 +815,16 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteGlobal) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyGlobalNotFetched) {
-    addCreateAuditEntry("dhcp4_global_parameter");
+    addCreateAuditEntry("dhcp4_global_parameter", 1);
+    addCreateAuditEntry("dhcp4_global_parameter", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only an option definition is merged into
 // the current configuration.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyOptionDef) {
-    addCreateAuditEntry("dhcp4_option_def");
+    addCreateAuditEntry("dhcp4_option_def", 1);
+    addCreateAuditEntry("dhcp4_option_def", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -726,14 +842,16 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteOptionDef) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyOptionDefNotFetched) {
-    addCreateAuditEntry("dhcp4_option_def");
+    addCreateAuditEntry("dhcp4_option_def", 1);
+    addCreateAuditEntry("dhcp4_option_def", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only a DHCPv4 option is merged into the
 // current configuration.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyOption) {
-    addCreateAuditEntry("dhcp4_options");
+    addCreateAuditEntry("dhcp4_options", 1);
+    addCreateAuditEntry("dhcp4_options", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -750,14 +868,16 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteOption) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyOptionNotFetched) {
-    addCreateAuditEntry("dhcp4_options");
+    addCreateAuditEntry("dhcp4_options", 1);
+    addCreateAuditEntry("dhcp4_options", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only a shared network is merged into the
 // current configuration.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplySharedNetwork) {
-    addCreateAuditEntry("dhcp4_shared_network");
+    addCreateAuditEntry("dhcp4_shared_network", 1);
+    addCreateAuditEntry("dhcp4_shared_network", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -774,15 +894,18 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteSharedNetwork) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplySharedNetworkNotFetched) {
-    addCreateAuditEntry("dhcp4_shared_network");
+    addCreateAuditEntry("dhcp4_shared_network", 1);
+    addCreateAuditEntry("dhcp4_shared_network", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only a subnet is merged into the current
 // configuration.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplySubnet) {
-    addCreateAuditEntry("dhcp4_shared_network");
-    addCreateAuditEntry("dhcp4_subnet");
+    addCreateAuditEntry("dhcp4_shared_network", 1);
+    addCreateAuditEntry("dhcp4_shared_network", 2);
+    addCreateAuditEntry("dhcp4_subnet", 1);
+    addCreateAuditEntry("dhcp4_subnet", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -798,11 +921,28 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteSubnet) {
 // when the modification time is earlier than the last fetched audit
 // entry.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplySubnetNotFetched) {
-    addCreateAuditEntry("dhcp4_subnet");
+    addCreateAuditEntry("dhcp4_subnet", 1);
+    addCreateAuditEntry("dhcp4_subnet", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
-// This test verifies that the configuration updates calls the hook.
+// This test verifies that only client classes are merged into the current
+// configuration.
+TEST_F(CBControlDHCPv4Test, databaseConfigApplyClientClasses) {
+    addCreateAuditEntry("dhcp4_client_class", 1);
+    addCreateAuditEntry("dhcp4_client_class", 2);
+    testDatabaseConfigApply(getTimestamp(-5));
+}
+
+// This test verifies that a client class is deleted from the local
+// configuration as a result of being deleted from the database.
+TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteClientClass) {
+    testDatabaseConfigApplyDelete(getTimestamp(-5), [this]() {
+        remoteDeleteClientClass("first-class");
+    });
+}
+
+// This test verifies that the configuration update calls the hook.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyHook) {
 
     // Initialize Hooks Manager.
@@ -813,11 +953,16 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyHook) {
         "cb4_updated", cb4_updated_callout));
 
     // Create audit entries.
-    addCreateAuditEntry("dhcp4_global_parameter");
-    addCreateAuditEntry("dhcp4_option_def");
-    addCreateAuditEntry("dhcp4_options");
-    addCreateAuditEntry("dhcp4_shared_network");
-    addCreateAuditEntry("dhcp4_subnet");
+    addCreateAuditEntry("dhcp4_global_parameter", 1);
+    addCreateAuditEntry("dhcp4_global_parameter", 2);
+    addCreateAuditEntry("dhcp4_option_def", 1);
+    addCreateAuditEntry("dhcp4_option_def", 2);
+    addCreateAuditEntry("dhcp4_options", 1);
+    addCreateAuditEntry("dhcp4_options", 2);
+    addCreateAuditEntry("dhcp4_shared_network", 1);
+    addCreateAuditEntry("dhcp4_shared_network", 2);
+    addCreateAuditEntry("dhcp4_subnet", 1);
+    addCreateAuditEntry("dhcp4_subnet", 2);
 
     // Run the test.
     testDatabaseConfigApply(getTimestamp(-5));
@@ -826,6 +971,76 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyHook) {
     EXPECT_EQ("cb4_updated", callback_name_);
     ASSERT_TRUE(callback_audit_entries_);
     EXPECT_TRUE(audit_entries_ == *callback_audit_entries_);
+}
+
+// This test verifies that it is possible to set ip-reservations-unique
+// parameter via configuration backend and that it is successful when
+// host database backend accepts the new setting.
+TEST_F(CBControlDHCPv4Test, ipReservationsNonUniqueAccepted) {
+    // Create host data source which accepts setting non-unique IP
+    // reservations.
+    MemHostDataSourcePtr hds(new MemHostDataSource());
+    auto testFactory = [hds](const DatabaseConnection::ParameterMap&) {
+        return (hds);
+    };
+    HostDataSourceFactory::registerFactory("test", testFactory);
+    HostMgr::addBackend("type=test");
+
+    // Insert ip-reservations-unique value set to false into the database.
+    auto& mgr = ConfigBackendDHCPv4Mgr::instance();
+    StampedValuePtr global_parameter = StampedValue::create("ip-reservations-unique",
+                                                            Element::create(false));
+    ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter4(BackendSelector::UNSPEC(),
+                                                                ServerSelector::ALL(),
+                                                                global_parameter));
+    // Adding audit entry simulates the case when the server is already configured
+    // and we're adding incremental changes. These changes should be applied to
+    // the current configuration.
+    addCreateAuditEntry("dhcp4_global_parameter", 1);
+
+    // Apply the configuration.
+    ASSERT_NO_THROW(ctl_.databaseConfigApply(BackendSelector::UNSPEC(),
+                                             ServerSelector::ALL(),
+                                             getTimestamp(-5),
+                                             audit_entries_));
+    // The new setting should be visible in both CfgDbAccess and HostMgr.
+    EXPECT_FALSE(CfgMgr::instance().getCurrentCfg()->getCfgDbAccess()->getIPReservationsUnique());
+    EXPECT_FALSE(HostMgr::instance().getIPReservationsUnique());
+}
+
+// This test verifies that the new setting of ip-reservations-unique is not
+// accepted when one of the host database backends does not support it.
+TEST_F(CBControlDHCPv4Test, ipReservationsNonUniqueRefused) {
+    // Create host data source which does not accept setting IP reservations
+    // non-unique setting.
+    NonUniqueHostDataSourcePtr hds(new NonUniqueHostDataSource());
+    auto testFactory = [hds](const DatabaseConnection::ParameterMap&) {
+        return (hds);
+    };
+    HostDataSourceFactory::registerFactory("test", testFactory);
+    HostMgr::addBackend("type=test");
+
+    // Insert ip-reservations-unique value set to false into the database.
+    auto& mgr = ConfigBackendDHCPv4Mgr::instance();
+    StampedValuePtr global_parameter = StampedValue::create("ip-reservations-unique",
+                                                            Element::create(false));
+    ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter4(BackendSelector::UNSPEC(),
+                                                                ServerSelector::ALL(),
+                                                                global_parameter));
+    // Adding audit entry simulates the case when the server is already configured
+    // and we're adding incremental changes. These changes should be applied to
+    // the current configuration.
+    addCreateAuditEntry("dhcp4_global_parameter", 1);
+
+    // Apply the configuration.
+    ASSERT_NO_THROW(ctl_.databaseConfigApply(BackendSelector::UNSPEC(),
+                                             ServerSelector::ALL(),
+                                             getTimestamp(-5),
+                                             audit_entries_));
+    // The default setting should be applied, because the backend refused to
+    // set it to false.
+    EXPECT_TRUE(CfgMgr::instance().getCurrentCfg()->getCfgDbAccess()->getIPReservationsUnique());
+    EXPECT_TRUE(HostMgr::instance().getIPReservationsUnique());
 }
 
 // ************************ V6 tests *********************
@@ -838,7 +1053,7 @@ public:
         CfgMgr::instance().setFamily(AF_INET6);
     }
 
-    using CBControlDHCPv6::getInitialAuditEntryTime;
+    using CBControlDHCPv6::getInitialAuditRevisionTime;
     using CBControlDHCPv6::databaseConfigApply;
 };
 
@@ -871,6 +1086,7 @@ public:
         setTimestamp("dhcp6_options", timestamp_index);
         setTimestamp("dhcp6_shared_network", timestamp_index);
         setTimestamp("dhcp6_subnet", timestamp_index);
+        setTimestamp("dhcp6_client_class", timestamp_index);
     }
 
     /// @brief Creates test server configuration and stores it in a test
@@ -900,16 +1116,14 @@ public:
                                                                     global_parameter));
 
         // Insert option definitions into the database.
-        OptionDefinitionPtr def(new OptionDefinition("one", 101, "uint16"));
+        OptionDefinitionPtr def(new OptionDefinition("one", 101, "isc", "uint16"));
         def->setId(1);
-        def->setOptionSpaceName("isc");
         def->setModificationTime(getTimestamp("dhcp6_option_def"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateOptionDef6(BackendSelector::UNSPEC(),
                                                               ServerSelector::ALL(),
                                                               def));
-        def.reset(new OptionDefinition("two", 102, "uint16"));
+        def.reset(new OptionDefinition("two", 102, "isc", "uint16"));
         def->setId(2);
-        def->setOptionSpaceName("isc");
         def->setModificationTime(getTimestamp("dhcp6_option_def"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateOptionDef6(BackendSelector::UNSPEC(),
                                                               ServerSelector::ALL(),
@@ -960,6 +1174,21 @@ public:
         subnet->setModificationTime(getTimestamp("dhcp6_subnet"));
         mgr.getPool()->createUpdateSubnet6(BackendSelector::UNSPEC(), ServerSelector::ALL(),
                                            subnet);
+
+        // Insert client classes into the database.
+        auto expression = boost::make_shared<Expression>();
+        ClientClassDefPtr client_class = boost::make_shared<ClientClassDef>("first-class", expression);
+        client_class->setTest("substring(option[1].hex, 0, 8) == 'my-value'");
+        client_class->setId(1);
+        client_class->setModificationTime(getTimestamp("dhcp6_client_class"));
+        mgr.getPool()->createUpdateClientClass6(BackendSelector::UNSPEC(), ServerSelector::ALL(),
+                                                client_class, "");
+
+        client_class = boost::make_shared<ClientClassDef>("second-class", expression);
+        client_class->setId(2);
+        client_class->setModificationTime(getTimestamp("dhcp6_client_class"));
+        mgr.getPool()->createUpdateClientClass6(BackendSelector::UNSPEC(), ServerSelector::ALL(),
+                                                client_class, "");
     }
 
     /// @brief Deletes specified global parameter from the configuration
@@ -1047,6 +1276,24 @@ public:
         addDeleteAuditEntry("dhcp6_subnet", id);
     }
 
+    /// @brief Deletes specified client class from the configuration backend
+    /// and generates audit entry.
+    ///
+    /// @param name Name of the client class to be deleted.
+    void remoteDeleteClientClass(const std::string& name) {
+        auto& mgr = ConfigBackendDHCPv6Mgr::instance();
+
+        auto client_class = mgr.getPool()->getClientClass6(BackendSelector::UNSPEC(),
+                                                           ServerSelector::ALL(),
+                                                           name);
+
+        if (client_class) {
+            mgr.getPool()->deleteClientClass6(BackendSelector::UNSPEC(),
+                                              ServerSelector::ALL(),
+                                              name);
+            addDeleteAuditEntry("dhcp6_client_class", client_class->getId());
+        }
+    }
 
     /// @brief Tests the @c CBControlDHCPv6::databaseConfigApply method.
     ///
@@ -1071,9 +1318,9 @@ public:
         auto srv_cfg = CfgMgr::instance().getCurrentCfg();
 
         // If there is an audit entry for global parameter and the parameter
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
-        if (fetchConfigElement("dhcp6_global_parameter") &&
+        if (hasConfigElement("dhcp6_global_parameter") &&
             (getTimestamp("dhcp6_global_parameter") > lb_modification_time)) {
             checkConfiguredGlobal(srv_cfg, "foo", Element::create("bar"));
 
@@ -1083,10 +1330,10 @@ public:
         }
 
         // If there is an audit entry for option definition and the definition
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
         auto found_def = srv_cfg->getCfgOptionDef()->get("isc", "one");
-        if (fetchConfigElement("dhcp6_option_def") &&
+        if (hasConfigElement("dhcp6_option_def") &&
             getTimestamp("dhcp6_option_def") > lb_modification_time) {
             ASSERT_TRUE(found_def);
             EXPECT_EQ(101, found_def->getCode());
@@ -1097,11 +1344,11 @@ public:
         }
 
         // If there is an audit entry for an option and the option
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
         auto options = srv_cfg->getCfgOption();
-        auto found_opt = options->get("dhcp6", D6O_BOOTFILE_URL);
-        if (fetchConfigElement("dhcp6_options") &&
+        auto found_opt = options->get(DHCP6_OPTION_SPACE, D6O_BOOTFILE_URL);
+        if (hasConfigElement("dhcp6_options") &&
             (getTimestamp("dhcp6_options") > lb_modification_time)) {
             ASSERT_TRUE(found_opt.option_);
             EXPECT_EQ("some.bootfile", found_opt.option_->toString());
@@ -1111,11 +1358,11 @@ public:
         }
 
         // If there is an audit entry for a shared network and the network
-        // modification time is later than last audit entry time it should
+        // modification time is later than last audit revision time it should
         // be merged.
         auto networks = srv_cfg->getCfgSharedNetworks6();
         auto found_network = networks->getByName("one");
-        if (fetchConfigElement("dhcp6_shared_network") &&
+        if (hasConfigElement("dhcp6_shared_network") &&
             (getTimestamp("dhcp6_shared_network") > lb_modification_time)) {
             ASSERT_TRUE(found_network);
             EXPECT_TRUE(found_network->hasFetchGlobalsFn());
@@ -1125,16 +1372,29 @@ public:
         }
 
         // If there is an audit entry for a subnet and the subnet modification
-        // time is later than last audit entry time it should be merged.
+        // time is later than last audit revision time it should be merged.
         auto subnets = srv_cfg->getCfgSubnets6();
         auto found_subnet = subnets->getSubnet(1);
-        if (fetchConfigElement("dhcp6_subnet") &&
+        if (hasConfigElement("dhcp6_subnet") &&
             (getTimestamp("dhcp6_subnet") > lb_modification_time)) {
             ASSERT_TRUE(found_subnet);
             EXPECT_TRUE(found_subnet->hasFetchGlobalsFn());
 
         } else {
             EXPECT_FALSE(found_subnet);
+        }
+
+        auto client_classes = srv_cfg->getClientClassDictionary();
+        auto found_class = client_classes->findClass("first-class");
+        if (hasConfigElement("dhcp6_client_class") &&
+            (getTimestamp("dhcp6_client_class") > lb_modification_time)) {
+            ASSERT_TRUE(found_class);
+            ASSERT_TRUE(found_class->getMatchExpr());
+            EXPECT_GT(found_class->getMatchExpr()->size(), 0);
+            EXPECT_EQ("first-class", found_class->getName());
+
+        } else {
+            EXPECT_FALSE(found_class);
         }
     }
 
@@ -1166,7 +1426,7 @@ public:
         // as if the server is starting up and fetches the entire
         // configuration from the database.
         ctl_.databaseConfigApply(BackendSelector::UNSPEC(), ServerSelector::ALL(),
-                                 ctl_.getInitialAuditEntryTime(),
+                                 ctl_.getInitialAuditRevisionTime(),
                                  AuditEntryCollection());
         // Commit the configuration so as it is moved from the staging
         // to current.
@@ -1214,8 +1474,10 @@ public:
         {
             SCOPED_TRACE("global options");
             // One of the options should still be there.
-            EXPECT_TRUE(srv_cfg->getCfgOption()->get("dhcp6", D6O_AFTR_NAME).option_);
-            auto found_opt = srv_cfg->getCfgOption()->get("dhcp6", D6O_AFTR_NAME);
+            EXPECT_TRUE(srv_cfg->getCfgOption()->get(DHCP6_OPTION_SPACE,
+                                                     D6O_AFTR_NAME).option_);
+            auto found_opt = srv_cfg->getCfgOption()->get(DHCP6_OPTION_SPACE,
+                                                          D6O_AFTR_NAME);
             if (deleteConfigElement("dhcp6_options", 1)) {
                 EXPECT_FALSE(found_opt.option_);
 
@@ -1267,11 +1529,18 @@ public:
 // types are merged into the current configuration.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyAll) {
 
-    addCreateAuditEntry("dhcp6_global_parameter");
-    addCreateAuditEntry("dhcp6_option_def");
-    addCreateAuditEntry("dhcp6_options");
-    addCreateAuditEntry("dhcp6_shared_network");
-    addCreateAuditEntry("dhcp6_subnet");
+    addCreateAuditEntry("dhcp6_global_parameter", 1);
+    addCreateAuditEntry("dhcp6_global_parameter", 2);
+    addCreateAuditEntry("dhcp6_option_def", 1);
+    addCreateAuditEntry("dhcp6_option_def", 2);
+    addCreateAuditEntry("dhcp6_options", 1);
+    addCreateAuditEntry("dhcp6_options", 2);
+    addCreateAuditEntry("dhcp6_shared_network", 1);
+    addCreateAuditEntry("dhcp6_shared_network", 2);
+    addCreateAuditEntry("dhcp6_subnet", 1);
+    addCreateAuditEntry("dhcp6_subnet", 2);
+    addCreateAuditEntry("dhcp6_client_class", 1);
+    addCreateAuditEntry("dhcp6_client_class", 2);
 
     testDatabaseConfigApply(getTimestamp(-5));
 }
@@ -1308,7 +1577,8 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteNonExisting) {
 // This test verifies that only a global parameter is merged into
 // the current configuration.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyGlobal) {
-    addCreateAuditEntry("dhcp6_global_parameter");
+    addCreateAuditEntry("dhcp6_global_parameter", 1);
+    addCreateAuditEntry("dhcp6_global_parameter", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -1325,14 +1595,16 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteGlobal) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyGlobalNotFetched) {
-    addCreateAuditEntry("dhcp6_global_parameter");
+    addCreateAuditEntry("dhcp6_global_parameter", 1);
+    addCreateAuditEntry("dhcp6_global_parameter", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only an option definition is merged into
 // the current configuration.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyOptionDef) {
-    addCreateAuditEntry("dhcp6_option_def");
+    addCreateAuditEntry("dhcp6_option_def", 1);
+    addCreateAuditEntry("dhcp6_option_def", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -1350,14 +1622,16 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteOptionDef) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyOptionDefNotFetched) {
-    addCreateAuditEntry("dhcp6_option_def");
+    addCreateAuditEntry("dhcp6_option_def", 1);
+    addCreateAuditEntry("dhcp6_option_def", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only a DHCPv6 option is merged into the
 // current configuration.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyOption) {
-    addCreateAuditEntry("dhcp6_options");
+    addCreateAuditEntry("dhcp6_options", 1);
+    addCreateAuditEntry("dhcp6_options", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -1374,14 +1648,16 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteOption) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyOptionNotFetched) {
-    addCreateAuditEntry("dhcp6_options");
+    addCreateAuditEntry("dhcp6_options", 1);
+    addCreateAuditEntry("dhcp6_options", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only a shared network is merged into the
 // current configuration.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplySharedNetwork) {
-    addCreateAuditEntry("dhcp6_shared_network");
+    addCreateAuditEntry("dhcp6_shared_network", 1);
+    addCreateAuditEntry("dhcp6_shared_network", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -1398,15 +1674,18 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteSharedNetwork) {
 // database when the modification time is earlier than the last
 // fetched audit entry.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplySharedNetworkNotFetched) {
-    addCreateAuditEntry("dhcp6_shared_network");
+    addCreateAuditEntry("dhcp6_shared_network", 1);
+    addCreateAuditEntry("dhcp6_shared_network", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
 // This test verifies that only a subnet is merged into the current
 // configuration.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplySubnet) {
-    addCreateAuditEntry("dhcp6_shared_network");
-    addCreateAuditEntry("dhcp6_subnet");
+    addCreateAuditEntry("dhcp6_shared_network", 1);
+    addCreateAuditEntry("dhcp6_shared_network", 2);
+    addCreateAuditEntry("dhcp6_subnet", 1);
+    addCreateAuditEntry("dhcp6_subnet", 2);
     testDatabaseConfigApply(getTimestamp(-5));
 }
 
@@ -1422,11 +1701,28 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteSubnet) {
 // when the modification time is earlier than the last fetched audit
 // entry.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplySubnetNotFetched) {
-    addCreateAuditEntry("dhcp6_subnet");
+    addCreateAuditEntry("dhcp6_subnet", 1);
+    addCreateAuditEntry("dhcp6_subnet", 2);
     testDatabaseConfigApply(getTimestamp(-3));
 }
 
-// This test verifies that the configuration updates calls the hook.
+// This test verifies that only client classes are merged into the current
+// configuration.
+TEST_F(CBControlDHCPv6Test, databaseConfigApplyClientClasses) {
+    addCreateAuditEntry("dhcp6_client_class", 1);
+    addCreateAuditEntry("dhcp6_client_class", 2);
+    testDatabaseConfigApply(getTimestamp(-5));
+}
+
+// This test verifies that a client class is deleted from the local
+// configuration as a result of being deleted from the database.
+TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteClientClass) {
+    testDatabaseConfigApplyDelete(getTimestamp(-5), [this]() {
+        remoteDeleteClientClass("first-class");
+    });
+}
+
+// This test verifies that the configuration update calls the hook.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyHook) {
 
     // Initialize Hooks Manager.
@@ -1437,11 +1733,16 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyHook) {
         "cb6_updated", cb6_updated_callout));
 
     // Create audit entries.
-    addCreateAuditEntry("dhcp6_global_parameter");
-    addCreateAuditEntry("dhcp6_option_def");
-    addCreateAuditEntry("dhcp6_options");
-    addCreateAuditEntry("dhcp6_shared_network");
-    addCreateAuditEntry("dhcp6_subnet");
+    addCreateAuditEntry("dhcp6_global_parameter", 1);
+    addCreateAuditEntry("dhcp6_global_parameter", 2);
+    addCreateAuditEntry("dhcp6_option_def", 1);
+    addCreateAuditEntry("dhcp6_option_def", 2);
+    addCreateAuditEntry("dhcp6_options", 1);
+    addCreateAuditEntry("dhcp6_options", 2);
+    addCreateAuditEntry("dhcp6_shared_network", 1);
+    addCreateAuditEntry("dhcp6_shared_network", 2);
+    addCreateAuditEntry("dhcp6_subnet", 1);
+    addCreateAuditEntry("dhcp6_subnet", 2);
 
     // Run the test.
     testDatabaseConfigApply(getTimestamp(-5));
@@ -1450,6 +1751,76 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyHook) {
     EXPECT_EQ("cb6_updated", callback_name_);
     ASSERT_TRUE(callback_audit_entries_);
     EXPECT_TRUE(audit_entries_ == *callback_audit_entries_);
+}
+
+// This test verifies that it is possible to set ip-reservations-unique
+// parameter via configuration backend and that it is successful when
+// host database backend accepts the new setting.
+TEST_F(CBControlDHCPv6Test, ipReservationsNonUniqueAccepted) {
+    // Create host data source which accepts setting non-unique IP
+    // reservations.
+    MemHostDataSourcePtr hds(new MemHostDataSource());
+    auto testFactory = [hds](const DatabaseConnection::ParameterMap&) {
+        return (hds);
+    };
+    HostDataSourceFactory::registerFactory("test", testFactory);
+    HostMgr::addBackend("type=test");
+
+    // Insert ip-reservations-unique value set to false into the database.
+    auto& mgr = ConfigBackendDHCPv6Mgr::instance();
+    StampedValuePtr global_parameter = StampedValue::create("ip-reservations-unique",
+                                                            Element::create(false));
+    ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter6(BackendSelector::UNSPEC(),
+                                                                ServerSelector::ALL(),
+                                                                global_parameter));
+    // Adding audit entry simulates the case when the server is already configured
+    // and we're adding incremental changes. These changes should be applied to
+    // the current configuration.
+    addCreateAuditEntry("dhcp6_global_parameter", 1);
+
+    // Apply the configuration.
+    ASSERT_NO_THROW(ctl_.databaseConfigApply(BackendSelector::UNSPEC(),
+                                             ServerSelector::ALL(),
+                                             getTimestamp(-5),
+                                             audit_entries_));
+    // The new setting should be visible in both CfgDbAccess and HostMgr.
+    EXPECT_FALSE(CfgMgr::instance().getCurrentCfg()->getCfgDbAccess()->getIPReservationsUnique());
+    EXPECT_FALSE(HostMgr::instance().getIPReservationsUnique());
+}
+
+// This test verifies that the new setting of ip-reservations-unique is not
+// accepted when one of the host database backends does not support it.
+TEST_F(CBControlDHCPv6Test, ipReservationsNonUniqueRefused) {
+    // Create host data source which does not accept setting IP reservations
+    // non-unique setting.
+    NonUniqueHostDataSourcePtr hds(new NonUniqueHostDataSource());
+    auto testFactory = [hds](const DatabaseConnection::ParameterMap&) {
+        return (hds);
+    };
+    HostDataSourceFactory::registerFactory("test", testFactory);
+    HostMgr::addBackend("type=test");
+
+    // Insert ip-reservations-unique value set to false into the database.
+    auto& mgr = ConfigBackendDHCPv6Mgr::instance();
+    StampedValuePtr global_parameter = StampedValue::create("ip-reservations-unique",
+                                                            Element::create(false));
+    ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter6(BackendSelector::UNSPEC(),
+                                                                ServerSelector::ALL(),
+                                                                global_parameter));
+    // Adding audit entry simulates the case when the server is already configured
+    // and we're adding incremental changes. These changes should be applied to
+    // the current configuration.
+    addCreateAuditEntry("dhcp6_global_parameter", 1);
+
+    // Apply the configuration.
+    ASSERT_NO_THROW(ctl_.databaseConfigApply(BackendSelector::UNSPEC(),
+                                             ServerSelector::ALL(),
+                                             getTimestamp(-5),
+                                             audit_entries_));
+    // The default setting should be applied, because the backend refused to
+    // set it to false.
+    EXPECT_TRUE(CfgMgr::instance().getCurrentCfg()->getCfgDbAccess()->getIPReservationsUnique());
+    EXPECT_TRUE(HostMgr::instance().getIPReservationsUnique());
 }
 
 }

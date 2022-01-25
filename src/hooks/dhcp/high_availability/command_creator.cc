@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,9 +21,10 @@ ConstElementPtr
 CommandCreator::createDHCPDisable(const unsigned int max_period,
                                   const HAServerType& server_type) {
     ElementPtr args;
+    args = Element::createMap();
+    args->set("origin", Element::create("ha-partner"));
     // max-period is optional. A value of 0 means that it is not specified.
     if (max_period > 0) {
-        args = Element::createMap();
         args->set("max-period", Element::create(static_cast<long int>(max_period)));
     }
     ConstElementPtr command = config::createCommand("dhcp-disable", args);
@@ -33,7 +34,17 @@ CommandCreator::createDHCPDisable(const unsigned int max_period,
 
 ConstElementPtr
 CommandCreator::createDHCPEnable(const HAServerType& server_type) {
-    ConstElementPtr command = config::createCommand("dhcp-enable");
+    ElementPtr args;
+    args = Element::createMap();
+    args->set("origin", Element::create("ha-partner"));
+    ConstElementPtr command = config::createCommand("dhcp-enable", args);
+    insertService(command, server_type);
+    return (command);
+}
+
+ConstElementPtr
+CommandCreator::createHAReset(const HAServerType& server_type) {
+    ConstElementPtr command = config::createCommand("ha-reset");
     insertService(command, server_type);
     return (command);
 }
@@ -125,6 +136,32 @@ CommandCreator::createLease6BulkApply(const Lease6CollectionPtr& leases,
 }
 
 ConstElementPtr
+CommandCreator::createLease6BulkApply(LeaseUpdateBacklog& leases) {
+    ElementPtr deleted_leases_list = Element::createList();
+    ElementPtr leases_list = Element::createList();
+
+    LeaseUpdateBacklog::OpType op_type;
+    Lease6Ptr lease;
+    while ((lease = boost::dynamic_pointer_cast<Lease6>(leases.pop(op_type)))) {
+        ElementPtr lease_as_json = lease->toElement();
+        insertLeaseExpireTime(lease_as_json);
+        if (op_type == LeaseUpdateBacklog::DELETE) {
+            deleted_leases_list->add(lease_as_json);
+        } else {
+            leases_list->add(lease_as_json);
+        }
+    }
+
+    ElementPtr args = Element::createMap();
+    args->set("deleted-leases", deleted_leases_list);
+    args->set("leases", leases_list);
+
+    ConstElementPtr command = config::createCommand("lease6-bulk-apply", args);
+    insertService(command, HAServerType::DHCPv6);
+    return (command);
+}
+
+ConstElementPtr
 CommandCreator::createLease6Update(const Lease6& lease6) {
     ElementPtr lease_as_json = lease6.toElement();
     insertLeaseExpireTime(lease_as_json);
@@ -180,6 +217,13 @@ CommandCreator::createMaintenanceNotify(const bool cancel, const HAServerType& s
     auto args = Element::createMap();
     args->set("cancel", Element::create(cancel));
     auto command = config::createCommand("ha-maintenance-notify", args);
+    insertService(command, server_type);
+    return (command);
+}
+
+ConstElementPtr
+CommandCreator::createSyncCompleteNotify(const HAServerType& server_type) {
+    auto command = config::createCommand("ha-sync-complete-notify");
     insertService(command, server_type);
     return (command);
 }

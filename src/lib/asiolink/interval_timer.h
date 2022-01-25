@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,8 +7,8 @@
 #ifndef ASIOLINK_INTERVAL_TIMER_H
 #define ASIOLINK_INTERVAL_TIMER_H 1
 
-#include <boost/function.hpp>
 #include <boost/shared_ptr.hpp>
+#include <functional>
 
 #include <asiolink/io_service.h>
 
@@ -52,7 +52,7 @@ class IntervalTimerImpl;
 class IntervalTimer {
 public:
     /// \name The type of timer callback function
-    typedef boost::function<void()> Callback;
+    typedef std::function<void()> Callback;
 
     /// \brief Defines possible timer modes used to setup a timer.
     /// - REPEATING - Timer will reschedule itself after each expiration

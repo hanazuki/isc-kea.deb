@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,18 +20,22 @@
 #include <util/watch_socket.h>
 #include <util/watched_thread.h>
 
-#include <boost/function.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/mem_fun.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
 #include <boost/noncopyable.hpp>
 #include <boost/scoped_array.hpp>
 #include <boost/shared_ptr.hpp>
 
+#include <functional>
 #include <list>
 #include <vector>
+#include <mutex>
 
 namespace isc {
 
 namespace dhcp {
-
 
 /// @brief IfaceMgr exception thrown thrown when interface detection fails.
 class IfaceDetectError : public Exception {
@@ -140,7 +144,8 @@ public:
     ///
     /// @param name name of the interface
     /// @param ifindex interface index (unique integer identifier)
-    Iface(const std::string& name, int ifindex);
+    /// @throw BadValue when name is empty.
+    Iface(const std::string& name, unsigned int ifindex);
 
     /// @brief Destructor.
     ~Iface() { }
@@ -208,7 +213,7 @@ public:
     /// @brief Returns interface index.
     ///
     /// @return interface index
-    uint16_t getIndex() const { return ifindex_; }
+    int getIndex() const { return ifindex_; }
 
     /// @brief Returns interface name.
     ///
@@ -370,7 +375,7 @@ public:
     /// NULL if the buffer is empty.
     uint8_t* getReadBuffer() {
         if (read_buffer_.empty()) {
-            return NULL;
+            return (0);
         }
         return (&read_buffer_[0]);
     }
@@ -454,7 +459,156 @@ private:
     std::vector<uint8_t> read_buffer_;
 };
 
+/// @brief Type definition for the pointer to an @c Iface object.
 typedef boost::shared_ptr<Iface> IfacePtr;
+
+/// @brief Collection of pointers to network interfaces.
+class IfaceCollection {
+public:
+
+    /// @brief Multi index container for network interfaces.
+    ///
+    /// This container allows to search for a network interfaces using
+    /// three indexes:
+    ///  - sequenced: used to access elements in the order they have
+    /// been added to the container.
+    ///  - interface index: used to access an interface using its index.
+    ///  - interface name: used to access an interface using its name.
+    /// Note that indexes and names are unique.
+    typedef boost::multi_index_container<
+        // Container comprises elements of IfacePtr type.
+        IfacePtr,
+        // Here we start enumerating various indexes.
+        boost::multi_index::indexed_by<
+            // Sequenced index allows accessing elements in the same way
+            // as elements in std::list. Sequenced is the index #0.
+            boost::multi_index::sequenced<>,
+            // Start definition of index #1.
+            boost::multi_index::hashed_unique<
+                // Use the interface index as the key.
+                boost::multi_index::const_mem_fun<
+                    Iface, int, &Iface::getIndex
+                >
+            >,
+            // Start definition of index #2.
+            boost::multi_index::hashed_unique<
+                // Use the interface name as the key.
+                boost::multi_index::const_mem_fun<
+                    Iface, std::string, &Iface::getName
+                >
+            >
+        >
+    > IfaceContainer;
+
+    /// @brief Begin iterator.
+    ///
+    /// @return The container sequence begin iterator.
+    IfaceContainer::const_iterator begin() const {
+        return (ifaces_container_.begin());
+    }
+
+    /// @brief End iterator.
+    ///
+    /// @return The container sequence end iterator.
+    IfaceContainer::const_iterator end() const {
+        return (ifaces_container_.end());
+    }
+
+    /// @brief Empty predicate.
+    ///
+    /// @return If the container is empty true else false.
+    bool empty() const {
+        return (ifaces_container_.empty());
+    }
+
+    /// @brief Return the number of interfaces.
+    ///
+    /// @return The container size.
+    size_t size() const {
+        return (ifaces_container_.size());
+    }
+
+    /// @brief Clear the collection.
+    void clear() {
+        cache_.reset();
+        ifaces_container_.clear();
+    }
+
+    /// @brief Adds an interface to the collection.
+    ///
+    /// The interface is added at the end of sequence.
+    ///
+    /// @param iface reference to Iface object.
+    void push_back(const IfacePtr& iface) {
+        ifaces_container_.push_back(iface);
+    }
+
+    /// @brief Lookup by interface index.
+    ///
+    /// @param ifindex The index of the interface to find.
+    /// @return The interface with the index or null.
+    IfacePtr getIface(uint32_t ifindex);
+
+    /// @brief Lookup by interface name.
+    ///
+    /// @param ifname The name of the interface to find.
+    /// @return The interface with the name or null.
+    IfacePtr getIface(const std::string& ifname);
+
+private:
+    /// @brief Lookup by interface index.
+    ///
+    /// @param ifindex The index of the interface to find.
+    /// @param need_lock True when the cache operation needs to hold the mutex.
+    /// @return The interface with the index or null.
+    IfacePtr getIfaceInternal(uint32_t ifindex, bool need_lock);
+
+    /// @brief Lookup by interface name.
+    ///
+    /// The mutex must be held when called from a packet processing thread.
+    ///
+    /// @param ifname The name of the interface to find.
+    /// @param need_lock True when the cache operation needs to hold the mutex.
+    /// @return The interface with the name or null.
+    IfacePtr getIfaceInternal(const std::string& ifname, bool need_lock);
+
+    /// @brief The mutex for protecting the cache from concurrent
+    /// access from packet processing threads.
+    std::mutex mutex_;
+
+    /// @brief The last interface returned by a lookup method.
+    ///
+    /// A lookup method first tries the cache: if it matches the cache is
+    /// returned without an expensive lookup in the container. If it does
+    /// not match and a value is found in the container the cache is
+    /// updated with this value.
+    /// The cache should perform well when active interfaces are a small
+    /// subset of the whole interface set, or when consecutive packets
+    /// come from the same interface.
+    IfacePtr cache_;
+
+    /// @brief The container.
+    IfaceContainer ifaces_container_;
+};
+
+/// @brief Type definition for the unordered set of IPv4 bound addresses.
+///
+/// In order to make @c hasOpenSocket with an IPv4 address faster bound
+/// addresses should be collected after calling @c CfgIface::openSockets.
+typedef boost::multi_index_container<
+    /// Container comprises elements of asiolink::IOAddress type.
+    asiolink::IOAddress,
+    // Here we start enumerating the only index.
+    boost::multi_index::indexed_by<
+        // Start definition of index #0.
+        boost::multi_index::hashed_unique<
+            // Use the address in its network order integer form as the key.
+            boost::multi_index::const_mem_fun<
+                asiolink::IOAddress, uint32_t, &asiolink::IOAddress::toUint32
+            >
+        >
+    >
+> BoundAddresses;
 
 /// @brief Forward declaration to the @c IfaceMgr.
 class IfaceMgr;
@@ -467,7 +621,7 @@ typedef boost::shared_ptr<IfaceMgr> IfaceMgrPtr;
 ///
 /// @param errmsg An error message.
 typedef
-boost::function<void(const std::string& errmsg)> IfaceMgrErrorMsgCallback;
+std::function<void(const std::string& errmsg)> IfaceMgrErrorMsgCallback;
 
 /// @brief Handles network interfaces, transmission and reception.
 ///
@@ -479,7 +633,7 @@ class IfaceMgr : public boost::noncopyable {
 public:
     /// Defines callback used when data is received over external sockets.
     /// @param fd socket descriptor of the ready socket
-    typedef boost::function<void (int fd)> SocketCallback;
+    typedef std::function<void (int fd)> SocketCallback;
 
     /// Keeps callback information for external sockets.
     struct SocketCallbackInfo {
@@ -501,13 +655,6 @@ public:
     /// than 1500. For now, we can assume that
     /// we don't support packets larger than 1500.
     static const uint32_t RCVBUFSIZE = 1500;
-
-    // TODO performance improvement: we may change this into
-    //      2 maps (ifindex-indexed and name-indexed) and
-    //      also hide it (make it public make tests easier for now)
-
-    /// Type that holds a list of pointers to interfaces.
-    typedef std::list<IfacePtr> IfaceCollection;
 
     /// IfaceMgr is a singleton class. This method returns reference
     /// to its sole instance.
@@ -575,7 +722,7 @@ public:
     ///
     /// @param ifindex index of searched interface
     ///
-    /// @return interface with requested index (or NULL if no such
+    /// @return interface with requested index (or null if no such
     ///         interface is present)
     ///
     IfacePtr getIface(int ifindex);
@@ -584,9 +731,21 @@ public:
     ///
     /// @param ifname name of searched interface
     ///
-    /// @return interface with requested name (or NULL if no such
+    /// @return interface with requested name (or null if no such
     ///         interface is present)
     IfacePtr getIface(const std::string& ifname);
+
+    /// @brief Returns interface with specified packet
+    ///
+    /// @note When the interface index is set (@c Pkt::indexSet
+    ///       returns true) it is searched for, if it is not set
+    ///       the name instead is searched for.
+    ///
+    /// @param pkt packet with interface index and name
+    ///
+    /// @return interface with packet interface index or name
+    ///         (or null if no such interface is present)
+    IfacePtr getIface(const PktPtr& pkt);
 
     /// @brief Returns container with all interfaces.
     ///
@@ -615,10 +774,16 @@ public:
     /// @brief Clears unicast addresses on all interfaces.
     void clearUnicasts();
 
+    /// @brief Clears the addresses all sockets are bound to.
+    void clearBoundAddresses();
+
+    /// @brief Collect the addresses all sockets are bound to.
+    void collectBoundAddresses();
+
     /// @brief Return most suitable socket for transmitting specified IPv6 packet.
     ///
-    /// This method takes Pkt6 (see overloaded implementation that takes
-    /// Pkt4) and chooses appropriate socket to send it. This method
+    /// This method takes Pkt6Ptr (see overloaded implementation that takes
+    /// Pkt4Ptr) and chooses appropriate socket to send it. This method
     /// may throw if specified packet does not have outbound interface specified,
     /// no such interface exists, or specified interface does not have any
     /// appropriate sockets open.
@@ -628,7 +793,7 @@ public:
     /// @return a socket descriptor
     /// @throw SocketNotFound If no suitable socket found.
     /// @throw IfaceNotFound If interface is not set for the packet.
-    uint16_t getSocket(const isc::dhcp::Pkt6& pkt);
+    uint16_t getSocket(const isc::dhcp::Pkt6Ptr& pkt);
 
     /// @brief Return most suitable socket for transmitting specified IPv4 packet.
     ///
@@ -643,7 +808,7 @@ public:
     ///
     /// @return A structure describing a socket.
     /// @throw SocketNotFound if no suitable socket found.
-    SocketInfo getSocket(const isc::dhcp::Pkt4& pkt);
+    SocketInfo getSocket(const isc::dhcp::Pkt4Ptr& pkt);
 
     /// Debugging method that prints out all available interfaces.
     ///
@@ -686,7 +851,7 @@ public:
     /// @param timeout_usec specifies fractional part of the timeout
     /// (in microseconds)
     ///
-    /// @return Pkt4 object representing received packet (or NULL)
+    /// @return Pkt4 object representing received packet (or null)
     Pkt6Ptr receive6(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
     /// @brief Receive IPv4 packets or data from external sockets
@@ -699,7 +864,7 @@ public:
     /// @param timeout_usec specifies fractional part of the timeout
     /// (in microseconds)
     ///
-    /// @return Pkt4 object representing received packet (or NULL)
+    /// @return Pkt4 object representing received packet (or null)
     Pkt4Ptr receive4(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
     /// Opens UDP/IP socket and binds it to address, interface and port.
@@ -810,7 +975,7 @@ public:
     /// to the error handler, e.g. Iface if it was really supposed to do
     /// some more sophisticated error handling.
     ///
-    /// If the error handler is not installed (is NULL), the exception is thrown
+    /// If the error handler is not installed (is null), the exception is thrown
     /// for each failure (default behavior).
     ///
     /// @warning This function does not check if there has been any sockets
@@ -823,7 +988,7 @@ public:
     /// @param port specifies port number (usually DHCP6_SERVER_PORT)
     /// @param error_handler A pointer to an error handler function which is
     /// called by the openSockets6 when it fails to open a socket. This
-    /// parameter can be NULL to indicate that the callback should not be used.
+    /// parameter can be null to indicate that the callback should not be used.
     ///
     /// @throw SocketOpenFailure if tried and failed to open socket.
     /// @return true if any sockets were open
@@ -835,7 +1000,7 @@ public:
     /// This method opens sockets only on interfaces which have the
     /// @c inactive4_ field set to false (are active). If the interface is active
     /// but it is not running, it is down, or is a loopback interface when
-    /// oopback is not allowed, an error is reported.
+    /// loopback is not allowed, an error is reported.
     ///
     /// The type of the socket being open depends on the selected Packet Filter
     /// represented by a class derived from @c isc::dhcp::PktFilter abstract
@@ -879,7 +1044,7 @@ public:
     /// to the error handler, e.g. Iface if it was really supposed to do
     /// some more sophisticated error handling.
     ///
-    /// If the error handler is not installed (is NULL), the exception is thrown
+    /// If the error handler is not installed (is null), the exception is thrown
     /// for each failure (default behavior).
     ///
     /// @warning This function does not check if there has been any sockets
@@ -893,7 +1058,7 @@ public:
     /// @param use_bcast configure sockets to support broadcast messages.
     /// @param error_handler A pointer to an error handler function which is
     /// called by the openSockets4 when it fails to open a socket. This
-    /// parameter can be NULL to indicate that the callback should not be used.
+    /// parameter can be null to indicate that the callback should not be used.
     ///
     /// @throw SocketOpenFailure if tried and failed to open socket and callback
     /// function hasn't been specified.
@@ -925,6 +1090,8 @@ public:
     void addExternalSocket(int socketfd, SocketCallback callback);
 
     /// @brief Deletes external socket
+    ///
+    /// @param socketfd socket descriptor
     void deleteExternalSocket(int socketfd);
 
     /// @brief Scans registered socket set and removes any that are invalid.
@@ -954,7 +1121,7 @@ public:
     /// @param packet_filter A pointer to the new packet filter object to be
     /// used by @c IfaceMgr.
     ///
-    /// @throw InvalidPacketFilter if provided packet filter object is NULL.
+    /// @throw InvalidPacketFilter if provided packet filter object is null.
     /// @throw PacketFilterChangeDenied if there are open IPv4 sockets.
     void setPacketFilter(const PktFilterPtr& packet_filter);
 
@@ -975,7 +1142,7 @@ public:
     /// @param packet_filter A pointer to the new packet filter object to be
     /// used by @c IfaceMgr.
     ///
-    /// @throw isc::dhcp::InvalidPacketFilter if specified object is NULL.
+    /// @throw isc::dhcp::InvalidPacketFilter if specified object is null.
     /// @throw isc::dhcp::PacketFilterChangeDenied if there are open IPv6
     /// sockets.
     void setPacketFilter(const PktFilter6Ptr& packet_filter);
@@ -1003,9 +1170,8 @@ public:
     /// @param iface reference to Iface object.
     /// @note This function must be public because it has to be callable
     /// from unit tests.
-    void addInterface(const IfacePtr& iface) {
-        ifaces_.push_back(iface);
-    }
+    /// @throw Unexpected when name or index already exists.
+    void addInterface(const IfacePtr& iface);
 
     /// @brief Checks if there is at least one socket of the specified family
     /// open.
@@ -1156,7 +1322,7 @@ protected:
     /// @throw isc::dhcp::SignalInterruptOnSelect when a call to select() is
     /// interrupted by a signal.
     ///
-    /// @return Pkt4 object representing received packet (or NULL)
+    /// @return Pkt4 object representing received packet (or null)
     Pkt4Ptr receive4Direct(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
     /// @brief Receive IPv4 packets indirectly or data from external sockets.
@@ -1178,7 +1344,7 @@ protected:
     /// @throw isc::dhcp::SignalInterruptOnSelect when a call to select() is
     /// interrupted by a signal.
     ///
-    /// @return Pkt4 object representing received packet (or NULL)
+    /// @return Pkt4 object representing received packet (or null)
     Pkt4Ptr receive4Indirect(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
     /// @brief Opens IPv6 socket.
@@ -1217,7 +1383,7 @@ protected:
     /// @throw isc::dhcp::SignalInterruptOnSelect when a call to select() is
     /// interrupted by a signal.
     ///
-    /// @return Pkt6 object representing received packet (or NULL)
+    /// @return Pkt6 object representing received packet (or null)
     Pkt6Ptr receive6Direct(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
     /// @brief Receive IPv6 packets indirectly or data from external sockets.
@@ -1239,7 +1405,7 @@ protected:
     /// @throw isc::dhcp::SignalInterruptOnSelect when a call to select() is
     /// interrupted by a signal.
     ///
-    /// @return Pkt6 object representing received packet (or NULL)
+    /// @return Pkt6 object representing received packet (or null)
     Pkt6Ptr receive6Indirect(uint32_t timeout_sec, uint32_t timeout_usec = 0);
 
 
@@ -1251,11 +1417,11 @@ protected:
     /// interfaces.txt file.
     void stubDetectIfaces();
 
-    // TODO: having 2 maps (ifindex->iface and ifname->iface would)
-    //      probably be better for performance reasons
-
-    /// List of available interfaces
+    /// @brief List of available interfaces
     IfaceCollection ifaces_;
+
+    /// @brief Unordered set of IPv4 bound addresses.
+    BoundAddresses bound_address_;
 
     // TODO: Also keep this interface on Iface once interface detection
     // is implemented. We may need it e.g. to close all sockets on
@@ -1302,7 +1468,7 @@ private:
     /// @param addr Link-local address to bind the socket to.
     /// @param port Port number to bind socket to.
     /// @param error_handler Error handler function to be called when an
-    /// error occurs during opening a socket, or NULL if exception should
+    /// error occurs during opening a socket, or null if exception should
     /// be thrown upon error.
     bool openMulticastSocket(Iface& iface,
                              const isc::asiolink::IOAddress& addr,
@@ -1354,6 +1520,11 @@ private:
     /// @param socket_info structure holding socket information
     void receiveDHCP6Packet(const SocketInfo& socket_info);
 
+    /// @brief Deletes external socket with the callbacks_mutex_ taken
+    ///
+    /// @param socketfd socket descriptor
+    void deleteExternalSocketInternal(int socketfd);
+
     /// Holds instance of a class derived from PktFilter, used by the
     /// IfaceMgr to open sockets and send/receive packets through these
     /// sockets. It is possible to supply custom object using
@@ -1372,6 +1543,9 @@ private:
 
     /// @brief Contains list of callbacks for external sockets
     SocketCallbackInfoContainer callbacks_;
+
+    /// @brief Mutex to protect callbacks_ against concurrent access
+    std::mutex callbacks_mutex_;
 
     /// @brief Indicates if the IfaceMgr is in the test mode.
     bool test_mode_;

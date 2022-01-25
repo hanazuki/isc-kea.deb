@@ -1,4 +1,4 @@
-// File created from ../../../src/bin/netconf/netconf_messages.mes on Fri Feb 08 2019 20:57
+// File created from ../../../src/bin/netconf/netconf_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>
@@ -17,11 +17,11 @@ extern const isc::log::MessageID NETCONF_GET_CONFIG = "NETCONF_GET_CONFIG";
 extern const isc::log::MessageID NETCONF_GET_CONFIG_FAILED = "NETCONF_GET_CONFIG_FAILED";
 extern const isc::log::MessageID NETCONF_GET_CONFIG_STARTED = "NETCONF_GET_CONFIG_STARTED";
 extern const isc::log::MessageID NETCONF_LOG_CHANGE_FAIL = "NETCONF_LOG_CHANGE_FAIL";
-extern const isc::log::MessageID NETCONF_MODULE_INSTALL = "NETCONF_MODULE_INSTALL";
 extern const isc::log::MessageID NETCONF_MODULE_MISSING_ERR = "NETCONF_MODULE_MISSING_ERR";
 extern const isc::log::MessageID NETCONF_MODULE_MISSING_WARN = "NETCONF_MODULE_MISSING_WARN";
 extern const isc::log::MessageID NETCONF_MODULE_REVISION_ERR = "NETCONF_MODULE_REVISION_ERR";
 extern const isc::log::MessageID NETCONF_MODULE_REVISION_WARN = "NETCONF_MODULE_REVISION_WARN";
+extern const isc::log::MessageID NETCONF_NOTIFICATION_RECEIVED = "NETCONF_NOTIFICATION_RECEIVED";
 extern const isc::log::MessageID NETCONF_RUN_EXIT = "NETCONF_RUN_EXIT";
 extern const isc::log::MessageID NETCONF_SET_CONFIG = "NETCONF_SET_CONFIG";
 extern const isc::log::MessageID NETCONF_SET_CONFIG_FAILED = "NETCONF_SET_CONFIG_FAILED";
@@ -29,6 +29,8 @@ extern const isc::log::MessageID NETCONF_SET_CONFIG_STARTED = "NETCONF_SET_CONFI
 extern const isc::log::MessageID NETCONF_STARTED = "NETCONF_STARTED";
 extern const isc::log::MessageID NETCONF_SUBSCRIBE_CONFIG = "NETCONF_SUBSCRIBE_CONFIG";
 extern const isc::log::MessageID NETCONF_SUBSCRIBE_CONFIG_FAILED = "NETCONF_SUBSCRIBE_CONFIG_FAILED";
+extern const isc::log::MessageID NETCONF_SUBSCRIBE_NOTIFICATIONS = "NETCONF_SUBSCRIBE_NOTIFICATIONS";
+extern const isc::log::MessageID NETCONF_SUBSCRIBE_NOTIFICATIONS_FAILED = "NETCONF_SUBSCRIBE_NOTIFICATIONS_FAILED";
 extern const isc::log::MessageID NETCONF_UPDATE_CONFIG = "NETCONF_UPDATE_CONFIG";
 extern const isc::log::MessageID NETCONF_UPDATE_CONFIG_COMPLETED = "NETCONF_UPDATE_CONFIG_COMPLETED";
 extern const isc::log::MessageID NETCONF_UPDATE_CONFIG_FAILED = "NETCONF_UPDATE_CONFIG_FAILED";
@@ -55,11 +57,11 @@ const char* values[] = {
     "NETCONF_GET_CONFIG_FAILED", "getting configuration from %1 server failed: %2",
     "NETCONF_GET_CONFIG_STARTED", "getting configuration from %1 server",
     "NETCONF_LOG_CHANGE_FAIL", "Netconf configuration change logging failed: %1",
-    "NETCONF_MODULE_INSTALL", "Sysrepo (un)installs a module: %1 (revision %2)",
     "NETCONF_MODULE_MISSING_ERR", "Missing essential module %1 in sysrepo",
     "NETCONF_MODULE_MISSING_WARN", "Missing module %1 in sysrepo",
-    "NETCONF_MODULE_REVISION_ERR", "Essential module %1 does have the right revision: expected %2, got %3",
-    "NETCONF_MODULE_REVISION_WARN", "Module %1 does have the right revision: expected %2, got %3",
+    "NETCONF_MODULE_REVISION_ERR", "Essential module %1 does NOT have the right revision: expected %2, got %3",
+    "NETCONF_MODULE_REVISION_WARN", "Module %1 does NOT have the right revision: expected %2, got %3",
+    "NETCONF_NOTIFICATION_RECEIVED", "Received notification of type %1 for module %1: %2",
     "NETCONF_RUN_EXIT", "application is exiting the event loop",
     "NETCONF_SET_CONFIG", "set configuration to %1 server: %2",
     "NETCONF_SET_CONFIG_FAILED", "setting configuration to %1 server failed: %2",
@@ -67,6 +69,8 @@ const char* values[] = {
     "NETCONF_STARTED", "Netconf (version %1) started",
     "NETCONF_SUBSCRIBE_CONFIG", "subscribing configuration changes for %1 server with %2 module",
     "NETCONF_SUBSCRIBE_CONFIG_FAILED", "subscribe configuration changes for %1 server with %2 module failed: %3",
+    "NETCONF_SUBSCRIBE_NOTIFICATIONS", "subscribing to notifications for %1 server with %2 module",
+    "NETCONF_SUBSCRIBE_NOTIFICATIONS_FAILED", "subscribing to notifications for %1 server with %2 module failed: %3",
     "NETCONF_UPDATE_CONFIG", "updating configuration with %1 server: %2",
     "NETCONF_UPDATE_CONFIG_COMPLETED", "completed updating configuration for %1 server",
     "NETCONF_UPDATE_CONFIG_FAILED", "updating configuration with %1 server: %2",

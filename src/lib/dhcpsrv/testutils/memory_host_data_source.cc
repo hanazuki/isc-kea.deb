@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,17 +16,29 @@ namespace dhcp {
 namespace test {
 
 ConstHostCollection
-MemHostDataSource::getAll(const Host::IdentifierType& /*identifier_type*/,
-                          const uint8_t* /*identifier_begin*/,
-                          const size_t /*identifier_len*/) const {
-    return (ConstHostCollection());
+MemHostDataSource::getAll(const Host::IdentifierType& identifier_type,
+                          const uint8_t* identifier_begin,
+                          const size_t identifier_len) const {
+    vector<uint8_t> ident(identifier_begin, identifier_begin + identifier_len);
+    ConstHostCollection hosts;
+    for (auto h = store_.begin(); h != store_.end(); ++h) {
+        // If identifier type do not match, it's not for us
+        if ((*h)->getIdentifierType() != identifier_type) {
+            continue;
+        }
+        // If the identifier matches, we found one!
+        if ((*h)->getIdentifier() == ident) {
+            hosts.push_back(*h);
+        }
+    }
+    return (hosts);
 }
 
 ConstHostCollection
 MemHostDataSource::getAll4(const SubnetID& subnet_id) const {
     ConstHostCollection hosts;
     for (auto h = store_.begin(); h != store_.end(); ++h) {
-        // Keep it when subnet_id matchs.
+        // Keep it when subnet_id matches.
         if ((*h)->getIPv4SubnetID() == subnet_id) {
             hosts.push_back(*h);
         }
@@ -38,7 +50,7 @@ ConstHostCollection
 MemHostDataSource::getAll6(const SubnetID& subnet_id) const {
     ConstHostCollection hosts;
     for (auto h = store_.begin(); h != store_.end(); ++h) {
-        // Keep it when subnet_id matchs.
+        // Keep it when subnet_id matches.
         if ((*h)->getIPv6SubnetID() == subnet_id) {
             hosts.push_back(*h);
         }
@@ -50,7 +62,7 @@ ConstHostCollection
 MemHostDataSource::getAllbyHostname(const std::string& hostname) const {
     ConstHostCollection hosts;
     for (auto h = store_.begin(); h != store_.end(); ++h) {
-        // Keep it when hostname matchs.
+        // Keep it when hostname matches.
         if ((*h)->getLowerHostname() == hostname) {
             hosts.push_back(*h);
         }
@@ -131,6 +143,40 @@ MemHostDataSource::getPage6(const SubnetID& subnet_id,
 }
 
 ConstHostCollection
+MemHostDataSource::getPage4(size_t& /*source_index*/,
+                            uint64_t lower_host_id,
+                            const HostPageSize& page_size) const {
+    ConstHostCollection hosts;
+    for (auto h = store_.begin(); h != store_.end(); ++h) {
+        if (lower_host_id && ((*h)->getHostId() <= lower_host_id)) {
+            continue;
+        }
+        hosts.push_back(*h);
+        if (hosts.size() == page_size.page_size_) {
+            break;
+        }
+    }
+    return (hosts);
+}
+
+ConstHostCollection
+MemHostDataSource::getPage6(size_t& /*source_index*/,
+                            uint64_t lower_host_id,
+                            const HostPageSize& page_size) const {
+    ConstHostCollection hosts;
+    for (auto h = store_.begin(); h != store_.end(); ++h) {
+        if (lower_host_id && ((*h)->getHostId() <= lower_host_id)) {
+            continue;
+        }
+        hosts.push_back(*h);
+        if (hosts.size() == page_size.page_size_) {
+            break;
+        }
+    }
+    return (hosts);
+}
+
+ConstHostCollection
 MemHostDataSource::getAll4(const asiolink::IOAddress& /*address*/) const {
     return (ConstHostCollection());
 }
@@ -193,6 +239,17 @@ MemHostDataSource::get4(const SubnetID& subnet_id,
     return (ConstHostPtr());
 }
 
+ConstHostCollection
+MemHostDataSource::getAll4(const SubnetID& subnet_id,
+                           const asiolink::IOAddress& address) const {
+    ConstHostCollection hosts;
+    auto host = get4(subnet_id, address);
+    if (host) {
+        hosts.push_back(host);
+    }
+    return (hosts);
+}
+
 ConstHostPtr
 MemHostDataSource::get6(const asiolink::IOAddress& /*prefix*/,
                         const uint8_t /*prefix_len*/) const {
@@ -223,6 +280,17 @@ MemHostDataSource::get6(const SubnetID& subnet_id,
     }
 
     return (ConstHostPtr());
+}
+
+ConstHostCollection
+MemHostDataSource::getAll6(const SubnetID& subnet_id,
+                           const asiolink::IOAddress& address) const {
+    ConstHostCollection hosts;
+    auto host = get6(subnet_id, address);
+    if (host) {
+        hosts.push_back(host);
+    }
+    return (hosts);
 }
 
 void

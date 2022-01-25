@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,12 +13,23 @@
 #include <asiolink/io_service.h>
 #include <cc/data.h>
 #include <dhcp/pkt.h>
+
 #include <boost/date_time/posix_time/posix_time.hpp>
-#include <boost/function.hpp>
+#include <boost/multi_index_container.hpp>
+#include <boost/multi_index/composite_key.hpp>
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/indexed_by.hpp>
+#include <boost/multi_index/member.hpp>
+#include <boost/multi_index/ordered_index.hpp>
+#include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
+
+#include <functional>
 #include <map>
+#include <mutex>
 #include <set>
 #include <string>
+#include <utility>
 
 namespace isc {
 namespace ha {
@@ -29,24 +40,20 @@ namespace ha {
 /// the two peers. If the connection is lost it is an indicator that
 /// the partner server may be down and failover actions should be triggered.
 ///
-/// Any command successfully sent over the control channel is an indicator
-/// that the connection is healthy. The most common command sent over the
-/// control channel is a lease update. If the DHCP traffic is heavy, the
-/// number of generated lease updates is sufficient to determine whether
-/// the connection is healthy or not. There is no need to send heartbeat
-/// commands in this case. However, if the DHCP traffic is low there is
-/// a need to send heartbeat commands to the partner at the specified
-/// rate to keep up-to-date information about the state of the connection.
+/// A heartbeat command successfully sent over the control channel is an
+/// indicator that the connection is healthy. A reply to the heartbeat
+/// command includes information about the recipient state, its notion of
+/// time, and other information useful for determining its health and
+/// current activity.
 ///
 /// This class uses an interval timer to run heartbeat commands over the
 /// control channel. The implementation of the heartbeat is external to
 /// this class and is provided via @c CommunicationState::startHeartbeat
 /// method. This implementation is required to run the @c poke method
 /// in case of receiving a successful response to the heartbeat command.
-/// It must also run @c poke when the lease update is successful.
 ///
 /// The @c poke method sets the "last poke time" to current time, thus
-/// indicating that the connection is healty. The @c getDurationInMillisecs
+/// indicating that the connection is healthy. The @c getDurationInMillisecs
 /// method is used to check for how long the server hasn't been able
 /// to communicate with the partner. This duration is simply a time
 /// elapsed since last successful poke time. If this duration becomes
@@ -90,9 +97,7 @@ public:
     /// @brief Returns last known state of the partner.
     ///
     /// @return Partner's state if it is known, or a negative value otherwise.
-    int getPartnerState() const {
-        return (partner_state_);
-    }
+    int getPartnerState() const;
 
     /// @brief Sets partner state.
     ///
@@ -101,41 +106,60 @@ public:
     /// @throw BadValue if unsupported state value was provided.
     void setPartnerState(const std::string& state);
 
-    std::set<std::string> getPartnerScopes() const {
-        return (partner_scopes_);
-    }
+private:
+    /// @brief Sets partner state.
+    ///
+    /// @param state new partner's state in a textual form. Supported values are
+    /// those returned in response to a ha-heartbeat command.
+    /// @throw BadValue if unsupported state value was provided.
+    void setPartnerStateInternal(const std::string& state);
 
+public:
+    /// @brief Returns scopes served by the partner server.
+    ///
+    /// @return A set of scopes served by the partner.
+    std::set<std::string> getPartnerScopes() const;
+
+    /// @brief Sets partner scopes.
+    ///
+    /// @param new_scopes Partner scopes enclosed in a JSON list.
     void setPartnerScopes(data::ConstElementPtr new_scopes);
 
+private:
+    /// @brief Sets partner scopes.
+    ///
+    /// @param new_scopes Partner scopes enclosed in a JSON list.
+    void setPartnerScopesInternal(data::ConstElementPtr new_scopes);
+
+public:
     /// @brief Starts recurring heartbeat (public interface).
     ///
     /// @param interval heartbeat interval in milliseconds.
     /// @param heartbeat_impl pointer to the heartbeat implementation
     /// function.
     void startHeartbeat(const long interval,
-                        const boost::function<void()>& heartbeat_impl);
+                        const std::function<void()>& heartbeat_impl);
 
-protected:
+    /// @brief Stops recurring heartbeat.
+    void stopHeartbeat();
 
+private:
     /// @brief Starts recurring heartbeat.
     ///
     /// @param interval heartbeat interval in milliseconds.
     /// @param heartbeat_impl pointer to the heartbeat implementation
     /// function.
     void startHeartbeatInternal(const long interval = 0,
-                                const boost::function<void()>& heartbeat_impl = 0);
-
-public:
+                                const std::function<void()>& heartbeat_impl = 0);
 
     /// @brief Stops recurring heartbeat.
-    void stopHeartbeat();
+    void stopHeartbeatInternal();
 
+public:
     /// @brief Checks if recurring heartbeat is running.
     ///
     /// @return true if heartbeat is running, false otherwise.
-    bool isHeartbeatRunning() const {
-        return (static_cast<bool>(timer_));
-    }
+    bool isHeartbeatRunning() const;
 
     /// @brief Pokes the communication state.
     ///
@@ -144,6 +168,15 @@ public:
     /// to the next heartbeat).
     void poke();
 
+private:
+    /// @brief Pokes the communication state.
+    ///
+    /// Sets the last poke time to current time. If the heartbeat timer
+    /// has been scheduled, it is reset (starts over measuring the time
+    /// to the next heartbeat).
+    void pokeInternal();
+
+public:
     /// @brief Returns duration between the poke time and current time.
     ///
     /// @return Duration between the poke time and current time.
@@ -153,7 +186,7 @@ public:
     ///
     /// This method checks if the communication with the partner appears
     /// to be interrupted. This is the case when the time since last
-    /// successful communication is longer than the confgured
+    /// successful communication is longer than the configured
     /// max-response-delay value.
     ///
     /// @return true if communication is interrupted, false otherwise.
@@ -192,6 +225,13 @@ public:
     /// this method.
     virtual void analyzeMessage(const boost::shared_ptr<dhcp::Pkt>& message) = 0;
 
+    /// @brief Returns the number of analyzed messages while being in the
+    /// communications interrupted state.
+    ///
+    /// @return Number of analyzed messages. It includes retransmissions by
+    /// the same clients.
+    size_t getAnalyzedMessagesCount() const;
+
     /// @brief Checks if the partner failure has been detected based
     /// on the DHCP traffic analysis.
     ///
@@ -201,17 +241,38 @@ public:
     /// Returning true in that case simplifies the code of the
     /// @c HAService which doesn't need to check if the failure detection
     /// is enabled or not. It simply calls this method in the
-    /// 'communications interrupted' situtation to check if the
+    /// 'communications interrupted' situation to check if the
     /// server should be transitioned to the 'partner-down' state.
     ///
     /// @return true if the partner failure has been detected, false
     /// otherwise.
     virtual bool failureDetected() const = 0;
 
+    /// @brief Returns the current number of clients which attempted
+    /// to get a lease from the partner server.
+    ///
+    /// The returned number is reset to 0 when the server successfully
+    /// establishes communication with the partner. The number is
+    /// incremented only in the communications interrupted case.
+    ///
+    /// @return The number of clients including unacked clients.
+    virtual size_t getConnectingClientsCount() const = 0;
+
+    /// @brief Returns the current number of clients which haven't got
+    /// the lease from the partner server.
+    ///
+    /// The returned number is reset to 0 when the server successfully
+    /// establishes communication with the partner. The number is
+    /// incremented only in the communications interrupted case.
+    ///
+    /// @return Number of unacked clients.
+    virtual size_t getUnackedClientsCount() const = 0;
+
 protected:
 
-    /// @brief Removes information about clients which the partner server
-    /// failed to respond to.
+    /// @brief Removes information about the clients the partner server
+    /// should respond to while communication with the partner was
+    /// interrupted.
     ///
     /// This information is cleared by the @c CommunicationState::poke.
     /// The derivations of this class must provide DHCPv4 and DHCPv6 specific
@@ -221,12 +282,12 @@ protected:
     /// procedure starts over.
     ///
     /// See @c CommunicationState::analyzeMessage for details.
-    virtual void clearUnackedClients() = 0;
+    virtual void clearConnectingClients() = 0;
 
 public:
 
-    /// @brief Indicates whether the HA service should issue a warning about
-    /// high clock skew between the active servers.
+    /// @brief Issues a warning about high clock skew between the active
+    /// servers if one is warranted.
     ///
     /// The HA service monitors the clock skew between the active servers. The
     /// clock skew is calculated from the local time and the time returned by
@@ -246,9 +307,35 @@ public:
     /// will reset the gating counter.
     ///
     /// @return true if the warning message should be logged because of the clock
-    /// skew exceeding a warning thresdhold.
+    /// skew exceeding a warning threshold.
     bool clockSkewShouldWarn();
 
+private:
+    /// @brief Issues a warning about high clock skew between the active
+    /// servers if one is warranted.
+    ///
+    /// The HA service monitors the clock skew between the active servers. The
+    /// clock skew is calculated from the local time and the time returned by
+    /// the partner in response to a heartbeat. When clock skew exceeds a certain
+    /// threshold the HA service starts issuing a warning message. This method
+    /// returns true if the HA service should issue this message.
+    ///
+    /// Currently, the warning threshold for the clock skew is hardcoded to
+    /// 30 seconds.  In the future it may become configurable.
+    ///
+    /// This method is called for each heartbeat. If we issue a warning for each
+    /// heartbeat it may flood logs with those messages. This method provides
+    /// a gating mechanism which prevents the HA service from logging the
+    /// warning more often than every 60 seconds. If the last warning was issued
+    /// less than 60 seconds ago this method will return false even if the clock
+    /// skew exceeds the 30 seconds threshold. The correction of the clock skew
+    /// will reset the gating counter.
+    ///
+    /// @return true if the warning message should be logged because of the clock
+    /// skew exceeding a warning threshold.
+    bool clockSkewShouldWarnInternal();
+
+public:
     /// @brief Indicates whether the HA service should enter "terminated"
     /// state as a result of the clock skew exceeding maximum value.
     ///
@@ -267,7 +354,24 @@ public:
     /// @return true if the HA service should enter "terminated" state.
     bool clockSkewShouldTerminate() const;
 
-protected:
+private:
+    /// @brief Indicates whether the HA service should enter "terminated"
+    /// state as a result of the clock skew exceeding maximum value.
+    ///
+    /// If the clocks on the active servers are not synchronized (perhaps as
+    /// a result of a warning message caused by @c clockSkewShouldWarn) and the
+    /// clocks further drift, the clock skew may exceed another threshold which
+    /// should cause the HA service to enter "terminated" state. In this state
+    /// the servers still respond to DHCP clients normally, but they will neither
+    /// send lease updates nor heartbeats. In this case, the administrator must
+    /// correct the problem (synchronize the clocks) and restart the service.
+    /// This method indicates whether the service should terminate or not.
+    ///
+    /// Currently, the terminal threshold for the clock skew is hardcoded to
+    /// 60 seconds.  In the future it may become configurable.
+    ///
+    /// @return true if the HA service should enter "terminated" state.
+    bool clockSkewShouldTerminateInternal() const;
 
     /// @brief Checks if the clock skew is greater than the specified number
     /// of seconds.
@@ -292,11 +396,131 @@ public:
     /// precision.
     void setPartnerTime(const std::string& time_text);
 
+private:
+    /// @brief Provide partner's notion of time so the new clock skew can be
+    /// calculated.
+    ///
+    /// @param time_text Partner's time received in response to a heartbeat. The
+    /// time must be provided in the RFC 1123 format.  It stores the current
+    /// time, partner's time, and the difference (skew) between them.
+    ///
+    /// @throw isc::http::HttpTimeConversionError if the time format is invalid.
+    ///
+    /// @todo Consider some other time formats which include millisecond
+    /// precision.
+    void setPartnerTimeInternal(const std::string& time_text);
+
+public:
     /// @brief Returns current clock skew value in the logger friendly format.
     std::string logFormatClockSkew() const;
 
-protected:
+private:
+    /// @brief Returns current clock skew value in the logger friendly format.
+    std::string logFormatClockSkewInternal() const;
 
+public:
+    /// @brief Returns the report about current communication state.
+    ///
+    /// This function returns a JSON map describing the state of communication
+    /// with a partner. This report is included in the response to the
+    /// status-get command.
+    ///
+    /// @return JSON element holding the report.
+    data::ElementPtr getReport() const;
+
+    /// @brief Modifies poke time by adding seconds to it.
+    ///
+    /// Used in unittests only.
+    ///
+    /// @param secs number of seconds to be added to the poke time. If
+    /// the value is negative it will set the poke time in the past
+    /// comparing to current value.
+    void modifyPokeTime(const long secs);
+
+private:
+
+    /// @brief Returns duration between the poke time and current time.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return Duration between the poke time and current time.
+    int64_t getDurationInMillisecsInternal() const;
+
+protected:
+    /// @brief Update the poke time and compute the duration.
+    ///
+    /// @return The time elapsed.
+    boost::posix_time::time_duration updatePokeTime();
+
+private:
+    /// @brief Update the poke time and compute the duration.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return The time elapsed.
+    boost::posix_time::time_duration updatePokeTimeInternal();
+
+public:
+
+    /// @brief Returns a total number of unsent lease updates.
+    uint64_t getUnsentUpdateCount() const;
+
+    /// @brief Increases a total number of unsent lease updates by 1.
+    ///
+    /// This method should be called when the server has allocated a
+    /// lease but decided to not send the lease update to its partner.
+    /// If the server is in the partner-down state it allocates new
+    /// leases but doesn't send lease updates because the partner is
+    /// unavailable.
+    ///
+    /// This method protects against setting the value to 0 in an
+    /// unlikely event of the overflow. The zero is reserved for the
+    /// server startup case.
+    void increaseUnsentUpdateCount();
+
+private:
+
+    /// @brief Thread unsafe implementation of the @c increaseUnsentUpdateCount.
+    void increaseUnsentUpdateCountInternal();
+
+public:
+
+    /// @brief Checks if the partner allocated new leases for which it hasn't sent
+    /// any lease updates.
+    ///
+    /// It compares a previous and current value of the @c partner_unsent_update_count_.
+    /// If the current value is 0 and the previous value is non-zero it indicates
+    /// that the partner was restarted.
+    ///
+    /// @return true if the partner has allocated new leases for which it didn't
+    /// send lease updates, false otherwise.
+    bool hasPartnerNewUnsentUpdates() const;
+
+private:
+
+    /// @brief Thread unsafe implementation of the @c hasPartnerNewUnsentUpdates.
+    ///
+    /// @return true if the partner has allocated new leases for which it didn't
+    /// send lease updates, false otherwise.
+    bool hasPartnerNewUnsentUpdatesInternal() const;
+
+public:
+
+    /// @brief Saves new total number of unsent lease updates from the partner.
+    ///
+    /// @param unsent_updates_count new total number of unsent lease updates from
+    /// the partner.
+    void setPartnerUnsentUpdateCount(uint64_t unsent_update_count);
+
+private:
+
+    /// @brief Thread unsafe implementation of the @c setPartnerUnsentUpdateCount.
+    ///
+    /// @param unsent_updates_count new total number of unsent lease updates from
+    /// the partner.
+    void setPartnerUnsentUpdateCountInternal(uint64_t unsent_update_count);
+
+protected:
     /// @brief Pointer to the common IO service instance.
     asiolink::IOServicePtr io_service_;
 
@@ -313,7 +537,7 @@ protected:
     boost::posix_time::ptime poke_time_;
 
     /// @brief Pointer to the function providing heartbeat implementation.
-    boost::function<void()> heartbeat_impl_;
+    std::function<void()> heartbeat_impl_;
 
     /// @brief Last known state of the partner server.
     ///
@@ -335,6 +559,30 @@ protected:
 
     /// @brief Partner reported time when skew was calculated.
     boost::posix_time::ptime partner_time_at_skew_;
+
+    /// @brief Total number of analyzed messages to be responded by partner.
+    size_t analyzed_messages_count_;
+
+    /// @brief Total number of unsent lease updates.
+    ///
+    /// The lease updates are not sent when the server is in the partner
+    /// down state. The server counts the number of lease updates which
+    /// haven't been sent to the partner because the partner was unavailable.
+    /// The partner receives this value in a response to a heartbeat message
+    /// and can use it to determine if it should synchronize its lease
+    /// database.
+    uint64_t unsent_update_count_;
+
+    /// @brief Previous and current total number of unsent lease updates
+    /// from the partner.
+    ///
+    /// This value is returned in response to a heartbeat command and saved
+    /// using the @c setPartnerUnsentUpdateCount. The previous value is
+    /// preserved so the values can be compared in the state handlers.
+    std::pair<uint64_t, uint64_t> partner_unsent_update_count_;
+
+    /// @brief The mutex used to protect internal state.
+    const boost::scoped_ptr<std::mutex> mutex_;
 };
 
 /// @brief Type of the pointer to the @c CommunicationState object.
@@ -379,21 +627,98 @@ public:
     /// otherwise.
     virtual bool failureDetected() const;
 
+    /// @brief Returns the current number of clients which attempted
+    /// to get a lease from the partner server.
+    ///
+    /// The returned number is reset to 0 when the server successfully
+    /// establishes communication with the partner. The number is
+    /// incremented only in the communications interrupted case.
+    ///
+    /// @return The number of clients including unacked clients.
+    virtual size_t getConnectingClientsCount() const;
+
+    /// @brief Returns the current number of clients which haven't gotten
+    /// a lease from the partner server.
+    ///
+    /// The returned number is reset to 0 when the server successfully
+    /// establishes communication with the partner. The number is
+    /// incremented only in the communications interrupted case.
+    ///
+    /// @return Number of unacked clients.
+    virtual size_t getUnackedClientsCount() const;
+
 protected:
 
-    /// @brief Removes information about clients which the partner server
-    /// failed to respond to.
+    /// @brief Checks if the DHCPv4 message appears to be unanswered.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// This method uses "secs" field value for detecting client
+    /// communication failures as described in the
+    /// @c CommunicationState::analyzeMessage. Some misbehaving Windows
+    /// clients were reported to swap "secs" field bytes. In this case
+    /// the first byte is set to non-zero byte and the second byte is
+    /// set to 0. This method handles such cases and corrects bytes
+    /// order before comparing against the threshold.
+    ///
+    /// @param message DHCPv4 message to be analyzed. This must be the
+    /// message which belongs to the partner, i.e. the caller must
+    /// filter out messages belonging to the partner prior to calling
+    /// this method.
+    virtual void analyzeMessageInternal(const boost::shared_ptr<dhcp::Pkt>& message);
+
+    /// @brief Checks if the partner failure has been detected based
+    /// on the DHCP traffic analysis.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return true if the partner failure has been detected, false
+    /// otherwise.
+    virtual bool failureDetectedInternal() const;
+
+    /// @brief Removes information about the clients the partner server
+    /// should respond to while communication with the partner was
+    /// interrupted.
     ///
     /// See @c CommunicationState::analyzeMessage for details.
-    virtual void clearUnackedClients();
+    virtual void clearConnectingClients();
 
-    /// @brief Holds information about the clients which the partner server
-    /// failed to respond to.
-    ///
-    /// The key of the multimap holds hardware addresses of the clients.
-    /// The value of the multimap holds client identifiers of the
-    /// clients. The client identifiers may be empty.
-    std::multimap<std::vector<uint8_t>, std::vector<uint8_t> > unacked_clients_;
+    /// @brief Structure holding information about the client which has
+    /// send the packet being analyzed.
+    struct ConnectingClient4 {
+        std::vector<uint8_t> hwaddr_;
+        std::vector<uint8_t> clientid_;
+        bool unacked_;
+    };
+
+    /// @brief Multi index container holding information about the clients
+    /// attempting to get leases from the partner server.
+    typedef boost::multi_index_container<
+        ConnectingClient4,
+        boost::multi_index::indexed_by<
+            // First index is a composite index which allows to find a client
+            // by the HW address/client identifier tuple.
+            boost::multi_index::hashed_unique<
+                boost::multi_index::composite_key<
+                    ConnectingClient4,
+                    boost::multi_index::member<ConnectingClient4, std::vector<uint8_t>,
+                                               &ConnectingClient4::hwaddr_>,
+                    boost::multi_index::member<ConnectingClient4, std::vector<uint8_t>,
+                                               &ConnectingClient4::clientid_>
+                >
+            >,
+            // Second index allows for counting all clients which are
+            // considered unacked.
+            boost::multi_index::ordered_non_unique<
+                boost::multi_index::member<ConnectingClient4, bool, &ConnectingClient4::unacked_>
+            >
+        >
+    > ConnectingClients4;
+
+    /// @brief Holds information about the clients attempting to contact
+    /// the partner server while the servers are in communications
+    /// interrupted state.
+    ConnectingClients4 connecting_clients_;
 };
 
 /// @brief Pointer to the @c CommunicationState4 object.
@@ -431,19 +756,85 @@ public:
     /// otherwise.
     virtual bool failureDetected() const;
 
+    /// @brief Returns the current number of clients which attempted
+    /// to get a lease from the partner server.
+    ///
+    /// The returned number is reset to 0 when the server successfully
+    /// establishes communication with the partner. The number is
+    /// incremented only in the communications interrupted case.
+    ///
+    /// @return The number of clients including unacked clients.
+    virtual size_t getConnectingClientsCount() const;
+
+    /// @brief Returns the current number of clients which haven't gotten
+    /// a lease from the partner server.
+    ///
+    /// The returned number is reset to 0 when the server successfully
+    /// establishes communication with the partner. The number is
+    /// incremented only in the communications interrupted case.
+    ///
+    /// @return Number of unacked clients.
+    virtual size_t getUnackedClientsCount() const;
+
 protected:
 
-    /// @brief Removes information about clients which the partner server
-    /// failed to respond to.
+    /// @brief Checks if the DHCPv6 message appears to be unanswered.
+    ///
+    /// Should be called in a thread safe context.
     ///
     /// See @c CommunicationState::analyzeMessage for details.
-    virtual void clearUnackedClients();
-
-    /// @brief Holds information about the clients which the partner server
-    /// failed to respond to.
     ///
-    /// The value of the set holds DUIDs of the clients.
-    std::set<std::vector<uint8_t> > unacked_clients_;
+    /// @param message DHCPv6 message to be analyzed. This must be the
+    /// message which belongs to the partner, i.e. the caller must
+    /// filter out messages belonging to the partner prior to calling
+    /// this method.
+    virtual void analyzeMessageInternal(const boost::shared_ptr<dhcp::Pkt>& message);
+
+    /// @brief Checks if the partner failure has been detected based
+    /// on the DHCP traffic analysis.
+    ///
+    /// Should be called in a thread safe context.
+    ///
+    /// @return true if the partner failure has been detected, false
+    /// otherwise.
+    virtual bool failureDetectedInternal() const;
+
+    /// @brief Removes information about the clients the partner server
+    /// should respond to while communication with the partner was
+    /// interrupted.
+    ///
+    /// See @c CommunicationState::analyzeMessage for details.
+    virtual void clearConnectingClients();
+
+    /// @brief Structure holding information about a client which
+    /// sent a packet being analyzed.
+    struct ConnectingClient6 {
+        std::vector<uint8_t> duid_;
+        bool unacked_;
+    };
+
+    /// @brief Multi index container holding information about the clients
+    /// attempting to get leases from the partner server.
+    typedef boost::multi_index_container<
+        ConnectingClient6,
+        boost::multi_index::indexed_by<
+            // First index is for accessing connecting clients by DUID.
+            boost::multi_index::hashed_unique<
+                boost::multi_index::member<ConnectingClient6, std::vector<uint8_t>,
+                                           &ConnectingClient6::duid_>
+            >,
+            // Second index allows for counting all clients which are
+            // considered unacked.
+            boost::multi_index::ordered_non_unique<
+                boost::multi_index::member<ConnectingClient6, bool, &ConnectingClient6::unacked_>
+            >
+        >
+    > ConnectingClients6;
+
+    /// @brief Holds information about the clients attempting to contact
+    /// the partner server while the servers are in communications
+    /// interrupted state.
+    ConnectingClients6 connecting_clients_;
 };
 
 /// @brief Pointer to the @c CommunicationState6 object.

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,10 +6,11 @@
 
 #include <config.h>
 
+#include <asiolink/testutils/timed_signal.h>
 #include <cc/command_interpreter.h>
+#include <d2srv/testutils/nc_test_utils.h>
 #include <d2/d2_controller.h>
 #include <d2/d2_process.h>
-#include <d2/tests/nc_test_utils.h>
 #include <process/testutils/d_test_stubs.h>
 
 #include <boost/pointer_cast.hpp>
@@ -18,6 +19,7 @@
 
 #include <sstream>
 
+using namespace isc::asiolink::test;
 using namespace isc::process;
 using namespace boost::posix_time;
 

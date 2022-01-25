@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,6 +6,7 @@
 
 #include <config.h>
 
+#include <functional>
 #include <vector>
 #include <string>
 #include <sstream>
@@ -24,7 +25,6 @@
 
 #include <util/unittests/wiredata.h>
 
-#include <boost/bind.hpp>
 #include <boost/lexical_cast.hpp>
 
 using namespace std;
@@ -33,6 +33,7 @@ using namespace isc::util;
 using namespace isc::dns::rdata;
 using isc::UnitTestUtil;
 using isc::util::unittests::matchWireData;
+namespace ph = std::placeholders;
 
 namespace isc {
 namespace dns {
@@ -135,10 +136,10 @@ TEST_F(RdataTest, createRdataWithLexer) {
 
     CreateRdataCallback callback;
     MasterLoaderCallbacks callbacks(
-        boost::bind(&CreateRdataCallback::callback, &callback,
-                    CreateRdataCallback::ERROR, _1, _2, _3),
-        boost::bind(&CreateRdataCallback::callback, &callback,
-                    CreateRdataCallback::WARN,  _1, _2, _3));
+        std::bind(&CreateRdataCallback::callback, &callback,
+                  CreateRdataCallback::ERROR, ph::_1, ph::_2, ph::_3),
+        std::bind(&CreateRdataCallback::callback, &callback,
+                  CreateRdataCallback::WARN,  ph::_1, ph::_2, ph::_3));
 
     size_t line = 0;
 

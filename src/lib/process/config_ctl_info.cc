@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,10 +14,12 @@ namespace isc {
 namespace process {
 
 void
-ConfigDbInfo::setAccessString(const std::string& access_str) {
+ConfigDbInfo::setAccessString(const std::string& access_str, bool test_mode) {
     access_str_ = access_str;
     access_params_.clear();
-    access_params_ = db::DatabaseConnection::parse(access_str_);
+    if (!test_mode) {
+        access_params_ = db::DatabaseConnection::parse(access_str_);
+    }
 }
 
 bool
@@ -41,7 +43,7 @@ ConfigDbInfo::getParameterValue(const std::string& name, std::string& value) con
     return(true);
 }
 
-//********* ConfiControlInfo ************//
+//******** ConfigControlInfo ********//
 
 ConfigControlInfo::ConfigControlInfo(const ConfigControlInfo& other)
     : config_fetch_wait_time_(other.config_fetch_wait_time_) {

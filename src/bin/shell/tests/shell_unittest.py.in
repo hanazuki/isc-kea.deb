@@ -1,6 +1,6 @@
 #!@PYTHON@
 
-# Copyright (C) 2017 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,8 @@ Kea shell unittest (python part)
 """
 
 import unittest
+import sys
+from base64 import b64encode
 
 from kea_conn import CARequest
 
@@ -24,7 +26,6 @@ class CARequestUnitTest(unittest.TestCase):
         """
         This method is called before each test. Currently it does nothing.
         """
-        pass
 
     def test_body_with_service(self):
         """
@@ -33,9 +34,10 @@ class CARequestUnitTest(unittest.TestCase):
         """
         request = CARequest()
         request.command = "foo"
-        request.service= ["service1"]
+        request.service = ["service1"]
         request.generate_body()
-        self.assertEqual(request.content, '{ "command": "foo", "service": ["service1"] }')
+        self.assertEqual(request.content,
+                         '{ "command": "foo", "service": ["service1"] }')
 
     def test_body_with_multiple_service(self):
         """
@@ -44,9 +46,10 @@ class CARequestUnitTest(unittest.TestCase):
         """
         request = CARequest()
         request.command = "foo"
-        request.service= ["service1","service2/2"]
+        request.service = ["service1", "service2/2"]
         request.generate_body()
-        self.assertEqual(request.content, '{ "command": "foo", "service": ["service1","service2/2"] }')
+        self.assertEqual(request.content,
+                         '{ "command": "foo", "service": ["service1","service2/2"] }')
 
     def test_body_with_malformed_service(self):
         """
@@ -55,9 +58,10 @@ class CARequestUnitTest(unittest.TestCase):
         """
         request = CARequest()
         request.command = "foo"
-        request.service= ["service1",""]
+        request.service = ["service1", ""]
         request.generate_body()
-        self.assertEqual(request.content, '{ "command": "foo", "service": ["service1"] }')
+        self.assertEqual(request.content,
+                         '{ "command": "foo", "service": ["service1"] }')
 
     def test_body_without_args(self):
         """
@@ -90,14 +94,12 @@ class CARequestUnitTest(unittest.TestCase):
         if header_name in headers:
             if headers[header_name] == value:
                 return True
-            else:
-                print("Expected value: " + value +
-                      " does not match actual value: " +
-                      headers[header_name])
+            print("Expected value: " + value +
+                  " does not match actual value: " +
+                  headers[header_name])
             return False
-        else:
-            print("Expected header: " + header_name + " missing")
-            return False
+        print("Expected header: " + header_name + " missing")
+        return False
 
     def test_headers(self):
         """
@@ -138,11 +140,60 @@ class CARequestUnitTest(unittest.TestCase):
         self.assertTrue(self.check_header(request.headers, 'User-Agent',
                                           'Kea-shell/1.2.3'))
 
+    def test_basic_http_auth(self):
+        """
+        This test check if the basic HTTP authentication credential
+        generated properly.
+        """
+        user = 'foo'
+        password = 'bar'
+        buser = user.encode('utf-8')
+        bpassword = password.encode('utf-8')
+        secret = b':'.join((buser, bpassword))
+        self.assertEqual(b'foo:bar', secret)
+        if sys.version_info[0] == 3:
+            auth = b64encode(secret).strip().decode('ascii')
+        else:
+            auth = b64encode(secret).strip().encode('ascii')
+        self.assertEqual('Zm9vOmJhcg==', auth)
+
+    def test_auth_unicode(self):
+        """
+        This test check if the basic HTTP authentication uses UTF-8 encoding.
+        """
+        if sys.version_info[0] == 3:
+            user = 'libert\xe9'
+            password = '\xe9galit\xe9'
+        else:
+            user = u'libert\xe9'
+            password = u'\xe9galit\xe9'
+        buser = user.encode('utf-8')
+        bpassword = password.encode('utf-8')
+        secret = b':'.join((buser, bpassword))
+        self.assertEqual(b'libert\xc3\xa9:\xc3\xa9galit\xc3\xa9', secret)
+        if sys.version_info[0] == 3:
+            auth = b64encode(secret).strip().decode('ascii')
+        else:
+            auth = b64encode(secret).strip().encode('ascii')
+        self.assertEqual('bGliZXJ0w6k6w6lnYWxpdMOp', auth)
+
+    def test_header_auth(self):
+        """
+        This test checks if the basic HTTP authentication header is
+        generated properly.
+        """
+        request = CARequest()
+        request.auth = "Zm9vOmJhcg=="
+        request.generate_headers()
+
+        self.assertTrue(self.check_header(request.headers,
+                                          'Authorization',
+                                          'Basic Zm9vOmJhcg=='))
+
     def tearDown(self):
         """
         This method is called after each test. Currently it does nothing.
         """
-        pass
 
 if __name__ == '__main__':
     unittest.main()

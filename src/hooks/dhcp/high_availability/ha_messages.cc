@@ -1,4 +1,4 @@
-// File created from ../../../../src/hooks/dhcp/high_availability/ha_messages.mes on Fri Jan 17 2020 20:25
+// File created from ../../../../src/hooks/dhcp/high_availability/ha_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>
@@ -16,14 +16,21 @@ extern const isc::log::MessageID HA_BUFFER6_RECEIVE_NOT_FOR_US = "HA_BUFFER6_REC
 extern const isc::log::MessageID HA_BUFFER6_RECEIVE_PACKET_OPTIONS_SKIPPED = "HA_BUFFER6_RECEIVE_PACKET_OPTIONS_SKIPPED";
 extern const isc::log::MessageID HA_BUFFER6_RECEIVE_UNPACK_FAILED = "HA_BUFFER6_RECEIVE_UNPACK_FAILED";
 extern const isc::log::MessageID HA_COMMAND_PROCESSED_FAILED = "HA_COMMAND_PROCESSED_FAILED";
+extern const isc::log::MessageID HA_COMMUNICATION_INTERRUPTED = "HA_COMMUNICATION_INTERRUPTED";
+extern const isc::log::MessageID HA_COMMUNICATION_INTERRUPTED_CLIENT4 = "HA_COMMUNICATION_INTERRUPTED_CLIENT4";
+extern const isc::log::MessageID HA_COMMUNICATION_INTERRUPTED_CLIENT4_UNACKED = "HA_COMMUNICATION_INTERRUPTED_CLIENT4_UNACKED";
+extern const isc::log::MessageID HA_COMMUNICATION_INTERRUPTED_CLIENT6 = "HA_COMMUNICATION_INTERRUPTED_CLIENT6";
+extern const isc::log::MessageID HA_COMMUNICATION_INTERRUPTED_CLIENT6_UNACKED = "HA_COMMUNICATION_INTERRUPTED_CLIENT6_UNACKED";
 extern const isc::log::MessageID HA_CONFIGURATION_FAILED = "HA_CONFIGURATION_FAILED";
 extern const isc::log::MessageID HA_CONFIGURATION_SUCCESSFUL = "HA_CONFIGURATION_SUCCESSFUL";
 extern const isc::log::MessageID HA_CONFIG_AUTO_FAILOVER_DISABLED = "HA_CONFIG_AUTO_FAILOVER_DISABLED";
+extern const isc::log::MessageID HA_CONFIG_DHCP_MT_DISABLED = "HA_CONFIG_DHCP_MT_DISABLED";
 extern const isc::log::MessageID HA_CONFIG_LEASE_SYNCING_DISABLED = "HA_CONFIG_LEASE_SYNCING_DISABLED";
 extern const isc::log::MessageID HA_CONFIG_LEASE_SYNCING_DISABLED_REMINDER = "HA_CONFIG_LEASE_SYNCING_DISABLED_REMINDER";
 extern const isc::log::MessageID HA_CONFIG_LEASE_UPDATES_AND_SYNCING_DIFFER = "HA_CONFIG_LEASE_UPDATES_AND_SYNCING_DIFFER";
 extern const isc::log::MessageID HA_CONFIG_LEASE_UPDATES_DISABLED = "HA_CONFIG_LEASE_UPDATES_DISABLED";
 extern const isc::log::MessageID HA_CONFIG_LEASE_UPDATES_DISABLED_REMINDER = "HA_CONFIG_LEASE_UPDATES_DISABLED_REMINDER";
+extern const isc::log::MessageID HA_CONFIG_SYSTEM_MT_UNSUPPORTED = "HA_CONFIG_SYSTEM_MT_UNSUPPORTED";
 extern const isc::log::MessageID HA_CONTINUE_HANDLER_FAILED = "HA_CONTINUE_HANDLER_FAILED";
 extern const isc::log::MessageID HA_DEINIT_OK = "HA_DEINIT_OK";
 extern const isc::log::MessageID HA_DHCP4_START_SERVICE_FAILED = "HA_DHCP4_START_SERVICE_FAILED";
@@ -38,10 +45,18 @@ extern const isc::log::MessageID HA_HEARTBEAT_HANDLER_FAILED = "HA_HEARTBEAT_HAN
 extern const isc::log::MessageID HA_HIGH_CLOCK_SKEW = "HA_HIGH_CLOCK_SKEW";
 extern const isc::log::MessageID HA_HIGH_CLOCK_SKEW_CAUSES_TERMINATION = "HA_HIGH_CLOCK_SKEW_CAUSES_TERMINATION";
 extern const isc::log::MessageID HA_INIT_OK = "HA_INIT_OK";
+extern const isc::log::MessageID HA_INVALID_PARTNER_STATE_COMMUNICATION_RECOVERY = "HA_INVALID_PARTNER_STATE_COMMUNICATION_RECOVERY";
+extern const isc::log::MessageID HA_INVALID_PARTNER_STATE_HOT_STANDBY = "HA_INVALID_PARTNER_STATE_HOT_STANDBY";
+extern const isc::log::MessageID HA_INVALID_PARTNER_STATE_LOAD_BALANCING = "HA_INVALID_PARTNER_STATE_LOAD_BALANCING";
 extern const isc::log::MessageID HA_LEASES4_COMMITTED_FAILED = "HA_LEASES4_COMMITTED_FAILED";
 extern const isc::log::MessageID HA_LEASES4_COMMITTED_NOTHING_TO_UPDATE = "HA_LEASES4_COMMITTED_NOTHING_TO_UPDATE";
 extern const isc::log::MessageID HA_LEASES6_COMMITTED_FAILED = "HA_LEASES6_COMMITTED_FAILED";
 extern const isc::log::MessageID HA_LEASES6_COMMITTED_NOTHING_TO_UPDATE = "HA_LEASES6_COMMITTED_NOTHING_TO_UPDATE";
+extern const isc::log::MessageID HA_LEASES_BACKLOG_COMMUNICATIONS_FAILED = "HA_LEASES_BACKLOG_COMMUNICATIONS_FAILED";
+extern const isc::log::MessageID HA_LEASES_BACKLOG_FAILED = "HA_LEASES_BACKLOG_FAILED";
+extern const isc::log::MessageID HA_LEASES_BACKLOG_NOTHING_TO_SEND = "HA_LEASES_BACKLOG_NOTHING_TO_SEND";
+extern const isc::log::MessageID HA_LEASES_BACKLOG_START = "HA_LEASES_BACKLOG_START";
+extern const isc::log::MessageID HA_LEASES_BACKLOG_SUCCESS = "HA_LEASES_BACKLOG_SUCCESS";
 extern const isc::log::MessageID HA_LEASES_SYNC_COMMUNICATIONS_FAILED = "HA_LEASES_SYNC_COMMUNICATIONS_FAILED";
 extern const isc::log::MessageID HA_LEASES_SYNC_FAILED = "HA_LEASES_SYNC_FAILED";
 extern const isc::log::MessageID HA_LEASES_SYNC_LEASE_PAGE_RECEIVED = "HA_LEASES_SYNC_LEASE_PAGE_RECEIVED";
@@ -69,16 +84,27 @@ extern const isc::log::MessageID HA_MAINTENANCE_STARTED = "HA_MAINTENANCE_STARTE
 extern const isc::log::MessageID HA_MAINTENANCE_STARTED_IN_PARTNER_DOWN = "HA_MAINTENANCE_STARTED_IN_PARTNER_DOWN";
 extern const isc::log::MessageID HA_MAINTENANCE_START_HANDLER_FAILED = "HA_MAINTENANCE_START_HANDLER_FAILED";
 extern const isc::log::MessageID HA_MISSING_CONFIGURATION = "HA_MISSING_CONFIGURATION";
+extern const isc::log::MessageID HA_PAUSE_CLIENT_LISTENER_FAILED = "HA_PAUSE_CLIENT_LISTENER_FAILED";
+extern const isc::log::MessageID HA_PAUSE_CLIENT_LISTENER_ILLEGAL = "HA_PAUSE_CLIENT_LISTENER_ILLEGAL";
+extern const isc::log::MessageID HA_RESET_COMMUNICATIONS_FAILED = "HA_RESET_COMMUNICATIONS_FAILED";
+extern const isc::log::MessageID HA_RESET_FAILED = "HA_RESET_FAILED";
+extern const isc::log::MessageID HA_RESET_HANDLER_FAILED = "HA_RESET_HANDLER_FAILED";
+extern const isc::log::MessageID HA_RESUME_CLIENT_LISTENER_FAILED = "HA_RESUME_CLIENT_LISTENER_FAILED";
 extern const isc::log::MessageID HA_SCOPES_HANDLER_FAILED = "HA_SCOPES_HANDLER_FAILED";
 extern const isc::log::MessageID HA_SERVICE_STARTED = "HA_SERVICE_STARTED";
 extern const isc::log::MessageID HA_STATE_MACHINE_CONTINUED = "HA_STATE_MACHINE_CONTINUED";
 extern const isc::log::MessageID HA_STATE_MACHINE_PAUSED = "HA_STATE_MACHINE_PAUSED";
 extern const isc::log::MessageID HA_STATE_TRANSITION = "HA_STATE_TRANSITION";
+extern const isc::log::MessageID HA_STATE_TRANSITION_PASSIVE_BACKUP = "HA_STATE_TRANSITION_PASSIVE_BACKUP";
+extern const isc::log::MessageID HA_SYNC_COMPLETE_NOTIFY_COMMUNICATIONS_FAILED = "HA_SYNC_COMPLETE_NOTIFY_COMMUNICATIONS_FAILED";
+extern const isc::log::MessageID HA_SYNC_COMPLETE_NOTIFY_FAILED = "HA_SYNC_COMPLETE_NOTIFY_FAILED";
+extern const isc::log::MessageID HA_SYNC_COMPLETE_NOTIFY_HANDLER_FAILED = "HA_SYNC_COMPLETE_NOTIFY_HANDLER_FAILED";
 extern const isc::log::MessageID HA_SYNC_FAILED = "HA_SYNC_FAILED";
 extern const isc::log::MessageID HA_SYNC_HANDLER_FAILED = "HA_SYNC_HANDLER_FAILED";
 extern const isc::log::MessageID HA_SYNC_START = "HA_SYNC_START";
 extern const isc::log::MessageID HA_SYNC_SUCCESSFUL = "HA_SYNC_SUCCESSFUL";
 extern const isc::log::MessageID HA_TERMINATED = "HA_TERMINATED";
+extern const isc::log::MessageID HA_TERMINATED_RESTART_PARTNER = "HA_TERMINATED_RESTART_PARTNER";
 
 } // namespace ha
 } // namespace isc
@@ -88,21 +114,28 @@ namespace {
 const char* values[] = {
     "HA_BUFFER4_RECEIVE_FAILED", "buffer4_receive callout failed: %1",
     "HA_BUFFER4_RECEIVE_NOT_FOR_US", "%1: dropping query to be processed by another server",
-    "HA_BUFFER4_RECEIVE_PACKET_OPTIONS_SKIPPED", "an error upacking an option, caused subsequent options to be skipped: %1",
+    "HA_BUFFER4_RECEIVE_PACKET_OPTIONS_SKIPPED", "an error unpacking an option, caused subsequent options to be skipped: %1",
     "HA_BUFFER4_RECEIVE_UNPACK_FAILED", "failed to parse query from %1 to %2, received over interface %3, reason: %4",
     "HA_BUFFER6_RECEIVE_FAILED", "buffer6_receive callout failed: %1",
     "HA_BUFFER6_RECEIVE_NOT_FOR_US", "%1: dropping query to be processed by another server",
-    "HA_BUFFER6_RECEIVE_PACKET_OPTIONS_SKIPPED", "an error upacking an option, caused subsequent options to be skipped: %1",
+    "HA_BUFFER6_RECEIVE_PACKET_OPTIONS_SKIPPED", "an error unpacking an option, caused subsequent options to be skipped: %1",
     "HA_BUFFER6_RECEIVE_UNPACK_FAILED", "failed to parse query from %1 to %2, received over interface %3, reason: %4",
     "HA_COMMAND_PROCESSED_FAILED", "command_processed callout failed: %1",
+    "HA_COMMUNICATION_INTERRUPTED", "communication with %1 is interrupted",
+    "HA_COMMUNICATION_INTERRUPTED_CLIENT4", "%1: new client attempting to get a lease from the partner",
+    "HA_COMMUNICATION_INTERRUPTED_CLIENT4_UNACKED", "%1: partner server failed to respond, %2 clients unacked so far, %3 clients left before transitioning to the partner-down state",
+    "HA_COMMUNICATION_INTERRUPTED_CLIENT6", "%1: new client attempting to get a lease from the partner",
+    "HA_COMMUNICATION_INTERRUPTED_CLIENT6_UNACKED", "%1: partner server failed to respond, %2 clients unacked so far, %3 clients left before transitioning to the partner-down state",
     "HA_CONFIGURATION_FAILED", "failed to configure High Availability hooks library: %1",
     "HA_CONFIGURATION_SUCCESSFUL", "HA hook library has been successfully configured",
     "HA_CONFIG_AUTO_FAILOVER_DISABLED", "auto-failover disabled for %1",
+    "HA_CONFIG_DHCP_MT_DISABLED", "HA multi-threading has been disabled, it cannot be enabled when Kea global multi-threading is disabled",
     "HA_CONFIG_LEASE_SYNCING_DISABLED", "lease database synchronization between HA servers is disabled",
     "HA_CONFIG_LEASE_SYNCING_DISABLED_REMINDER", "bypassing SYNCING state because lease database synchronization is administratively disabled",
     "HA_CONFIG_LEASE_UPDATES_AND_SYNCING_DIFFER", "unusual configuration where \"send-lease-updates\": %1 and \"sync-leases\": %2",
     "HA_CONFIG_LEASE_UPDATES_DISABLED", "lease updates will not be generated",
     "HA_CONFIG_LEASE_UPDATES_DISABLED_REMINDER", "lease updates are administratively disabled and will not be generated while in %1 state",
+    "HA_CONFIG_SYSTEM_MT_UNSUPPORTED", "HA multi-threading has been disabled, auto-detection of thread support reports 0",
     "HA_CONTINUE_HANDLER_FAILED", "ha-continue command failed: %1",
     "HA_DEINIT_OK", "unloading High Availability hooks library successful",
     "HA_DHCP4_START_SERVICE_FAILED", "failed to start DHCPv4 HA service in dhcp4_srv_configured callout: %1",
@@ -117,10 +150,18 @@ const char* values[] = {
     "HA_HIGH_CLOCK_SKEW", "%1, please synchronize clocks!",
     "HA_HIGH_CLOCK_SKEW_CAUSES_TERMINATION", "%1, causing HA service to terminate",
     "HA_INIT_OK", "loading High Availability hooks library successful",
+    "HA_INVALID_PARTNER_STATE_COMMUNICATION_RECOVERY", "partner is in the communication-recovery state unexpectedly",
+    "HA_INVALID_PARTNER_STATE_HOT_STANDBY", "partner is in the hot-standby state unexpectedly",
+    "HA_INVALID_PARTNER_STATE_LOAD_BALANCING", "partner is in the load-balancing state unexpectedly",
     "HA_LEASES4_COMMITTED_FAILED", "leases4_committed callout failed: %1",
     "HA_LEASES4_COMMITTED_NOTHING_TO_UPDATE", "%1: leases4_committed callout was invoked without any leases",
     "HA_LEASES6_COMMITTED_FAILED", "leases6_committed callout failed: %1",
     "HA_LEASES6_COMMITTED_NOTHING_TO_UPDATE", "%1: leases6_committed callout was invoked without any leases",
+    "HA_LEASES_BACKLOG_COMMUNICATIONS_FAILED", "failed to communicate with %1 while sending lease updates backlog: %2",
+    "HA_LEASES_BACKLOG_FAILED", "failed to send lease updates backlog to %1: %2",
+    "HA_LEASES_BACKLOG_NOTHING_TO_SEND", "no leases in backlog after communication recovery",
+    "HA_LEASES_BACKLOG_START", "starting to send %1 outstanding lease updates to %2",
+    "HA_LEASES_BACKLOG_SUCCESS", "sending lease updates backlog to %1 successful in %2",
     "HA_LEASES_SYNC_COMMUNICATIONS_FAILED", "failed to communicate with %1 while syncing leases: %2",
     "HA_LEASES_SYNC_FAILED", "failed to synchronize leases with %1: %2",
     "HA_LEASES_SYNC_LEASE_PAGE_RECEIVED", "received %1 leases from %2",
@@ -148,16 +189,27 @@ const char* values[] = {
     "HA_MAINTENANCE_STARTED_IN_PARTNER_DOWN", "the server is now in the partner-down mode as a result of requested maintenance",
     "HA_MAINTENANCE_START_HANDLER_FAILED", "ha-maintenance-start command failed: %1",
     "HA_MISSING_CONFIGURATION", "high-availability parameter not specified for High Availability hooks library",
+    "HA_PAUSE_CLIENT_LISTENER_FAILED", "Pausing multi-threaded HTTP processing failed: %1",
+    "HA_PAUSE_CLIENT_LISTENER_ILLEGAL", "Pausing multi-threaded HTTP processing failed: %1",
+    "HA_RESET_COMMUNICATIONS_FAILED", "failed to send ha-reset command to %1: %2",
+    "HA_RESET_FAILED", "failed to reset HA state machine of %1: %2",
+    "HA_RESET_HANDLER_FAILED", "ha-reset command failed: %1",
+    "HA_RESUME_CLIENT_LISTENER_FAILED", "Resuming multi-threaded HTTP processing failed: %1",
     "HA_SCOPES_HANDLER_FAILED", "ha-scopes command failed: %1",
     "HA_SERVICE_STARTED", "started high availability service in %1 mode as %2 server",
     "HA_STATE_MACHINE_CONTINUED", "state machine is un-paused",
     "HA_STATE_MACHINE_PAUSED", "state machine paused in state %1",
     "HA_STATE_TRANSITION", "server transitions from %1 to %2 state, partner state is %3",
+    "HA_STATE_TRANSITION_PASSIVE_BACKUP", "server transitions from %1 to %2 state",
+    "HA_SYNC_COMPLETE_NOTIFY_COMMUNICATIONS_FAILED", "failed to send ha-sync-complete-notify to %1: %2",
+    "HA_SYNC_COMPLETE_NOTIFY_FAILED", "error processing ha-sync-complete-notify command on %1: %2",
+    "HA_SYNC_COMPLETE_NOTIFY_HANDLER_FAILED", "ha-sync-complete-notify command failed: %1",
     "HA_SYNC_FAILED", "lease database synchronization with %1 failed: %2",
     "HA_SYNC_HANDLER_FAILED", "ha-sync command failed: %1",
     "HA_SYNC_START", "starting lease database synchronization with %1",
     "HA_SYNC_SUCCESSFUL", "lease database synchronization with %1 completed successfully in %2",
     "HA_TERMINATED", "HA service terminated due to an unrecoverable condition. Check previous error message(s), address the problem and restart!",
+    "HA_TERMINATED_RESTART_PARTNER", "waiting for the partner in the TERMINATED state to be restarted",
     NULL
 };
 

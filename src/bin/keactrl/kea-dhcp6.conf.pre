@@ -15,7 +15,7 @@
 // do. Comments in this configuration file sometimes refer to sections for more
 // details. These are section numbers in Kea User's Guide. The version matching
 // your software should come with your Kea package, but it is also available
-// in ISC's Knowledgebase (https://kb.isc.org/docs/kea-administrator-reference-manual; the direct link for
+// in ISC's Knowledgebase (https://kea.readthedocs.io; the direct link for
 // the stable version is https://kea.readthedocs.io/).
 //
 // This configuration file contains only DHCPv6 server's configuration.
@@ -35,7 +35,7 @@
         "interfaces": [ ]
     },
 
-    // Kea support control channel, which is a way to receive management commands
+    // Kea supports control channel, which is a way to receive management commands
     // while the server is running. This is a Unix domain socket that receives
     // commands formatted in JSON, e.g. config-set (which sets new configuration),
     // config-reload (which tells Kea to reload its configuration from file),
@@ -53,6 +53,8 @@
     // There are dedicated examples for each backend. See Section 8.2.2 "Lease
     // Storage" for details.
     "lease-database": {
+        // Memfile is the simplest and easiest backend to use. It's an in-memory
+        // C++ database that stores its state in CSV file.
         "type": "memfile",
         "lfc-interval": 3600
     },
@@ -184,6 +186,42 @@
         }
     ],
 
+    // Another thing possible here are hooks. Kea supports a powerful mechanism
+    // that allows loading external libraries that can extract information and
+    // even influence how the server processes packets. Those libraries include
+    // additional forensic logging capabilities, ability to reserve hosts in
+    // more flexible ways, and even add extra commands. For a list of available
+    // hook libraries, see https://gitlab.isc.org/isc-projects/kea/wikis/Hooks-available.
+    // "hooks-libraries": [
+    //   {
+    //       // Forensic Logging library generates forensic type of audit trail
+    //       // of all devices serviced by Kea, including their identifiers
+    //       // (like MAC address), their location in the network, times
+    //       // when they were active etc.
+    //       "library": "@libdir@/kea/hooks/libdhcp_legal_log.so",
+    //       "parameters": {
+    //           "path": "/var/lib/kea",
+    //           "base-name": "kea-forensic6"
+    //       }
+    //   },
+    //   {
+    //       // Flexible identifier (flex-id). Kea software provides a way to
+    //       // handle host reservations that include addresses, prefixes,
+    //       // options, client classes and other features. The reservation can
+    //       // be based on hardware address, DUID, circuit-id or client-id in
+    //       // DHCPv4 and using hardware address or DUID in DHCPv6. However,
+    //       // there are sometimes scenario where the reservation is more
+    //       // complex, e.g. uses other options that mentioned above, uses part
+    //       // of specific options or perhaps even a combination of several
+    //       // options and fields to uniquely identify a client. Those scenarios
+    //       // are addressed by the Flexible Identifiers hook application.
+    //       "library": "@libdir@/kea/hooks/libdhcp_flex_id.so",
+    //       "parameters": {
+    //           "identifier-expression": "relay6[0].option[37].hex"
+    //       }
+    //   }
+    // ],
+
     // Below an example of a simple IPv6 subnet declaration. Uncomment to enable
     // it. This is a list, denoted with [ ], of structures, each denoted with
     // { }. Each structure describes a single subnet and may have several
@@ -282,7 +320,7 @@
                 // reservation.
                 {
                     "duid": "01:02:03:04:05:06:07:08:09:0A",
-                    "ip-addresses": [ "2001:db8:1:cafe::1" ],
+                    "ip-addresses": [ "2001:db8:1:0:cafe::1" ],
                     "prefixes": [ "2001:db8:2:abcd::/64" ],
                     "hostname": "foo.example.com",
                     "option-data": [
@@ -310,7 +348,7 @@
                 // loaded to work.
                 {
                     "flex-id": "'somevalue'",
-                    "ip-addresses": [ "2001:db8:1:cafe::2" ]
+                    "ip-addresses": [ "2001:db8:1:0:cafe::2" ]
                 }
             ]
         }
@@ -332,13 +370,10 @@
     // Client-classes can be defined here. See "client-classes" in Dhcp4 for
     // an example.
 
-    // Hook libraries can be defined here. See "hooks-libraries" example in
-    // Dhcp4.
-
     // DDNS information (how the DHCPv6 component can reach a DDNS daemon)
 
-// Logging configuration starts here. Kea uses different loggers to log various
-// activities. For details (e.g. names of loggers), see Chapter 18.
+    // Logging configuration starts here. Kea uses different loggers to log various
+    // activities. For details (e.g. names of loggers), see Chapter 18.
     "loggers": [
     {
         // This specifies the logging for kea-dhcp6 logger, i.e. all logs
@@ -352,7 +387,7 @@
                 // - stderr (prints on standard error)
                 // - syslog (logs to syslog)
                 // - syslog:name (logs to syslog using specified name)
-                // Any other value is considered a name of a time
+                // Any other value is considered a name of the file
                 "output": "@localstatedir@/log/kea-dhcp6.log"
 
                 // Shorter log pattern suitable for use with systemd,

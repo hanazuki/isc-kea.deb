@@ -9,7 +9,6 @@ module kea-types {
 
   revision 2019-08-12 {
     description "Initial revision";
-    reference "";
   }
 
   /*

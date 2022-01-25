@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,6 +13,7 @@
 #include <dhcpsrv/host.h>
 #include <dhcpsrv/host_mgr.h>
 #include <dhcpsrv/subnet_id.h>
+#include <testutils/gtest_utils.h>
 
 #ifdef HAVE_CQL
 #include <cql/testutils/cql_schema.h>
@@ -121,18 +122,18 @@ namespace {
 /// - Configuration 12:
 ///   - Simple configuration with a single subnet
 ///   - One in-pool reservation for MAC address aa:bb:cc:dd:ee:ff
-///   - Host reservation mode set to ALL (fully enabled)
+///   - The reservations-in-subnet flag is set to true
 ///
 /// - Configuration 13:
 ///   - Simple configuration with a single subnet as in #12
-///   - Host reservation mode set to "disabled" for testing that the
+///   - The reservations-in-subnet flag is set to false for testing that the
 ///     reservations are ignored
 ///
 /// - Configuration 14:
 ///   - Simple configuration with a single subnet
-///   - Two host reservations, one out of the pool another one in pool
-///   - Host reservation mode set to "out-of-pool" to test that
-///     only out of pool reservations are honored.
+///   - Two host reservations, one out of the pool, another one in pool
+///   - The reservations-in-subnet and reservations-out-of-pool flags are set to
+///     true to test that only out of pool reservations are honored.
 ///
 /// - Configuration 15:
 ///   - Use for testing authoritative flag
@@ -149,7 +150,7 @@ namespace {
 ///     respond to requests from unknown clients.
 ///
 const char* DORA_CONFIGS[] = {
-// Configuration 0
+    // Configuration 0
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -177,7 +178,7 @@ const char* DORA_CONFIGS[] = {
         " } ]"
     "}",
 
-// Configuration 1
+    // Configuration 1
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -204,7 +205,7 @@ const char* DORA_CONFIGS[] = {
         " } ]"
     "}",
 
-// Configuration 2
+    // Configuration 2
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -233,7 +234,7 @@ const char* DORA_CONFIGS[] = {
         "} ]"
     "}",
 
-// Configuration 3
+    // Configuration 3
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -250,7 +251,7 @@ const char* DORA_CONFIGS[] = {
         " } ]"
     "}",
 
-// Configuration 4
+    // Configuration 4
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -312,7 +313,7 @@ const char* DORA_CONFIGS[] = {
         "} ]"
     "}",
 
-// Configuration 6
+    // Configuration 6
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -334,7 +335,7 @@ const char* DORA_CONFIGS[] = {
         "} ]"
     "}",
 
-// Configuration 7
+    // Configuration 7
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -378,7 +379,7 @@ const char* DORA_CONFIGS[] = {
         "]"
     "}",
 
-// Configuration 8
+    // Configuration 8
     "{ \"interfaces-config\": {"
         "   \"interfaces\": [ \"*\" ]"
         "},"
@@ -396,7 +397,7 @@ const char* DORA_CONFIGS[] = {
         " } ]"
     "}",
 
-// Configuration 9
+    // Configuration 9
     "{ \"interfaces-config\": {"
         "   \"interfaces\": [ \"*\" ]"
         "},"
@@ -414,7 +415,7 @@ const char* DORA_CONFIGS[] = {
         " } ]"
     "}",
 
-// Configuration 10
+    // Configuration 10
     "{ \"interfaces-config\": {"
         "   \"interfaces\": [ \"*\" ]"
         "},"
@@ -432,7 +433,7 @@ const char* DORA_CONFIGS[] = {
         " } ]"
     "}",
 
-// Configuration 11
+    // Configuration 11
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -450,7 +451,7 @@ const char* DORA_CONFIGS[] = {
         "} ]"
     "}",
 
-// Configuration 12
+    // Configuration 12
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -458,7 +459,9 @@ const char* DORA_CONFIGS[] = {
         "\"subnet4\": [ { "
         "    \"subnet\": \"10.0.0.0/24\","
         "    \"pools\": [ { \"pool\": \"10.0.0.10-10.0.0.100\" } ],"
-        "    \"reservation-mode\": \"all\","
+        "    \"reservations-global\": false,"
+        "    \"reservations-in-subnet\": true,"
+        "    \"reservations-out-of-pool\": false,"
         "    \"reservations\": [ "
         "       {"
         "         \"hw-address\": \"aa:bb:cc:dd:ee:ff\","
@@ -468,7 +471,7 @@ const char* DORA_CONFIGS[] = {
         "} ]"
     "}",
 
-// Configuration 13
+    // Configuration 13
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -476,7 +479,8 @@ const char* DORA_CONFIGS[] = {
         "\"subnet4\": [ { "
         "    \"subnet\": \"10.0.0.0/24\","
         "    \"pools\": [ { \"pool\": \"10.0.0.10-10.0.0.100\" } ],"
-        "    \"reservation-mode\": \"disabled\","
+        "    \"reservations-global\": false,"
+        "    \"reservations-in-subnet\": false,"
         "    \"reservations\": [ "
         "       {"
         "         \"hw-address\": \"aa:bb:cc:dd:ee:ff\","
@@ -486,7 +490,7 @@ const char* DORA_CONFIGS[] = {
         "} ]"
     "}",
 
-// Configuration 14
+    // Configuration 14
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -494,7 +498,9 @@ const char* DORA_CONFIGS[] = {
         "\"subnet4\": [ { "
         "    \"subnet\": \"10.0.0.0/24\","
         "    \"pools\": [ { \"pool\": \"10.0.0.10-10.0.0.100\" } ],"
-        "    \"reservation-mode\": \"out-of-pool\","
+        "    \"reservations-global\": false,"
+        "    \"reservations-in-subnet\": true,"
+        "    \"reservations-out-of-pool\": true,"
         "    \"reservations\": [ "
         "       {"
         "         \"hw-address\": \"aa:bb:cc:dd:ee:ff\","
@@ -508,7 +514,7 @@ const char* DORA_CONFIGS[] = {
         "} ]"
     "}",
 
-// Configuration 15
+    // Configuration 15
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -525,7 +531,7 @@ const char* DORA_CONFIGS[] = {
         " } ]"
     "}",
 
-// Configuration 16
+    // Configuration 16
     "{ \"interfaces-config\": {"
         "      \"interfaces\": [ \"*\" ]"
         "},"
@@ -540,7 +546,29 @@ const char* DORA_CONFIGS[] = {
         "        \"data\": \"10.0.0.200,10.0.0.201\""
         "    } ]"
         " } ]"
+    "}",
+
+    // Configuration 17
+    "{ \"interfaces-config\": {"
+        "      \"interfaces\": [ \"*\" ]"
+        "},"
+        "\"valid-lifetime\": 600,"
+        "\"subnet4\": ["
+        "    {"
+        "        \"subnet\": \"10.0.0.0/24\", "
+        "        \"store-extended-info\": true,"
+        "        \"pools\": [ { \"pool\": \"10.0.0.10-10.0.0.100\" } ],"
+        "        \"interface\": \"eth0\""
+        "    },"
+        "    {"
+        "        \"subnet\": \"192.0.2.0/26\", "
+        "        \"store-extended-info\": false,"
+        "        \"pools\": [ { \"pool\": \"192.0.2.10-192.0.2.63\" } ],"
+        "        \"interface\": \"eth1\""
+        "    }"
+        "]"
     "}"
+
 };
 
 /// @brief Test fixture class for testing 4-way (DORA) exchanges.
@@ -558,8 +586,6 @@ public:
     DORATest()
         : Dhcpv4SrvTest(),
           iface_mgr_test_config_(true) {
-        IfaceMgr::instance().openSockets4();
-
         // Let's wipe all existing statistics.
         isc::stats::StatsMgr::instance().removeAll();
     }
@@ -608,15 +634,194 @@ public:
     /// @c DORA_CONFIGS array.
     void testMultiStageBoot(const unsigned int config_index);
 
+    /// @brief This test verifies that the client in the SELECTING state can get
+    /// an address when it doesn't request any specific address in the
+    /// DHCPDISCOVER message.
+    void selectingDoNotRequestAddress();
+
+    /// @brief This test verifies that multiple clients may use the DHCPv4
+    /// server and obtain unique leases.
+    void selectingMultipleClients();
+
+    /// @brief This test verifies that the client in a SELECTING state can
+    /// request a specific address and that this address will be assigned when
+    /// available. It also tests that if the client requests an address which is
+    /// in use the client will get a different address.
+    void selectingRequestAddress();
+
+    /// @brief  This test verifies that the client will get the address that it
+    /// has been allocated when the client requests a different address.
+    void selectingRequestNonMatchingAddress();
+
+    /// @brief  Test that the client in the INIT-REBOOT state can request the IP
+    /// address it has and the address is returned. Also, check that if the
+    /// client requests invalid address the server sends a DHCPNAK.
+    void initRebootRequest();
+
+    /// @brief  Test that the client in the INIT-REBOOT state can request the IP
+    /// address it has and the address is returned. Also, check that if the
+    /// client is unknown the server sends a DHCPNAK.
+    void authoritative();
+
+    /// @brief  Test that the client in the INIT-REBOOT state can request the IP
+    /// address it has and the address is returned. Also, check that if  the
+    /// client is unknown the request is dropped.
+    void notAuthoritative();
+
+    /// @brief Check that the ciaddr returned by the server is correct for
+    /// DHCPOFFER and DHCPNAK according to RFC2131, section 4.3.1.
+    void ciaddr();
+
+    /// @brief This test checks the server behavior in the following situation:
+    /// - Client A identifies itself to the server using client identifier
+    ///   and the hardware address and requests allocation of the new lease.
+    /// - Server allocates the lease to the client.
+    /// - Client B has the same hardware address but is using a different
+    ///   client identifier then Client A.
+    /// - Client B sends DHCPDISCOVER.
+    /// - Server should determine that the client B is not client A, because
+    ///   it is using a different client identifier, even though they use the
+    ///   same HW address. As a consequence, the server should offer a
+    ///    different address to the client B.
+    /// - The client B performs the 4-way exchange again and the server
+    ///   allocates a new address to the client, which should be different
+    ///   than the address used by the client A.
+    /// - Client B is in the renewing state and it successfully renews its
+    ///   address.
+    /// - Client A also renews its address successfully.
+    void twoAllocationsOverlap();
+
+    /// @brief This is a simple test for the host reservation. It creates a
+    /// reservation for an address for a single client, identified by the HW
+    /// address. The test verifies that the client using this HW address will
+    /// obtain a lease for the reserved address. It also checks that the client
+    /// using a different HW address will obtain an address from the dynamic
+    /// pool.
+    void reservation();
+
+    /// @brief  This test checks that it is possible to make a reservation by
+    /// DUID carried in the Client Identifier option.
+    void reservationByDUID();
+
+    /// @brief This test checks that it is possible to make a reservation by
+    /// circuit-id inserted by the relay agent.
+    void reservationByCircuitId();
+
+    /// @brief This test checks that it is possible to make a reservation by
+    ///  client-id.
+    void reservationByClientId();
+
+    /// @brief  This test verifies that order in which host identifiers are used
+    /// to retrieve host reservations can be controlled.
+    void hostIdentifiersOrder();
+
+    /// @brief This test checks that setting the match-client-id value to false
+    /// causes the server to ignore changing client identifier when the client
+    /// is using consistent HW address.
+    void ignoreChangingClientId();
+
+    /// @brief This test checks that the match-client-id parameter doesn't have
+    /// effect on the lease lookup using the HW address.
+    void changingHWAddress();
+
+    /// @brief This test verifies that the server assigns reserved values for
+    /// the siaddr, sname and file fields carried within DHCPv4 message.
+    void messageFieldsReservations();
+
+    /// @brief This test checks the following scenario:
+    /// 1. Client A performs 4-way exchange and obtains a lease from the dynamic
+    /// pool.
+    /// 2. Reservation is created for the client A using an address out of the
+    ///    dynamic pool.
+    /// 3. Client A renews the lease.
+    /// 4. Server responds with DHCPNAK to indicate that the client should stop
+    ///    using an address for which it has a lease. Server doesn't want to
+    ///    renew an address for which the client doesn't have a reservation,
+    ///    while it has a reservation for a different address.
+    /// 5. Client A receives a DHCPNAK and returns to the DHCP server discovery.
+    /// 6. Client A performs a 4-way exchange with a server and the server
+    ///    allocates a reserved address to the Client A.
+    /// 7. Client A renews the allocated address and the server returns a
+    ///    DHCPACK.
+    /// 8. Reservation for the Client A is removed.
+    /// 9. Client A renews the (previously reserved) lease and the server
+    ///    returns DHCPNAK because the address in use is neither reserved nor
+    ///    belongs to the dynamic pool.
+    /// 10. Client A returns to the DHCP server discovery.
+    /// 11. Client A uses 4-way exchange to obtain a lease from the dynamic
+    ///     pool.
+    /// 12. The new address that the Client A is using is reserved for Client B.
+    ///     Client A still holds this address.
+    /// 13. Client B uses 4-way exchange to obtain a new lease.
+    /// 14. The server determines that the Client B has a reservation for the
+    ///     address which is in use by Client A and offers an address different
+    ///     than reserved.
+    /// 15. Client B requests the allocation of the offered address and the
+    ///     server allocates this address.
+    /// 16. Client A renews the lease.
+    /// 17. The server determines that the address that Client A is using is
+    ///     reserved for Client B. The server returns DHCPNAK to the Client A.
+    /// 18. Client B uses 4-way exchange to obtain the reserved lease but the
+    ///     lease for the Client A hasn't been removed yet. Client B is assigned
+    ///     the same address it has been using.
+    /// 19. Client A uses 4-way exchange to allocate a new lease.
+    /// 20. The server allocates a new lease from the dynamic pool but it avoids
+    ///     allocating the address reserved for the Client B.
+    /// 21. Client B uses 4-way exchange to obtain a new lease.
+    /// 22. The server finally allocates a reserved address to the Client B.
+    void reservationsWithConflicts();
+
+    /// @brief This test verifies that the allocation engine ignores
+    /// reservations when reservations flags are set to "disabled".
+    void reservationModeDisabled();
+
+    /// @brief This test verifies that allocation engine assigns a reserved
+    /// address to the client which doesn't own this reservation. We want to
+    /// avoid such cases in the real deployments, but this is just a test that
+    /// the allocation engine skips checking if the reservation exists when it
+    /// allocates an address. In the real deployment the reservation simply
+    /// wouldn't exist.
+    void reservationIgnoredInDisabledMode();
+
+    /// @brief This test verifies that in pool reservations are ignored when the
+    /// reservations-out-of-pool flag is set to true.
+    void reservationModeOutOfPool();
+
+    /// @brief This test verifies that the in-pool reservation can be assigned
+    /// to a client not owning this reservation when the
+    /// reservations-out-of-pool flag is set to true.
+    void reservationIgnoredInOutOfPoolMode();
+
+    /// @brief This test verifies that after a client completes its DORA
+    /// exchange, appropriate statistics are updated.
+    void statisticsDORA();
+
+    /// @brief This test verifies that after a client completes an exchange that
+    /// result in NAK, appropriate statistics are updated.
+    void statisticsNAK();
+
+    /// @brief This test verifies that custom server identifier can be specified
+    /// for a subnet.
+    void customServerIdentifier();
+
+    /// @brief This test verifies that reserved lease is not assigned to a
+    /// client which identifier doesn't match the identifier in the reservation.
+    void changingCircuitId();
+
+    /// @brief  Verifies that extended info is stored on the lease when
+    /// store-extended-info is enabled.
+    void storeExtendedInfoEnabled();
+
+    /// @brief Verifies that extended info is not stored on the lease when
+    ///  store-extended-info is disabled.
+    void storeExtendedInfoDisabled();
+
     /// @brief Interface Manager's fake configuration control.
     IfaceMgrTestConfig iface_mgr_test_config_;
-
 };
 
-/// This test verifies that the client in the SELECTING state can get
-/// an address when it doesn't request any specific address in the
-/// DHCPDISCOVER message.
-TEST_F(DORATest, selectingDoNotRequestAddress) {
+void
+DORATest::selectingDoNotRequestAddress() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -638,9 +843,18 @@ TEST_F(DORATest, selectingDoNotRequestAddress) {
     ASSERT_NE(client.config_.lease_.addr_.toText(), "0.0.0.0");
 }
 
-/// This test verifies that multiple clients may use the DHCPv4 server
-/// and obtain unique leases.
-TEST_F(DORATest, selectingMultipleClients) {
+TEST_F(DORATest, selectingDoNotRequestAddress) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    selectingDoNotRequestAddress();
+}
+
+TEST_F(DORATest, selectingDoNotRequestAddressMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    selectingDoNotRequestAddress();
+}
+
+void
+DORATest::selectingMultipleClients() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -681,11 +895,18 @@ TEST_F(DORATest, selectingMultipleClients) {
     EXPECT_NE(lease1.addr_, lease3.addr_);
 }
 
-// This test verifies that the client in a SELECTING state can request
-// a specific address and that this address will be assigned when
-// available. It also tests that if the client requests an address which
-// is in use the client will get a different address.
-TEST_F(DORATest, selectingRequestAddress) {
+TEST_F(DORATest, selectingMultipleClients) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    selectingMultipleClients();
+}
+
+TEST_F(DORATest, selectingMultipleClientsMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    selectingMultipleClients();
+}
+
+void
+DORATest::selectingRequestAddress() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -726,9 +947,18 @@ TEST_F(DORATest, selectingRequestAddress) {
     EXPECT_NE(client.config_.lease_.addr_.toText(), "10.0.0.50");
 }
 
-// This test verifies that the client will get the address that it has
-// been allocated when the client requests a different address.
-TEST_F(DORATest, selectingRequestNonMatchingAddress) {
+TEST_F(DORATest, selectingRequestAddress) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    selectingRequestAddress();
+}
+
+TEST_F(DORATest, selectingRequestAddressMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    selectingRequestAddress();
+}
+
+void
+DORATest::selectingRequestNonMatchingAddress() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -767,10 +997,18 @@ TEST_F(DORATest, selectingRequestNonMatchingAddress) {
     EXPECT_EQ("10.0.0.50", client.config_.lease_.addr_.toText());
 }
 
-// Test that the client in the INIT-REBOOT state can request the IP
-// address it has and the address is returned. Also, check that if
-// if the client requests invalid address the server sends a DHCPNAK.
-TEST_F(DORATest, initRebootRequest) {
+TEST_F(DORATest, selectingRequestNonMatchingAddress) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    selectingRequestNonMatchingAddress();
+}
+
+TEST_F(DORATest, selectingRequestNonMatchingAddressMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    selectingRequestNonMatchingAddress();
+}
+
+void
+DORATest::initRebootRequest() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -845,10 +1083,18 @@ TEST_F(DORATest, initRebootRequest) {
     ASSERT_EQ("10.0.0.50", client.config_.lease_.addr_.toText());
 }
 
-// Test that the client in the INIT-REBOOT state can request the IP
-// address it has and the address is returned. Also, check that if
-// if the client is unknown the server sends a DHCPNAK.
-TEST_F(DORATest, authoritative) {
+TEST_F(DORATest, initRebootRequest) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    initRebootRequest();
+}
+
+TEST_F(DORATest, initRebootRequestMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    initRebootRequest();
+}
+
+void
+DORATest::authoritative() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[15], *client.getServer());
@@ -940,10 +1186,18 @@ TEST_F(DORATest, authoritative) {
     ASSERT_EQ("10.0.0.50", client.config_.lease_.addr_.toText());
 }
 
-// Test that the client in the INIT-REBOOT state can request the IP
-// address it has and the address is returned. Also, check that if
-// if the client is unknown the request is dropped.
-TEST_F(DORATest, notAuthoritative) {
+TEST_F(DORATest, authoritative) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    authoritative();
+}
+
+TEST_F(DORATest, authoritativeMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    authoritative();
+}
+
+void
+DORATest::notAuthoritative() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[16], *client.getServer());
@@ -1033,9 +1287,18 @@ TEST_F(DORATest, notAuthoritative) {
     ASSERT_EQ("10.0.0.50", client.config_.lease_.addr_.toText());
 }
 
-// Check that the ciaddr returned by the server is correct for DHCPOFFER and
-// DHCPNAK according to RFC2131, section 4.3.1.
-TEST_F(DORATest, ciaddr) {
+TEST_F(DORATest, notAuthoritative) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    notAuthoritative();
+}
+
+TEST_F(DORATest, notAuthoritativeMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    notAuthoritative();
+}
+
+void
+DORATest::ciaddr() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -1086,6 +1349,16 @@ TEST_F(DORATest, ciaddr) {
     EXPECT_EQ("0.0.0.0", resp->getCiaddr().toText());
 }
 
+TEST_F(DORATest, ciaddr) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    ciaddr();
+}
+
+TEST_F(DORATest, ciaddrMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    ciaddr();
+}
+
 void
 DORATest::oneAllocationOverlapTest(const std::string& clientid_a,
                                    const std::string& clientid_b) {
@@ -1126,24 +1399,8 @@ DORATest::oneAllocationOverlapTest(const std::string& clientid_a,
     ASSERT_EQ(yiaddr, client.config_.lease_.addr_);
 }
 
-// This test checks the server behavior in the following situation:
-// - Client A identifies itself to the server using client identifier
-//   and the hardware address and requests allocation of the new lease.
-// - Server allocates the lease to the client.
-// - Client B has the same hardware address but is using a different
-//   client identifier then Client A.
-// - Client B sends DHCPDISCOVER.
-// - Server should determine that the client B is not client A, because
-//   it is using a different client identifier, even though they use the
-//   same HW address. As a consequence, the server should offer a
-//    different address to the client B.
-// - The client B performs the 4-way exchange again and the server
-//   allocates a new address to the client, which should be different
-//   than the address used by the client A.
-// - Client B is in the renewing state and it successfully renews its
-//   address.
-// - Client A also renews its address successfully.
-TEST_F(DORATest, twoAllocationsOverlap) {
+void
+DORATest::twoAllocationsOverlap() {
     // Allocate a lease by client A using the 4-way exchange.
     Dhcp4Client client_a(Dhcp4Client::SELECTING);
     client_a.includeClientId("12:34");
@@ -1214,6 +1471,16 @@ TEST_F(DORATest, twoAllocationsOverlap) {
     ASSERT_NE(client_a.config_.lease_.addr_, client_b.config_.lease_.addr_);
 }
 
+TEST_F(DORATest, twoAllocationsOverlap) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    twoAllocationsOverlap();
+}
+
+TEST_F(DORATest, twoAllocationsOverlapMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    twoAllocationsOverlap();
+}
+
 // This test checks the server behavior in the following situation:
 // - Client A identifies itself to the server using the hardware address
 //   and client identifier.
@@ -1229,6 +1496,26 @@ TEST_F(DORATest, twoAllocationsOverlap) {
 //   same reason.
 // - Client A renews its address successfully.
 TEST_F(DORATest, oneAllocationOverlap1) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    oneAllocationOverlapTest("12:34", "");
+}
+
+// This test checks the server behavior in the following situation:
+// - Client A identifies itself to the server using the hardware address
+//   and client identifier.
+// - Client A performs the 4-way exchange and obtains a lease from the server.
+// - Client B uses the same HW address as the client A, but it doesn't use
+//   the client identifier.
+// - Client B sends the DHCPDISCOVER to the server.
+//   The server determines that there is a lease for the client A using the
+//   same HW address as the client B. Server discards the client's message and
+//   doesn't offer the lease for the client B to prevent allocation of the
+//   lease without a unique identifier.
+// - The client sends the DHCPREQUEST and the server sends the DHCPNAK for the
+//   same reason.
+// - Client A renews its address successfully.
+TEST_F(DORATest, oneAllocationOverlap1MultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
     oneAllocationOverlapTest("12:34", "");
 }
 
@@ -1236,15 +1523,20 @@ TEST_F(DORATest, oneAllocationOverlap1) {
 // uses no client identifier, and the client B uses the HW address and the
 // client identifier. The server behaves as previously.
 TEST_F(DORATest, oneAllocationOverlap2) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
     oneAllocationOverlapTest("", "12:34");
 }
 
-// This is a simple test for the host reservation. It creates a reservation
-// for an address for a single client, identified by the HW address. The
-// test verifies that the client using this HW address will obtain a
-// lease for the reserved address. It also checks that the client using
-// a different HW address will obtain an address from the dynamic pool.
-TEST_F(DORATest, reservation) {
+// This test is similar to oneAllocationOverlap2 but this time the client A
+// uses no client identifier, and the client B uses the HW address and the
+// client identifier. The server behaves as previously.
+TEST_F(DORATest, oneAllocationOverlap2MultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    oneAllocationOverlapTest("", "12:34");
+}
+
+void
+DORATest::reservation() {
     // Client A is a one which will have a reservation.
     Dhcp4Client clientA(Dhcp4Client::SELECTING);
     // Set explicit HW address so as it matches the reservation in the
@@ -1283,9 +1575,18 @@ TEST_F(DORATest, reservation) {
     ASSERT_TRUE(subnet->inPool(Lease::TYPE_V4, clientB.config_.lease_.addr_));
 }
 
-// This test checks that it is possible to make a reservation by
-// DUID carried in the Client Identifier option.
-TEST_F(DORATest, reservationByDUID) {
+TEST_F(DORATest, reservation) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservation();
+}
+
+TEST_F(DORATest, reservationMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservation();
+}
+
+void
+DORATest:: reservationByDUID() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Use relay agent.
     client.useRelay(true, IOAddress("10.0.0.1"), IOAddress("10.0.0.2"));
@@ -1315,9 +1616,18 @@ TEST_F(DORATest, reservationByDUID) {
     ASSERT_EQ("10.0.0.8", client.config_.lease_.addr_.toText());
 }
 
-// This test checks that it is possible to make a reservation by
-// circuit-id inserted by the relay agent.
-TEST_F(DORATest, reservationByCircuitId) {
+TEST_F(DORATest, reservationByDUID) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationByDUID();
+}
+
+TEST_F(DORATest, reservationByDUIDMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationByDUID();
+}
+
+void
+DORATest::reservationByCircuitId() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Use relay agent so as the circuit-id can be inserted.
     client.useRelay(true, IOAddress("10.0.0.1"), IOAddress("10.0.0.2"));
@@ -1339,9 +1649,18 @@ TEST_F(DORATest, reservationByCircuitId) {
     ASSERT_EQ("10.0.0.9", client.config_.lease_.addr_.toText());
 }
 
-// This test checks that it is possible to make a reservation by
-// client-id.
-TEST_F(DORATest, reservationByClientId) {
+TEST_F(DORATest, reservationByCircuitId) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationByCircuitId();
+}
+
+TEST_F(DORATest, reservationByCircuitIdMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationByCircuitId();
+}
+
+void
+DORATest::reservationByClientId() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Use relay agent to make sure that the desired subnet is
     // selected for our client.
@@ -1364,9 +1683,18 @@ TEST_F(DORATest, reservationByClientId) {
     ASSERT_EQ("10.0.0.1", client.config_.lease_.addr_.toText());
 }
 
-// This test verifies that order in which host identifiers are used to
-// retrieve host reservations can be controlled.
-TEST_F(DORATest, hostIdentifiersOrder) {
+TEST_F(DORATest, reservationByClientId) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationByClientId();
+}
+
+TEST_F(DORATest, reservationByClientIdMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationByClientId();
+}
+
+void
+DORATest::hostIdentifiersOrder() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     client.setHWAddress("aa:bb:cc:dd:ee:ff");
     // Use relay agent so as the circuit-id can be inserted.
@@ -1442,10 +1770,18 @@ TEST_F(DORATest, hostIdentifiersOrder) {
     ASSERT_EQ("10.0.0.1", client.config_.lease_.addr_.toText());
 }
 
-// This test checks that setting the match-client-id value to false causes
-// the server to ignore changing client identifier when the client is
-// using consistent HW address.
-TEST_F(DORATest, ignoreChangingClientId) {
+TEST_F(DORATest, hostIdentifiersOrder) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    hostIdentifiersOrder();
+}
+
+TEST_F(DORATest, hostIdentifiersOrderMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    hostIdentifiersOrder();
+}
+
+void
+DORATest::ignoreChangingClientId() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[3], *client.getServer());
@@ -1481,9 +1817,18 @@ TEST_F(DORATest, ignoreChangingClientId) {
     EXPECT_FALSE(client.config_.lease_.client_id_);
 }
 
-// This test checks that the match-client-id parameter doesn't have
-// effect on the lease lookup using the HW address.
-TEST_F(DORATest, changingHWAddress) {
+TEST_F(DORATest, ignoreChangingClientId) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    ignoreChangingClientId();
+}
+
+TEST_F(DORATest, ignoreChangingClientIdMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    ignoreChangingClientId();
+}
+
+void
+DORATest::changingHWAddress() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[3], *client.getServer());
@@ -1521,9 +1866,18 @@ TEST_F(DORATest, changingHWAddress) {
     EXPECT_FALSE(client.config_.lease_.client_id_);
 }
 
-// This test verifies that the server assigns reserved values for the
-// siaddr, sname and file fields carried within DHCPv4 message.
-TEST_F(DORATest, messageFieldsReservations) {
+TEST_F(DORATest, changingHWAddress) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    changingHWAddress();
+}
+
+TEST_F(DORATest, changingHWAddressMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    changingHWAddress();
+}
+
+void
+DORATest::messageFieldsReservations() {
     // Client has a reservation.
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Set explicit HW address so as it matches the reservation in the
@@ -1547,45 +1901,18 @@ TEST_F(DORATest, messageFieldsReservations) {
     EXPECT_EQ("bootfile.efi", client.config_.boot_file_name_);
 }
 
-// This test checks the following scenario:
-// 1. Client A performs 4-way exchange and obtains a lease from the dynamic pool.
-// 2. Reservation is created for the client A using an address out of the dynamic
-//    pool.
-// 3. Client A renews the lease.
-// 4. Server responds with DHCPNAK to indicate that the client should stop using
-//    an address for which it has a lease. Server doesn't want to renew an
-//    address for which the client doesn't have a reservation, while it has
-//    a reservation for a different address.
-// 5. Client A receives a DHCPNAK and returns to the DHCP server discovery.
-// 6. Client A performs a 4-way exchange with a server and the server allocates
-//   a reserved address to the Client A.
-// 7. Client A renews the allocated address and the server returns a DHCPACK.
-// 8. Reservation for the Client A is removed.
-// 9. Client A renews the (previously reserved) lease and the server returns
-//    DHCPNAK because the address in use is neither reserved nor belongs to
-//    the dynamic pool.
-// 10. Client A returns to the DHCP server discovery.
-// 11. Client A uses 4-way exchange to obtain a lease from the dynamic pool.
-// 12. The new address that the Client A is using is reserved for Client B.
-//     Client A still holds this address.
-// 13. Client B uses 4-way exchange to obtain a new lease.
-// 14. The server determines that the Client B has a reservation for the
-//     address which is in use by Client A and offers an address different
-//     than reserved.
-// 15. Client B requests the allocation of the offered address and the server
-//     allocates this address.
-// 16. Client A renews the lease.
-// 17. The server determines that the address that Client A is using is reserved
-//     for Client B. The server returns DHCPNAK to the Client A.
-// 18. Client B uses 4-way exchange to obtain the reserved lease but the lease
-//     for the Client A hasn't been removed yet. Client B is assigned the same
-//     address it has been using.
-// 19. Client A uses 4-way exchange to allocate a new lease.
-// 20. The server allocates a new lease from the dynamic pool but it avoids
-//     allocating the address reserved for the Client B.
-// 21. Client B uses 4-way exchange to obtain a new lease.
-// 22. The server finally allocates a reserved address to the Client B.
-TEST_F(DORATest, reservationsWithConflicts) {
+TEST_F(DORATest, messageFieldsReservations) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    messageFieldsReservations();
+}
+
+TEST_F(DORATest, messageFieldsReservationsMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    messageFieldsReservations();
+}
+
+void
+DORATest::reservationsWithConflicts() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -1774,16 +2101,25 @@ TEST_F(DORATest, reservationsWithConflicts) {
     ASSERT_EQ(in_pool_addr, clientB.config_.lease_.addr_);
 }
 
-// This test verifies that the allocation engine ignores reservations when
-// reservation-mode is set to "disabled".
-TEST_F(DORATest, reservationModeDisabled) {
+TEST_F(DORATest, reservationsWithConflicts) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationsWithConflicts();
+}
+
+TEST_F(DORATest, reservationsWithConflictsMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationsWithConflicts();
+}
+
+void
+DORATest::reservationModeDisabled() {
     // Client has a reservation.
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Set explicit HW address so as it matches the reservation in the
     // configuration used below.
     client.setHWAddress("aa:bb:cc:dd:ee:ff");
-    // Configure DHCP server. In this configuration the reservation mode is
-    // set to disabled. Thus, the server should ignore the reservation for
+    // Configure DHCP server. In this configuration the reservations flags are
+    // set to false. Thus, the server should ignore the reservation for
     // this client.
     configure(DORA_CONFIGS[13], *client.getServer());
     // Client requests the 10.0.0.50 address and the server should assign it
@@ -1810,19 +2146,24 @@ TEST_F(DORATest, reservationModeDisabled) {
     ASSERT_EQ("10.0.0.65", client.config_.lease_.addr_.toText());
 }
 
-// This test verifies that allocation engine assigns a reserved address to
-// the client which doesn't own this reservation. We want to avoid such
-// cases in the real deployments, but this is just a test that the allocation
-// engine skips checking if the reservation exists when it allocates an
-// address. In the real deployment the reservation simply wouldn't exist.
-TEST_F(DORATest, reservationIgnoredInDisabledMode) {
+TEST_F(DORATest, reservationModeDisabled) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationModeDisabled();
+}
+
+TEST_F(DORATest, reservationModeDisabledMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationModeDisabled();
+}
+
+void
+DORATest::reservationIgnoredInDisabledMode() {
     // Client has a reservation.
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Set MAC address which doesn't match the reservation configured.
     client.setHWAddress("11:22:33:44:55:66");
-    // Configure DHCP server. In this configuration the reservation mode is
-    // set to disabled. Any client should be able to hijack the reserved
-    // address.
+    // Configure DHCP server. In this configuration the reservations flags are
+    // disabled. Any client should be able to hijack the reserved address.
     configure(DORA_CONFIGS[13], *client.getServer());
     // Client requests the 10.0.0.65 address reserved for another client.
     ASSERT_NO_THROW(client.doDORA(boost::shared_ptr<
@@ -1837,9 +2178,18 @@ TEST_F(DORATest, reservationIgnoredInDisabledMode) {
     ASSERT_EQ("10.0.0.65", client.config_.lease_.addr_.toText());
 }
 
-// This test verifies that in pool reservations are ignored when the
-// reservation mode is set to "out-of-pool".
-TEST_F(DORATest, reservationModeOutOfPool) {
+TEST_F(DORATest, reservationIgnoredInDisabledMode) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationIgnoredInDisabledMode();
+}
+
+TEST_F(DORATest, reservationIgnoredInDisabledModeMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationIgnoredInDisabledMode();
+}
+
+void
+DORATest::reservationModeOutOfPool() {
     // Create the first client for which we have a reservation out of the
     // dynamic pool.
     Dhcp4Client clientA(Dhcp4Client::SELECTING);
@@ -1876,10 +2226,18 @@ TEST_F(DORATest, reservationModeOutOfPool) {
     ASSERT_EQ("10.0.0.40", clientB.config_.lease_.addr_.toText());
 }
 
-// This test verifies that the in-pool reservation can be assigned to
-// the client not owning this reservation when the reservation mode is
-// set to "out-of-pool".
-TEST_F(DORATest, reservationIgnoredInOutOfPoolMode) {
+TEST_F(DORATest, reservationModeOutOfPool) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationModeOutOfPool();
+}
+
+TEST_F(DORATest, reservationModeOutOfPoolMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationModeOutOfPool();
+}
+
+void
+DORATest::reservationIgnoredInOutOfPoolMode() {
     // Create the first client for which we have a reservation out of the
     // dynamic pool.
     Dhcp4Client client(Dhcp4Client::SELECTING);
@@ -1899,9 +2257,18 @@ TEST_F(DORATest, reservationIgnoredInOutOfPoolMode) {
     ASSERT_EQ("10.0.0.65", client.config_.lease_.addr_.toText());
 }
 
-/// This test verifies that after a client completes its DORA exchange,
-/// appropriate statistics are updated.
-TEST_F(DORATest, statisticsDORA) {
+TEST_F(DORATest, reservationIgnoredInOutOfPoolMode) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    reservationIgnoredInOutOfPoolMode();
+}
+
+TEST_F(DORATest, reservationIgnoredInOutOfPoolModeMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    reservationIgnoredInOutOfPoolMode();
+}
+
+void
+DORATest::statisticsDORA() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -1958,9 +2325,18 @@ TEST_F(DORATest, statisticsDORA) {
     EXPECT_EQ(5, pkt4_sent->getInteger().first);
 }
 
-// This test verifies that after a client completes an exchange that result
-// in NAK, appropriate statistics are updated.
-TEST_F(DORATest, statisticsNAK) {
+TEST_F(DORATest, statisticsDORA) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    statisticsDORA();
+}
+
+TEST_F(DORATest, statisticsDORAMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    statisticsDORA();
+}
+
+void
+DORATest::statisticsNAK() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     configure(DORA_CONFIGS[0], *client.getServer());
@@ -2000,6 +2376,16 @@ TEST_F(DORATest, statisticsNAK) {
     EXPECT_EQ(1, pkt4_request_received->getInteger().first);
     EXPECT_EQ(1, pkt4_nak_sent->getInteger().first);
     EXPECT_EQ(1, pkt4_sent->getInteger().first);
+}
+
+TEST_F(DORATest, statisticsNAK) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    statisticsNAK();
+}
+
+TEST_F(DORATest, statisticsNAKMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    statisticsNAK();
 }
 
 void
@@ -2080,17 +2466,24 @@ DORATest::testMultiStageBoot(const unsigned int config_index) {
     ASSERT_NE(leased_address2, leased_address3);
 }
 
-
 // Test that the client using the same hardware address but multiple
 // client identifiers will obtain multiple leases.
 TEST_F(DORATest, multiStageBoot) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
     // DORA_CONFIGS[0] to be used for server configuration.
     testMultiStageBoot(0);
 }
 
-// This test verifies that custom server identifier can be specified for
-// a subnet.
-TEST_F(DORATest, customServerIdentifier) {
+// Test that the client using the same hardware address but multiple
+// client identifiers will obtain multiple leases.
+TEST_F(DORATest, multiStageBootMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    // DORA_CONFIGS[0] to be used for server configuration.
+    testMultiStageBoot(0);
+}
+
+void
+DORATest::customServerIdentifier() {
     Dhcp4Client client1(Dhcp4Client::SELECTING);
     // Configure DHCP server.
     ASSERT_NO_THROW(configure(DORA_CONFIGS[7], *client1.getServer()));
@@ -2108,6 +2501,7 @@ TEST_F(DORATest, customServerIdentifier) {
     // Repeat the test for different subnet.
     Dhcp4Client client2(client1.getServer(), Dhcp4Client::SELECTING);
     client2.setIfaceName("eth1");
+    client2.setIfaceIndex(ETH1_INDEX);
 
     ASSERT_NO_THROW(client2.doDORA());
     ASSERT_TRUE(client2.getContext().response_);
@@ -2128,9 +2522,18 @@ TEST_F(DORATest, customServerIdentifier) {
     EXPECT_EQ("3.4.5.6", client3.config_.serverid_.toText());
 }
 
-// This test verifies that reserved lease is not assigned to a client which
-// identifier doesn't match the identifier in the reservation.
-TEST_F(DORATest, changingCircuitId) {
+TEST_F(DORATest, customServerIdentifier) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    customServerIdentifier();
+}
+
+TEST_F(DORATest, customServerIdentifierMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    customServerIdentifier();
+}
+
+void
+DORATest::changingCircuitId() {
     Dhcp4Client client(Dhcp4Client::SELECTING);
     client.setHWAddress("aa:bb:cc:dd:ee:ff");
     // Use relay agent so as the circuit-id can be inserted.
@@ -2188,6 +2591,105 @@ TEST_F(DORATest, changingCircuitId) {
     EXPECT_NE("10.0.0.9", client.config_.lease_.addr_.toText());
 }
 
+TEST_F(DORATest, changingCircuitId) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    changingCircuitId();
+}
+
+TEST_F(DORATest, changingCircuitIdMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    changingCircuitId();
+}
+
+void
+DORATest::storeExtendedInfoEnabled() {
+    Dhcp4Client client(Dhcp4Client::SELECTING);
+    // Use relay agent to make sure that the desired subnet is
+    // selected for our client.
+    client.useRelay(true, IOAddress("10.0.0.20"), IOAddress("10.0.0.21"));
+    // Specify client identifier.
+    client.includeClientId("01:11:22:33:44:55:66");
+    // Set the circuit id to make relay-agent-info more interesting.
+    client.setCircuitId("charter950");
+
+    // Configure DHCP server.
+    configure(DORA_CONFIGS[17], *client.getServer());
+    // Client A performs 4-way exchange and should obtain a reserved
+    // address.
+    ASSERT_NO_THROW_LOG(client.doDORA(boost::shared_ptr<
+                                      IOAddress>(new IOAddress("0.0.0.0"))));
+    // Make sure that the server responded.
+    ASSERT_TRUE(client.getContext().response_);
+    Pkt4Ptr resp = client.getContext().response_;
+    // Make sure that the server has responded with DHCPACK.
+    ASSERT_EQ(DHCPACK, static_cast<int>(resp->getType()));
+    // Make sure that the client has got the lease for the reserved address.
+    ASSERT_EQ("10.0.0.10", client.config_.lease_.addr_.toText());
+
+    // The stored lease should have extended info.
+    Lease4Ptr lease = LeaseMgrFactory::instance().getLease4(client.config_.lease_.addr_);
+    ASSERT_TRUE(lease);
+    ASSERT_TRUE(lease->getContext());
+
+    // Make user the user-context content is correct.
+    std::string expected_context = "{ \"ISC\": { \"relay-agent-info\":"
+                                   " \"0x010A63686172746572393530\" } }";
+    stringstream ss;
+    ss << *(lease->getContext());
+    ASSERT_EQ(expected_context, ss.str());
+}
+
+TEST_F(DORATest, storeExtendedInfoEnabled) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    storeExtendedInfoEnabled();
+}
+
+TEST_F(DORATest, storeExtendedInfoEnabledMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    storeExtendedInfoEnabled();
+}
+
+void
+DORATest::storeExtendedInfoDisabled() {
+    Dhcp4Client client(Dhcp4Client::SELECTING);
+    // Use relay agent to make sure that the desired subnet is
+    // selected for our client.
+    client.useRelay(true, IOAddress("192.0.2.20"), IOAddress("192.0.2.21"));
+    // Specify client identifier.
+    client.includeClientId("01:11:22:33:44:55:66");
+    // Set the circuit id to make relay-agent-info more interesting.
+    client.setCircuitId("charter950");
+
+    // Configure DHCP server.
+    configure(DORA_CONFIGS[17], *client.getServer());
+    // Client A performs 4-way exchange and should obtain a reserved
+    // address.
+    ASSERT_NO_THROW_LOG(client.doDORA(boost::shared_ptr<
+                                      IOAddress>(new IOAddress("0.0.0.0"))));
+    // Make sure that the server responded.
+    ASSERT_TRUE(client.getContext().response_);
+    Pkt4Ptr resp = client.getContext().response_;
+    // Make sure that the server has responded with DHCPACK.
+    ASSERT_EQ(DHCPACK, static_cast<int>(resp->getType()));
+    // Make sure that the client has got the lease for the reserved address.
+    ASSERT_EQ("192.0.2.10", client.config_.lease_.addr_.toText());
+
+    // The stored lease should not have extended info.
+    Lease4Ptr lease = LeaseMgrFactory::instance().getLease4(client.config_.lease_.addr_);
+    ASSERT_TRUE(lease);
+    ASSERT_FALSE(lease->getContext());
+}
+
+TEST_F(DORATest, storeExtendedInfoDisabled) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    storeExtendedInfoDisabled();
+}
+
+TEST_F(DORATest, storeExtendedInfoDisabledMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    storeExtendedInfoDisabled();
+}
+
 // Starting tests which require MySQL backend availability. Those tests
 // will not be executed if Kea has been compiled without the
 // --with-mysql.
@@ -2216,7 +2718,16 @@ public:
 // Test that the client using the same hardware address but multiple
 // client identifiers will obtain multiple leases (MySQL lease database).
 TEST_F(DORAMySQLTest, multiStageBoot) {
-    // DORA_CONFIGS[9] to be used for server configuration.
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    // DORA_CONFIGS[8] to be used for server configuration.
+    testMultiStageBoot(8);
+}
+
+// Test that the client using the same hardware address but multiple
+// client identifiers will obtain multiple leases (MySQL lease database).
+TEST_F(DORAMySQLTest, multiStageBootMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
+    // DORA_CONFIGS[8] to be used for server configuration.
     testMultiStageBoot(8);
 }
 
@@ -2250,6 +2761,15 @@ public:
 // Test that the client using the same hardware address but multiple
 // client identifiers will obtain multiple leases (PostgreSQL lease database).
 TEST_F(DORAPgSQLTest, multiStageBoot) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    // DORA_CONFIGS[9] to be used for server configuration.
+    testMultiStageBoot(9);
+}
+
+// Test that the client using the same hardware address but multiple
+// client identifiers will obtain multiple leases (PostgreSQL lease database).
+TEST_F(DORAPgSQLTest, multiStageBootMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
     // DORA_CONFIGS[9] to be used for server configuration.
     testMultiStageBoot(9);
 }
@@ -2283,6 +2803,15 @@ public:
 // Test that the client using the same hardware address but multiple
 // client identifiers will obtain multiple leases (CQL lease database).
 TEST_F(DORACQLTest, multiStageBoot) {
+    Dhcpv4SrvMTTestGuard guard(*this, false);
+    // DORA_CONFIGS[10] to be used for server configuration.
+    testMultiStageBoot(10);
+}
+
+// Test that the client using the same hardware address but multiple
+// client identifiers will obtain multiple leases (CQL lease database).
+TEST_F(DORACQLTest, multiStageBootMultiThreading) {
+    Dhcpv4SrvMTTestGuard guard(*this, true);
     // DORA_CONFIGS[10] to be used for server configuration.
     testMultiStageBoot(10);
 }

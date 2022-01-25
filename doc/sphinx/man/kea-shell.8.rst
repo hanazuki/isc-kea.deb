@@ -1,5 +1,5 @@
 ..
-   Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+   Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,7 +15,7 @@ kea-shell - Text client for Control Agent process
 Synopsis
 ~~~~~~~~
 
-:program:`kea-shell` [**-h**] [**-v**] [**--host**] [**--port**] [**--path**] [**--timeout**] [**--service**] [command]
+:program:`kea-shell` [**-h**] [**-v**] [**--host**] [**--port**] [**--path**] [**--ca**] [**--cert**] [**--key**] [**--auth-user**] [**--auth-password**] [**--timeout**] [**--service**] [command]
 
 Description
 ~~~~~~~~~~~
@@ -24,7 +24,9 @@ The ``kea-shell`` provides a REST client for the Kea Control Agent (CA).
 It takes command as a command-line parameter that is being sent to CA
 with proper JSON encapsulation. Optional arguments may be specified on
 the standard input. The request is sent via HTTP and a response is
-retrieved, displayed on the standard output.
+retrieved, displayed on the standard output. Basic HTTP authentication
+and HTTPS i.e. TLS transport are supported.
+
 
 Arguments
 ~~~~~~~~~
@@ -50,6 +52,27 @@ The arguments are as follows:
    path is used. As Control Agent listens at the empty path, this
    parameter is useful only with a reverse proxy.
 
+``--ca``
+   Specifies the file or directory name of the Certification Authority.
+   If not specified HTTPS is not used.
+
+``--cert``
+   Specifies the file name of the user end-entity public key certificate.
+   If specified the file name of the user key must be specified too.
+
+``--key``
+   Specifies the file name of the user key file. If specified the file
+   name of the user certificate must be specified too. Note that
+   encrypted key files are not supported.
+
+``--auth-user``
+   Specifies the user id for basic HTTP authentication. If not specified
+   or specified as the empty string authentication is not used.
+
+``--auth-password``
+   Specifies the password for basic HTTP authentication. If not specified
+   but the user id is specified an empty password is used.
+
 ``--timeout``
    Specifies the connection timeout in seconds. If not specified, 10
    (seconds) is used.
@@ -73,10 +96,10 @@ Kea Messages Manual, which lists all possible messages Kea can print
 with a brief description for each of them. Both documents are
 available in various formats (.txt, .html, .pdf) with the Kea
 distribution. The Kea documentation is available at
-https://kb.isc.org/docs/kea-administrator-reference-manual .
+https://kea.readthedocs.io.
 
 Kea source code is documented in the Kea Developer's Guide. Its online
-version is available at https://jenkins.isc.org/job/Kea_doc/doxygen/.
+version is available at https://reports.kea.isc.org/dev_guide/.
 
 The Kea project website is available at https://kea.isc.org.
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -64,11 +64,11 @@ CSVLeaseFile4::append(const Lease4& lease) {
     row.writeAt(getColumnIndex("subnet_id"), lease.subnet_id_);
     row.writeAt(getColumnIndex("fqdn_fwd"), lease.fqdn_fwd_);
     row.writeAt(getColumnIndex("fqdn_rev"), lease.fqdn_rev_);
-    row.writeAt(getColumnIndex("hostname"), lease.hostname_);
+    row.writeAtEscaped(getColumnIndex("hostname"), lease.hostname_);
     row.writeAt(getColumnIndex("state"), lease.state_);
     // User context is optional.
     if (lease.getContext()) {
-        row.writeAt(getColumnIndex("user_context"), lease.getContext()->str());
+        row.writeAtEscaped(getColumnIndex("user_context"), lease.getContext()->str());
     }
 
     try {
@@ -146,7 +146,7 @@ CSVLeaseFile4::next(Lease4Ptr& lease) {
             lease->setContext(ctx);
         }
 
-    } catch (std::exception& ex) {
+    } catch (const std::exception& ex) {
         // bump the read error count
         ++read_errs_;
 
@@ -239,7 +239,7 @@ CSVLeaseFile4::readFqdnRev(const CSVRow& row) {
 
 std::string
 CSVLeaseFile4::readHostname(const CSVRow& row) {
-    std::string hostname = row.readAt(getColumnIndex("hostname"));
+    std::string hostname = row.readAtEscaped(getColumnIndex("hostname"));
     return (hostname);
 }
 
@@ -251,7 +251,7 @@ CSVLeaseFile4::readState(const util::CSVRow& row) {
 
 ConstElementPtr
 CSVLeaseFile4::readContext(const util::CSVRow& row) {
-    std::string user_context = row.readAt(getColumnIndex("user_context"));
+    std::string user_context = row.readAtEscaped(getColumnIndex("user_context"));
     if (user_context.empty()) {
         return (ConstElementPtr());
     }

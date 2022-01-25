@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,7 +24,7 @@ TEST(Doubles, areDoublesEquivalent) {
     EXPECT_TRUE(areDoublesEquivalent( 1.0000000, 1.0000005));
     EXPECT_FALSE(areDoublesEquivalent(1.0000000, 1.000005));
 
-    // Check custome tolerance.
+    // Check custom tolerance.
     EXPECT_TRUE(areDoublesEquivalent( 1.000, 1.005, 0.01));
     EXPECT_FALSE(areDoublesEquivalent(1.000, 1.005, 0.001));
 }

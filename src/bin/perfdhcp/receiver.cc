@@ -1,15 +1,17 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#include <config.h>
 
 #include <perfdhcp/receiver.h>
 #include <perfdhcp/command_options.h>
 
 #include <dhcp/iface_mgr.h>
 
-#include <boost/bind.hpp>
+#include <functional>
 
 using namespace std;
 using namespace isc::dhcp;
@@ -27,7 +29,7 @@ Receiver::start() {
         run_flag_.clear();
         isc_throw(isc::Unexpected, "run_flag_ should be false.");
     }
-    recv_thread_.reset(new std::thread(boost::bind(&Receiver::run, this)));
+    recv_thread_.reset(new std::thread(std::bind(&Receiver::run, this)));
 }
 
 void
@@ -100,12 +102,12 @@ Receiver::readPktFromSocket() {
     PktPtr pkt;
     uint32_t timeout;
     if (single_threaded_) {
-        // In case of single thread just check socket and if empty exit immediatelly
+        // In case of single thread just check socket and if empty exit immediately
         // to not slow down sending part.
         timeout = 0;
     } else {
         // In case of multi thread wait for packets a little bit (1ms) as it is run
-        // in separate thread and do not interefere with sending thread.
+        // in separate thread and do not interfere with sending thread.
         timeout = 1000;
     }
     try {

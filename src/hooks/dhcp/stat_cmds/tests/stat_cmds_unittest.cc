@@ -1,10 +1,9 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 //
-
 
 #include <config.h>
 
@@ -16,7 +15,7 @@
 #include <dhcpsrv/cfgmgr.h>
 #include <cc/command_interpreter.h>
 #include <cc/data.h>
-#include <cc/data.h>
+#include <stats/stats_mgr.h>
 
 #include <boost/date_time/posix_time/posix_time.hpp>
 #include <gtest/gtest.h>
@@ -29,6 +28,7 @@ using namespace isc::config;
 using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::asiolink;
+using namespace isc::stats;
 using namespace boost::posix_time;
 
 namespace {
@@ -101,7 +101,7 @@ public:
     /// @param exp_result 0 - success, 1 - error, 2 - ...
     /// @param exp_txt expected text response (optional)
     void testCommand(string cmd_txt, int exp_result, string exp_txt,
-                                string exp_result_json = "") {
+                     string exp_result_json = "") {
         // Let's load the library first.
         loadLib();
 
@@ -134,7 +134,7 @@ public:
         // If we expect nothing and nothing is what we got, we're done.
         if (exp_args->size() == 0) {
             ASSERT_TRUE(actual_args->size() == 0)
-                << "Acutal args should be empty:" << toJSON(actual_args);
+                << "Actual args should be empty:" << toJSON(actual_args);
             return;
         }
 
@@ -389,7 +389,8 @@ public:
         cfg_mgr.commit();
 
         // Subnet 10
-        // 2 assigned, 3 declined,  1 expired
+        // 300 cumulative, 2 assigned, 3 declined,  1 expired
+        setSubnetStat(10, "cumulative-assigned-addresses", 300);
         addLease4("192.0.1.1", 10);
         addLease4("192.0.1.2", 10, Lease::STATE_DECLINED);
         addLease4("192.0.1.3", 10, Lease::STATE_DECLINED);
@@ -398,7 +399,8 @@ public:
         addLease4("192.0.1.6", 10, Lease::STATE_EXPIRED_RECLAIMED);
 
         // Subnet 20
-        // 3 assigned, 0 declined,  2 expired
+        // 10 cumulative, 3 assigned, 0 declined,  2 expired
+        setSubnetStat(20, "cumulative-assigned-addresses", 10);
         addLease4("192.0.2.1", 20);
         addLease4("192.0.2.2", 20);
         addLease4("192.0.2.3", 20);
@@ -407,13 +409,15 @@ public:
 
         // Subnet 30 no leases
 
-        // Subnet 40, 4 assigned
+        // Subnet 40, 4 cumulative, 4 assigned
+        setSubnetStat(40, "cumulative-assigned-addresses", 4);
         addLease4("192.0.4.1", 40);
         addLease4("192.0.4.2", 40);
         addLease4("192.0.4.3", 40);
         addLease4("192.0.4.4", 40);
 
-        // Subnet 50, 1 assigned, 1 declined
+        // Subnet 50, 2 cumulative, 1 assigned, 1 declined
+        setSubnetStat(50, "cumulative-assigned-addresses", 2);
         addLease4("192.0.5.1", 50);
         addLease4("192.0.5.2", 50, Lease::STATE_DECLINED);
     }
@@ -465,7 +469,8 @@ public:
 
         cfg_mgr.commit();
 
-        // Subnet 10:  2 assigned NAs, 3 declined NAs, 1 expired NAs
+        // Subnet 10: 10000 cumulative NAs, 2 assigned, 3 declined, 1 expired
+        setSubnetStat(10, "cumulative-assigned-nas", 10000);
         addLease6("2001:db8:1::1", 10);
         addLease6("2001:db8:1::2", 10);
         addLease6("2001:db8:1::3", 10, Lease::STATE_DECLINED);
@@ -473,21 +478,26 @@ public:
         addLease6("2001:db8:1::5", 10, Lease::STATE_DECLINED);
         addLease6("2001:db8:1::6", 10, Lease::STATE_EXPIRED_RECLAIMED);
 
-        // Subnet 20:  3 assigned NAs
+        // Subnet 20: 10 cumulative NAs, 3 assigned
+        setSubnetStat(20, "cumulative-assigned-nas", 10);
         addLease6("2001:db8:2::1", 20);
         addLease6("2001:db8:2::2", 20);
         addLease6("2001:db8:2::3", 20);
 
-        // Subnet 30:  1 assigned NAs, 1 declined NAs, 3 PDs
+        // Subnet 30: 2 cumulative NAs, 1 assigned, 1 declined,
+        // 4 cumulative PDs, 3 assigned
+        setSubnetStat(30, "cumulative-assigned-nas", 2);
         addLease6("2001:db8:3::1", 30);
         addLease6("2001:db8:3::2", 30, Lease::STATE_DECLINED);
+        setSubnetStat(30, "cumulative-assigned-pds", 4);
         addPrefix("3001::1:0", 112, 30);
         addPrefix("3001::2:0", 112, 30);
         addPrefix("3001::3:0", 112, 30);
 
-        // Subnet 40:  no leases
+        // Subnet 40: no leases
 
-        // Subnet 50:  2 PDs
+        // Subnet 50: 1000 cumulative PDs, 2 assigned
+        setSubnetStat(50, "cumulative-assigned-pds", 1000);
         addPrefix("5001::1:0", 112, 50);
         addPrefix("5001::2:0", 112, 50);
     }
@@ -563,6 +573,19 @@ public:
                    const SubnetID& subnet_id,
                    const int state = Lease::STATE_DEFAULT) {
         addLease6(prefix, subnet_id, state, Lease::TYPE_PD, prefix_len);
+    }
+
+    /// @brief Creates a statistic
+    ///
+    /// @param subnet_id subnet identifier
+    /// @param name statistic name
+    /// @param value statistic value
+    void setSubnetStat(const SubnetID& subnet_id, const std::string& name,
+                       int64_t value) {
+        StatsMgr& stats_mgr = StatsMgr::instance();
+        const std::string& stats_name =
+            stats_mgr.generateName("subnet", subnet_id, name);
+        stats_mgr.setValue(stats_name, value);
     }
 
     /// @brief Pointer to the lease manager
@@ -781,15 +804,16 @@ TEST_F(StatCmdsTest, statLease4GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-addreses\",\n"
-        "        \"assigned-addreses\", \"declined-addreses\"\n"
+        "        \"subnet-id\", \"total-addresses\",\n"
+        "        \"cumulative-assigned-addresses\",\n"
+        "        \"assigned-addresses\", \"declined-addresses\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 10, 256, 2, 3 ],\n"
-        "       [ 20,  16, 3, 0 ],\n"
-        "       [ 30, 256, 0, 0 ],\n"
-        "       [ 40,  16, 4, 0 ],\n"
-        "       [ 50, 256, 1, 1 ]\n"
+        "       [ 10, 256, 300, 2, 3 ],\n"
+        "       [ 20, 16, 10, 3, 0 ],\n"
+        "       [ 30, 256, 0, 0, 0 ],\n"
+        "       [ 40, 16, 4, 4, 0 ],\n"
+        "       [ 50, 256, 2, 1, 1 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -803,15 +827,16 @@ TEST_F(StatCmdsTest, statLease4GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-addreses\",\n"
-        "        \"assigned-addreses\", \"declined-addreses\"\n"
+        "        \"subnet-id\", \"total-addresses\",\n"
+        "        \"cumulative-assigned-addresses\",\n"
+        "        \"assigned-addresses\", \"declined-addresses\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 10, 256, 2, 3 ],\n"
-        "       [ 20,  16, 3, 0 ],\n"
-        "       [ 30, 256, 0, 0 ],\n"
-        "       [ 40,  16, 4, 0 ],\n"
-        "       [ 50, 256, 1, 1 ]\n"
+        "       [ 10, 256, 300, 2, 3 ],\n"
+        "       [ 20, 16, 10, 3, 0 ],\n"
+        "       [ 30, 256, 0, 0, 0 ],\n"
+        "       [ 40, 16, 4, 4, 0 ],\n"
+        "       [ 50, 256, 2, 1, 1 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -828,11 +853,12 @@ TEST_F(StatCmdsTest, statLease4GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-addreses\",\n"
-        "        \"assigned-addreses\", \"declined-addreses\"\n"
+        "        \"subnet-id\", \"total-addresses\",\n"
+        "        \"cumulative-assigned-addresses\",\n"
+        "        \"assigned-addresses\", \"declined-addresses\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 20, 16, 3, 0 ],\n"
+        "       [ 20, 16, 10, 3, 0 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -852,13 +878,14 @@ TEST_F(StatCmdsTest, statLease4GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-addreses\",\n"
-        "        \"assigned-addreses\", \"declined-addreses\"\n"
+        "        \"subnet-id\", \"total-addresses\",\n"
+        "        \"cumulative-assigned-addresses\",\n"
+        "        \"assigned-addresses\", \"declined-addresses\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 10, 256, 2, 3 ],\n"
-        "       [ 20,  16, 3, 0 ],\n"
-        "       [ 30, 256, 0, 0 ],\n"
+        "       [ 10, 256, 300, 2, 3 ],\n"
+        "       [ 20, 16, 10, 3, 0 ],\n"
+        "       [ 30, 256, 0, 0, 0 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -878,13 +905,14 @@ TEST_F(StatCmdsTest, statLease4GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-addreses\",\n"
-        "        \"assigned-addreses\", \"declined-addreses\"\n"
+        "        \"subnet-id\", \"total-addresses\",\n"
+        "        \"cumulative-assigned-addresses\",\n"
+        "        \"assigned-addresses\", \"declined-addresses\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 20,  16, 3, 0 ],\n"
-        "       [ 30, 256, 0, 0 ],\n"
-        "       [ 40,  16, 4, 0 ],\n"
+        "       [ 20, 16, 10, 3, 0 ],\n"
+        "       [ 30, 256, 0, 0, 0 ],\n"
+        "       [ 40, 16, 4, 4, 0 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -904,13 +932,14 @@ TEST_F(StatCmdsTest, statLease4GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-addreses\",\n"
-        "        \"assigned-addreses\", \"declined-addreses\"\n"
+        "        \"subnet-id\", \"total-addresses\",\n"
+        "        \"cumulative-assigned-addresses\",\n"
+        "        \"assigned-addresses\", \"declined-addresses\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 30, 256, 0, 0 ],\n"
-        "       [ 40,  16, 4, 0 ],\n"
-        "       [ 50, 256, 1, 1 ],\n"
+        "       [ 30, 256, 0, 0, 0 ],\n"
+        "       [ 40, 16, 4, 4, 0 ],\n"
+        "       [ 50, 256, 2, 1, 1 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -930,12 +959,13 @@ TEST_F(StatCmdsTest, statLease4GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-addreses\",\n"
-        "        \"assigned-addreses\", \"declined-addreses\"\n"
+        "        \"subnet-id\", \"total-addresses\",\n"
+        "        \"cumulative-assigned-addresses\",\n"
+        "        \"assigned-addresses\", \"declined-addresses\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 30, 256, 0, 0 ],\n"
-        "       [ 40,  16, 4, 0 ],\n"
+        "       [ 30, 256, 0, 0, 0 ],\n"
+        "       [ 40, 16, 4, 4, 0 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -1199,21 +1229,23 @@ TEST_F(StatCmdsTest, statLease6GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-nas\", \"assigned-nas\",\n"
-        "        \"declined-nas\", \"total-pds\", \"assigned-pds\"\n"
+        "        \"subnet-id\", \"total-nas\",\n"
+        "        \"cumulative-assigned-nas\", \"assigned-nas\",\n"
+        "        \"declined-nas\", \"total-pds\",\n"
+        "        \"cumulative-assigned-pds\", \"assigned-pds\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 10, 65536, 2, 3, 0, 0 ],\n"
-        "       [ 20, 16777216, 3, 0, 0, 0 ],\n"
-        "       [ 30, 16, 1, 1, 65536, 3 ],\n"
-        "       [ 40, 16777216, 0, 0, 0, 0 ],\n"
-        "       [ 50, 0, 0, 0, 65536, 2 ]\n"
+        "       [ 10, 65536, 10000, 2, 3, 0, 0, 0 ],\n"
+        "       [ 20, 16777216, 10, 3, 0, 0, 0, 0 ],\n"
+        "       [ 30, 16, 2, 1, 1, 65536, 4, 3 ],\n"
+        "       [ 40, 16777216, 0, 0, 0, 0, 0, 0 ],\n"
+        "       [ 50, 0, 0, 0, 0, 65536, 1000, 2 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
         },
         {
-        "ALL-Subnets6 arugments omitted",
+        "ALL-Subnets6 arguments omitted",
         "{\n"
         "    \"command\": \"stat-lease6-get\"\n"
         "}",
@@ -1221,15 +1253,17 @@ TEST_F(StatCmdsTest, statLease6GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-nas\", \"assigned-nas\",\n"
-        "        \"declined-nas\", \"total-pds\", \"assigned-pds\"\n"
+        "        \"subnet-id\", \"total-nas\",\n"
+        "        \"cumulative-assigned-nas\", \"assigned-nas\",\n"
+        "        \"declined-nas\", \"total-pds\",\n"
+        "        \"cumulative-assigned-pds\", \"assigned-pds\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 10, 65536, 2, 3, 0, 0 ],\n"
-        "       [ 20, 16777216, 3, 0, 0, 0 ],\n"
-        "       [ 30, 16, 1, 1, 65536, 3 ],\n"
-        "       [ 40, 16777216, 0, 0, 0, 0 ],\n"
-        "       [ 50, 0, 0, 0, 65536, 2 ]\n"
+        "       [ 10, 65536, 10000, 2, 3, 0, 0, 0 ],\n"
+        "       [ 20, 16777216, 10, 3, 0, 0, 0, 0 ],\n"
+        "       [ 30, 16, 2, 1, 1, 65536, 4, 3 ],\n"
+        "       [ 40, 16777216, 0, 0, 0, 0, 0, 0 ],\n"
+        "       [ 50, 0, 0, 0, 0, 65536, 1000, 2 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -1246,11 +1280,13 @@ TEST_F(StatCmdsTest, statLease6GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-nas\", \"assigned-nas\",\n"
-        "        \"declined-nas\", \"total-pds\", \"assigned-pds\"\n"
+        "        \"subnet-id\", \"total-nas\",\n"
+        "        \"cumulative-assigned-nas\", \"assigned-nas\",\n"
+        "        \"declined-nas\", \"total-pds\",\n"
+        "        \"cumulative-assigned-pds\", \"assigned-pds\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 20, 16777216, 3, 0, 0, 0 ]\n"
+        "       [ 20, 16777216, 10, 3, 0, 0, 0, 0 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -1270,13 +1306,15 @@ TEST_F(StatCmdsTest, statLease6GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-nas\", \"assigned-nas\",\n"
-        "        \"declined-nas\", \"total-pds\", \"assigned-pds\"\n"
+        "        \"subnet-id\", \"total-nas\",\n"
+        "        \"cumulative-assigned-nas\", \"assigned-nas\",\n"
+        "        \"declined-nas\", \"total-pds\",\n"
+        "        \"cumulative-assigned-pds\", \"assigned-pds\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 10, 65536, 2, 3, 0, 0 ],\n"
-        "       [ 20, 16777216, 3, 0, 0, 0 ],\n"
-        "       [ 30, 16, 1, 1, 65536, 3 ],\n"
+        "       [ 10, 65536, 10000, 2, 3, 0, 0, 0 ],\n"
+        "       [ 20, 16777216, 10, 3, 0, 0, 0, 0 ],\n"
+        "       [ 30, 16, 2, 1, 1, 65536, 4, 3 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -1296,13 +1334,15 @@ TEST_F(StatCmdsTest, statLease6GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-nas\", \"assigned-nas\",\n"
-        "        \"declined-nas\", \"total-pds\", \"assigned-pds\"\n"
+        "        \"subnet-id\", \"total-nas\",\n"
+        "        \"cumulative-assigned-nas\", \"assigned-nas\",\n"
+        "        \"declined-nas\", \"total-pds\",\n"
+        "        \"cumulative-assigned-pds\", \"assigned-pds\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 20, 16777216, 3, 0, 0, 0 ],\n"
-        "       [ 30, 16, 1, 1, 65536, 3 ],\n"
-        "       [ 40, 16777216, 0, 0, 0, 0 ]\n"
+        "       [ 20, 16777216, 10, 3, 0, 0, 0, 0 ],\n"
+        "       [ 30, 16, 2, 1, 1, 65536, 4, 3 ],\n"
+        "       [ 40, 16777216, 0, 0, 0, 0, 0, 0 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -1322,13 +1362,15 @@ TEST_F(StatCmdsTest, statLease6GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-nas\", \"assigned-nas\",\n"
-        "        \"declined-nas\", \"total-pds\", \"assigned-pds\"\n"
+        "        \"subnet-id\", \"total-nas\",\n"
+        "        \"cumulative-assigned-nas\", \"assigned-nas\",\n"
+        "        \"declined-nas\", \"total-pds\",\n"
+        "        \"cumulative-assigned-pds\", \"assigned-pds\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 30, 16, 1, 1, 65536, 3 ],\n"
-        "       [ 40, 16777216, 0, 0, 0, 0 ],\n"
-        "       [ 50, 0, 0, 0, 65536, 2 ]\n"
+        "       [ 30, 16, 2, 1, 1, 65536, 4, 3 ],\n"
+        "       [ 40, 16777216, 0, 0, 0, 0, 0, 0 ],\n"
+        "       [ 50, 0, 0, 0, 0, 65536, 1000, 2 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -1348,12 +1390,14 @@ TEST_F(StatCmdsTest, statLease6GetValid) {
         "{\n"
         "\"result-set\": {\n"
         "   \"columns\": [\n"
-        "        \"subnet-id\", \"total-nas\", \"assigned-nas\",\n"
-        "        \"declined-nas\", \"total-pds\", \"assigned-pds\"\n"
+        "        \"subnet-id\", \"total-nas\",\n"
+        "        \"cumulative-assigned-nas\", \"assigned-nas\",\n"
+        "        \"declined-nas\", \"total-pds\",\n"
+        "        \"cumulative-assigned-pds\", \"assigned-pds\"\n"
         "   ],\n"
         "   \"rows\": [\n"
-        "       [ 30, 16, 1, 1, 65536, 3 ],\n"
-        "       [ 40, 16777216, 0, 0, 0, 0 ]\n"
+        "       [ 30, 16, 2, 1, 1, 65536, 4, 3 ],\n"
+        "       [ 40, 16777216, 0, 0, 0, 0, 0, 0 ]\n"
         "   ],\n"
         "   \"timestamp\": \"2018-05-04 15:03:37.000000\" }\n"
         "}\n"
@@ -1428,10 +1472,7 @@ TEST_F(StatCmdsTest, statLease6GetSubnetsNotFound) {
                     (*test).exp_response_, (*test).exp_result_json);
         }
     }
-
 }
-
-
 
 } // end of anonymous namespace
 

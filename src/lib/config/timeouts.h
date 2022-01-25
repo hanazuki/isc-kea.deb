@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,14 +27,14 @@ constexpr long TIMEOUT_AGENT_IDLE_CONNECTION_TIMEOUT = 30000;
 /// Kea server, e.g. DHCP server.
 ///
 /// This value is high to ensure that the server have enough time
-/// to generate large responses, e.g. dump whole lease databse.
+/// to generate large responses, e.g. dump whole lease database.
 constexpr long TIMEOUT_AGENT_FORWARD_COMMAND = 60000;
 
 /// @brief Timeout for the HTTP clients awaiting a response to a request.
 ///
 /// This value is high to ensure that the client waits long enough
 /// for the fulfilling server to generate a response.  Specified
-/// milliseconds. 
+/// milliseconds.
 constexpr long TIMEOUT_DEFAULT_HTTP_CLIENT_REQUEST = 10000;
 
 

@@ -23,18 +23,27 @@ sys.setrecursionlimit(5000)
 # -- Project information -----------------------------------------------------
 
 project = 'Kea'
-copyright = '2019, Internet Systems Consortium'
+copyright = '2019-2020, Internet Systems Consortium'
 author = 'Internet Systems Consortium'
-today = '26 Feb, 2020'
 
 # get current kea version
 config_ac_path = '../../configure.ac'
+changelog_path = '../../ChangeLog'
 release = 'UNRELEASED'
 with open(config_ac_path) as f:
     for line in f.readlines():
         if line.startswith('AC_INIT(kea'):
             parts = line.split(',')
             release = parts[1]
+            # If the first line of the ChangeLog announces release, it means
+            # that this is the final release.
+            dash_parts = release.split('-')
+            candidate_release = dash_parts[0]
+            with open(changelog_path) as changelog_file:
+                first_line = changelog_file.readline()
+                if candidate_release in first_line and "released" in first_line:
+                    release = candidate_release
+            break
 version = release
 
 # -- General configuration ---------------------------------------------------
@@ -48,6 +57,7 @@ version = release
 # ones.
 extensions = [
     'sphinx.ext.todo',
+    'sphinx.ext.mathjax',
 ]
 
 # The suffix(es) of source filenames.
@@ -75,6 +85,7 @@ language = None
 exclude_patterns = [
     '_build', 'Thumbs.db', '.DS_Store',
     # included files need to be excluded to avoid duplicate labels
+    'arm/platforms.rst',
     'arm/hooks-bootp.rst',
     'arm/hooks-class-cmds.rst',
     'arm/hooks-cb-cmds.rst',
@@ -82,9 +93,18 @@ exclude_patterns = [
     'arm/hooks-ha.rst',
     'arm/hooks-host-cache.rst',
     'arm/hooks-lease-cmds.rst',
+    'arm/hooks-lease-query.rst',
     'arm/hooks-radius.rst',
+    'arm/hooks-run-script.rst',
     'arm/hooks-stat-cmds.rst',
     'arm/hammer.rst',
+    'arm/ext-netconf.rst',
+    'arm/ext-gss-tsig.rst',
+    'grammar/grammar-ca-parser.rst',
+    'grammar/grammar-d2-parser.rst',
+    'grammar/grammar-dhcp4-parser.rst',
+    'grammar/grammar-dhcp6-parser.rst',
+    'grammar/grammar-netconf-parser.rst',
 ]
 
 # The name of the Pygments (syntax highlighting) style to use.
@@ -98,7 +118,6 @@ pygments_style = None
 #
 #html_theme = 'alabaster'
 html_theme = 'sphinx_rtd_theme'
-#html_logo = '_static/kea-logo-100x70.png'
 html_logo = 'static/kea-imageonly-100bw.png'
 
 # Theme options are theme-specific and customize the look and feel of a theme
@@ -158,6 +177,8 @@ latex_documents = [
     (master_doc, 'kea-arm.tex', 'Kea Administrator Reference Manual Documentation', author, 'manual'),
 ]
 
+latex_logo = 'static/kea-logo-200.png'
+
 if os.getenv("READTHEDOCS", "False") == "False":
     latex_documents.append((messages_doc, 'kea-messages.tex', 'Kea Messages Manual', author, 'manual'))
 
@@ -175,7 +196,7 @@ man_pages = [
     ('man/kea-dhcp6.8', 'kea-dhcp6', 'DHCPv6 server in Kea', author, 8),
     ('man/kea-dhcp-ddns.8', 'kea-dhcp-ddns', 'DHCP-DDNS process in Kea', author, 8),
     ('man/kea-lfc.8', 'kea-lfc', 'Lease File Cleanup process in Kea', author, 8),
-    ('man/kea-netconf.8', 'kea-netconf', 'NETCONF agent for Kea environment', author, 8),
+    ('man/kea-netconf.8', 'kea-netconf', 'NETCONF agent for configuring Kea', author, 8),
     ('man/kea-shell.8', 'kea-shell', 'Text client for Control Agent process', author, 8),
     ('man/perfdhcp.8', 'perfdhcp', 'DHCP benchmarking tool', author, 8),
 ]
@@ -202,7 +223,7 @@ def run_generate_docs(_):
     import api2doc
     with open(os.path.join(src_dir, 'api-files.txt')) as af:
         api_files = af.read().split()
-    api_files = [os.path.abspath(os.path.join(src_dir, af)) for af in api_files]
+    api_files = [os.path.abspath(os.path.join(src_dir, '../..', af)) for af in api_files]
     api2doc.generate(api_files, os.path.join(src_dir, 'api.rst'))
 
     import mes2doc
@@ -211,9 +232,36 @@ def run_generate_docs(_):
     mes_files = [os.path.abspath(os.path.join(src_dir, '../..', mf)) for mf in mes_files]
     mes2doc.generate(mes_files, os.path.join(src_dir, 'kea-messages.rst'))
 
+    # Sphinx has some limitations. It can't import files from outside its directory, which
+    # in our case is src/sphinx. On the other hand, we need to have platforms.rst file
+    # in top level directory, so it's easily accessible by prospective and first time
+    # users. Furthermore, ReadTheDocs does not use the makefile system at all and they rely
+    # on sphinx-build only. As a result we need to conduct some Makefile-like operations
+    # here. This requires us to copy (or link) the file from the top level to sphinx subdir.
+    #
+    # The first entry on this list is the actual file to copy, the second is a unique name
+    # that will be used when copied over to arm/ directory.
+    FILES_TO_COPY = [
+        [ '../../platforms.rst', 'platforms.rst' ],
+        [ '../examples/template-power-user-home/info.md', 'template-power-user-home.md' ],
+        [ '../examples/template-power-user-home/kea-ca-1.conf', 'template-power-user-home-ca-1.conf' ],
+        [ '../examples/template-power-user-home/kea-ca-2.conf', 'template-power-user-home-ca-2.conf' ],
+        [ '../examples/template-power-user-home/kea-dhcp4-1.conf', 'template-power-user-home-dhcp4-1.conf' ],
+        [ '../examples/template-power-user-home/kea-dhcp4-2.conf', 'template-power-user-home-dhcp4-2.conf' ]
+    ]
+
+    from shutil import copyfile
+    for [a, b] in FILES_TO_COPY:
+        src = os.path.join(src_dir, a)
+        dst = os.path.join(src_dir, 'arm', b)
+        print("Copying %s to %s" % (src, dst))
+        copyfile(src, dst)
 
 # custom setup hook
 def setup(app):
-    app.add_stylesheet('kea.css')
+    if hasattr(app, 'add_css_file'):
+        app.add_css_file('kea.css')
+    else:
+        app.add_stylesheet('kea.css')
 
     app.connect('builder-inited', run_generate_docs)

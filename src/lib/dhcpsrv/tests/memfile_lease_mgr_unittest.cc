@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,14 +16,13 @@
 #include <dhcpsrv/memfile_lease_mgr.h>
 #include <dhcpsrv/timer_mgr.h>
 #include <dhcpsrv/testutils/lease_file_io.h>
-#include <dhcpsrv/tests/test_utils.h>
+#include <dhcpsrv/testutils/test_utils.h>
 #include <dhcpsrv/tests/generic_lease_mgr_unittest.h>
 #include <util/multi_threading_mgr.h>
 #include <util/pid_file.h>
 #include <util/range_utilities.h>
 #include <util/stopwatch.h>
 
-#include <boost/bind.hpp>
 #include <gtest/gtest.h>
 
 #include <cstdlib>
@@ -105,10 +104,11 @@ public:
     MemfileLeaseMgrTest() :
         io4_(getLeaseFilePath("leasefile4_0.csv")),
         io6_(getLeaseFilePath("leasefile6_0.csv")),
-        io_service_(new IOService()),
+        io_service_(getIOService()),
         timer_mgr_(TimerMgr::instance()) {
 
         timer_mgr_->setIOService(io_service_);
+        LeaseMgr::setIOService(io_service_);
 
         std::ostringstream s;
         s << KEA_LFC_BUILD_DIR << "/kea-lfc";
@@ -212,13 +212,13 @@ public:
         lmptr_ = &(LeaseMgrFactory::instance());
     }
 
-    /// @brief Runs @c IfaceMgr::receive6 in a look for a specified time.
+    /// @brief Runs IOService and stops after a specified time.
     ///
     /// @param ms Duration in milliseconds.
     void setTestTime(const uint32_t ms) {
         IntervalTimer timer(*io_service_);
         timer.setup([this]() {
-                io_service_->stop();
+            io_service_->stop();
         }, ms, IntervalTimer::ONE_SHOT);
 
         io_service_->run();
@@ -233,13 +233,30 @@ public:
     /// @return true if the process ended, false otherwise
     bool waitForProcess(const Memfile_LeaseMgr& lease_mgr,
                         const uint8_t timeout) {
-        uint32_t iterations = 0;
         const uint32_t iterations_max = timeout * 1000;
-        while (lease_mgr.isLFCRunning() && (iterations < iterations_max)) {
-            usleep(1000);
-            ++iterations;
-        }
-        return (iterations < iterations_max);
+        IntervalTimer fast_path_timer(*io_service_);
+        IntervalTimer timer(*io_service_);
+        bool elapsed = false;
+        timer.setup([&]() {
+            io_service_->stop();
+            elapsed = true;
+        }, iterations_max, IntervalTimer::ONE_SHOT);
+
+        fast_path_timer.setup([&]() {
+            if (!lease_mgr.isLFCRunning()) {
+                io_service_->stop();
+            }
+        }, 1, IntervalTimer::REPEATING);
+
+        io_service_->run();
+        io_service_->get_io_service().reset();
+        return (!elapsed);
+    }
+
+    /// @brief Single instance of IOService.
+    static asiolink::IOServicePtr getIOService() {
+        static asiolink::IOServicePtr io_service(new asiolink::IOService());
+        return (io_service);
     }
 
     /// @brief Generates a DHCPv4 lease with random content.
@@ -683,18 +700,8 @@ TEST_F(MemfileLeaseMgrTest, leaseFileCleanupStartFail) {
     pmap["universe"] = "4";
     pmap["name"] = getLeaseFilePath("leasefile4_0.csv");
     pmap["lfc-interval"] = "1";
-    boost::scoped_ptr<NakedMemfileLeaseMgr> lease_mgr(new NakedMemfileLeaseMgr(pmap));
-
-    // Try to run the lease file cleanup.
-    ASSERT_NO_THROW(lease_mgr->lfcCallback());
-
-    // Wait for the LFC process to complete.
-    ASSERT_TRUE(waitForProcess(*lease_mgr, 2));
-
-    // And make sure it has returned an error.
-    EXPECT_EQ(EXIT_FAILURE, lease_mgr->getLFCExitStatus())
-        << "Executing the LFC process failed: make sure that"
-        " the kea-lfc program has been compiled.";
+    boost::scoped_ptr<NakedMemfileLeaseMgr> lease_mgr;
+    ASSERT_THROW(lease_mgr.reset(new NakedMemfileLeaseMgr(pmap)), ProcessSpawnError);
 }
 
 /// @brief This test checks that the callback function executing the cleanup of the
@@ -911,19 +918,6 @@ TEST_F(MemfileLeaseMgrTest, getLease4HWAddr2MultiThread) {
     testGetLease4HWAddr2();
 }
 
-/// @brief Checks lease4 retrieval with clientId, HWAddr and subnet_id
-TEST_F(MemfileLeaseMgrTest, getLease4ClientIdHWAddrSubnetId) {
-    startBackend(V4);
-    testGetLease4ClientIdHWAddrSubnetId();
-}
-
-/// @brief Checks lease4 retrieval with clientId, HWAddr and subnet_id
-TEST_F(MemfileLeaseMgrTest, getLease4ClientIdHWAddrSubnetIdMultiThread) {
-    startBackend(V4);
-    MultiThreadingMgr::instance().setMode(true);
-    testGetLease4ClientIdHWAddrSubnetId();
-}
-
 /// @brief Basic Lease4 Checks
 ///
 /// Checks that the addLease, getLease4(by address), getLease4(hwaddr,subnet_id),
@@ -1085,7 +1079,7 @@ TEST_F(MemfileLeaseMgrTest, getLeases6HostnameMultiThread) {
 }
 
 /// @brief This test adds 3 leases  and verifies fetch by DUID.
-/// Verifies retrival of non existant DUID fails
+/// Verifies retrieval of non existant DUID fails
 TEST_F(MemfileLeaseMgrTest, getLeases6Duid) {
     startBackend(V6);
     testGetLeases6Duid();
@@ -1865,6 +1859,7 @@ TEST_F(MemfileLeaseMgrTest, leaseUpgrade4) {
     // Wait for the LFC process to complete and
     // make sure it has returned an exit status of 0.
     ASSERT_TRUE(waitForProcess(*lease_mgr, 2));
+
     ASSERT_EQ(0, lease_mgr->getLFCExitStatus())
         << "Executing the LFC process failed: make sure that"
         " the kea-lfc program has been compiled.";
@@ -1937,6 +1932,7 @@ TEST_F(MemfileLeaseMgrTest, leaseUpgrade6) {
     // Wait for the LFC process to complete and
     // make sure it has returned an exit status of 0.
     ASSERT_TRUE(waitForProcess(*lease_mgr, 2));
+
     ASSERT_EQ(0, lease_mgr->getLFCExitStatus())
         << "Executing the LFC process failed: make sure that"
         " the kea-lfc program has been compiled.";
@@ -2072,16 +2068,6 @@ TEST_F(MemfileLeaseMgrTest, lease4ContainerIndexUpdate) {
             << " not found by getLease4(clientid, subnet_id)"
             << error_desc;
         detailCompareLease(tested, lease_by_clientid_subnet);
-
-        // Retrieve lease by client id, HW address and subnet.
-        Lease4Ptr lease_by_clientid_hwaddr_subnet = lmptr_->getLease4(*tested->client_id_,
-                                                                      *tested->hwaddr_,
-                                                                      tested->subnet_id_);
-        ASSERT_TRUE(lease_by_clientid_hwaddr_subnet)
-            << "Lease " << tested->addr_.toText()
-            << " not found by getLease4(clientid, hwaddr, subnet_id)"
-            << error_desc;
-        detailCompareLease(tested, lease_by_clientid_hwaddr_subnet);
 
         // Retrieve lease by HW address.
         Lease4Collection leases_by_hwaddr = lmptr_->getLease4(*tested->hwaddr_);
@@ -2256,6 +2242,18 @@ TEST_F(MemfileLeaseMgrTest, leaseStatsQuery4) {
 TEST_F(MemfileLeaseMgrTest, leaseStatsQuery6) {
     startBackend(V6);
     testLeaseStatsQuery6();
+}
+
+/// @brief Tests v4 lease stats to be attributed to the wrong subnet.
+TEST_F(MemfileLeaseMgrTest, leaseStatsQueryAttribution4) {
+    startBackend(V4);
+    testLeaseStatsQueryAttribution4();
+}
+
+/// @brief Tests v6 lease stats to be attributed to the wrong subnet.
+TEST_F(MemfileLeaseMgrTest, leaseStatsQueryAttribution6) {
+    startBackend(V6);
+    testLeaseStatsQueryAttribution6();
 }
 
 }  // namespace

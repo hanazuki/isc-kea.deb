@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,8 +10,9 @@
 #include <util/watch_socket.h>
 
 #include <boost/shared_ptr.hpp>
-#include <boost/function.hpp>
 
+#include <functional>
+#include <mutex>
 #include <thread>
 
 namespace isc {
@@ -79,7 +80,7 @@ public:
     /// Creates the thread, passing into it the given function to run.
     ///
     /// @param thread_main function the thread should run
-    void start(const boost::function<void()>& thread_main);
+    void start(const std::function<void()>& thread_main);
 
     /// @brief Returns true if the thread is running
     bool isRunning() {
@@ -98,7 +99,7 @@ public:
     /// This records the given error message and sets the error watch
     /// socket to ready.
     ///
-    /// @param error_msg
+    /// @param error_msg to be set as last error
     void setError(const std::string& error_msg);
 
     /// @brief Fetches the error message text for the most recent error
@@ -106,8 +107,20 @@ public:
     /// @return string containing the error message
     std::string getLastError();
 
+private:
+
+    /// @brief Sets the error state thread safe
+    ///
+    /// This records the given error message
+    ///
+    /// @param error_msg to be set as last error
+    void setErrorInternal(const std::string& error_msg);
+
     /// @brief Error message of the last error encountered
     std::string last_error_;
+
+    /// @brief Mutex to protect internal state
+    std::mutex mutex_;
 
     /// @brief WatchSockets that are used to communicate with the owning thread
     /// There are three:
@@ -126,7 +139,7 @@ public:
 /// @brief Defines a pointer to a WatchedThread
 typedef boost::shared_ptr<WatchedThread> WatchedThreadPtr;
 
-}; // namespace isc::util
-}; // namespace isc
+}  // namespace util
+}  // namespace isc
 
 #endif // WATCHED_THREAD_H

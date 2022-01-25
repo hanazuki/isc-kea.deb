@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -129,5 +129,5 @@ LeaseMgrFactory::instance() {
     return (*lmptr);
 }
 
-}; // namespace dhcp
-}; // namespace isc
+} // namespace dhcp
+} // namespace isc

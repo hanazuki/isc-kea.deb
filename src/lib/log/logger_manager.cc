@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,7 +19,6 @@
 #include <log/message_dictionary.h>
 #include <log/message_exception.h>
 #include <log/message_initializer.h>
-#include <log/message_initializer.h>
 #include <log/message_reader.h>
 #include <log/message_types.h>
 #include <log/interprocess/interprocess_sync_null.h>
@@ -29,7 +28,7 @@ using namespace std;
 // Older log4cplus versions (1.2.0) don't have the initializer.h header that
 // would allow explicit initialization. Newer versions (2.0.4 for sure, possibly
 // older as well) have it and it's recommended to use it. We detect whether
-// it's present or not and do explicit initalization if possible.
+// it's present or not and do explicit initialization if possible.
 #ifdef LOG4CPLUS_INITIALIZER_H
 #include <log4cplus/initializer.h>
 namespace {
@@ -186,7 +185,7 @@ LoggerManager::readLocalMessageFile(const char* file) {
                 logger.warn(LOG_NO_SUCH_MESSAGE).arg(message_id);
         }
     }
-    catch (MessageException& e) {
+    catch (const MessageException& e) {
         MessageID ident = e.id();
         vector<string> args = e.arguments();
 

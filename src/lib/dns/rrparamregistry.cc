@@ -5,7 +5,7 @@
 ///////////////
 ///////////////
 
-// Copyright (C) 2010-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -239,6 +239,7 @@ RRParamRegistry::RRParamRegistry() {
         add("NSEC3PARAM", 51, "IN", 1, RdataFactoryPtr(new RdataFactory<generic::NSEC3PARAM>()));
         add("TLSA", 52, "IN", 1, RdataFactoryPtr(new RdataFactory<generic::TLSA>()));
         add("SPF", 99, "IN", 1, RdataFactoryPtr(new RdataFactory<generic::SPF>()));
+        add("TKEY", 249, "IN", 1, RdataFactoryPtr(new RdataFactory<generic::TKEY>()));
         add("CAA", 257, "IN", 1, RdataFactoryPtr(new RdataFactory<generic::CAA>()));
         add("DLV", 32769, "IN", 1, RdataFactoryPtr(new RdataFactory<generic::DLV>()));
         add("A", 1, "CH", 3, RdataFactoryPtr(new RdataFactory<ch::A>()));
@@ -266,45 +267,45 @@ RRParamRegistry::RRParamRegistry() {
         add("NSEC3PARAM", 51, RdataFactoryPtr(new RdataFactory<generic::NSEC3PARAM>()));
         add("TLSA", 52, RdataFactoryPtr(new RdataFactory<generic::TLSA>()));
         add("SPF", 99, RdataFactoryPtr(new RdataFactory<generic::SPF>()));
+        add("TKEY", 249, RdataFactoryPtr(new RdataFactory<generic::TKEY>()));
         add("CAA", 257, RdataFactoryPtr(new RdataFactory<generic::CAA>()));
         add("DLV", 32769, RdataFactoryPtr(new RdataFactory<generic::DLV>()));
         // Meta and non-implemented RR types
-        addType("IPSECKEY", 45);
-        addType("L32", 105);
-        addType("NID", 104);
-        addType("LP", 107);
-        addType("L64", 106);
-        addType("KX", 36);
-        addType("UNSPEC", 103);
-        addType("MAILA", 254);
-        addType("MAILB", 253);
-        addType("HIP", 55);
-        addType("LOC", 29);
-        addType("URI", 256);
-        addType("APL", 42);
-        addType("GPOS", 27);
-        addType("TKEY", 249);
-        addType("MG", 8);
-        addType("MR", 9);
         addType("IXFR", 251);
-        addType("MB", 7);
-        addType("MF", 4);
         addType("AXFR", 252);
         addType("ANY", 255);
         addType("MD", 3);
-        addType("CERT", 37);
-        addType("KEY", 25);
-        addType("SIG", 24);
-        addType("A6", 38);
-        addType("PX", 26);
-        addType("RT", 21);
-        addType("X25", 19);
-        addType("NSAP-PTR", 23);
-        addType("NSAP", 22);
+        addType("MF", 4);
+        addType("MB", 7);
+        addType("MG", 8);
+        addType("MR", 9);
         addType("NXT", 30);
+        addType("A6", 38);
+        addType("MAILA", 254);
         addType("NULL", 10);
         addType("WKS", 11);
+        addType("X25", 19);
+        addType("RT", 21);
+        addType("NSAP", 22);
+        addType("NSAP-PTR", 23);
+        addType("SIG", 24);
         addType("ISDN", 20);
+        addType("KEY", 25);
+        addType("PX", 26);
+        addType("GPOS", 27);
+        addType("LOC", 29);
+        addType("KX", 36);
+        addType("CERT", 37);
+        addType("APL", 42);
+        addType("IPSECKEY", 45);
+        addType("HIP", 55);
+        addType("UNSPEC", 103);
+        addType("NID", 104);
+        addType("L32", 105);
+        addType("L64", 106);
+        addType("LP", 107);
+        addType("MAILB", 253);
+        addType("URI", 256);
         // Meta classes
         addClass("NONE", 254);
         // END_WELL_KNOWN_PARAMS

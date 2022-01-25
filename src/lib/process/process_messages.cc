@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/process/process_messages.mes on Thu Jun 13 2019 01:25
+// File created from ../../../src/lib/process/process_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>
@@ -21,6 +21,7 @@ extern const isc::log::MessageID DCTL_CONFIG_LOAD_FAIL = "DCTL_CONFIG_LOAD_FAIL"
 extern const isc::log::MessageID DCTL_CONFIG_START = "DCTL_CONFIG_START";
 extern const isc::log::MessageID DCTL_CONFIG_STUB = "DCTL_CONFIG_STUB";
 extern const isc::log::MessageID DCTL_CONFIG_UPDATE = "DCTL_CONFIG_UPDATE";
+extern const isc::log::MessageID DCTL_DEVELOPMENT_VERSION = "DCTL_DEVELOPMENT_VERSION";
 extern const isc::log::MessageID DCTL_INIT_PROCESS = "DCTL_INIT_PROCESS";
 extern const isc::log::MessageID DCTL_INIT_PROCESS_FAIL = "DCTL_INIT_PROCESS_FAIL";
 extern const isc::log::MessageID DCTL_NOT_RUNNING = "DCTL_NOT_RUNNING";
@@ -32,9 +33,9 @@ extern const isc::log::MessageID DCTL_RUN_PROCESS = "DCTL_RUN_PROCESS";
 extern const isc::log::MessageID DCTL_SESSION_FAIL = "DCTL_SESSION_FAIL";
 extern const isc::log::MessageID DCTL_SHUTDOWN = "DCTL_SHUTDOWN";
 extern const isc::log::MessageID DCTL_SHUTDOWN_SIGNAL_RECVD = "DCTL_SHUTDOWN_SIGNAL_RECVD";
-extern const isc::log::MessageID DCTL_SIGNAL_ERROR = "DCTL_SIGNAL_ERROR";
 extern const isc::log::MessageID DCTL_STANDALONE = "DCTL_STANDALONE";
 extern const isc::log::MessageID DCTL_STARTING = "DCTL_STARTING";
+extern const isc::log::MessageID DCTL_UNLOAD_LIBRARIES_ERROR = "DCTL_UNLOAD_LIBRARIES_ERROR";
 extern const isc::log::MessageID DCTL_UNSUPPORTED_SIGNAL = "DCTL_UNSUPPORTED_SIGNAL";
 
 } // namespace process
@@ -57,6 +58,7 @@ const char* values[] = {
     "DCTL_CONFIG_START", "parsing new configuration: %1",
     "DCTL_CONFIG_STUB", "%1 configuration stub handler called",
     "DCTL_CONFIG_UPDATE", "%1 updated configuration received: %2",
+    "DCTL_DEVELOPMENT_VERSION", "This software is a development branch of Kea. It is not recommended for production use.",
     "DCTL_INIT_PROCESS", "%1 initializing the application",
     "DCTL_INIT_PROCESS_FAIL", "%1 application initialization failed: %2",
     "DCTL_NOT_RUNNING", "%1 application instance is not running",
@@ -68,9 +70,9 @@ const char* values[] = {
     "DCTL_SESSION_FAIL", "%1 controller failed to establish Kea session: %1",
     "DCTL_SHUTDOWN", "%1 has shut down, pid: %2, version: %3",
     "DCTL_SHUTDOWN_SIGNAL_RECVD", "OS signal %1 received, starting shutdown",
-    "DCTL_SIGNAL_ERROR", "signal handler for signal %1, threw an unexpected exception: %2",
     "DCTL_STANDALONE", "%1 skipping message queue, running standalone",
-    "DCTL_STARTING", "%1 starting, pid: %2, version: %3",
+    "DCTL_STARTING", "%1 starting, pid: %2, version: %3 (%4)",
+    "DCTL_UNLOAD_LIBRARIES_ERROR", "error unloading hooks libraries during shutdown: %1",
     "DCTL_UNSUPPORTED_SIGNAL", "ignoring reception of unsupported signal: %1",
     NULL
 };

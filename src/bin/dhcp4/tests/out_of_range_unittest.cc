@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -200,7 +200,6 @@ public:
         : Dhcpv4SrvTest(),
           d2_mgr_(CfgMgr::instance().getD2ClientMgr()),
           iface_mgr_test_config_(true) {
-        IfaceMgr::instance().openSockets4();
     }
 
     /// @brief Destructor.
@@ -243,7 +242,7 @@ public:
 
     /// @brief Conducts a single out-of-range test scenario
     ///
-    /// Each test cycles consists of a the following two stages, the first is
+    /// Each test cycles consists of the following two stages, the first is
     /// a set-up stage during which the server is configured with an initial,
     /// reference, configuration and a client then verifies that it can acquire
     /// and renew a lease.  The second stage verifies that the server, having

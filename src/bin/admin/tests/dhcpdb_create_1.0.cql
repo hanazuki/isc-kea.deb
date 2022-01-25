@@ -1,4 +1,4 @@
--- Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+-- Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 -- Copyright (C) 2015-2017 Deutsche Telekom AG.
 
 -- Author: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -39,7 +39,7 @@
 -- is initialized to 1.0, then upgraded to 2.0 etc. This may be somewhat
 -- sub-optimal, but it ensues consistency with upgrade scripts. (It is much
 -- easier to maintain init and upgrade scripts if they look the same).
--- Since initialization is done only once, it's performance is not an issue.
+-- Since initialization is done only once, its performance is not an issue.
 
 -- This line starts database initialization to 1.0.
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <exceptions/exceptions.h>
 #include <process/testutils/d_test_stubs.h>
 #include <process/d_cfg_mgr.h>
+#include <process/redact_config.h>
 
 #include <boost/foreach.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -279,6 +280,96 @@ TEST_F(DStubCfgMgrTest, simpleParseConfigWithCallback) {
         isc_throw(Unexpected, "unexpected configuration error");
     });
     EXPECT_TRUE(checkAnswer(1));
+}
+
+// This test checks that redactConfig works as expected.
+TEST_F(DStubCfgMgrTest, redactConfig) {
+    // Basic case.
+    string config = "{ \"foo\": 1 }";
+    ConstElementPtr elem;
+    ASSERT_NO_THROW(elem = Element::fromJSON(config));
+    ConstElementPtr ret;
+    ASSERT_NO_THROW(ret = redactConfig(elem));
+    EXPECT_EQ(ret->str(), elem->str());
+
+    // Verify redaction.
+    config = "{ \"password\": \"foo\", \"secret\": \"bar\" }";
+    ASSERT_NO_THROW(elem = Element::fromJSON(config));
+    ASSERT_NO_THROW(ret = redactConfig(elem));
+    string expected = "{ \"password\": \"*****\", \"secret\": \"*****\" }";
+    EXPECT_EQ(expected, ret->str());
+
+    // Verify that user context are skipped.
+    config = "{ \"user-context\": { \"password\": \"foo\" } }";
+    ASSERT_NO_THROW(elem = Element::fromJSON(config));
+    ASSERT_NO_THROW(ret = redactConfig(elem));
+    EXPECT_EQ(ret->str(), elem->str());
+
+    // Verify that only given subtrees are handled.
+    list<string> keys = { "foo" };
+    config = "{ \"foo\": { \"password\": \"foo\" }, ";
+    config += "\"next\": { \"secret\": \"bar\" } }";
+    ASSERT_NO_THROW(elem = Element::fromJSON(config));
+    ASSERT_NO_THROW(ret = redactConfig(elem, keys));
+    expected = "{ \"foo\": { \"password\": \"*****\" }, ";
+    expected += "\"next\": { \"secret\": \"bar\" } }";
+    EXPECT_EQ(expected, ret->str());
+}
+
+// Test that user context is not touched when configuration is redacted.
+TEST(RedactConfig, userContext) {
+    ConstElementPtr const config(Element::fromJSON(R"(
+        {
+            "some-database": {
+                "password": "sensitive",
+                "secret": "sensitive",
+                "user": "keatest",
+                "nested-map": {
+                    "password": "sensitive",
+                    "secret": "sensitive",
+                    "user": "keatest"
+                }
+            },
+            "user-context": {
+                "password": "keatest",
+                "secret": "keatest",
+                "user": "keatest",
+                "nested-map": {
+                    "password": "keatest",
+                    "secret": "keatest",
+                    "user": "keatest"
+                }
+            }
+        }
+    )"));
+    ConstElementPtr const expected(Element::fromJSON(R"(
+        {
+            "some-database": {
+                "password": "*****",
+                "secret": "*****",
+                "user": "keatest",
+                "nested-map": {
+                    "password": "*****",
+                    "secret": "*****",
+                    "user": "keatest"
+                }
+            },
+            "user-context": {
+                "password": "keatest",
+                "secret": "keatest",
+                "user": "keatest",
+                "nested-map": {
+                    "password": "keatest",
+                    "secret": "keatest",
+                    "user": "keatest"
+                }
+            }
+        }
+    )"));
+    ConstElementPtr redacted(redactConfig(config));
+    EXPECT_TRUE(isEquivalent(redacted, expected))
+        << "Actual:\n" << prettyPrint(redacted) << "\n"
+           "Expected:\n" << prettyPrint(expected);
 }
 
 } // end of anonymous namespace

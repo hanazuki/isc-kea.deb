@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,7 +21,7 @@
 /// higher-level hooks classes (LibraryManager, LibraryManagerCollection and
 /// HooksManager).  It
 ///
-/// - sets the the ServerHooks object with three hooks and stores their
+/// - sets the ServerHooks object with three hooks and stores their
 ///   indexes.
 /// - executes the callouts (which are assumed to perform a calculation)
 ///   and checks the results.

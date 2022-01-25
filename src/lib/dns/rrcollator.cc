@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,13 +19,14 @@
 #include <dns/rdata.h>
 #include <dns/rrset.h>
 
-#include <boost/bind.hpp>
-
 #include <algorithm>
+#include <functional>
+
+using namespace isc::dns::rdata;
+namespace ph = std::placeholders;
 
 namespace isc {
 namespace dns {
-using namespace rdata;
 
 class RRCollator::Impl {
 public:
@@ -88,8 +89,8 @@ RRCollator::~RRCollator() {
 
 AddRRCallback
 RRCollator::getCallback() {
-    return (boost::bind(&RRCollator::Impl::addRR, this->impl_,
-                        _1, _2, _3, _4, _5));
+    return (std::bind(&RRCollator::Impl::addRR, this->impl_,
+                      ph::_1, ph::_2, ph::_3, ph::_4, ph::_5));
 }
 
 void

@@ -34,7 +34,8 @@ libdhcp6_la_SOURCES += dhcp6_srv.cc dhcp6_srv.h
 libdhcp6_la_SOURCES += ctrl_dhcp6_srv.cc ctrl_dhcp6_srv.h
 libdhcp6_la_SOURCES += json_config_parser.cc json_config_parser.h
 libdhcp6_la_SOURCES += dhcp6to4_ipc.cc dhcp6to4_ipc.h
-libdhcp6_la_SOURCES += dhcp6_lexer.ll location.hh position.hh stack.hh
+libdhcp6_la_SOURCES += client_handler.cc client_handler.h
+libdhcp6_la_SOURCES += dhcp6_lexer.ll location.hh
 libdhcp6_la_SOURCES += dhcp6_parser.cc dhcp6_parser.h
 libdhcp6_la_SOURCES += parser_context.cc parser_context.h parser_context_decl.h
 libdhcp6_la_SOURCES += dhcp6_messages.h dhcp6_messages.cc
@@ -51,6 +52,7 @@ kea_dhcp6_LDADD += $(top_builddir)/src/lib/eval/libkea-eval.la
 kea_dhcp6_LDADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
 kea_dhcp6_LDADD += $(top_builddir)/src/lib/stats/libkea-stats.la
 kea_dhcp6_LDADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+kea_dhcp6_LDADD += $(top_builddir)/src/lib/http/libkea-http.la
 kea_dhcp6_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 
 if HAVE_MYSQL
@@ -124,7 +126,10 @@ endif
 
 if GENERATE_PARSER
 
-parser: dhcp6_lexer.cc location.hh position.hh stack.hh dhcp6_parser.cc dhcp6_parser.h
+# Generate parser first.
+all-recursive: dhcp6_lexer.cc location.hh dhcp6_parser.cc dhcp6_parser.h
+
+parser: dhcp6_lexer.cc location.hh dhcp6_parser.cc dhcp6_parser.h
 	@echo "Flex/bison files regenerated"
 
 # --- Flex/Bison stuff below --------------------------------------------------
@@ -136,15 +141,16 @@ parser: dhcp6_lexer.cc location.hh position.hh stack.hh dhcp6_parser.cc dhcp6_pa
 # Call flex with -s to check that the default rule can be suppressed
 # Call bison with -W to get warnings like unmarked empty rules
 # Note C++11 deprecated register still used by flex < 2.6.0
-location.hh position.hh stack.hh dhcp6_parser.cc dhcp6_parser.h: dhcp6_parser.yy
-	$(YACC) --defines=dhcp6_parser.h --report=all --report-file=dhcp6_parser.report -o dhcp6_parser.cc dhcp6_parser.yy
+location.hh dhcp6_parser.cc dhcp6_parser.h: dhcp6_parser.yy
+	$(YACC) -Wno-yacc --defines=dhcp6_parser.h --report=all \
+	--report-file=dhcp6_parser.report -o dhcp6_parser.cc dhcp6_parser.yy
 
 dhcp6_lexer.cc: dhcp6_lexer.ll
 	$(LEX) --prefix parser6_ -o dhcp6_lexer.cc dhcp6_lexer.ll
 
 else
 
-parser location.hh position.hh stack.hh dhcp6_parser.cc dhcp6_parser.h dhcp6_lexer.cc:
+parser location.hh dhcp6_parser.cc dhcp6_parser.h dhcp6_lexer.cc:
 	@echo Parser generation disabled. Configure with --enable-generate-parser to enable it.
 
 endif

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,7 +33,7 @@ validCqlConnectionString() {
 
 void
 destroyCqlSchema(bool show_err, bool force) {
-    // If force is true or wipeCqlData() fails, destory the schema.
+    // If force is true or wipeCqlData() fails, destroy the schema.
     if (force || (!softWipeEnabled()) || wipeCqlData(show_err)) {
         runCqlScript(DATABASE_SCRIPTS_DIR, "cql/dhcpdb_drop.cql", show_err);
     }
@@ -68,8 +68,8 @@ runCqlScript(const std::string& path,
 
     int32_t retval = ::system(cmd.str().c_str());
     if (retval) {
-        std::cerr << "runCqlSchema failed:" << cmd.str() << std::endl;
-        isc_throw(Unexpected, "runCqlSchema failed:" << cmd.str());
+        std::cerr << "runCqlSchema failed: " << cmd.str() << std::endl;
+        isc_throw(Unexpected, "runCqlSchema failed: " << cmd.str());
     }
 }
 
@@ -80,7 +80,7 @@ bool wipeCqlData(bool show_err) {
     std::ostringstream version;
     version << CQL_SCHEMA_VERSION_MAJOR  << "." << CQL_SCHEMA_VERSION_MINOR;
 
-    cmd << "cql/wipe_data.sh" << " " << version.str()
+    cmd << "cql/wipe_data.sh " << version.str()
         << " -u keatest -p keatest -k keatest --request-timeout=6000";
 
     if (!show_err) {

@@ -1,7 +1,7 @@
 SUBDIRS = testdata .
 
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
-AM_CPPFLAGS += $(BOOST_INCLUDES)
+AM_CPPFLAGS += $(BOOST_INCLUDES) $(CRYPTO_CFLAGS) $(CRYPTO_INCLUDES)
 AM_CPPFLAGS += -DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/lib/config/tests\"
 
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
@@ -22,12 +22,16 @@ TESTS += run_unittests
 run_unittests_SOURCES = client_connection_unittests.cc
 run_unittests_SOURCES += run_unittests.cc
 run_unittests_SOURCES += command_mgr_unittests.cc
+run_unittests_SOURCES += cmd_http_listener_unittests.cc
+run_unittests_SOURCES += cmd_response_creator_unittests.cc
+run_unittests_SOURCES += cmd_response_creator_factory_unittests.cc
 
 run_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 run_unittests_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(GTEST_LDFLAGS)
 
 run_unittests_LDADD  = $(top_builddir)/src/lib/asiolink/testutils/libasiolinktest.la
 run_unittests_LDADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+run_unittests_LDADD += $(top_builddir)/src/lib/http/libkea-http.la
 run_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 run_unittests_LDADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 run_unittests_LDADD += $(top_builddir)/src/lib/cc/libkea-cc.la

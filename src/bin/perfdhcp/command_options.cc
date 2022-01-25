@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,6 +14,7 @@
 #include <dhcp/option.h>
 #include <cfgrpt/config_report.h>
 #include <util/encode/hex.h>
+#include <asiolink/io_error.h>
 
 #include <boost/lexical_cast.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -116,6 +117,8 @@ CommandOptions::reset() {
     renew_rate_ = 0;
     release_rate_ = 0;
     report_delay_ = 0;
+    clean_report_ = false;
+    clean_report_separator_ = "";
     clients_num_ = 0;
     mac_template_.assign(mac, mac + 6);
     duid_template_.clear();
@@ -123,9 +126,14 @@ CommandOptions::reset() {
     addr_unique_ = false;
     mac_list_file_.clear();
     mac_list_.clear();
+    relay_addr_list_file_.clear();
+    relay_addr_list_.clear();
+    multi_subnet_ = false;
     num_request_.clear();
     exit_wait_time_ = 0;
     period_ = 0;
+    wait_for_elapsed_time_ = -1;
+    increased_elapsed_time_ = -1;
     drop_time_set_ = 0;
     drop_time_.assign(dt, dt + 2);
     max_drop_.clear();
@@ -223,6 +231,7 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
     std::ostringstream stream;
     stream << "perfdhcp";
     int num_mac_list_files = 0;
+    int num_subnet_list_files = 0;
 
     struct option long_options[] = {
         {"scenario", required_argument, 0, LONG_OPT_SCENARIO},
@@ -233,7 +242,7 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
     // they will be tuned and validated elsewhere
     while((opt = getopt_long(argc, argv,
                              "huv46A:r:t:R:b:n:p:d:D:l:P:a:L:N:M:s:iBc1"
-                             "T:X:O:o:E:S:I:x:W:w:e:f:F:g:",
+                             "J:T:X:O:o:E:S:I:x:W:w:e:f:F:g:C:y:Y:",
                              long_options, NULL)) != -1) {
         stream << " -" << static_cast<char>(opt);
         if (optarg) {
@@ -286,6 +295,11 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
             rapid_commit_ = true;
             break;
 
+        case 'C':
+            clean_report_ = true;
+            clean_report_separator_ = optarg;
+            break;
+
         case 'd':
             check(drop_time_set_ > 1,
                   "maximum number of drops already specified, "
@@ -293,7 +307,7 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
             try {
                 drop_time_[drop_time_set_] =
                     boost::lexical_cast<double>(optarg);
-            } catch (boost::bad_lexical_cast&) {
+            } catch (const boost::bad_lexical_cast&) {
                 isc_throw(isc::InvalidParameter,
                           "value of drop time: -d<value>"
                           " must be positive number");
@@ -313,7 +327,7 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
                 try {
                     drop_percent =
                         boost::lexical_cast<double>(drop_arg.substr(0, percent_loc));
-                } catch (boost::bad_lexical_cast&) {
+                } catch (const boost::bad_lexical_cast&) {
                     isc_throw(isc::InvalidParameter,
                               "value of drop percentage: -D<value%>"
                               " must be 0..100");
@@ -373,6 +387,13 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
                                           " positive integer");
             break;
 
+        case 'J':
+            check(num_subnet_list_files >= 1, "only one -J option can be specified");
+            num_subnet_list_files++;
+            relay_addr_list_file_ = std::string(optarg);
+            loadRelayAddr();
+            break;
+
         case 'l':
             localname_ = std::string(optarg);
             initIsInterface();
@@ -399,7 +420,7 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
             break;
 
         case 'M':
-            check(num_mac_list_files >= 1, "only -M option can be specified");
+            check(num_mac_list_files >= 1, "only one -M option can be specified");
             num_mac_list_files++;
             mac_list_file_ = std::string(optarg);
             loadMacs();
@@ -455,7 +476,7 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
             try {
                 code = boost::lexical_cast<int>(opt_text.substr(0,coma_loc));
                 check(code <= 0, "Option code can't be negative");
-            } catch (boost::bad_lexical_cast&) {
+            } catch (const boost::bad_lexical_cast&) {
                 isc_throw(InvalidParameter, "Invalid option code specified for "
                           "-o option, expected format: -o<integer>,<hexstring>");
             }
@@ -465,7 +486,7 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
             std::vector<uint8_t> bin;
             try {
                 isc::util::encode::decodeHex(opt_text, bin);
-            } catch (BadValue& e) {
+            } catch (const BadValue& e) {
                 isc_throw(InvalidParameter, "Error during encoding option -o:"
                           << e.what());
             }
@@ -554,6 +575,16 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
             xid_offset_.push_back(offset_arg);
             break;
 
+        case 'Y':
+            wait_for_elapsed_time_ = nonNegativeInteger("value of time:"
+                                     " -Y<value> must be a non negative integer");
+            break;
+
+        case 'y':
+            increased_elapsed_time_ = positiveInteger("value of time:"
+                                      " -y<value> must be a positive integer");
+            break;
+
         case LONG_OPT_SCENARIO: {
             auto optarg_text = std::string(optarg);
             if (optarg_text == "basic") {
@@ -610,19 +641,20 @@ CommandOptions::initialize(int argc, char** argv, bool print_cmd_line) {
             server_name_ = ALL_DHCP_SERVERS;
         }
     }
+    if (!getCleanReport()) {
+        if (print_cmd_line) {
+            std::cout << "Running: " << stream.str() << std::endl;
+        }
 
-    if (print_cmd_line) {
-        std::cout << "Running: " << stream.str() << std::endl;
-    }
+        if (scenario_ == Scenario::BASIC) {
+            std::cout << "Scenario: basic." << std::endl;
+        } else if (scenario_ == Scenario::AVALANCHE) {
+            std::cout << "Scenario: avalanche." << std::endl;
+        }
 
-    if (scenario_ == Scenario::BASIC) {
-        std::cout << "Scenario: basic." << std::endl;
-    } else if (scenario_ == Scenario::AVALANCHE) {
-        std::cout << "Scenario: avalanche." << std::endl;
-    }
-
-    if (!isSingleThreaded()) {
-        std::cout << "Multi-thread mode enabled." << std::endl;
+        if (!isSingleThreaded()) {
+            std::cout << "Multi-thread mode enabled." << std::endl;
+        }
     }
 
     // Handle the local '-l' address/interface
@@ -655,14 +687,14 @@ CommandOptions::initClientsNum() {
         "value of -R <value> must be non-negative integer";
 
     try {
-        // Declare clients_num as as 64-bit signed value to
+        // Declare clients_num as a 64-bit signed value to
         // be able to detect negative values provided
         // by user. We would not detect negative values
         // if we casted directly to unsigned value.
         long long clients_num = boost::lexical_cast<long long>(optarg);
         check(clients_num < 0, errmsg);
         clients_num_ = boost::lexical_cast<uint32_t>(optarg);
-    } catch (boost::bad_lexical_cast&) {
+    } catch (const boost::bad_lexical_cast&) {
         isc_throw(isc::InvalidParameter, errmsg);
     }
 }
@@ -716,7 +748,7 @@ CommandOptions::decodeMacBase(const std::string& base) {
             try {
                 // Do actual conversion
                 ui = convertHexString(token);
-            } catch (isc::InvalidParameter&) {
+            } catch (const isc::InvalidParameter&) {
                 isc_throw(isc::InvalidParameter,
                           "invalid characters in MAC provided");
 
@@ -749,7 +781,7 @@ CommandOptions::decodeDuid(const std::string& base) {
         try {
             // Do actual conversion
             ui = convertHexString(b.substr(i, 2));
-        } catch (isc::InvalidParameter&) {
+        } catch (const isc::InvalidParameter&) {
             isc_throw(isc::InvalidParameter,
                       "invalid characters in DUID provided,"
                       " expected hex digits");
@@ -816,6 +848,34 @@ CommandOptions::convertHexString(const std::string& text) const {
     return ui;
 }
 
+bool CommandOptions::validateIP(const std::string& line) {
+    try {
+        isc::asiolink::IOAddress ip_address(line);
+        if ((getIpVersion() == 4 && !ip_address.isV4()) ||
+            (getIpVersion() == 6 && !ip_address.isV6())) {
+            return (true);
+        }
+    } catch (const isc::asiolink::IOError& e) {
+        return (true);
+    }
+    relay_addr_list_.push_back(line);
+    multi_subnet_ = true;
+    return (false);
+}
+
+void CommandOptions::loadRelayAddr() {
+    std::string line;
+    std::ifstream infile(relay_addr_list_file_.c_str());
+    size_t cnt = 0;
+    while (std::getline(infile, line)) {
+        cnt++;
+        stringstream tmp;
+        tmp << "invalid address or wrong address version in line: " << cnt;
+        check(validateIP(line), tmp.str());
+    }
+    check(cnt == 0, "file with addresses is empty!");
+}
+
 void CommandOptions::loadMacs() {
     std::string line;
     std::ifstream infile(mac_list_file_.c_str());
@@ -841,7 +901,7 @@ bool CommandOptions::decodeMacString(const std::string& line) {
       try {
         // Do actual conversion
         ui = convertHexString(token);
-      } catch (isc::InvalidParameter&) {
+      } catch (const isc::InvalidParameter&) {
         return (true);
       }
       // If conversion succeeded store byte value
@@ -860,8 +920,6 @@ CommandOptions::validate() {
           "-6 (IPv6) must be set to use -c");
     check(getIpVersion() == 4 && isUseRelayedV6(),
           "Can't use -4 with -A, it's a V6 only option.");
-    check((getIpVersion() != 6) && (getReleaseRate() != 0),
-          "-F<release-rate> may be used with -6 (IPv6) only");
     check((getExchangeMode() == DO_SA) && (getNumRequests().size() > 1),
           "second -n<num-request> is not compatible with -i");
     check((getIpVersion() == 4) && !getLeaseType().is(LeaseType::ADDRESS),
@@ -919,7 +977,10 @@ CommandOptions::validate() {
           "use -I<ip-offset>");
     check((!getMacListFile().empty() && base_.size() > 0),
           "Can't use -b with -M option");
-
+    check((getWaitForElapsedTime() == -1 && getIncreaseElapsedTime() != -1),
+	  "Option -y can't be used without -Y");
+    check((getWaitForElapsedTime() != -1 && getIncreaseElapsedTime() == -1),
+	  "Option -Y can't be used without -y");
     auto nthreads = std::thread::hardware_concurrency();
     if (nthreads == 1 && isSingleThreaded() == false) {
         std::cout << "WARNING: Currently system can run only 1 thread in parallel." << std::endl
@@ -962,7 +1023,7 @@ CommandOptions::positiveInteger(const std::string& errmsg) const {
         int value = boost::lexical_cast<int>(optarg);
         check(value <= 0, errmsg);
         return (value);
-    } catch (boost::bad_lexical_cast&) {
+    } catch (const boost::bad_lexical_cast&) {
         isc_throw(InvalidParameter, errmsg);
     }
 }
@@ -973,7 +1034,7 @@ CommandOptions::nonNegativeInteger(const std::string& errmsg) const {
         int value = boost::lexical_cast<int>(optarg);
         check(value < 0, errmsg);
         return (value);
-    } catch (boost::bad_lexical_cast&) {
+    } catch (const boost::bad_lexical_cast&) {
         isc_throw(InvalidParameter, errmsg);
     }
 }
@@ -1103,175 +1164,188 @@ CommandOptions::printCommandLine() const {
 }
 
 void
-CommandOptions::usage() const {
+CommandOptions::usage() {
     std::cout <<
-        "perfdhcp [-huv] [-4|-6] [-A<encapsulation-level>] [-e<lease-type>]\n"
-        "         [-r<rate>] [-f<renew-rate>]\n"
-        "         [-F<release-rate>] [-t<report>] [-R<range>] [-b<base>]\n"
-        "         [-n<num-request>] [-p<test-period>] [-d<drop-time>]\n"
-        "         [-D<max-drop>] [-l<local-addr|interface>] [-P<preload>]\n"
-        "         [-L<local-port>] [-N<remote-port>]\n"
-        "         [-s<seed>] [-i] [-B] [-W<late-exit-delay>]\n"
-        "         [-c] [-1] [-M<mac-list-file>] [-T<template-file>]\n"
-        "         [-X<xid-offset>] [-O<random-offset] [-E<time-offset>]\n"
-        "         [-S<srvid-offset>] [-I<ip-offset>] [-x<diagnostic-selector>]\n"
-        "         [-w<wrapped>] [server]\n"
-        "\n"
-        "The [server] argument is the name/address of the DHCP server to\n"
-        "contact.  For DHCPv4 operation, exchanges are initiated by\n"
-        "transmitting a DHCP DISCOVER to this address.\n"
-        "\n"
-        "For DHCPv6 operation, exchanges are initiated by transmitting a DHCP\n"
-        "SOLICIT to this address.  In the DHCPv6 case, the special name 'all'\n"
-        "can be used to refer to All_DHCP_Relay_Agents_and_Servers (the\n"
-        "multicast address FF02::1:2), or the special name 'servers' to refer\n"
-        "to All_DHCP_Servers (the multicast address FF05::1:3).  The [server]\n"
-        "argument is optional only in the case that -l is used to specify an\n"
-        "interface, in which case [server] defaults to 'all'.\n"
-        "\n"
-        "The default is to perform a single 4-way exchange, effectively pinging\n"
-        "the server.\n"
-        "The -r option is used to set up a performance test, without\n"
-        "it exchanges are initiated as fast as possible.\n"
-        "The other scenario is an avalanche which is selected by\n"
-        "--scenario avalanche. It first sends as many Discovery or Solicit\n"
-        "messages as request in -R option then back off mechanism is used for\n"
-        "each simulated client until all requests are answered. At the end\n"
-        "time of whole scenario is reported.\n"
-        "\n"
-        "Options:\n"
-        "-1: Take the server-ID option from the first received message.\n"
-        "-4: DHCPv4 operation (default). This is incompatible with the -6 option.\n"
-        "-6: DHCPv6 operation. This is incompatible with the -4 option.\n"
-        "-u: Enable checking address uniqueness. Lease valid lifetime\n"
-        "    should not be shorter than test duration.\n"
-        "-b<base>: The base mac, duid, IP, etc, used to simulate different\n"
-        "    clients.  This can be specified multiple times, each instance is\n"
-        "    in the <type>=<value> form, for instance:\n"
-        "    (and default) mac=00:0c:01:02:03:04.\n"
-        "-d<drop-time>: Specify the time after which a request is treated as\n"
-        "    having been lost.  The value is given in seconds and may contain a\n"
-        "    fractional component.  The default is 1 second.\n"
-        "-e<lease-type>: A type of lease being requested from the server. It\n"
-        "    may be one of the following: address-only, prefix-only or\n"
-        "    address-and-prefix. The address-only indicates that the regular\n"
-        "    address (v4 or v6) will be requested. The prefix-only indicates\n"
-        "    that the IPv6 prefix will be requested. The address-and-prefix\n"
-        "    indicates that both IPv6 address and prefix will be requested.\n"
-        "    The '-e prefix-only' and -'e address-and-prefix' must not be\n"
-        "    used with -4.\n"
-        "-E<time-offset>: Offset of the (DHCPv4) secs field / (DHCPv6)\n"
-        "    elapsed-time option in the (second/request) template.\n"
-        "    The value 0 disables it.\n"
-        "-f<renew-rate>: Rate at which DHCPv4 or DHCPv6 renew requests are sent\n"
-        "    to a server. This value is only valid when used in conjunction\n"
-        "    with the exchange rate (given by -r<rate>).  Furthermore the sum of\n"
-        "    this value and the release-rate (given by -F<rate) must be equal\n"
-        "    to or less than the exchange rate.\n"
-        "-g: Select thread mode: 'single' or 'multi'. In multi-thread mode packets\n"
-        "    are received in separate thread. This allows better utilisation of CPUs.\n"
-        "    If more than 1 CPU is present then multi-thread mode is the default,\n"
-        "    otherwise single-thread is the default.\n"
-        "-h: Print this help.\n"
-        "-i: Do only the initial part of an exchange: DO or SA, depending on\n"
-        "    whether -6 is given.\n"
-        "-I<ip-offset>: Offset of the (DHCPv4) IP address in the requested-IP\n"
-        "    option / (DHCPv6) IA_NA option in the (second/request) template.\n"
-        "-l<local-addr|interface>: For DHCPv4 operation, specify the local\n"
-        "    hostname/address to use when communicating with the server.  By\n"
-        "    default, the interface address through which traffic would\n"
-        "    normally be routed to the server is used.\n"
-        "    For DHCPv6 operation, specify the name of the network interface\n"
-        "    via which exchanges are initiated.\n"
-        "-L<local-port>: Specify the local port to use\n"
-        "    (the value 0 means to use the default).\n"
-        "-M<mac-list-file>: A text file containing a list of MAC addresses,\n"
-        "   one per line. If provided, a MAC address will be chosen randomly\n"
-        "   from this list for every new exchange. In the DHCPv6 case, MAC\n"
-        "   addresses are used to generate DUID-LLs. This parameter must not be\n"
-        "   used in conjunction with the -b parameter.\n"
-        "-N<remote-port>: Specify the remote port to use\n"
-        "    (the value 0 means to use the default).\n"
-        "-O<random-offset>: Offset of the last octet to randomize in the template.\n"
-        "-P<preload>: Initiate first <preload> exchanges back to back at startup.\n"
-        "-r<rate>: Initiate <rate> DORA/SARR (or if -i is given, DO/SA)\n"
-        "    exchanges per second.  A periodic report is generated showing the\n"
-        "    number of exchanges which were not completed, as well as the\n"
-        "    average response latency.  The program continues until\n"
-        "    interrupted, at which point a final report is generated.\n"
-        "-R<range>: Specify how many different clients are used. With 1\n"
-        "    (the default), all requests seem to come from the same client.\n"
-        "-s<seed>: Specify the seed for randomization, making it repeatable.\n"
-        "--scenario <name>: where name is 'basic' (default) or 'avalanche'.\n"
-        "-S<srvid-offset>: Offset of the server-ID option in the\n"
-        "    (second/request) template.\n"
-        "-T<template-file>: The name of a file containing the template to use\n"
-        "    as a stream of hexadecimal digits.\n"
-        "-v: Report the version number of this program.\n"
-        "-W<time>: Specifies exit-wait-time parameter, that makes perfdhcp wait\n"
-        "    for <time> us after an exit condition has been met to receive all\n"
-        "    packets without sending any new packets. Expressed in microseconds.\n"
-        "-w<wrapped>: Command to call with start/stop at the beginning/end of\n"
-        "    the program.\n"
-        "-x<diagnostic-selector>: Include extended diagnostics in the output.\n"
-        "    <diagnostic-selector> is a string of single-keywords specifying\n"
-        "    the operations for which verbose output is desired.  The selector\n"
-        "    keyletters are:\n"
-        "   * 'a': print the decoded command line arguments\n"
-        "   * 'e': print the exit reason\n"
-        "   * 'i': print rate processing details\n"
-        "   * 's': print first server-id\n"
-        "   * 't': when finished, print timers of all successful exchanges\n"
-        "   * 'T': when finished, print templates\n"
-        "-X<xid-offset>: Transaction ID (aka. xid) offset in the template.\n"
-        "\n"
-        "DHCPv4 only options:\n"
-        "-B: Force broadcast handling.\n"
-        "\n"
-        "DHCPv6 only options:\n"
-        "-c: Add a rapid commit option (exchanges will be SA).\n"
-        "-F<release-rate>: Rate at which IPv6 Release requests are sent to\n"
-        "    a server. This value is only valid when used in conjunction with\n"
-        "    the exchange rate (given by -r<rate>).  Furthermore the sum of\n"
-        "    this value and the renew-rate (given by -f<rate) must be equal\n"
-        "    to or less than the exchange rate.\n"
-        "-A<encapsulation-level>: Specifies that relayed traffic must be\n"
-        "    generated. The argument specifies the level of encapsulation, i.e.\n"
-        "    how many relay agents are simulated. Currently the only supported\n"
-        "    <encapsulation-level> value is 1, which means that the generated\n"
-        "    traffic is an equivalent of the traffic passing through a single\n"
-        "    relay agent.\n"
-        "\n"
-        "The remaining options are typically used in conjunction with -r:\n"
-        "\n"
-        "-D<max-drop>: Abort the test immediately if max-drop requests have\n"
-        "    been dropped.  max-drop must be a positive integer. If max-drop\n"
-        "    includes the suffix '%', it specifies a maximum percentage of\n"
-        "    requests that may be dropped before abort. In this case, testing\n"
-        "    of the threshold begins after 10 requests have been expected to\n"
-        "    be received.\n"
-        "-n<num-request>: Initiate <num-request> transactions.  No report is\n"
-        "    generated until all transactions have been initiated/waited-for,\n"
-        "    after which a report is generated and the program terminates.\n"
-        "-p<test-period>: Send requests for the given test period, which is\n"
-        "    specified in the same manner as -d.  This can be used as an\n"
-        "    alternative to -n, or both options can be given, in which case the\n"
-        "    testing is completed when either limit is reached.\n"
-        "-t<report>: Delay in seconds between two periodic reports.\n"
-        "\n"
-        "Errors:\n"
-        "- tooshort: received a too short message\n"
-        "- orphans: received a message which doesn't match an exchange\n"
-        "   (duplicate, late or not related)\n"
-        "- locallimit: reached to local system limits when sending a message.\n"
-        "\n"
-        "Exit status:\n"
-        "The exit status is:\n"
-        "0 on complete success.\n"
-        "1 for a general error.\n"
-        "2 if an error is found in the command line arguments.\n"
-        "3 if there are no general failures in operation, but one or more\n"
-        "  exchanges are not successfully completed.\n";
+R"(perfdhcp [-1] [-4 | -6] [-A encapsulation-level] [-b base] [-B] [-c]
+         [-C separator] [-d drop-time] [-D max-drop] [-e lease-type]
+         [-E time-offset] [-f renew-rate] [-F release-rate] [-g thread-mode]
+         [-h] [-i] [-I ip-offset] [-J remote-address-list-file]
+         [-l local-address|interface] [-L local-port] [-M mac-list-file]
+         [-n num-request] [-N remote-port] [-O random-offset]
+         [-o code,hexstring] [-p test-period] [-P preload] [-r rate]
+         [-R num-clients] [-s seed] [-S srvid-offset] [--scenario name]
+         [-t report] [-T template-file] [-u] [-v] [-W exit-wait-time]
+         [-w script_name] [-x diagnostic-selector] [-X xid-offset] [server]
+
+The [server] argument is the name/address of the DHCP server to
+contact.  For DHCPv4 operation, exchanges are initiated by
+transmitting a DHCP DISCOVER to this address.
+
+For DHCPv6 operation, exchanges are initiated by transmitting a DHCP
+SOLICIT to this address.  In the DHCPv6 case, the special name 'all'
+can be used to refer to All_DHCP_Relay_Agents_and_Servers (the
+multicast address FF02::1:2), or the special name 'servers' to refer
+to All_DHCP_Servers (the multicast address FF05::1:3).  The [server]
+argument is optional only in the case that -l is used to specify an
+interface, in which case [server] defaults to 'all'.
+
+The default is to perform a single 4-way exchange, effectively pinging
+the server.
+The -r option is used to set up a performance test, without
+it exchanges are initiated as fast as possible.
+The other scenario is an avalanche which is selected by
+--scenario avalanche. It first sends as many Discovery or Solicit
+messages as request in -R option then back off mechanism is used for
+each simulated client until all requests are answered. At the end
+time of whole scenario is reported.
+
+Options:
+-1: Take the server-ID option from the first received message.
+-4: DHCPv4 operation (default). This is incompatible with the -6 option.
+-6: DHCPv6 operation. This is incompatible with the -4 option.
+-b<base>: The base mac, duid, IP, etc, used to simulate different
+    clients.  This can be specified multiple times, each instance is
+    in the <type>=<value> form, for instance:
+    (and default) mac=00:0c:01:02:03:04.
+-d<drop-time>: Specify the time after which a request is treated as
+    having been lost.  The value is given in seconds and may contain a
+    fractional component.  The default is 1 second.
+-e<lease-type>: A type of lease being requested from the server. It
+    may be one of the following: address-only, prefix-only or
+    address-and-prefix. The address-only indicates that the regular
+    address (v4 or v6) will be requested. The prefix-only indicates
+    that the IPv6 prefix will be requested. The address-and-prefix
+    indicates that both IPv6 address and prefix will be requested.
+    The '-e prefix-only' and -'e address-and-prefix' must not be
+    used with -4.
+-E<time-offset>: Offset of the (DHCPv4) secs field / (DHCPv6)
+    elapsed-time option in the (second/request) template.
+    The value 0 disables it.
+-F<release-rate>: Rate at which Release requests are sent to
+    a server. This value is only valid when used in conjunction with
+    the exchange rate (given by -r<rate>).  Furthermore the sum of
+    this value and the renew-rate (given by -f<rate>) must be equal
+    to or less than the exchange rate.
+-f<renew-rate>: Rate at which DHCPv4 or DHCPv6 renew requests are sent
+    to a server. This value is only valid when used in conjunction
+    with the exchange rate (given by -r<rate>).  Furthermore the sum of
+    this value and the release-rate (given by -F<rate>) must be equal
+    to or less than the exchange rate.
+-g<thread-mode>: 'single' or 'multi'. In multi-thread mode packets
+    are received in separate thread. This allows better utilisation of CPUs.
+    If more than 1 CPU is present then multi-thread mode is the default,
+    otherwise single-thread is the default.
+-h: Print this help.
+-i: Do only the initial part of an exchange: DO or SA, depending on
+    whether -6 is given.
+-I<ip-offset>: Offset of the (DHCPv4) IP address in the requested-IP
+    option / (DHCPv6) IA_NA option in the (second/request) template.
+-J<remote-address-list-file>: Text file that include multiple addresses.
+    If provided perfdhcp will choose randomly one of addresses for each
+    exchange.
+-l<local-addr|interface>: For DHCPv4 operation, specify the local
+    hostname/address to use when communicating with the server.  By
+    default, the interface address through which traffic would
+    normally be routed to the server is used.
+    For DHCPv6 operation, specify the name of the network interface
+    via which exchanges are initiated.
+-L<local-port>: Specify the local port to use
+    (the value 0 means to use the default).
+-M<mac-list-file>: A text file containing a list of MAC addresses,
+   one per line. If provided, a MAC address will be chosen randomly
+   from this list for every new exchange. In the DHCPv6 case, MAC
+   addresses are used to generate DUID-LLs. This parameter must not be
+   used in conjunction with the -b parameter.
+-N<remote-port>: Specify the remote port to use
+    (the value 0 means to use the default).
+-o<code,hexstring>: Send custom option with the specified code and the
+    specified buffer in hexstring format.
+-O<random-offset>: Offset of the last octet to randomize in the template.
+-P<preload>: Initiate first <preload> exchanges back to back at startup.
+-r<rate>: Initiate <rate> DORA/SARR (or if -i is given, DO/SA)
+    exchanges per second.  A periodic report is generated showing the
+    number of exchanges which were not completed, as well as the
+    average response latency.  The program continues until
+    interrupted, at which point a final report is generated.
+-R<range>: Specify how many different clients are used. With 1
+    (the default), all requests seem to come from the same client.
+-s<seed>: Specify the seed for randomization, making it repeatable.
+--scenario <name>: where name is 'basic' (default) or 'avalanche'.
+-S<srvid-offset>: Offset of the server-ID option in the
+    (second/request) template.
+-T<template-file>: The name of a file containing the template to use
+    as a stream of hexadecimal digits.
+-u: Enable checking address uniqueness. Lease valid lifetime should not be
+    shorter than test duration and clients should not request address more than
+    once without releasing it first.
+-v: Report the version number of this program.
+-W<time>: Specifies exit-wait-time parameter, that makes perfdhcp wait
+    for <time> us after an exit condition has been met to receive all
+    packets without sending any new packets. Expressed in microseconds.
+-w<wrapped>: Command to call with start/stop at the beginning/end of
+    the program.
+-x<diagnostic-selector>: Include extended diagnostics in the output.
+    <diagnostic-selector> is a string of single-keywords specifying
+    the operations for which verbose output is desired.  The selector
+    key letters are:
+   * 'a': print the decoded command line arguments
+   * 'e': print the exit reason
+   * 'i': print rate processing details
+   * 'l': print received leases
+   * 's': print first server-id
+   * 't': when finished, print timers of all successful exchanges
+   * 'T': when finished, print templates
+-X<xid-offset>: Transaction ID (aka. xid) offset in the template.
+-Y<time>: time in seconds after which perfdhcp will start sending
+    messages with increased elapsed time option.
+-y<time>: period of time in seconds in which perfdhcp will be sending
+    messages with increased elapsed time option.
+DHCPv4 only options:
+-B: Force broadcast handling.
+
+DHCPv6 only options:
+-c: Add a rapid commit option (exchanges will be SA).
+-A<encapsulation-level>: Specifies that relayed traffic must be
+    generated. The argument specifies the level of encapsulation, i.e.
+    how many relay agents are simulated. Currently the only supported
+    <encapsulation-level> value is 1, which means that the generated
+    traffic is an equivalent of the traffic passing through a single
+    relay agent.
+
+The remaining options are typically used in conjunction with -r:
+
+-D<max-drop>: Abort the test immediately if max-drop requests have
+    been dropped.  max-drop must be a positive integer. If max-drop
+    includes the suffix '%', it specifies a maximum percentage of
+    requests that may be dropped before abort. In this case, testing
+    of the threshold begins after 10 requests have been expected to
+    be received.
+-n<num-request>: Initiate <num-request> transactions.  No report is
+    generated until all transactions have been initiated/waited-for,
+    after which a report is generated and the program terminates.
+-p<test-period>: Send requests for the given test period, which is
+    specified in the same manner as -d.  This can be used as an
+    alternative to -n, or both options can be given, in which case the
+    testing is completed when either limit is reached.
+-t<report>: Delay in seconds between two periodic reports.
+-C<separator>: Output reduced, an argument is a separator for periodic
+    (-t) reports generated in easy parsable mode. Data output won't be
+    changed, remain identical as in -t option.
+
+Errors:
+- tooshort: received a too short message
+- orphans: received a message which doesn't match an exchange
+   (duplicate, late or not related)
+- locallimit: reached to local system limits when sending a message.
+
+Exit status:
+The exit status is:
+0 on complete success.
+1 for a general error.
+2 if an error is found in the command line arguments.
+3 if there are no general failures in operation, but one or more
+  exchanges are not successfully completed.
+)";
 }
 
 void

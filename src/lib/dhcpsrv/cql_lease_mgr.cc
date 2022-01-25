@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2018 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -52,9 +52,9 @@ public:
     ///
     /// @param connection already open Cassandra connection.
     CqlLeaseExchange(const CqlConnection &connection)
-        : connection_(connection), valid_lifetime_(0), expire_(0), old_expire_(0),
-          subnet_id_(0), fqdn_fwd_(cass_false), fqdn_rev_(cass_false),
-          state_(0), user_context_(NULL_USER_CONTEXT) {
+        : connection_(connection), valid_lifetime_(0), expire_(0),
+          current_expire_(0), subnet_id_(0), fqdn_fwd_(cass_false),
+          fqdn_rev_(cass_false), state_(0), user_context_(NULL_USER_CONTEXT) {
     }
 
     /// @brief Create BIND array to receive C++ data.
@@ -91,7 +91,7 @@ protected:
     cass_int64_t expire_;
 
     /// @brief Expiration time of lease before update
-    cass_int64_t old_expire_;
+    cass_int64_t current_expire_;
 
     /// @brief Subnet identifier
     cass_int32_t subnet_id_;
@@ -161,7 +161,7 @@ public:
     /// Fills in the CQL_BIND array for sending data in the Lease4 object to
     /// the database. Used for DELETE statements.
     ///
-    /// @param address address of the lease to be deleted
+    /// @param lease Deleted lease information.
     /// @param data lease info in CQL format will be stored here
     /// @param statement_tag tag identifying the query (optional)
     void createBindForDelete(const Lease4Ptr &lease,
@@ -633,9 +633,10 @@ CqlLease4Exchange::createBindForUpdate(const Lease4Ptr &lease, AnyArray &data,
         data.add(&user_context_);
         data.add(&address_);
 
-        CqlExchange::convertToDatabaseTime(lease_->old_cltt_, lease_->old_valid_lft_,
-                                           old_expire_);
-        data.add(&old_expire_);
+        CqlExchange::convertToDatabaseTime(lease_->current_cltt_,
+                                           lease_->current_valid_lft_,
+                                           current_expire_);
+        data.add(&current_expire_);
     } catch (const Exception &ex) {
         isc_throw(DbOperationError,
                   "CqlLease4Exchange::createBindUpdate(): "
@@ -664,9 +665,10 @@ CqlLease4Exchange::createBindForDelete(const Lease4Ptr &lease, AnyArray &data,
         data.clear();
         data.add(&address_);
 
-        CqlExchange::convertToDatabaseTime(lease_->old_cltt_, lease_->old_valid_lft_,
-                                           old_expire_);
-        data.add(&old_expire_);
+        CqlExchange::convertToDatabaseTime(lease_->current_cltt_,
+                                           lease_->current_valid_lft_,
+                                           current_expire_);
+        data.add(&current_expire_);
     } catch (const Exception &ex) {
         isc_throw(DbOperationError,
                   "CqlLease4Exchange::createBindForDelete(): "
@@ -1424,9 +1426,10 @@ CqlLease6Exchange::createBindForUpdate(const Lease6Ptr &lease, AnyArray &data,
         data.add(&user_context_);
         data.add(&address_);
 
-        CqlExchange::convertToDatabaseTime(lease_->old_cltt_, lease_->old_valid_lft_,
-                                           old_expire_);
-        data.add(&old_expire_);
+        CqlExchange::convertToDatabaseTime(lease_->current_cltt_,
+                                           lease_->current_valid_lft_,
+                                           current_expire_);
+        data.add(&current_expire_);
     } catch (const Exception &ex) {
         isc_throw(DbOperationError,
                   "CqlLease6Exchange::createBindForUpdate(): "
@@ -1461,9 +1464,10 @@ CqlLease6Exchange::createBindForDelete(const Lease6Ptr &lease, AnyArray &data,
         data.clear();
         data.add(&address_);
 
-        CqlExchange::convertToDatabaseTime(lease_->old_cltt_, lease_->old_valid_lft_,
-                                           old_expire_);
-        data.add(&old_expire_);
+        CqlExchange::convertToDatabaseTime(lease_->current_cltt_,
+                                           lease_->current_valid_lft_,
+                                           current_expire_);
+        data.add(&current_expire_);
     } catch (const Exception &ex) {
         isc_throw(DbOperationError,
                   "CqlLease6Exchange::createBindForDelete(): "
@@ -1596,8 +1600,9 @@ CqlLease6Exchange::retrieve() {
 
         time_t cltt = 0;
         CqlExchange::convertFromDatabaseTime(expire_, valid_lifetime_, cltt);
+        // Update cltt_ and current_cltt_ explicitly.
         result->cltt_ = cltt;
-        result->old_cltt_ = cltt;
+        result->current_cltt_ = cltt;
 
         result->state_ = state_;
 
@@ -1701,7 +1706,7 @@ public:
     CqlLeaseStatsQuery(CqlConnection& conn, StatementTag& statement,
                        const bool fetch_type)
         : conn_(conn), statement_(statement), fetch_type_(fetch_type),
-          cummulative_rows_(), next_row_(cummulative_rows_.begin()),
+          cumulative_rows_(), next_row_(cumulative_rows_.begin()),
           subnet_id_(0), lease_type_(0), state_(0) {
     }
 
@@ -1717,15 +1722,15 @@ public:
     CqlLeaseStatsQuery(CqlConnection& conn, StatementTag& statement,
                        const bool fetch_type, const SubnetID& subnet_id)
         : LeaseStatsQuery(subnet_id), conn_(conn), statement_(statement),
-          fetch_type_(fetch_type), cummulative_rows_(),
-          next_row_(cummulative_rows_.begin()),
+          fetch_type_(fetch_type), cumulative_rows_(),
+          next_row_(cumulative_rows_.begin()),
           subnet_id_(0), lease_type_(0), state_(0) {
     }
 
     /// @brief Constructor to query for the stats for a range of subnets
     ///
     /// The query created will return statistics for the inclusive range of
-    /// subnets described by first and last sunbet IDs.
+    /// subnets described by first and last subnet IDs.
     ///
     /// @param conn An open connection to the database housing the lease data
     /// @param statement The lease data SQL prepared statement tag to execute
@@ -1737,8 +1742,8 @@ public:
                        const bool fetch_type, const SubnetID& first_subnet_id,
                        const SubnetID& last_subnet_id)
         : LeaseStatsQuery(first_subnet_id, last_subnet_id), conn_(conn),
-          statement_(statement), fetch_type_(fetch_type), cummulative_rows_(),
-          next_row_(cummulative_rows_.begin()),
+          statement_(statement), fetch_type_(fetch_type), cumulative_rows_(),
+          next_row_(cumulative_rows_.begin()),
           subnet_id_(0), lease_type_(0), state_(0) {
     }
 
@@ -1769,9 +1774,9 @@ public:
     /// have derived this class from CqlExchange and used it's executeSelect
     /// (from which this method borrows heavily). However, that would mean
     /// copying all the raw lease  data into a collection returned by
-    /// executeSelect and then aggregating that into cummulative rows.
+    /// executeSelect and then aggregating that into cumulative rows.
     /// The way we are now we go turn the raw lease data directly into the
-    /// cummulative row map.
+    /// cumulative row map.
     ///
     /// @param connection connection used to communicate with the Cassandra
     /// database
@@ -1838,7 +1843,7 @@ private:
 
 
     /// @brief map containing the aggregated lease counts
-    std::map<LeaseStatsRow, int> cummulative_rows_;
+    std::map<LeaseStatsRow, int> cumulative_rows_;
 
     /// @brief cursor pointing to the next row to read in aggregate map
     std::map<LeaseStatsRow, int>::iterator next_row_;
@@ -1934,17 +1939,17 @@ CqlLeaseStatsQuery::start() {
 
     // This gets a collection of "raw" data for all leases that match
     // the subnet selection criteria (all, range, or single subnets)
-    // then rolls them up into cummulative_rows_
+    // then rolls them up into cumulative_rows_
     executeSelect(conn_, data, statement_);
 
     // Set our row iterator to the beginning
-    next_row_ = cummulative_rows_.begin();
+    next_row_ = cumulative_rows_.begin();
 }
 
 bool
 CqlLeaseStatsQuery::getNextRow(LeaseStatsRow& row) {
     // If we're past the end, punt.
-    if (next_row_ == cummulative_rows_.end()) {
+    if (next_row_ == cumulative_rows_.end()) {
         return (false);
     }
 
@@ -2060,7 +2065,7 @@ CqlLeaseStatsQuery::executeSelect(const CqlConnection& connection, const AnyArra
     }
 
     // Since we're currently forced to pull data for all leases, we
-    // iterate over them, aggregating them into cummulative LeaseStatsRows
+    // iterate over them, aggregating them into cumulative LeaseStatsRows
     AnyArray return_values;
     CassIterator* rows = cass_iterator_from_result(result_collection);
     while (cass_iterator_next(rows)) {
@@ -2076,11 +2081,11 @@ CqlLeaseStatsQuery::executeSelect(const CqlConnection& connection, const AnyArra
         LeaseStatsRow raw_row(subnet_id_, static_cast<Lease::Type>(lease_type_),
                               state_, 1);
 
-        auto cum_row = cummulative_rows_.find(raw_row);
-        if (cum_row != cummulative_rows_.end()) {
-            cummulative_rows_[raw_row] = cum_row->second + 1;
+        auto cum_row = cumulative_rows_.find(raw_row);
+        if (cum_row != cumulative_rows_.end()) {
+            cumulative_rows_[raw_row] = cum_row->second + 1;
         } else {
-            cummulative_rows_.insert(std::make_pair(raw_row, 1));
+            cumulative_rows_.insert(std::make_pair(raw_row, 1));
         }
     }
 
@@ -2104,6 +2109,9 @@ CqlLeaseMgr::CqlLeaseMgr(const DatabaseConnection::ParameterMap &parameters)
                   << " found version:  " << db_version.first << "."
                   << db_version.second);
     }
+
+    // Cassandra support is now deprecated.
+    LOG_WARN(dhcpsrv_logger, DHCPSRV_DEPRECATED).arg("Cassandra lease backend");
 
     // Open the database.
     dbconn_.openDatabase();
@@ -2145,8 +2153,9 @@ CqlLeaseMgr::addLease(const Lease4Ptr &lease) {
         return false;
     }
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
 
     return true;
 }
@@ -2168,8 +2177,9 @@ CqlLeaseMgr::addLease(const Lease6Ptr &lease) {
         return false;
     }
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
 
     return true;
 }
@@ -2254,22 +2264,6 @@ CqlLeaseMgr::getLease4(const ClientId &clientid) const {
     exchange4->getLeaseCollection(CqlLease4Exchange::GET_LEASE4_CLIENTID, data, result);
 
     return (result);
-}
-
-Lease4Ptr
-CqlLeaseMgr::getLease4(const ClientId &clientid, const HWAddr &hwaddr,
-                       SubnetID subnet_id) const {
-    /// @todo: Remove this method in this and all other implementations.
-    /// This method is currently not implemented because allocation engine
-    /// searches for the lease using HW address or client identifier.
-    /// It never uses both parameters in the same time. We need to
-    /// consider if this method is needed at all.
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_CQL_GET_CLIENTID_HWADDR_SUBID)
-        .arg(clientid.toText())
-        .arg(hwaddr.toText())
-        .arg(subnet_id);
-
-    isc_throw(NotImplemented, "CqlLeaseMgr::getLease4() is obsolete");
 }
 
 Lease4Ptr
@@ -2618,8 +2612,8 @@ CqlLeaseMgr::updateLease4(const Lease4Ptr &lease) {
         isc_throw(NoSuchLease, exception.what());
     }
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 }
 
 void
@@ -2637,8 +2631,8 @@ CqlLeaseMgr::updateLease6(const Lease6Ptr &lease) {
         isc_throw(NoSuchLease, exception.what());
     }
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 }
 
 bool

@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,22 +10,33 @@
 #include <asiolink/io_service.h>
 #include <dhcpsrv/timer_mgr.h>
 #include <exceptions/exceptions.h>
+#include <testutils/multi_threading_utils.h>
 
-#include <boost/bind.hpp>
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <sstream>
 #include <unistd.h>
 
 using namespace isc;
 using namespace isc::dhcp;
 using namespace isc::asiolink;
+using namespace isc::test;
 
 namespace {
 
 /// @brief Test fixture class for @c TimerMgr.
 class TimerMgrTest : public ::testing::Test {
+public:
+
+    /// @brief Constructor
+    TimerMgrTest() = default;
+
+    /// @brief Destructor
+    virtual ~TimerMgrTest() = default;
+
 private:
+
     /// @brief Prepares the class for a test.
     virtual void SetUp();
 
@@ -73,16 +84,39 @@ public:
     ///
     /// This is just a wrapped to make it a bit more convenient
     /// in the test.
-    boost::function<void ()> makeCallback(const std::string& timer_name);
+    std::function<void ()> makeCallback(const std::string& timer_name);
 
     /// @brief Create a callback which generates exception.
-    boost::function<void ()> makeCallbackWithException();
+    std::function<void ()> makeCallbackWithException();
 
     /// @brief Callback for timeout.
     ///
     /// This callback indicates the test timeout by setting the
     /// @c timeout_ member.
     void timeoutCallback();
+
+    // @brief This test checks that certain errors are returned when invalid
+    // parameters are specified when registering a timer, or when
+    // the registration can't be made.
+    void testRegisterTimer();
+
+    /// @brief This test verifies that it is possible to unregister a timer from
+    /// the TimerMgr.
+    void testUnregisterTimer();
+
+    /// @brief This test verifies that it is possible to unregister all timers.
+    void testUnregisterTimers();
+
+    /// @brief This test verifies that the timer execution can be cancelled.
+    void testCancel();
+
+    /// @brief This test verifies that the callbacks for the scheduled timers
+    /// are actually called.
+    void testScheduleTimers();
+
+    /// @brief  This test verifies that exceptions emitted from the callback
+    /// would be handled by the TimerMgr.
+    void testCallbackWithException();
 
     /// @brief Type definition for a map holding calls counters for
     /// timers.
@@ -154,20 +188,21 @@ TimerMgrTest::timerCallbackWithException() {
     isc_throw(Exception, "timerCallbackWithException");
 }
 
-boost::function<void ()>
+std::function<void ()>
 TimerMgrTest::makeCallback(const std::string& timer_name) {
-    return (boost::bind(&TimerMgrTest::timerCallback, this, timer_name));
+    return (std::bind(&TimerMgrTest::timerCallback, this, timer_name));
 }
 
-boost::function<void ()>
+std::function<void ()>
 TimerMgrTest::makeCallbackWithException() {
-    return (boost::bind(&TimerMgrTest::timerCallbackWithException, this));
+    return (std::bind(&TimerMgrTest::timerCallbackWithException, this));
 }
 
 // This test checks that certain errors are returned when invalid
 // parameters are specified when registering a timer, or when
 // the registration can't be made.
-TEST_F(TimerMgrTest, registerTimer) {
+void
+TimerMgrTest::testRegisterTimer() {
     // Empty timer name is not allowed.
     ASSERT_THROW(timer_mgr_->registerTimer("", makeCallback("timer1"), 1,
                                            IntervalTimer::ONE_SHOT),
@@ -185,9 +220,20 @@ TEST_F(TimerMgrTest, registerTimer) {
                  BadValue);
 }
 
-// This test verifies that it is possible to unregister a timer from
-// the TimerMgr.
-TEST_F(TimerMgrTest, unregisterTimer) {
+TEST_F(TimerMgrTest, registerTimer) {
+    // Disable Multi-Threading.
+    MultiThreadingTest mt(false);
+    testRegisterTimer();
+}
+
+TEST_F(TimerMgrTest, registerTimerMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingTest mt(true);
+    testRegisterTimer();
+}
+
+void
+TimerMgrTest::testUnregisterTimer() {
     // Register a timer and start it.
     ASSERT_NO_FATAL_FAILURE(registerTimer("timer1", 1));
     ASSERT_EQ(1, timer_mgr_->timersCount());
@@ -218,8 +264,20 @@ TEST_F(TimerMgrTest, unregisterTimer) {
     EXPECT_EQ(calls_count_["timer1"], calls_count);
 }
 
-// This test verifies taht it is possible to unregister all timers.
-TEST_F(TimerMgrTest, unregisterTimers) {
+TEST_F(TimerMgrTest, unregisterTimer) {
+    // Disable Multi-Threading.
+    MultiThreadingTest mt(false);
+    testUnregisterTimer();
+}
+
+TEST_F(TimerMgrTest, unregisterTimerMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingTest mt(true);
+    testUnregisterTimer();
+}
+
+void
+TimerMgrTest::testUnregisterTimers() {
     // Register 10 timers.
     for (int i = 1; i <= 20; ++i) {
         std::ostringstream s;
@@ -262,8 +320,20 @@ TEST_F(TimerMgrTest, unregisterTimers) {
     EXPECT_TRUE(calls_count == calls_count_);
 }
 
-// This test verifies that the timer execution can be cancelled.
-TEST_F(TimerMgrTest, cancel) {
+TEST_F(TimerMgrTest, unregisterTimers) {
+    // Disable Multi-Threading.
+    MultiThreadingTest mt(false);
+    testUnregisterTimers();
+}
+
+TEST_F(TimerMgrTest, unregisterTimersMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingTest mt(true);
+    testUnregisterTimers();
+}
+
+void
+TimerMgrTest::testCancel() {
     // Register timer.
     ASSERT_NO_FATAL_FAILURE(registerTimer("timer1", 1));
 
@@ -299,9 +369,20 @@ TEST_F(TimerMgrTest, cancel) {
     EXPECT_GT(calls_count_["timer1"], calls_count);
 }
 
-// This test verifies that the callbacks for the scheduled timers are
-// actually called.
-TEST_F(TimerMgrTest, scheduleTimers) {
+TEST_F(TimerMgrTest, cancel) {
+    // Disable Multi-Threading.
+    MultiThreadingTest mt(false);
+    testCancel();
+}
+
+TEST_F(TimerMgrTest, cancelMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingTest mt(true);
+    testCancel();
+}
+
+void
+TimerMgrTest::testScheduleTimers() {
     // Register two timers: 'timer1' and 'timer2'. The first timer will
     // be executed at the 50ms interval. The second one at the 100ms
     // interval.
@@ -353,9 +434,20 @@ TEST_F(TimerMgrTest, scheduleTimers) {
     EXPECT_GT(calls_count_["timer2"], calls_count_timer2);
 }
 
-// This test verifies that exceptions emitted from the callback would
-// be handled by the TimerMgr.
-TEST_F(TimerMgrTest, callbackWithException) {
+TEST_F(TimerMgrTest, scheduleTimers) {
+    // Disable Multi-Threading.
+    MultiThreadingTest mt(false);
+    testScheduleTimers();
+}
+
+TEST_F(TimerMgrTest, scheduleTimersMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingTest mt(true);
+    testScheduleTimers();
+}
+
+void
+TimerMgrTest::testCallbackWithException() {
     // Create timer which will trigger callback generating exception.
     ASSERT_NO_THROW(
         timer_mgr_->registerTimer("timer1", makeCallbackWithException(), 1,
@@ -368,6 +460,18 @@ TEST_F(TimerMgrTest, callbackWithException) {
     // Start thread. We hope that exception will be caught by the @c TimerMgr
     // and will not kill the process.
     doWait(500);
+}
+
+TEST_F(TimerMgrTest, callbackWithException) {
+    // Disable Multi-Threading.
+    MultiThreadingTest mt(false);
+    testCallbackWithException();
+}
+
+TEST_F(TimerMgrTest, callbackWithExceptionMultiThreading) {
+    // Enable Multi-Threading.
+    MultiThreadingTest mt(true);
+    testCallbackWithException();
 }
 
 // This test verifies that IO service specified for the TimerMgr

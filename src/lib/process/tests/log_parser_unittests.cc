@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -313,7 +313,7 @@ TEST_F(LoggingTest, multipleLoggingDestinations) {
 // Verifies that log rotation occurs when configured.  We do not
 // worry about contents of the log files, only that rotation occurs.
 // Such details are tested in lib/log.  This test verifies that
-// we can correcty configure logging such that rotation occurs as
+// we can correctly configure logging such that rotation occurs as
 // expected.
 TEST_F(LoggingTest, logRotate) {
     wipeFiles();
@@ -376,6 +376,7 @@ TEST_F(LoggingTest, logRotate) {
 // Verifies that a valid output option,'pattern' paress correctly.
 TEST_F(LoggingTest, validPattern) {
 
+    // Note the backslash must be doubled in the pattern definition.
     const char* config_txt =
     "{ \"loggers\": ["
     "    {"
@@ -383,7 +384,7 @@ TEST_F(LoggingTest, validPattern) {
     "        \"output_options\": ["
     "            {"
     "                \"output\": \"stdout\","
-    "                \"pattern\": \"mylog %m\n\""
+    "                \"pattern\": \"mylog %m\\n\""
     "            }"
     "        ],"
     "        \"severity\": \"INFO\""

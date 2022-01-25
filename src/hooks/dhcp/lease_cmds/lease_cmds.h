@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -91,6 +91,9 @@ public:
     /// command was added as a result of our experience with High Availability
     /// where multiple IPv6 addresses and/or prefixes can be allocated for
     /// a single DHCPv6 packet.
+    ///
+    /// @note Unlike leaseX-del, this command does not support "update-ddns" and
+    /// this will not generate CHG_REMOVEs for deleted leases.
     ///
     /// Example structure of the command:
     ///
@@ -345,7 +348,9 @@ public:
     /// criteria.
     /// It extracts the command name and arguments from the given Callouthandle,
     /// attempts to process them, and then set's the handle's "response"
-    /// argument accordingly.
+    /// argument accordingly.  If the lease is deleted successfully, then a call
+    /// to @ref isc::dhcp::queueNCR() is issued, which to generate an
+    /// CHG_REMOVE request to kea-dhcp-ddns, if appropriate.
     ///
     /// Two types of parameters are supported: (subnet-id, address) or
     /// (subnet-id, identifier-type, identifier).
@@ -381,7 +386,9 @@ public:
     /// This command attempts to delete a lease that match selected criteria.
     /// It extracts the command name and arguments from the given Callouthandle,
     /// attempts to process them, and then set's the handle's "response"
-    /// argument accordingly.
+    /// argument accordingly.  If the lease is deleted successfully, then a call
+    /// to @ref isc::dhcp::queueNCR() is issued, which to generate an
+    /// CHG_REMOVE request to kea-dhcp-ddns, if appropriate.
     ///
     /// Two types of parameters are supported: (subnet-id, address) or
     /// (subnet-id, type, iaid, identifier-type, identifier).
@@ -524,6 +531,56 @@ public:
     /// @return result of the operation
     int
     lease6WipeHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease4-resend-ddns command handler
+    ///
+    /// This command attempts to resend the DDNS updates for the IPv4 lease that
+    /// matches the selection criteria.
+    ///
+    /// It extracts the command name and arguments from the given Callouthandle,
+    /// attempts to process them, and then set's the handle's "response"
+    /// argument accordingly.
+    ///
+    /// A single parameter is supported: ip-address:
+    ///
+    /// Example command to resend DDNS based on existing FDQN and flags
+    /// {
+    ///     "command": "lease4-resend-ddns",
+    ///     "arguments": {
+    ///         "ip-address": "192.0.2.202"
+    ///     }
+    /// }
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// lease4-resend-ddns command JSON text in the "command" argument
+    /// @return result of the operation
+    int
+    lease4ResendDdnsHandler(hooks::CalloutHandle& handle);
+
+    /// @brief lease6-resend-ddns command handler
+    ///
+    /// This command attempts to resend the DDNS updates for the IPv6 lease that
+    /// matches the selection criteria.
+    ///
+    /// It extracts the command name and arguments from the given Callouthandle,
+    /// attempts to process them, and then set's the handle's "response"
+    /// argument accordingly.
+    ///
+    /// A single parameter is supported: ip-address:
+    ///
+    /// Example command to resend DDNS based on existing FDQN and flags
+    /// {
+    ///     "command": "lease6-resend-ddns",
+    ///     "arguments": {
+    ///         "ip-address": "2001:db8:abcd::",
+    ///     }
+    /// }
+    ///
+    /// @param handle Callout context - which is expected to contain the
+    /// lease6-resend-ddns command JSON text in the "command" argument
+    /// @return result of the operation
+    int
+    lease6ResendDdnsHandler(hooks::CalloutHandle& handle);
 
 private:
     /// Pointer to the actual implementation

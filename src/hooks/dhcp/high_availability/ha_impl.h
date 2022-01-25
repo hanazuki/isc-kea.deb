@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -34,7 +34,7 @@ public:
     /// @brief Constructor.
     HAImpl();
 
-    /// @brief Parases configuration.
+    /// @brief Parses configuration.
     ///
     /// @param input_config Configuration specified for the hooks library.
     /// @throw ConfigError when configuration fails.
@@ -53,6 +53,11 @@ public:
     void startService(const asiolink::IOServicePtr& io_service,
                       const dhcp::NetworkStatePtr& network_state,
                       const HAServerType& server_type);
+
+    /// @brief Destructor.
+    ~HAImpl();
+
+public:
 
     /// @brief Returns parsed configuration.
     HAConfigPtr getConfig() const {
@@ -113,13 +118,8 @@ public:
 
     /// @brief Implementation of the "command_processed" callout.
     ///
-    /// This callout adjusts network state (DHCP service state) after receiving
-    /// a "dhcp-enable" commands. It is preventing a situation when the DHCP
-    /// service is enabled in a state for which this is not allowed, e.g.
-    /// waiting, syncing etc. We don't want to rely on the HA partner to do
-    /// a correct thing in that respect.
-    /// It too adds the HA servers information to "status-get" command
-    /// responses by calling @c HAService::commandProcessed.
+    /// It adds the HA servers information to "status-get" command responses by
+    /// calling @c HAService::commandProcessed.
     ///
     /// @param callout_handle Callout handle provided to the callout.
     void commandProcessed(hooks::CalloutHandle& callout_handle);
@@ -158,6 +158,16 @@ public:
     ///
     /// @param callout_handle Callout handle provided to the callout.
     void maintenanceCancelHandler(hooks::CalloutHandle& callout_handle);
+
+    /// @brief Implements handler for the ha-reset command.
+    ///
+    /// @param callout_handle Callout handle provided to the callout.
+    void haResetHandler(hooks::CalloutHandle& callout_handle);
+
+    /// @brief Implements handler for the ha-sync-complete-notify command.
+    ///
+    /// @param callout_handle Callout handle provided to the callout.
+    void syncCompleteNotifyHandler(hooks::CalloutHandle& callout_handle);
 
 protected:
 

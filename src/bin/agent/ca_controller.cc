@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,9 +10,11 @@
 #include <agent/ca_process.h>
 #include <agent/ca_command_mgr.h>
 #include <agent/parser_context.h>
-#include <boost/bind.hpp>
+#include <cfgrpt/config_report.h>
+#include <functional>
 
 using namespace isc::process;
+namespace ph = std::placeholders;
 
 namespace isc {
 namespace agent {
@@ -52,31 +54,31 @@ CtrlAgentController::parseFile(const std::string& name) {
 void
 CtrlAgentController::registerCommands() {
     CtrlAgentCommandMgr::instance().registerCommand(BUILD_REPORT_COMMAND,
-        boost::bind(&DControllerBase::buildReportHandler, this, _1, _2));
+        std::bind(&DControllerBase::buildReportHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(CONFIG_GET_COMMAND,
-        boost::bind(&DControllerBase::configGetHandler, this, _1, _2));
+        std::bind(&DControllerBase::configGetHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(CONFIG_RELOAD_COMMAND,
-        boost::bind(&DControllerBase::configReloadHandler, this, _1, _2));
+        std::bind(&DControllerBase::configReloadHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(CONFIG_SET_COMMAND,
-        boost::bind(&DControllerBase::configSetHandler, this, _1, _2));
+        std::bind(&DControllerBase::configSetHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(CONFIG_TEST_COMMAND,
-        boost::bind(&DControllerBase::configTestHandler, this, _1, _2));
+        std::bind(&DControllerBase::configTestHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(CONFIG_WRITE_COMMAND,
-        boost::bind(&DControllerBase::configWriteHandler, this, _1, _2));
+        std::bind(&DControllerBase::configWriteHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(SHUT_DOWN_COMMAND,
-        boost::bind(&DControllerBase::shutdownHandler, this, _1, _2));
+        std::bind(&DControllerBase::shutdownHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(STATUS_GET_COMMAND,
-        boost::bind(&DControllerBase::statusGetHandler, this, _1, _2));
+        std::bind(&DControllerBase::statusGetHandler, this, ph::_1, ph::_2));
 
     CtrlAgentCommandMgr::instance().registerCommand(VERSION_GET_COMMAND,
-        boost::bind(&DControllerBase::versionGetHandler, this, _1, _2));
+        std::bind(&DControllerBase::versionGetHandler, this, ph::_1, ph::_2));
 }
 
 void
@@ -103,6 +105,9 @@ CtrlAgentProcessPtr
 CtrlAgentController::getCtrlAgentProcess() {
     return (boost::dynamic_pointer_cast<CtrlAgentProcess>(getProcess()));
 }
+
+// Refer to config_report so it will be embedded in the binary.
+const char* const* ca_config_report = isc::detail::config_report;
 
 } // namespace isc::agent
 } // namespace isc

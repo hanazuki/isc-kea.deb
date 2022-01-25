@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,6 +17,8 @@ namespace dhcp {
 
 /// @brief Forward declaration of the @c TimerMgr implementation.
 class TimerMgrImpl;
+
+typedef boost::shared_ptr<TimerMgrImpl> TimerMgrImplPtr;
 
 /// @brief Forward declaration of the @c TimerMgr.
 class TimerMgr;
@@ -51,6 +53,12 @@ typedef boost::shared_ptr<TimerMgr> TimerMgrPtr;
 /// Before the @c TimerMgr can be used the server process must call
 /// @c TimerMgr::setIOService to associate the manager with the IO service
 /// that the server is using to its run tasks.
+///
+/// @note Only scheduling new timer (calling @ref setup) and canceling existing
+/// timer (calling @ref cancel) are thread safe.
+/// Registering new timers (calling @ref registerTimer) and unregistering
+/// existing timers (calling @ref unregisterTimer) must be handled before
+/// starting processing threads.
 class TimerMgr : public boost::noncopyable {
 public:
 
@@ -145,9 +153,8 @@ private:
     /// construction via @c TimerMgr::instance.
     TimerMgr();
 
-    /// @brief Pointer to @c TimerMgr implementation.
-    TimerMgrImpl* impl_;
-
+    /// @brief The @c TimerMgr implementation.
+    TimerMgrImplPtr impl_;
 };
 
 } // end of namespace isc::dhcp

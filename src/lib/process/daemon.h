@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,15 +10,18 @@
 #include <cc/data.h>
 #include <process/config_base.h>
 #include <util/pid_file.h>
-#include <util/signal_set.h>
+#include <asiolink/io_service_signal.h>
+
 #include <boost/noncopyable.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
+
+#include <list>
 #include <string>
 
 namespace isc {
 namespace process {
 
-/// @brief Exception thrown when a the PID file points to a live PID
+/// @brief Exception thrown when the PID file points to a live PID
 class DaemonPIDExists : public Exception {
 public:
     DaemonPIDExists(const char* file, size_t line, const char* what) :
@@ -36,13 +39,8 @@ public:
 /// implementations should derive from it.
 ///
 /// Methods are not pure virtual, as we need to instantiate basic daemons (e.g.
-/// Dhcpv6Srv) in tests, without going through the hassles of implementing stub
-/// methods.
-///
-/// Classes derived from @c Daemon may install custom signal handlers using
-/// @c isc::util::SignalSet class. This base class provides a declaration
-/// of the @c SignalSet object that should be initialized in the derived
-/// classes to install the custom exception handlers.
+/// Dhcpv4Srv and Dhcpv6Srv) in tests, without going through the hassles of
+/// implementing stub methods.
 ///
 /// @note Only one instance of this class is instantiated as it encompasses
 ///       the whole operation of the server.  Nothing, however, enforces the
@@ -66,13 +64,13 @@ public:
     ///
     /// Performs configuration backend specific final clean-up. This is called
     /// shortly before the daemon terminates. Depending on backend, it may
-    /// terminat existing msgq session, close LDAP connection or similar.
+    /// terminate existing msgq session, close LDAP connection or similar.
     ///
     /// The daemon is not expected to receive any further commands or
     /// configuration updates as it is in final stages of shutdown.
     virtual void cleanup();
 
-    /// @brief Initiates shutdown procedure for the whole DHCPv6 server.
+    /// @brief Initiates shutdown procedure for the whole server.
     virtual void shutdown();
 
     /// @brief Initializes logger
@@ -85,18 +83,6 @@ public:
     /// @param log_name name used in logger initialization
     /// @param verbose verbose mode (true usually enables DEBUG messages)
     static void loggerInit(const char* log_name, bool verbose);
-
-    /// @brief Relocate Logging configuration
-    ///
-    /// Moves the loggers entry from Logging to the server top element.
-    /// This method assumes the configuration is sane, e.g. the server
-    /// top element exists and is a map.
-    /// Top elements other than the server one are removed.
-    ///
-    /// @param config JSON top level configuration
-    /// @param server_name name of the server top element
-    static void relocateLogging(isc::data::ConstElementPtr config,
-                                const std::string server_name);
 
     /// @brief Configures logger
     ///
@@ -230,33 +216,45 @@ public:
         default_logger_name_ = logger;
     }
 
-protected:
+    /// @brief Fetches the exit value.
+    int getExitValue() {
+        return (exit_value_);
+    }
 
-    /// @brief Invokes handler for the next received signal.
+    /// @brief Sets the exit value.
     ///
-    /// This function provides a default implementation for the function
-    /// handling next signal received by the process. It checks if a pointer
-    /// to @c isc::util::SignalSet object and the signal handler function
-    /// have been set. If they have been set, the signal handler is invoked for
-    /// the the next signal registered in the @c SignalSet object.
+    /// @param value new exit value.
+    void setExitValue(int value) {
+        exit_value_ = value;
+    }
+
+    /// @brief Return a list of all paths that contain passwords or secrets.
     ///
-    /// This function should be received in the main loop of the process.
-    virtual void handleSignal();
+    /// Used in @ref isc::process::Daemon::redactConfig to only make copies and
+    /// only redact configuration subtrees that contain passwords or secrets. To
+    /// be overridden by derived classes.
+    ///
+    /// @return the list of lists of sequential JSON map keys needed to reach
+    /// the passwords and secrets.
+    virtual std::list<std::list<std::string>> jsonPathsToRedact() const;
+
+    /// @brief Redact a configuration.
+    ///
+    /// Calls @ref isc::process::redactConfig
+    ///
+    /// @param config the Element tree structure that describes the configuration.
+    ///
+    /// @return the redacted configuration
+    isc::data::ConstElementPtr redactConfig(isc::data::ConstElementPtr const& config);
+
+protected:
 
     /// @brief A pointer to the object installing custom signal handlers.
     ///
-    /// This pointer needs to be initialized to point to the @c SignalSet
+    /// This pointer needs to be initialized to point to the @c IOSignalSet
     /// object in the derived classes which need to handle signals received
     /// by the process.
-    isc::util::SignalSetPtr signal_set_;
-
-    /// @brief Pointer to the common signal handler invoked by the handleSignal
-    /// function.
-    ///
-    /// This pointer needs to be initialized to point to the signal handler
-    /// function for signals being handled by the process. If signal handler
-    /// it not initialized, the signals will not be handled.
-    isc::util::SignalHandler signal_handler_;
+    isc::asiolink::IOSignalSetPtr signal_set_;
 
     /// @brief Manufacture the pid file name
     std::string makePIDFileName() const;
@@ -286,9 +284,13 @@ private:
 
     /// @brief Flag indicating if this instance created the file
     bool am_file_author_;
+
+    /// @brief Exit value the process should use.  Typically set
+    /// by the application during a controlled shutdown.
+    int exit_value_;
 };
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // namespace process
+} // namespace isc
 
 #endif

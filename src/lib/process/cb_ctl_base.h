@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -55,15 +55,15 @@ namespace process {
 /// and then committed, and in the second case it has to be directly merged
 /// into the running configuration.
 ///
-/// This class contains some common logic to faciliate both scenarios which
+/// This class contains some common logic to facilitate both scenarios which
 /// will be used by all server types. It also contains some pure virtual
 /// methods to be implemented by specific servers. The common logic includes
 /// the following operations:
 /// - use the "config-control" specification to connect to the specified
 ///   databases via the configuration backends,
 /// - fetch the audit trail to detect configuration updates,
-/// - store the timestamp of the most recent audit entry fetched from the
-///   database, so as next time it can fetch only the later updates.
+/// - store the timestamp and id of the most recent audit entry fetched
+///   from the database, so as next time it can fetch only the later updates.
 ///
 /// The server specific part to be implemented in derived classes must
 /// correctly interpret the audit entries and make appropriate API calls
@@ -92,9 +92,11 @@ public:
 
     /// @brief Constructor.
     ///
-    /// Sets the time of the last fetched audit entry to Jan 1st, 1970.
+    /// Sets the time of the last fetched audit entry to Jan 1st, 2000,
+    /// with id 0.
     CBControlBase()
-        : last_audit_entry_time_(getInitialAuditEntryTime()) {
+        : last_audit_revision_time_(getInitialAuditRevisionTime()),
+          last_audit_revision_id_(0) {
     }
 
     /// @brief Virtual destructor.
@@ -107,10 +109,11 @@ public:
     /// @brief Resets the state of this object.
     ///
     /// Disconnects the configuration backends resets the recorded last
-    /// audit entry time.
+    /// audit revision time and id.
     void reset() {
         databaseConfigDisconnect();
-        last_audit_entry_time_ = getInitialAuditEntryTime();
+        last_audit_revision_time_ = getInitialAuditRevisionTime();
+        last_audit_revision_id_ = 0;
     }
 
     /// @brief (Re)connects to the specified configuration backends.
@@ -192,21 +195,24 @@ public:
 
         // If we're fetching updates we need to retrieve audit entries to see
         // which objects have to be updated. If we're performing full reconfiguration
-        // we also need audit entries to set the last_audit_entry_time_ to the
+        // we also need audit entries to set the last_audit_revision_time_ to the
         // time of the most recent audit entry.
 
         /// @todo We need a separate API call for the latter case to only
         /// fetch the last audit entry rather than all of them.
 
-        // Save the timestamp indicating last audit entry time.
-        auto lb_modification_time = last_audit_entry_time_;
+        // Save the timestamp indicating last audit revision time.
+        auto lb_modification_time = last_audit_revision_time_;
+        // Save the identifier indicating last audit revision id.
+        auto lb_modification_id = last_audit_revision_id_;
 
         audit_entries = getMgr().getPool()->getRecentAuditEntries(backend_selector,
                                                                   server_selector,
-                                                                  lb_modification_time);
-        // Store the last audit entry time. It should be set to the most recent
+                                                                  lb_modification_time,
+                                                                  lb_modification_id);
+        // Store the last audit revision time. It should be set to the most recent
         // audit entry fetched. If returned audit is empty we don't update.
-        updateLastAuditEntryTime(audit_entries);
+        updateLastAuditRevisionTimeId(audit_entries);
 
         // If this is full reconfiguration we don't need the audit entries anymore.
         // Let's remove them and proceed as if they don't exist.
@@ -223,11 +229,12 @@ public:
                 databaseConfigApply(backend_selector, server_selector,
                                     lb_modification_time, audit_entries);
             } catch (...) {
-                // Revert last audit entry time so as we can retry from the
-                // last successful attempt.
+                // Revert last audit revision time and id so as we can retry
+                // from the last successful attempt.
                 /// @todo Consider reverting to the initial value to reload
                 /// the entire configuration if the update failed.
-                last_audit_entry_time_ = lb_modification_time;
+                last_audit_revision_time_ = lb_modification_time;
+                last_audit_revision_id_ = lb_modification_id;
                 throw;
             }
         }
@@ -235,38 +242,35 @@ public:
 
 protected:
 
-    /// @brief Checks if there are new or updated configuration elements of
-    /// specific type to be fetched from the database.
+    /// @brief Returns audit entries for new or updated configuration
+    /// elements of specific type to be fetched from the database.
     ///
     /// This is convenience method invoked from the implementations of the
-    /// @c databaseConfigApply function. This method is invoked in two cases:
-    /// when the server starts up and fetches the entire configuration available
-    /// for it and when it should fetch the updates to the existing configuration.
-    /// In the former case, the collection of audit entries is always empty.
-    /// In the latter case it contains audit entries indicating the updates
-    /// to be fetched. This method checks if the implementation of the
-    /// @c databaseConfigApply should fetch updated configuration of the
-    /// configuration elements of the specific type. Therefore, it returns true
-    /// if the audit entries collection is empty (the former case described
-    /// above) or the audit entries collection contains CREATE or UPDATE
-    /// entries of the specific type.
+    /// @c databaseConfigApply function. This method is invoked when the
+    /// server should fetch the updates to the existing configuration.
+    /// The collection of audit entries contains audit entries indicating
+    /// the updates to be fetched. This method returns audit entries for
+    /// updated configuration elements of the specific type the
+    /// @c databaseConfigApply should fetch. The returned collection od
+    /// audit entries contains CREATE or UPDATE entries of the specific type.
     ///
-    /// @return true if there are new or updated configuration elements to
-    /// be fetched from the database or the audit entries collection is empty.
-    bool fetchConfigElement(const db::AuditEntryCollection& audit_entries,
-                            const std::string& object_type) const {
-        if (!audit_entries.empty()) {
-            const auto& index = audit_entries.get<db::AuditEntryObjectTypeTag>();
-            auto range = index.equal_range(object_type);
-            for (auto it = range.first; it != range.second; ++it) {
-                if ((*it)->getModificationType() != db::AuditEntry::ModificationType::DELETE) {
-                    return (true);
-                }
+    /// @param audit_entries collection od audit entries to filter.
+    /// @param object_type object type to filter with.
+    /// @return audit entries collection with CREATE or UPDATE entries
+    /// of the specific type be fetched from the database.
+    db::AuditEntryCollection
+    fetchConfigElement(const db::AuditEntryCollection& audit_entries,
+                       const std::string& object_type) const {
+        db::AuditEntryCollection result;
+        const auto& index = audit_entries.get<db::AuditEntryObjectTypeTag>();
+        auto range = index.equal_range(object_type);
+        for (auto it = range.first; it != range.second; ++it) {
+            if ((*it)->getModificationType() != db::AuditEntry::ModificationType::DELETE) {
+                result.insert(*it);
             }
-            return (false);
         }
 
-        return (true);
+        return (result);
     }
 
     /// @brief Server specific method to fetch and apply back end
@@ -310,12 +314,12 @@ protected:
     }
 
     /// @brief Convenience method returning initial timestamp to set the
-    /// @c last_audit_entry_time_ to.
+    /// @c last_audit_revision_time_ to.
     ///
-    /// @return Returns 1970-Jan-01 00:00:00 in local time.
-    static boost::posix_time::ptime getInitialAuditEntryTime() {
+    /// @return Returns 2000-Jan-01 00:00:00 in local time.
+    static boost::posix_time::ptime getInitialAuditRevisionTime() {
         static boost::posix_time::ptime
-            initial_time(boost::gregorian::date(1970, boost::gregorian::Jan, 1));
+            initial_time(boost::gregorian::date(2000, boost::gregorian::Jan, 1));
         return (initial_time);
     }
 
@@ -326,22 +330,42 @@ protected:
     /// returns without updating the timestamp.
     ///
     /// @param audit_entries reference to the collection of the fetched audit entries.
-    void updateLastAuditEntryTime(const db::AuditEntryCollection& audit_entries) {
+    void updateLastAuditRevisionTimeId(const db::AuditEntryCollection& audit_entries) {
         // Do nothing if there are no audit entries. It is the case if
         // there were no updates to the configuration.
         if (audit_entries.empty()) {
             return;
         }
 
-        // Get the audit entries sorted by modification time and pick the
-        // latest entry.
-        const auto& index = audit_entries.get<db::AuditEntryModificationTimeTag>();
-        last_audit_entry_time_ = ((*index.rbegin())->getModificationTime());
+        // Get the audit entries sorted by modification time and id,
+	// and pick the latest entry.
+        const auto& index = audit_entries.get<db::AuditEntryModificationTimeIdTag>();
+        last_audit_revision_time_ = (*index.rbegin())->getModificationTime();
+        last_audit_revision_id_ = (*index.rbegin())->getRevisionId();
     }
 
-    /// @brief Stores the most recent audit entry.
-    boost::posix_time::ptime last_audit_entry_time_;
+    /// @brief Stores the most recent audit revision timestamp.
+    boost::posix_time::ptime last_audit_revision_time_;
+
+    /// @brief Stores the most recent audit revision identifier.
+    ///
+    /// The identifier is used when two (or more) audit entries have
+    /// the same timestamp. It is not used by itself because timestamps
+    /// are more user friendly. Unfortunately old versions of MySQL do not
+    /// support millisecond timestamps.
+    uint64_t last_audit_revision_id_;
 };
+
+/// @brief Checks if an object is in a collection od audit entries.
+///
+/// @param audit_entries collection od audit entries to search for.
+/// @param object_id object identifier.
+inline bool
+hasObjectId(const db::AuditEntryCollection& audit_entries,
+            const uint64_t& object_id) {
+    const auto& object_id_idx = audit_entries.get<db::AuditEntryObjectIdTag>();
+    return (object_id_idx.count(object_id) > 0);
+}
 
 } // end of namespace isc::process
 } // end of namespace isc

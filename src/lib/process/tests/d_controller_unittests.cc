@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #include <config.h>
 #include <kea_version.h>
 
+#include <asiolink/testutils/timed_signal.h>
 #include <cc/command_interpreter.h>
 #include <process/testutils/d_test_stubs.h>
 
@@ -15,6 +16,7 @@
 
 #include <sstream>
 
+using namespace isc::asiolink::test;
 using namespace boost::posix_time;
 
 namespace isc {
@@ -28,12 +30,13 @@ public:
     /// @brief Constructor.
     /// Note the constructor passes in the static DStubController instance
     /// method.
-    DStubControllerTest() : DControllerTest (DStubController::instance) {
+    DStubControllerTest() : DControllerTest(DStubController::instance) {
         controller_ = boost::dynamic_pointer_cast<DStubController>
                                                  (DControllerTest::
                                                   getController());
     }
 
+    /// @brief The controller.
     DStubControllerPtr controller_;
 };
 
@@ -185,6 +188,23 @@ TEST_F(DStubControllerTest, launchNormalShutdown) {
                 elapsed_time.total_milliseconds() <= 2300);
 }
 
+/// @brief A variant of the launch and normal shutdown test using a callback.
+TEST_F(DStubControllerTest, launchNormalShutdownWithCallback) {
+    // Write the valid, empty, config and then run launch() for 1000 ms
+    // Access to the internal state.
+    auto callback = [&] { EXPECT_FALSE(getProcess()->shouldShutdown()); };
+    time_duration elapsed_time;
+    ASSERT_NO_THROW(runWithConfig("{}", 2000,
+                                  static_cast<const TestCallback&>(callback),
+                                  elapsed_time));
+
+    // Verify that duration of the run invocation is the same as the
+    // timer duration.  This demonstrates that the shutdown was driven
+    // by an io_service event and callback.
+    EXPECT_TRUE(elapsed_time.total_milliseconds() >= 1900 &&
+                elapsed_time.total_milliseconds() <= 2300);
+}
+
 /// @brief Tests launch with an non-existing configuration file.
 TEST_F(DStubControllerTest, nonExistingConfigFile) {
     // command line to run standalone
@@ -287,6 +307,28 @@ TEST_F(DStubControllerTest, configUpdateTests) {
     EXPECT_EQ(1, rcode);
 }
 
+// Tests that handleOtherObjects behaves as expected.
+TEST_F(DStubControllerTest, handleOtherObjects) {
+    using namespace isc::data;
+
+    // A bad config.
+    ElementPtr config = Element::createMap();
+    config->set(controller_->getAppName(), Element::create(1));
+    config->set("foo", Element::create(2));
+    config->set("bar", Element::create(3));
+
+    // Check the error message.
+    std::string errmsg;
+    EXPECT_NO_THROW(errmsg = controller_->handleOtherObjects(config));
+    EXPECT_EQ(" contains unsupported 'bar' parameter (and 'foo')", errmsg);
+
+    // Retry with no error.
+    config = Element::createMap();
+    config->set(controller_->getAppName(), Element::create(1));
+    EXPECT_NO_THROW(errmsg = controller_->handleOtherObjects(config));
+    EXPECT_TRUE(errmsg.empty());
+}
+
 // Tests that registered signals are caught and handled.
 TEST_F(DStubControllerTest, ioSignals) {
     // Tell test controller just to record the signals, don't call the
@@ -354,8 +396,6 @@ TEST_F(DStubControllerTest, alternateParsing) {
     ASSERT_EQ(1, signals.size());
     EXPECT_EQ(SIGHUP, signals[0]);
 }
-
-
 
 // Tests that the original configuration is replaced after a SIGHUP triggered
 // reconfiguration succeeds.

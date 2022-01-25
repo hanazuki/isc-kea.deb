@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,11 +15,13 @@
 #include <dhcp/option6_iaaddr.h>
 #include <dhcp/option6_status_code.h>
 #include <dhcp/pkt6.h>
+#include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/pool.h>
 #include <dhcp6/tests/dhcp6_client.h>
 #include <util/buffer.h>
+#include <util/multi_threading_mgr.h>
 #include <boost/foreach.hpp>
 #include <boost/pointer_cast.hpp>
 #include <algorithm>
@@ -30,6 +32,7 @@
 using namespace isc::asiolink;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
+using namespace isc::util;
 
 namespace {
 
@@ -103,6 +106,7 @@ Dhcp6Client::Dhcp6Client() :
     duid_(generateDUID(DUID::DUID_LLT)),
     link_local_("fe80::3a60:77ff:fed5:cdef"),
     iface_name_("eth0"),
+    iface_index_(ETH0_INDEX),
     srv_(boost::shared_ptr<NakedDhcpv6Srv>(new NakedDhcpv6Srv(0))),
     use_relay_(false),
     use_oro_(false),
@@ -121,6 +125,7 @@ Dhcp6Client::Dhcp6Client(boost::shared_ptr<NakedDhcpv6Srv>& srv) :
     duid_(generateDUID(DUID::DUID_LLT)),
     link_local_("fe80::3a60:77ff:fed5:cdef"),
     iface_name_("eth0"),
+    iface_index_(ETH0_INDEX),
     srv_(srv),
     use_relay_(false),
     use_oro_(false),
@@ -524,10 +529,10 @@ Dhcp6Client::doRenew() {
     // RFC 8415.
     appendRequestedIAs(query);
 
+    context_.query_ = query;
+
     // Add Client FQDN if configured.
     appendFQDN();
-
-    context_.query_ = query;
 
     sendMsg(context_.query_);
     context_.response_ = receiveOneMsg();
@@ -614,7 +619,6 @@ Dhcp6Client::doRelease() {
         applyRcvdConfiguration(context_.response_);
     }
 }
-
 
 void
 Dhcp6Client::generateIAFromLeases(const Pkt6Ptr& query,
@@ -775,8 +779,7 @@ Dhcp6Client::hasLeaseForAddressRange(const asiolink::IOAddress& first,
 }
 
 bool
-Dhcp6Client::
-hasLeaseWithZeroLifetimeForAddress(const asiolink::IOAddress& address) const {
+Dhcp6Client::hasLeaseWithZeroLifetimeForAddress(const asiolink::IOAddress& address) const {
     std::vector<Lease6> leases = getLeasesByAddress(address);
     BOOST_FOREACH(const Lease6& lease, leases) {
         if ((lease.preferred_lft_ == 0) && (lease.valid_lft_ == 0)) {
@@ -916,13 +919,7 @@ Dhcp6Client::modifyDUID() {
 
 Pkt6Ptr
 Dhcp6Client::receiveOneMsg() {
-    // Return empty pointer if server hasn't responded.
-    if (srv_->fake_sent_.empty()) {
-        return (Pkt6Ptr());
-    }
-    Pkt6Ptr msg = srv_->fake_sent_.front();
-    srv_->fake_sent_.pop_front();
-    return (msg);
+    return (srv_->receiveOneMsg());
 }
 
 void
@@ -970,6 +967,7 @@ Dhcp6Client::sendMsg(const Pkt6Ptr& msg) {
     msg_copy->setRemoteAddr(link_local_);
     msg_copy->setLocalAddr(dest_addr_);
     msg_copy->setIface(iface_name_);
+    msg_copy->setIndex(iface_index_);
 
     // Copy classes
     const ClientClasses& classes = msg->getClasses();
@@ -987,6 +985,9 @@ Dhcp6Client::sendMsg(const Pkt6Ptr& msg) {
     } catch (...) {
         // Suppress errors, as the DHCPv6 server does.
     }
+
+    // Make sure the server processed all packets in MT.
+    isc::util::MultiThreadingMgr::instance().getThreadPool().wait(3);
 }
 
 void

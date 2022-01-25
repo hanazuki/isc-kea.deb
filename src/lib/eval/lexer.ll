@@ -1,4 +1,4 @@
-/* Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -219,6 +219,13 @@ addr6 [0-9a-fA-F]*\:[0-9a-fA-F]*\:[0-9a-fA-F:.]*
 "concat"       return isc::eval::EvalParser::make_CONCAT(loc);
 "ifelse"       return isc::eval::EvalParser::make_IFELSE(loc);
 "hexstring"    return isc::eval::EvalParser::make_TOHEXSTRING(loc);
+"addrtotext"   return isc::eval::EvalParser::make_ADDRTOTEXT(loc);
+"int8totext"   return isc::eval::EvalParser::make_INT8TOTEXT(loc);
+"int16totext"  return isc::eval::EvalParser::make_INT16TOTEXT(loc);
+"int32totext"  return isc::eval::EvalParser::make_INT32TOTEXT(loc);
+"uint8totext"  return isc::eval::EvalParser::make_UINT8TOTEXT(loc);
+"uint16totext" return isc::eval::EvalParser::make_UINT16TOTEXT(loc);
+"uint32totext" return isc::eval::EvalParser::make_UINT32TOTEXT(loc);
 "not"          return isc::eval::EvalParser::make_NOT(loc);
 "and"          return isc::eval::EvalParser::make_AND(loc);
 "or"           return isc::eval::EvalParser::make_OR(loc);
@@ -230,6 +237,7 @@ addr6 [0-9a-fA-F]*\:[0-9a-fA-F]*\:[0-9a-fA-F:.]*
 "]"            return isc::eval::EvalParser::make_RBRACKET(loc);
 ","            return isc::eval::EvalParser::make_COMA(loc);
 "*"            return isc::eval::EvalParser::make_ANY(loc);
+"+"            return isc::eval::EvalParser::make_PLUS(loc);
 .          driver.error (loc, "Invalid character: " + std::string(evaltext));
 <<EOF>>    return isc::eval::EvalParser::make_END(loc);
 %%

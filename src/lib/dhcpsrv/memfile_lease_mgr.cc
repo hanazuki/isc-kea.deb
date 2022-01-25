@@ -1,10 +1,11 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <database/database_connection.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/dhcpsrv_exceptions.h>
@@ -15,8 +16,6 @@
 #include <exceptions/exceptions.h>
 #include <util/multi_threading_mgr.h>
 #include <util/pid_file.h>
-#include <util/process_spawn.h>
-#include <util/signal_set.h>
 #include <cstdio>
 #include <cstring>
 #include <errno.h>
@@ -106,7 +105,7 @@ private:
 
     /// @brief A pointer to the @c ProcessSpawn object used to execute
     /// the LFC.
-    boost::scoped_ptr<util::ProcessSpawn> process_;
+    boost::scoped_ptr<ProcessSpawn> process_;
 
     /// @brief A pointer to the callback function executed by the timer.
     asiolink::IntervalTimer::Callback callback_;
@@ -174,7 +173,7 @@ LFCSetup::setup(const uint32_t lfc_interval,
                                            lease_file6->getFilename();
 
     // Create the other names by appending suffixes to the base name.
-    util::ProcessArgs args;
+    ProcessArgs args;
     // Universe: v4 or v6.
     args.push_back(lease_file4 ? "-4" : "-6");
 
@@ -204,7 +203,7 @@ LFCSetup::setup(const uint32_t lfc_interval,
     args.push_back("ignored-path");
 
     // Create the process (do not start it yet).
-    process_.reset(new util::ProcessSpawn(executable, args));
+    process_.reset(new ProcessSpawn(LeaseMgr::getIOService(), executable, args));
 
     // If we've been told to run it once now, invoke the callback directly.
     if (run_once_now) {
@@ -630,7 +629,7 @@ const int Memfile_LeaseMgr::MAJOR_VERSION;
 const int Memfile_LeaseMgr::MINOR_VERSION;
 
 Memfile_LeaseMgr::Memfile_LeaseMgr(const DatabaseConnection::ParameterMap& parameters)
-    : LeaseMgr(), lfc_setup_(), conn_(parameters), mutex_() {
+    : LeaseMgr(), lfc_setup_(), conn_(parameters), mutex_(new std::mutex) {
     bool conversion_needed = false;
 
     // Check the universe and use v4 file or v6 file.
@@ -666,8 +665,6 @@ Memfile_LeaseMgr::Memfile_LeaseMgr(const DatabaseConnection::ParameterMap& param
         }
         lfcSetup(conversion_needed);
     }
-
-    mutex_.reset(new std::mutex);
 }
 
 Memfile_LeaseMgr::~Memfile_LeaseMgr() {
@@ -704,6 +701,11 @@ Memfile_LeaseMgr::addLeaseInternal(const Lease4Ptr& lease) {
     }
 
     storage4_.insert(lease);
+
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
+
     return (true);
 }
 
@@ -735,6 +737,11 @@ Memfile_LeaseMgr::addLeaseInternal(const Lease6Ptr& lease) {
     }
 
     storage6_.insert(lease);
+
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
+
     return (true);
 }
 
@@ -870,44 +877,6 @@ Memfile_LeaseMgr::getLease4(const ClientId& client_id) const {
     }
 
     return (collection);
-}
-
-Lease4Ptr
-Memfile_LeaseMgr::getLease4Internal(const ClientId& client_id,
-                                    const HWAddr& hwaddr,
-                                    SubnetID subnet_id) const {
-    // Get the index by client id, HW address and subnet id.
-    const Lease4StorageClientIdHWAddressSubnetIdIndex& idx =
-        storage4_.get<ClientIdHWAddressSubnetIdIndexTag>();
-    // Try to get the lease using client id, hardware address and subnet id.
-    Lease4StorageClientIdHWAddressSubnetIdIndex::const_iterator lease =
-        idx.find(boost::make_tuple(client_id.getClientId(), hwaddr.hwaddr_,
-                                   subnet_id));
-
-    if (lease == idx.end()) {
-        // Lease was not found. Return empty pointer to the caller.
-        return (Lease4Ptr());
-    }
-
-    // Lease was found. Return it to the caller.
-    return (*lease);
-}
-
-Lease4Ptr
-Memfile_LeaseMgr::getLease4(const ClientId& client_id,
-                            const HWAddr& hwaddr,
-                            SubnetID subnet_id) const {
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MEMFILE_GET_CLIENTID_HWADDR_SUBID).arg(client_id.toText())
-                                                        .arg(hwaddr.toText())
-                                                        .arg(subnet_id);
-
-    if (MultiThreadingMgr::instance().getMode()) {
-        std::lock_guard<std::mutex> lock(*mutex_);
-        return (getLease4Internal(client_id, hwaddr, subnet_id));
-    } else {
-        return (getLease4Internal(client_id, hwaddr, subnet_id));
-    }
 }
 
 Lease4Ptr
@@ -1409,19 +1378,30 @@ Memfile_LeaseMgr::updateLease4Internal(const Lease4Ptr& lease) {
     // Obtain 'by address' index.
     Lease4StorageAddressIndex& index = storage4_.get<AddressIndexTag>();
 
+    bool persist = persistLeases(V4);
+
     // Lease must exist if it is to be updated.
     Lease4StorageAddressIndex::const_iterator lease_it = index.find(lease->addr_);
     if (lease_it == index.end()) {
         isc_throw(NoSuchLease, "failed to update the lease with address "
                   << lease->addr_ << " - no such lease");
+    } else if ((!persist) && (((*lease_it)->cltt_ != lease->current_cltt_) ||
+        ((*lease_it)->valid_lft_ != lease->current_valid_lft_))) {
+        // For test purpose only: check that the lease has not changed in
+        // the database.
+        isc_throw(NoSuchLease, "failed to update the lease with address "
+                  << lease->addr_ << " - lease has changed in database");
     }
 
     // Try to write a lease to disk first. If this fails, the lease will
     // not be inserted to the memory and the disk and in-memory data will
     // remain consistent.
-    if (persistLeases(V4)) {
+    if (persist) {
         lease_file4_->append(*lease);
     }
+
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 
     // Use replace() to re-index leases.
     index.replace(lease_it, Lease4Ptr(new Lease4(*lease)));
@@ -1445,19 +1425,30 @@ Memfile_LeaseMgr::updateLease6Internal(const Lease6Ptr& lease) {
     // Obtain 'by address' index.
     Lease6StorageAddressIndex& index = storage6_.get<AddressIndexTag>();
 
+    bool persist = persistLeases(V6);
+
     // Lease must exist if it is to be updated.
     Lease6StorageAddressIndex::const_iterator lease_it = index.find(lease->addr_);
     if (lease_it == index.end()) {
         isc_throw(NoSuchLease, "failed to update the lease with address "
                   << lease->addr_ << " - no such lease");
+    } else if ((!persist) && (((*lease_it)->cltt_ != lease->current_cltt_) ||
+        ((*lease_it)->valid_lft_ != lease->current_valid_lft_))) {
+        // For test purpose only: check that the lease has not changed in
+        // the database.
+        isc_throw(NoSuchLease, "failed to update the lease with address "
+                  << lease->addr_ << " - lease has changed in database");
     }
 
     // Try to write a lease to disk first. If this fails, the lease will
     // not be inserted to the memory and the disk and in-memory data will
     // remain consistent.
-    if (persistLeases(V6)) {
+    if (persist) {
         lease_file6_->append(*lease);
     }
+
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 
     // Use replace() to re-index leases.
     index.replace(lease_it, Lease6Ptr(new Lease6(*lease)));
@@ -1479,10 +1470,6 @@ Memfile_LeaseMgr::updateLease6(const Lease6Ptr& lease) {
 bool
 Memfile_LeaseMgr::deleteLeaseInternal(const Lease4Ptr& lease) {
     const isc::asiolink::IOAddress& addr = lease->addr_;
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MEMFILE_DELETE_ADDR)
-        .arg(addr.toText());
-
     Lease4Storage::iterator l = storage4_.find(addr);
     if (l == storage4_.end()) {
         // No such lease
@@ -1496,6 +1483,13 @@ Memfile_LeaseMgr::deleteLeaseInternal(const Lease4Ptr& lease) {
             // removed.
             lease_copy.valid_lft_ = 0;
             lease_file4_->append(lease_copy);
+        } else {
+            // For test purpose only: check that the lease has not changed in
+            // the database.
+            if (((*l)->cltt_ != lease->current_cltt_) ||
+                ((*l)->valid_lft_ != lease->current_valid_lft_)) {
+                return false;
+            }
         }
         storage4_.erase(l);
         return (true);
@@ -1518,10 +1512,6 @@ Memfile_LeaseMgr::deleteLease(const Lease4Ptr& lease) {
 bool
 Memfile_LeaseMgr::deleteLeaseInternal(const Lease6Ptr& lease) {
     const isc::asiolink::IOAddress& addr = lease->addr_;
-    LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL,
-              DHCPSRV_MEMFILE_DELETE_ADDR)
-        .arg(addr.toText());
-
     Lease6Storage::iterator l = storage6_.find(addr);
     if (l == storage6_.end()) {
         // No such lease
@@ -1535,6 +1525,13 @@ Memfile_LeaseMgr::deleteLeaseInternal(const Lease6Ptr& lease) {
             lease_copy.valid_lft_ = 0;
             lease_copy.preferred_lft_ = 0;
             lease_file6_->append(lease_copy);
+        } else {
+            // For test purpose only: check that the lease has not changed in
+            // the database.
+            if (((*l)->cltt_ != lease->current_cltt_) ||
+                ((*l)->valid_lft_ != lease->current_valid_lft_)) {
+                return false;
+            }
         }
         storage6_.erase(l);
         return (true);
@@ -1785,7 +1782,7 @@ Memfile_LeaseMgr::loadLeasesFromFiles(const std::string& filename,
     uint32_t max_row_errors = 0;
     try {
         max_row_errors = boost::lexical_cast<uint32_t>(max_row_errors_str);
-    } catch (boost::bad_lexical_cast&) {
+    } catch (const boost::bad_lexical_cast&) {
         isc_throw(isc::BadValue, "invalid value of the max-row-errors "
                   << max_row_errors_str << " specified");
     }
@@ -1846,9 +1843,10 @@ Memfile_LeaseMgr::lfcCallback() {
 
     // Check if we're in the v4 or v6 space and use the appropriate file.
     if (lease_file4_) {
+        MultiThreadingCriticalSection cs;
         lfcExecute(lease_file4_);
-
     } else if (lease_file6_) {
+        MultiThreadingCriticalSection cs;
         lfcExecute(lease_file6_);
     }
 }
@@ -1865,13 +1863,13 @@ Memfile_LeaseMgr::lfcSetup(bool conversion_needed) {
     uint32_t lfc_interval = 0;
     try {
         lfc_interval = boost::lexical_cast<uint32_t>(lfc_interval_str);
-    } catch (boost::bad_lexical_cast&) {
+    } catch (const boost::bad_lexical_cast&) {
         isc_throw(isc::BadValue, "invalid value of the lfc-interval "
                   << lfc_interval_str << " specified");
     }
 
     if (lfc_interval > 0 || conversion_needed) {
-        lfc_setup_.reset(new LFCSetup(boost::bind(&Memfile_LeaseMgr::lfcCallback, this)));
+        lfc_setup_.reset(new LFCSetup(std::bind(&Memfile_LeaseMgr::lfcCallback, this)));
         lfc_setup_->setup(lfc_interval, lease_file4_, lease_file6_, conversion_needed);
     }
 }

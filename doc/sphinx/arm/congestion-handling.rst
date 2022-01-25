@@ -58,7 +58,7 @@ The default packet queue implementation for both kea-dhcp4 and kea-dhcp6
 is a simple ring buffer. Once it reaches capacity, new packets get added
 to the back of the queue by discarding packets from the front of the
 queue. Rather than always discarding the newest packets, Kea now always
-discards the oldest packets. The capacity of the buffer, i.e the maximum
+discards the oldest packets. The capacity of the buffer, i.e. the maximum
 number of packets the buffer can contain, is configurable. A reasonable
 starting point would be to match the capacity to the number of leases
 per second a specific installation of Kea can handle. Please note that this
@@ -66,12 +66,12 @@ figure varies widely depending on the specifics of an individual deployment.
 
 As there is no one algorithm that will best handle the dynamics of all
 sites, and because over time new approaches will evolve, the packet
-queue is implemented as a plug-in, which can replaced by a custom queue
+queue is implemented as a plug-in, which can be replaced by a custom queue
 implementation via a hook library. This should make it straightforward
 for interested parties to experiment with their own solutions.
 (Developers can refer to isc::dhcp::PacketQueue and
 isc::dhcp::PacketQueueMgr, described in the
-`Kea Developer's Guide <https://jenkins.isc.org/job/Kea_doc/doxygen/index.html>`__.)
+`Kea Developer's Guide <https://reports.kea.isc.org/dev_guide/index.html>`__.)
 
 Packet queue behavior is configured in both kea-dhcp4 and kea-dhcp6
 servers through an optional, top-level, configuration element,
@@ -101,7 +101,7 @@ where:
 
 -  ``capacity`` = n [packets] - this is the maximum number of packets the
    queue can hold before packets are discarded. The optimal value for
-   this is extremely site-dependent. The default value is 500 for both
+   this is extremely site-dependent. The default value is 64 for both
    kea-ring4 and kea-ring6.
 
 The following example enables the default packet queue for kea-dhcp4,
@@ -135,3 +135,8 @@ with a queue capacity of 300 packets:
        },
        ...
    }
+
+.. note:
+
+   Currently the congestion handling is incompatible with multi-threading:
+   when both are enabled the congestion handling is silently disabled.

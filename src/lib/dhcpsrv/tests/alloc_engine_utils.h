@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -46,6 +46,17 @@ namespace test {
 bool testStatistics(const std::string& stat_name, const int64_t exp_value,
                     const SubnetID subnet_id = SUBNET_ID_UNUSED);
 
+/// @brief Get a value held by statistic manager.
+///
+/// This function may be used in some allocation tests and there's no
+/// single base class for it. @todo consider moving it src/lib/util.
+///
+/// @param stat_name Statistic name.
+/// @param subnet_id subnet_id of the desired subnet, if not zero.
+/// @return the value held by the statistic manager or zero.
+int64_t getStatistics(const std::string& stat_name,
+                      const SubnetID subnet_id = SUBNET_ID_UNUSED);
+
 /// @brief Allocation engine with some internal methods exposed
 class NakedAllocEngine : public AllocEngine {
 public:
@@ -63,6 +74,7 @@ public:
     using AllocEngine::Allocator;
     using AllocEngine::IterativeAllocator;
     using AllocEngine::getAllocator;
+    using AllocEngine::updateLease4ExtendedInfo;
 
     /// @brief IterativeAllocator with internal methods exposed
     class NakedIterativeAllocator: public AllocEngine::IterativeAllocator {
@@ -77,6 +89,25 @@ public:
         using AllocEngine::IterativeAllocator::increaseAddress;
         using AllocEngine::IterativeAllocator::increasePrefix;
     };
+
+    /// @brief Wrapper method for invoking AllocEngine4::updateLease4ExtendedInfo().
+    /// @param lease lease to update
+    /// @param ctx current packet processing context
+    /// @return true if extended information was changed
+    bool callUpdateLease4ExtendedInfo(const Lease4Ptr& lease,
+                                      AllocEngine::ClientContext4& ctx) const {
+        return (updateLease4ExtendedInfo(lease, ctx));
+    }
+
+    /// @brief Wrapper method for invoking AllocEngine6::updateLease6ExtendedInfo().
+    /// @param lease lease to update
+    /// @param ctx current packet processing context
+    /// @return true if extended information was changed
+    bool callUpdateLease6ExtendedInfo(const Lease6Ptr& lease,
+                                      AllocEngine::ClientContext6& ctx) const {
+        return (updateLease6ExtendedInfo(lease, ctx));
+    }
+
 };
 
 /// @brief Used in Allocation Engine tests for IPv6
@@ -211,6 +242,7 @@ public:
         EXPECT_EQ(fqdn_rev_, lease->fqdn_rev_);
         EXPECT_EQ(hostname_, lease->hostname_);
         EXPECT_TRUE(*lease->duid_ == *duid);
+        EXPECT_EQ(0, lease->reuseable_valid_lft_);
         /// @todo: check cltt
     }
 
@@ -384,7 +416,7 @@ public:
     /// can succeed. The invalid hint should be ignored completely.
     ///
     /// @param type Lease type
-    /// @param hint hint (as send by a client)
+    /// @param hint hint (as sent by a client)
     /// @param expected_pd_len (used in validation)
     void allocBogusHint6(Lease::Type type, asiolink::IOAddress hint,
                          uint8_t expected_pd_len);
@@ -530,6 +562,7 @@ public:
             EXPECT_TRUE(*lease->client_id_ == *clientid_);
         }
         EXPECT_TRUE(*lease->hwaddr_ == *hwaddr_);
+        EXPECT_EQ(0, lease->reuseable_valid_lft_);
         /// @todo: check cltt
     }
 
@@ -591,8 +624,8 @@ public:
                                      ///< allocation engine functions.
 };
 
-}; // namespace test
-}; // namespace dhcp
-}; // namespace isc
+} // namespace test
+} // namespace dhcp
+} // namespace isc
 
 #endif

@@ -79,6 +79,10 @@ This is most likely due to the installation of a new version of Kea
 without rebuilding the hook library.  A rebuild and re-install of the
 library should fix the problem in most cases.
 
+% HOOKS_LIBRARY_CLOSED hooks library %1 successfully closed
+This information message is issued when a user-supplied hooks library
+has been successfully closed.
+
 % HOOKS_LIBRARY_LOADED hooks library %1 successfully loaded
 This information message is issued when a user-supplied hooks library
 has been successfully loaded.

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -84,7 +84,7 @@ HookedCommandMgr::handleCommand(const std::string& cmd_name,
     }
 
     // If we're here it means that the callouts weren't called. We need
-    // to handle the command using local Command Mananger.
+    // to handle the command using local Command Manager.
     ConstElementPtr response = BaseCommandMgr::handleCommand(cmd_name,
                                                              params,
                                                              original_cmd);

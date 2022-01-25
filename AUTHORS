@@ -2,29 +2,38 @@
 ------------------------------
 
 Primary developers:
- - Tomek Mrugalski (lead developer: DHCPv4, DHCPv6 components, prefix
-                    delegation, memfile, database interface, core libdhcp++,
+ - Tomek Mrugalski (DHCPv4, DHCPv6 components, prefix delegation,
+                    memfile, database interface, core libdhcp++,
                     host reservation, MAC extraction in DHCPv6,
                     statistics manager, kea-shell, netconf, flex/bison
                     parsers, flex-id, documentation)
- - Stephen Morris (Hooks, MySQL)
  - Marcin Siodelski (DHCPv4, DHCPv6 components, options handling, perfdhcp,
                      host reservation, lease file cleanup, lease expiration,
                      control agent, shared networks, high availability,
                      config backend)
  - Thomas Markwalder (DDNS, user_chk, global host reservations, stat commands,
-                     congestion handling, config backend)
- - Jeremy C. Reed (documentation, build system, testing, release engineering)
+                      congestion handling, config backend, multi-threading mode
+                      of high availability, forensic logging, leasequery)
  - Wlodek Wencel (testing, release engineering)
  - Francis Dupont (crypto, flex/bison parsers, perfdhcp, control agent,
-                   radius, netconf, config backend)
- - Brian Reid     (logo design)
+                   radius, netconf, config backend, multi-threading)
+ - Razvan Becheriu (cassandra, netconf, multi-threading, forensic logging,
+                    run script hook, multi-threading mode of high availability)
+ - Vicky Risk (documentation)
+ - Suzanne Goldlust (documentation)
+ - Andrei Pavel (build system, documentation, hammer, netconf, perfdhcp,
+                 release engineering, shell scripts, testing)
+ - Peter Davies (documentation)
+ - Slawek Figiel (documentation)
+
+Former developers who are no longer active:
+ - Stephen Morris (Hooks, MySQL)
+ - Jeremy C. Reed (documentation, build system, testing, release engineering)
+ - Brian Reid (logo design)
  - Shawn Routhier (lease file cleanup)
  - Michal Nowikowski (testing, hammer, release engineering)
- - Razvan Becheriu (cassandra, sysrepo)
- - Suzanne Goldlust (documentation)
 
-Primary area of work mentioned in parentheses. The list is in a roughly
+Main area of work mentioned in parentheses. The lists are in a roughly
 chronological order.
 
 Kea uses parts of the code of the now-defunct BIND 10 project. The following
@@ -154,6 +163,7 @@ We have received the following contributions:
    2018-02: Support for Google benchmark added (github 36)
    2018-02: exit-wait-time param added to perfdhcp (github 55)
    2018-07: Sysrepo detection improvements
+   2020-05: Fix exit-wait-time in perfdhcp
 
  - Vincent Legout
    2016-11: Fixed serveral spelling mistakes
@@ -208,3 +218,17 @@ We have received the following contributions:
 
  - Niclas Rosenvik
    2020-01: Fix in the gtest detection scripts.
+
+ - Carsten Strotman
+   2020-11: Several Kea ARM corrections.
+
+ - Khem Raj
+   2021-05: gcc11 compilation fixes.
+
+ - Sriram Rajagopalan
+   2021-08: fix for a type mismatch in libdhcp which could have lead to an
+            an interface with index of MAX_UINT32_T to be set in a Pkt when the
+            index was meant to be reset instead
+
+ - Brad Smith
+   2021-08: compilation fix for upcoming boost 1.77

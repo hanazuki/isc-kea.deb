@@ -1,5 +1,5 @@
 ..
-   Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+   Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,7 +15,7 @@ kea-dhcp6 - DHCPv6 server in Kea
 Synopsis
 ~~~~~~~~
 
-:program:`kea-dhcp6` [**-v**] [**-V**] [**-W**] [**-d**] [**-c** config-file] [**-t** config-file] [**-p** server-port-number]
+:program:`kea-dhcp6` [**-v**] [**-V**] [**-W**] [**-d**] [**-c** config-file] [**-t** config-file] [**-p** server-port-number] [**-P** client-port-number]
 
 Description
 ~~~~~~~~~~~
@@ -53,6 +53,10 @@ The arguments are as follows:
    Specifies the server port number (1-65535) on which the server listens. This is
    useful for testing purposes only.
 
+``-P client-port-number``
+   Specifies the client port number (1-65535) to which the server responds. This is
+   useful for testing purposes only.
+
 Documentation
 ~~~~~~~~~~~~~
 
@@ -63,10 +67,10 @@ Kea Messages Manual, which lists all possible messages Kea can print
 with a brief description for each of them. Both documents are
 available in various formats (.txt, .html, .pdf) with the Kea
 distribution. The Kea documentation is available at
-https://kb.isc.org/docs/kea-administrator-reference-manual .
+https://kea.readthedocs.io.
 
 Kea source code is documented in the Kea Developer's Guide. Its online
-version is available at https://jenkins.isc.org/job/Kea_doc/doxygen/.
+version is available at https://reports.kea.isc.org/dev_guide/.
 
 The Kea project website is available at https://kea.isc.org.
 

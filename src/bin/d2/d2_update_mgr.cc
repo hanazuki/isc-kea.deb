@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,8 @@
 #include <d2/d2_update_mgr.h>
 #include <d2/nc_add.h>
 #include <d2/nc_remove.h>
+#include <d2/simple_add.h>
+#include <d2/simple_remove.h>
 
 #include <sstream>
 #include <iostream>
@@ -76,7 +78,7 @@ D2UpdateMgr::checkFinishedTransactions() {
     // to expand as DHCP_DDNS matures.
     // NOTE: One must use postfix increments of the iterator on the calls
     // to erase.  This replaces the old iterator which becomes invalid by the
-    // erase with a the next valid iterator.  Prefix incrementing will not
+    // erase with the next valid iterator.  Prefix incrementing will not
     // work.
     TransactionList::iterator it = transaction_list_.begin();
     while (it != transaction_list_.end()) {
@@ -197,13 +199,25 @@ D2UpdateMgr::makeTransaction(dhcp_ddns::NameChangeRequestPtr& next_ncr) {
     // the transaction's IO.
     NameChangeTransactionPtr trans;
     if (next_ncr->getChangeType() == dhcp_ddns::CHG_ADD) {
-        trans.reset(new NameAddTransaction(io_service_, next_ncr,
-                                           forward_domain, reverse_domain,
-                                           cfg_mgr_));
+        if (next_ncr->useConflictResolution()) {
+            trans.reset(new NameAddTransaction(io_service_, next_ncr,
+                                               forward_domain, reverse_domain,
+                                               cfg_mgr_));
+        } else {
+            trans.reset(new SimpleAddTransaction(io_service_, next_ncr,
+                                                 forward_domain, reverse_domain,
+                                                 cfg_mgr_));
+        }
     } else {
-        trans.reset(new NameRemoveTransaction(io_service_, next_ncr,
-                                              forward_domain, reverse_domain,
-                                              cfg_mgr_));
+        if (next_ncr->useConflictResolution()) {
+            trans.reset(new NameRemoveTransaction(io_service_, next_ncr,
+                                                  forward_domain, reverse_domain,
+                                                  cfg_mgr_));
+        } else {
+            trans.reset(new SimpleRemoveTransaction(io_service_, next_ncr,
+                                                    forward_domain, reverse_domain,
+                                                    cfg_mgr_));
+        }
     }
 
     // Add the new transaction to the list.

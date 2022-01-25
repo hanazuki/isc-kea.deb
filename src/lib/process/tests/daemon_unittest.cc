@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -270,58 +270,6 @@ TEST_F(DaemonTest, PIDFileCleanup) {
     EXPECT_EQ(errno, ENOENT);
 }
 
-// Check that relocateLogging method is behaving properly with no Logging.
-TEST_F(DaemonTest, relocateLoggingNoLogging) {
-    std::string config_txt = "{ \"myServer\": { } }";
-    ConstElementPtr config = Element::fromJSON(config_txt);
-    ConstElementPtr expected = Element::fromJSON(config_txt);
-    Daemon x;
-    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
-    EXPECT_TRUE(expected->equals(*config));
-}
-
-// Check that relocateLogging method is behaving properly with empty Logging.
-TEST_F(DaemonTest, relocateLoggingEmptyLogging) {
-    std::string config_txt =
-        "{ \"myServer\": { },\n"
-        "  \"Logging\": { } }";
-    ConstElementPtr config = Element::fromJSON(config_txt);
-    std::string expected_txt = "{ \"myServer\": { } }";
-    ConstElementPtr expected = Element::fromJSON(expected_txt);
-    Daemon x;
-    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
-    EXPECT_TRUE(expected->equals(*config));
-}
-
-// Check that relocateLogging method is behaving properly.
-TEST_F(DaemonTest, relocateLogging) {
-    std::string config_txt =
-        "{ \"myServer\": { },\n"
-        "  \"Logging\": {\n"
-        "    \"loggers\": [ ] } }";
-    ConstElementPtr config = Element::fromJSON(config_txt);
-    std::string expected_txt =
-        "{ \"myServer\": {\n"
-        "  \"loggers\": [ ] } }";
-    ConstElementPtr expected = Element::fromJSON(expected_txt);
-    Daemon x;
-    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
-    EXPECT_TRUE(expected->equals(*config));
-}
-
-// Check that relocateLogging method is behaving properly with extra objects.
-TEST_F(DaemonTest, relocateLoggingExtraObjects) {
-    std::string config_txt =
-        "{ \"myServer\": { },\n"
-        "  \"Foobar\": { } }";
-    ConstElementPtr config = Element::fromJSON(config_txt);
-    std::string expected_txt = "{ \"myServer\": { } }";
-    ConstElementPtr expected = Element::fromJSON(expected_txt);
-    Daemon x;
-    EXPECT_NO_THROW(x.relocateLogging(config, "myServer"));
-    EXPECT_TRUE(expected->equals(*config));
-}
-
 // Checks that configureLogger method is behaving properly.
 // More dedicated tests are available for LogConfigParser class.
 // See logger_unittest.cc
@@ -362,6 +310,13 @@ TEST_F(DaemonTest, parsingConsoleOutput) {
     EXPECT_EQ("stdout" , storage->getLoggingInfo()[0].destinations_[0].output_);
 }
 
+TEST_F(DaemonTest, exitValue) {
+    DaemonImpl instance;
+
+    EXPECT_EQ(EXIT_SUCCESS, instance.getExitValue());
+    instance.setExitValue(77);
+    EXPECT_EQ(77, instance.getExitValue());
+}
 
 
 // More tests will appear here as we develop Daemon class.

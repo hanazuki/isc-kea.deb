@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <cc/data.h>
 #include <dhcpsrv/parsers/simple_parser6.h>
+
 #include <boost/foreach.hpp>
 
 using namespace isc::data;
@@ -35,54 +36,68 @@ namespace dhcp {
 /// list and map types for entries.
 /// Order follows global_param rule in bison grammar.
 const SimpleKeywords SimpleParser6::GLOBAL6_PARAMETERS = {
-    { "data-directory",               Element::string },
-    { "preferred-lifetime",           Element::integer },
-    { "min-preferred-lifetime",       Element::integer },
-    { "max-preferred-lifetime",       Element::integer },
-    { "valid-lifetime",               Element::integer },
-    { "min-valid-lifetime",           Element::integer },
-    { "max-valid-lifetime",           Element::integer },
-    { "renew-timer",                  Element::integer },
-    { "rebind-timer",                 Element::integer },
-    { "decline-probation-period",     Element::integer },
-    { "subnet6",                      Element::list },
-    { "shared-networks",              Element::list },
-    { "interfaces-config",            Element::map },
-    { "lease-database",               Element::map },
-    { "hosts-database",               Element::map },
-    { "hosts-databases",              Element::list },
-    { "mac-sources",                  Element::list },
-    { "relay-supplied-options",       Element::list },
-    { "host-reservation-identifiers", Element::list },
-    { "client-classes",               Element::list },
-    { "option-def",                   Element::list },
-    { "option-data",                  Element::list },
-    { "hooks-libraries",              Element::list },
-    { "expired-leases-processing",    Element::map },
-    { "server-id",                    Element::map },
-    { "dhcp4o6-port",                 Element::integer },
-    { "control-socket",               Element::map },
-    { "dhcp-queue-control",           Element::map },
-    { "dhcp-ddns",                    Element::map },
-    { "user-context",                 Element::map },
-    { "comment",                      Element::string },
-    { "sanity-checks",                Element::map },
-    { "reservations",                 Element::list },
-    { "config-control",               Element::map },
-    { "server-tag",                   Element::string },
-    { "reservation-mode",             Element::string },
-    { "calculate-tee-times",          Element::boolean },
-    { "t1-percent",                   Element::real },
-    { "t2-percent",                   Element::real },
-    { "loggers",                      Element::list },
-    { "hostname-char-set",            Element::string },
-    { "hostname-char-replacement",    Element::string },
-    { "ddns-send-updates",            Element::boolean },
-    { "ddns-override-no-update",      Element::boolean },
-    { "ddns-override-client-update",  Element::boolean },
-    { "ddns-replace-client-name",     Element::string },
-    { "ddns-generated-prefix",        Element::string },
-    { "ddns-qualifying-suffix",       Element::string }
+    { "data-directory",                 Element::string },
+    { "preferred-lifetime",             Element::integer },
+    { "min-preferred-lifetime",         Element::integer },
+    { "max-preferred-lifetime",         Element::integer },
+    { "valid-lifetime",                 Element::integer },
+    { "min-valid-lifetime",             Element::integer },
+    { "max-valid-lifetime",             Element::integer },
+    { "renew-timer",                    Element::integer },
+    { "rebind-timer",                   Element::integer },
+    { "decline-probation-period",       Element::integer },
+    { "subnet6",                        Element::list },
+    { "shared-networks",                Element::list },
+    { "interfaces-config",              Element::map },
+    { "lease-database",                 Element::map },
+    { "hosts-database",                 Element::map },
+    { "hosts-databases",                Element::list },
+    { "mac-sources",                    Element::list },
+    { "relay-supplied-options",         Element::list },
+    { "host-reservation-identifiers",   Element::list },
+    { "client-classes",                 Element::list },
+    { "option-def",                     Element::list },
+    { "option-data",                    Element::list },
+    { "hooks-libraries",                Element::list },
+    { "expired-leases-processing",      Element::map },
+    { "server-id",                      Element::map },
+    { "dhcp4o6-port",                   Element::integer },
+    { "control-socket",                 Element::map },
+    { "dhcp-queue-control",             Element::map },
+    { "dhcp-ddns",                      Element::map },
+    { "user-context",                   Element::map },
+    { "comment",                        Element::string },
+    { "sanity-checks",                  Element::map },
+    { "reservations",                   Element::list },
+    { "config-control",                 Element::map },
+    { "server-tag",                     Element::string },
+    { "reservation-mode",               Element::string },
+    { "reservations-global",            Element::boolean },
+    { "reservations-in-subnet",         Element::boolean },
+    { "reservations-out-of-pool",       Element::boolean },
+    { "calculate-tee-times",            Element::boolean },
+    { "t1-percent",                     Element::real },
+    { "t2-percent",                     Element::real },
+    { "loggers",                        Element::list },
+    { "hostname-char-set",              Element::string },
+    { "hostname-char-replacement",      Element::string },
+    { "ddns-send-updates",              Element::boolean },
+    { "ddns-override-no-update",        Element::boolean },
+    { "ddns-override-client-update",    Element::boolean },
+    { "ddns-replace-client-name",       Element::string },
+    { "ddns-generated-prefix",          Element::string },
+    { "ddns-qualifying-suffix",         Element::string },
+    { "store-extended-info",            Element::boolean },
+    { "statistic-default-sample-count", Element::integer },
+    { "statistic-default-sample-age",   Element::integer },
+    { "multi-threading",                Element::map },
+    { "cache-threshold",                Element::real },
+    { "cache-max-age",                  Element::integer },
+    { "ip-reservations-unique",         Element::boolean },
+    { "ddns-update-on-renew",           Element::boolean },
+    { "ddns-use-conflict-resolution",   Element::boolean },
+    { "compatibility",                  Element::map },
+    { "parked-packet-limit",            Element::integer },
 };
 
 /// @brief This table defines default global values for DHCPv6
@@ -96,7 +111,9 @@ const SimpleDefaults SimpleParser6::GLOBAL6_DEFAULTS = {
     { "decline-probation-period",       Element::integer, "86400" }, // 24h
     { "dhcp4o6-port",                   Element::integer, "0" },
     { "server-tag",                     Element::string,  "" },
-    { "reservation-mode",               Element::string,  "all" },
+    { "reservations-global",            Element::boolean, "false" },
+    { "reservations-in-subnet",         Element::boolean, "true" },
+    { "reservations-out-of-pool",       Element::boolean, "false" },
     { "calculate-tee-times",            Element::boolean, "true" },
     { "t1-percent",                     Element::real,    ".50" },
     { "t2-percent",                     Element::real,    ".80" },
@@ -105,9 +122,16 @@ const SimpleDefaults SimpleParser6::GLOBAL6_DEFAULTS = {
     { "ddns-override-client-update",    Element::boolean, "false" },
     { "ddns-replace-client-name",       Element::string,  "never" },
     { "ddns-generated-prefix",          Element::string,  "myhost" },
-    { "ddns-qualifying-suffix",         Element::string,   "" },
-    { "hostname-char-set",              Element::string, "[^A-Za-z0-9.-]" },
-    { "hostname-char-replacement",      Element::string, "" }
+    { "ddns-qualifying-suffix",         Element::string,  "" },
+    { "hostname-char-set",              Element::string,  "[^A-Za-z0-9.-]" },
+    { "hostname-char-replacement",      Element::string,  "" },
+    { "store-extended-info",            Element::boolean, "false" },
+    { "statistic-default-sample-count", Element::integer, "20" },
+    { "statistic-default-sample-age",   Element::integer, "0" },
+    { "ip-reservations-unique",         Element::boolean, "true" },
+    { "ddns-update-on-renew",           Element::boolean, "false" },
+    { "ddns-use-conflict-resolution",   Element::boolean, "true" },
+    { "parked-packet-limit",            Element::integer, "256" }
 };
 
 /// @brief This table defines all option definition parameters.
@@ -134,7 +158,7 @@ const SimpleKeywords SimpleParser6::OPTION6_DEF_PARAMETERS = {
 /// definitions. This array lists default values for those option definitions.
 const SimpleDefaults SimpleParser6::OPTION6_DEF_DEFAULTS = {
     { "record-types", Element::string,  ""},
-    { "space",        Element::string,  "dhcp6"},
+    { "space",        Element::string,  "dhcp6"}, // DHCP6_OPTION_SPACE
     { "array",        Element::boolean, "false"},
     { "encapsulate",  Element::string,  "" }
 };
@@ -162,7 +186,7 @@ const SimpleKeywords SimpleParser6::OPTION6_PARAMETERS = {
 /// subnet, class or host reservations scopes. This array lists default values
 /// for those option-data declarations.
 const SimpleDefaults SimpleParser6::OPTION6_DEFAULTS = {
-    { "space",        Element::string,  "dhcp6"},
+    { "space",        Element::string,  "dhcp6"}, // DHCP6_OPTION_SPACE
     { "csv-format",   Element::boolean, "true"},
     { "always-send",  Element::boolean, "false"}
 };
@@ -193,6 +217,9 @@ const SimpleKeywords SimpleParser6::SUBNET6_PARAMETERS = {
     { "require-client-classes",         Element::list },
     { "reservations",                   Element::list },
     { "reservation-mode",               Element::string },
+    { "reservations-global",            Element::boolean },
+    { "reservations-in-subnet",         Element::boolean },
+    { "reservations-out-of-pool",       Element::boolean },
     { "relay",                          Element::map },
     { "user-context",                   Element::map },
     { "comment",                        Element::string },
@@ -207,10 +234,20 @@ const SimpleKeywords SimpleParser6::SUBNET6_PARAMETERS = {
     { "ddns-qualifying-suffix",         Element::string },
     { "hostname-char-set",              Element::string },
     { "hostname-char-replacement",      Element::string },
-    { "metadata",                       Element::map }
+    { "store-extended-info",            Element::boolean },
+    { "metadata",                       Element::map },
+    { "cache-threshold",                Element::real },
+    { "cache-max-age",                  Element::integer },
+    { "ddns-update-on-renew",           Element::boolean },
+    { "ddns-use-conflict-resolution",   Element::boolean }
 };
 
 /// @brief This table defines default values for each IPv6 subnet.
+///
+/// Note: When updating this array, please also update SHARED_SUBNET6_DEFAULTS
+/// below. In most cases, those two should be kept in sync, except cases
+/// where a parameter can be derived from shared-networks, but is not
+/// defined on global level.
 const SimpleDefaults SimpleParser6::SUBNET6_DEFAULTS = {
     { "id",               Element::integer, "0" }, // 0 means autogenerate
     { "interface",        Element::string,  "" },
@@ -219,7 +256,11 @@ const SimpleDefaults SimpleParser6::SUBNET6_DEFAULTS = {
     { "interface-id",     Element::string,  "" }
 };
 
-/// @brief This table defines default values for each IPv6 shared network.
+/// @brief This table defines default values for each IPv6 subnet that is
+///        part of a shared network
+///
+/// This is mostly the same as @ref SUBNET6_DEFAULTS, except the parameters
+/// that can be derived from shared-network, but cannot from global scope.
 const SimpleDefaults SimpleParser6::SHARED_NETWORK6_DEFAULTS = {
     { "client-class",     Element::string,  "" },
     { "interface",        Element::string,  "" },
@@ -248,7 +289,10 @@ const ParamsList SimpleParser6::INHERIT_TO_SUBNET6 = {
     "max-valid-lifetime",
     "calculate-tee-times",
     "t1-percent",
-    "t2-percent"
+    "t2-percent",
+    "store-extended-info",
+    "cache-threshold",
+    "cache-max-age"
 };
 
 /// @brief This table defines all pool parameters.
@@ -300,6 +344,9 @@ const SimpleKeywords SimpleParser6::SHARED_NETWORK6_PARAMETERS = {
     { "option-data",                    Element::list },
     { "relay",                          Element::map },
     { "reservation-mode",               Element::string },
+    { "reservations-global",            Element::boolean },
+    { "reservations-in-subnet",         Element::boolean },
+    { "reservations-out-of-pool",       Element::boolean },
     { "client-class",                   Element::string },
     { "require-client-classes",         Element::list },
     { "preferred-lifetime",             Element::integer },
@@ -322,7 +369,12 @@ const SimpleKeywords SimpleParser6::SHARED_NETWORK6_PARAMETERS = {
     { "ddns-qualifying-suffix",         Element::string },
     { "hostname-char-set",              Element::string },
     { "hostname-char-replacement",      Element::string },
-    { "metadata",                       Element::map }
+    { "store-extended-info",            Element::boolean },
+    { "metadata",                       Element::map },
+    { "cache-threshold",                Element::real },
+    { "cache-max-age",                  Element::integer },
+    { "ddns-update-on-renew",           Element::boolean },
+    { "ddns-use-conflict-resolution",   Element::boolean }
 };
 
 /// @brief This table defines default values for each IPv6 subnet.
@@ -335,11 +387,18 @@ const SimpleDefaults SimpleParser6::IFACE6_DEFAULTS = {
     { "re-detect", Element::boolean, "true" }
 };
 
-/// @brief This table defines default values for dhcp-queue-control in DHCPv4.
+/// @brief This table defines default values for dhcp-queue-control in DHCPv6.
 const SimpleDefaults SimpleParser6::DHCP_QUEUE_CONTROL6_DEFAULTS = {
     { "enable-queue",   Element::boolean, "false"},
     { "queue-type",     Element::string,  "kea-ring6"},
-    { "capacity",       Element::integer, "500"}
+    { "capacity",       Element::integer, "64"}
+};
+
+/// @brief This table defines default values for multi-threading in DHCPv6.
+const SimpleDefaults SimpleParser6::DHCP_MULTI_THREADING6_DEFAULTS = {
+    { "enable-multi-threading", Element::boolean, "false" },
+    { "thread-pool-size",       Element::integer, "0" },
+    { "packet-queue-size",      Element::integer, "64" }
 };
 
 /// @brief This defines default values for sanity checking for DHCPv6.
@@ -415,6 +474,18 @@ size_t SimpleParser6::setAllDefaults(ElementPtr global) {
 
     cnt += setDefaults(mutable_cfg, DHCP_QUEUE_CONTROL6_DEFAULTS);
 
+    // Set the defaults for multi-threading.  If the element isn't there
+    // we'll add it.
+    ConstElementPtr multi_threading = global->get("multi-threading");
+    if (multi_threading) {
+        mutable_cfg = boost::const_pointer_cast<Element>(multi_threading);
+    } else {
+        mutable_cfg = Element::createMap();
+        global->set("multi-threading", mutable_cfg);
+    }
+
+    cnt += setDefaults(mutable_cfg, DHCP_MULTI_THREADING6_DEFAULTS);
+
     // Set the defaults for sanity-checks.  If the element isn't
     // there we'll add it.
     ConstElementPtr sanity_checks = global->get("sanity-checks");
@@ -432,6 +503,7 @@ size_t SimpleParser6::setAllDefaults(ElementPtr global) {
 
 size_t SimpleParser6::deriveParameters(ElementPtr global) {
     size_t cnt = 0;
+
     // Now derive global parameters into subnets.
     ConstElementPtr subnets = global->get("subnet6");
     if (subnets) {
@@ -467,5 +539,5 @@ size_t SimpleParser6::deriveParameters(ElementPtr global) {
     return (cnt);
 }
 
-};
-};
+}  // namespace dhcp
+}  // namespace isc

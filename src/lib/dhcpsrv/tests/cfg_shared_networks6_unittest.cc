@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -208,6 +208,7 @@ TEST(CfgSharedNetworks6Test, unparse) {
     network1->setDdnsQualifyingSuffix("example.com.");
     network1->setHostnameCharSet("[^A-Z]");
     network1->setHostnameCharReplacement("x");
+    network1->setCacheThreshold(.20);
 
     network2->setIface("eth1");
     network2->setT1(Triplet<uint32_t>(100));
@@ -215,6 +216,8 @@ TEST(CfgSharedNetworks6Test, unparse) {
     network2->setPreferred(Triplet<uint32_t>(200));
     network2->setValid(Triplet<uint32_t>(300));
     network2->setDdnsSendUpdates(false);
+    network2->setStoreExtendedInfo(true);
+    network2->setCacheMaxAge(80);
 
     network3->setIface("eth2");
     network3->setPreferred(Triplet<uint32_t>(100,200,300));
@@ -250,7 +253,9 @@ TEST(CfgSharedNetworks6Test, unparse) {
         "    \"renew-timer\": 100,\n"
         "    \"subnet6\": [ ],\n"
         "    \"preferred-lifetime\": 200,\n"
-        "    \"valid-lifetime\": 300\n"
+        "    \"valid-lifetime\": 300\n,"
+        "    \"store-extended-info\": true,\n"
+        "    \"cache-max-age\": 80\n"
         "  },\n"
         "  {\n"
         "    \"calculate-tee-times\": true,\n"
@@ -268,7 +273,8 @@ TEST(CfgSharedNetworks6Test, unparse) {
         "    \"t1-percent\": .35,\n"
         "    \"t2-percent\": .655,\n"
         "    \"hostname-char-replacement\": \"x\",\n"
-        "    \"hostname-char-set\": \"[^A-Z]\"\n"
+        "    \"hostname-char-set\": \"[^A-Z]\",\n"
+        "    \"cache-threshold\": .20\n"
         "  }\n"
         "]\n";
 
@@ -280,7 +286,7 @@ TEST(CfgSharedNetworks6Test, mergeNetworks) {
     // Create custom options dictionary for testing merge. We're keeping it
     // simple because they are more rigorous tests elsewhere.
     CfgOptionDefPtr cfg_def(new CfgOptionDef());
-    cfg_def->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "string"))), "isc");
+    cfg_def->add((OptionDefinitionPtr(new OptionDefinition("one", 1, "isc", "string"))));
 
     Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:1::"),
                                    64, 60, 80, 100, 200, SubnetID(1)));

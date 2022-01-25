@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,8 +11,8 @@
 #include <dhcpsrv/base_host_data_source.h>
 #include <exceptions/exceptions.h>
 #include <boost/scoped_ptr.hpp>
-#include <boost/function.hpp>
 
+#include <functional>
 #include <string>
 #include <vector>
 #include <map>
@@ -75,11 +75,30 @@ public:
     /// @return true when found and removed, false when not found.
     static bool del(HostDataSourceList& sources, const std::string& db_type);
 
+    /// @brief Delete a host data source.
+    ///
+    /// Delete the first instance of a host data source which matches specific
+    /// parameters.
+    /// This should have the effect of closing the database connection.
+    ///
+    /// @param sources host data source list.
+    /// @param db_type database backend type.
+    /// @param dbaccess Database access parameters.  These are in the form of
+    ///        "keyword=value" pairs, separated by spaces. They are backend-
+    ///        -end specific, although must include the "type" keyword which
+    ///        gives the backend in use.
+    /// @param if_unusable flag which indicates if the host data source should
+    ///        be deleted only if it is unusable.
+    /// @return false when not removed because it is not found or because it is
+    /// still usable (if_unusable is true), true otherwise.
+    static bool del(HostDataSourceList& sources, const std::string& db_type,
+                    const std::string& dbaccess, bool if_unusable = true);
+
     /// @brief Type of host data source factory
     ///
     /// A factory takes a parameter map and returns a pointer to a host
     /// data source. In case of failure it must throw and not return NULL.
-    typedef boost::function<HostDataSourcePtr (const db::DatabaseConnection::ParameterMap&)> Factory;
+    typedef std::function<HostDataSourcePtr (const db::DatabaseConnection::ParameterMap&)> Factory;
 
     /// @brief Register a host data source factory
     ///
@@ -125,8 +144,7 @@ private:
     static std::map<std::string, Factory> map_;
 };
 
-
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace
 
 #endif

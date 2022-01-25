@@ -1,22 +1,35 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
+#include <config.h>
+
+#include <asiolink/io_address.h>
+#include <asiolink/io_error.h>
+#include <asiolink/crypto_tls.h>
+#include <dhcpsrv/cfgmgr.h>
+#include <dhcpsrv/cfg_multi_threading.h>
 #include <exceptions/exceptions.h>
+#include <util/multi_threading_mgr.h>
 #include <util/strutil.h>
+#include <ha_log.h>
 #include <ha_config.h>
 #include <ha_service_states.h>
 #include <sstream>
 
+using namespace isc::asiolink;
+using namespace isc::http;
 using namespace isc::util;
+using namespace isc::dhcp;
 
 namespace isc {
 namespace ha {
 
 HAConfig::PeerConfig::PeerConfig()
-    : name_(), url_(""), role_(STANDBY), auto_failover_(false) {
+    : tls_context_(), name_(), url_(""), trust_anchor_(), cert_file_(),
+      key_file_(), role_(STANDBY), auto_failover_(false), basic_auth_() {
 }
 
 void
@@ -77,6 +90,15 @@ HAConfig::PeerConfig::roleToString(const HAConfig::PeerConfig::Role& role) {
         ;
     }
     return ("");
+}
+
+void
+HAConfig::PeerConfig::addBasicAuthHttpHeader(PostHttpRequestJsonPtr request) const {
+    const BasicHttpAuthPtr& auth = getBasicAuth();
+    if (!request || !auth) {
+        return;
+    }
+    request->context()->headers_.push_back(BasicAuthHttpHeaderContext(*auth));
 }
 
 HAConfig::StateConfig::StateConfig(const int state)
@@ -140,13 +162,17 @@ HAConfig::StateMachineConfig::getStateConfig(const int state) {
 HAConfig::HAConfig()
     : this_server_name_(), ha_mode_(HOT_STANDBY), send_lease_updates_(true),
       sync_leases_(true), sync_timeout_(60000), sync_page_limit_(10000),
-      heartbeat_delay_(10000), max_response_delay_(60000), max_ack_delay_(10000),
-      max_unacked_clients_(10), peers_(), state_machine_(new StateMachineConfig()) {
+      delayed_updates_limit_(0), heartbeat_delay_(10000), max_response_delay_(60000),
+      max_ack_delay_(10000), max_unacked_clients_(10), wait_backup_ack_(false),
+      enable_multi_threading_(false), http_dedicated_listener_(false),
+      http_listener_threads_(0), http_client_threads_(0),
+      trust_anchor_(), cert_file_(), key_file_(),
+      peers_(), state_machine_(new StateMachineConfig()) {
 }
 
 HAConfig::PeerConfigPtr
 HAConfig::selectNextPeerConfig(const std::string& name) {
-    // Check if there is a configuration for this server name alrady. We can't
+    // Check if there is a configuration for this server name already. We can't
     // have two servers with the same name.
     if (peers_.count(name) > 0) {
         isc_throw(BadValue, "peer with name '" << name << "' already specified");
@@ -186,6 +212,9 @@ HAConfig::stringToHAMode(const std::string& ha_mode) {
 
     } else if (ha_mode == "hot-standby") {
         return (HOT_STANDBY);
+
+    } else if (ha_mode == "passive-backup") {
+        return (PASSIVE_BACKUP);
     }
 
     isc_throw(BadValue, "unsupported value '" << ha_mode << "' for mode parameter");
@@ -198,6 +227,8 @@ HAConfig::HAModeToString(const HAMode& ha_mode) {
         return ("load-balancing");
     case HOT_STANDBY:
         return ("hot-standby");
+    case PASSIVE_BACKUP:
+        return ("passive-backup");
     default:
         ;
     }
@@ -240,7 +271,7 @@ HAConfig::getOtherServersConfig() const {
 }
 
 void
-HAConfig::validate() const {
+HAConfig::validate() {
     // Peers configurations must be provided.
     if (peers_.count(getThisServerName()) == 0) {
         isc_throw(HAConfigValidationError, "no peer configuration specified for the '"
@@ -254,6 +285,73 @@ HAConfig::validate() const {
             isc_throw(HAConfigValidationError, "invalid URL: "
                       << p->second->getUrl().getErrorMessage()
                       << " for server " << p->second->getName());
+        }
+
+        // The hostname must be an address, not a name.
+        IOAddress addr("::");
+        try {
+            addr = IOAddress(p->second->getUrl().getHostname());
+        } catch (const IOError& ex) {
+            isc_throw(HAConfigValidationError, "bad url '"
+                      << p->second->getUrl().toText()
+                      << "': " << ex.what()
+                      << " for server " << p->second->getName());
+        }
+
+        // Check TLS setup.
+        Optional<std::string> ca = p->second->getTrustAnchor();
+        Optional<std::string> cert = p->second->getCertFile();
+        Optional<std::string> key = p->second->getKeyFile();
+        // When not configured get the value from the global level.
+        if (ca.unspecified()) {
+            ca = trust_anchor_;
+        }
+        if (cert.unspecified()) {
+            cert = cert_file_;
+        }
+        if (key.unspecified()) {
+            key = key_file_;
+        }
+        bool have_ca = (!ca.unspecified() && !ca.get().empty());
+        bool have_cert = (!cert.unspecified() && !cert.get().empty());
+        bool have_key = (!key.unspecified() && !key.get().empty());
+        bool use_tls = (have_ca || have_cert || have_key);
+        if (use_tls) {
+            try {
+                // TLS is used: all 3 parameters are required.
+                if (!have_ca) {
+                    isc_throw(HAConfigValidationError, "trust-anchor parameter"
+                              << " is missing or empty: all or none of"
+                              << " TLS parameters must be set");
+                }
+                if (!have_cert) {
+                    isc_throw(HAConfigValidationError, "cert-file parameter"
+                              << " is missing or empty: all or none of"
+                              << " TLS parameters must be set");
+                }
+                if (!have_key) {
+                    isc_throw(HAConfigValidationError, "key-file parameter"
+                              << " is missing or empty: all or none of"
+                              << " TLS parameters must be set");
+                }
+                TlsContext::configure(p->second->tls_context_,
+                                      TlsRole::CLIENT,
+                                      ca.get(),
+                                      cert.get(),
+                                      key.get());
+            } catch (const isc::Exception& ex) {
+                isc_throw(HAConfigValidationError, "bad TLS config for server "
+                          << p->second->getName() << ": " << ex.what());
+            }
+        } else {
+            // Refuse HTTPS scheme when TLS is not enabled.
+            if (p->second->getUrl().getScheme() == Url::HTTPS) {
+                isc_throw(HAConfigValidationError, "bad url '"
+                          << p->second->getUrl().toText()
+                          << "': https scheme is not supported"
+                          << " for server " << p->second->getName()
+                          << " where TLS is disabled");
+            }
         }
 
         ++peers_cnt[p->second->getRole()];
@@ -293,9 +391,13 @@ HAConfig::validate() const {
                       " balancing configuration");
         }
 
-    }
+        // In the load-balancing mode the wait-backup-ack must be false.
+        if (wait_backup_ack_) {
+            isc_throw(HAConfigValidationError, "'wait-backup-ack' must be set to false in the"
+                      " load balancing configuration");
+        }
 
-    if (ha_mode_ == HOT_STANDBY) {
+    } else if (ha_mode_ == HOT_STANDBY) {
         // Secondary servers not allowed in the hot standby configuration.
         if (peers_cnt.count(PeerConfig::SECONDARY) > 0) {
             isc_throw(HAConfigValidationError, "secondary servers not allowed in the hot"
@@ -312,6 +414,82 @@ HAConfig::validate() const {
         if (peers_cnt.count(PeerConfig::PRIMARY) == 0) {
             isc_throw(HAConfigValidationError, "primary server required in the hot"
                       " standby configuration");
+        }
+
+        // In the hot-standby mode the wait-backup-ack must be false.
+        if (wait_backup_ack_) {
+            isc_throw(HAConfigValidationError, "'wait-backup-ack' must be set to false in the"
+                      " hot standby configuration");
+        }
+
+        // The server must not transition to communication-recovery state in
+        // hot-standby mode.
+        if (delayed_updates_limit_ > 0) {
+            isc_throw(HAConfigValidationError, "'delayed-updates-limit' must be set to 0 in"
+                      " the hot standby configuration");
+        }
+
+    } else if (ha_mode_ == PASSIVE_BACKUP) {
+        if (peers_cnt.count(PeerConfig::SECONDARY) > 0) {
+            isc_throw(HAConfigValidationError, "secondary servers not allowed in the"
+                      " passive backup configuration");
+        }
+
+        if (peers_cnt.count(PeerConfig::STANDBY) > 0) {
+            isc_throw(HAConfigValidationError, "standby servers not allowed in the"
+                      " passive backup configuration");
+        }
+
+        if (peers_cnt.count(PeerConfig::PRIMARY) == 0) {
+            isc_throw(HAConfigValidationError, "primary server required in the"
+                      " passive backup configuration");
+        }
+
+        // The server must not transition to communication-recovery state in
+        // passive-backup mode.
+        if (delayed_updates_limit_ > 0) {
+            isc_throw(HAConfigValidationError, "'delayed-updates-limit' must be set to 0 in"
+                      " the passive backup configuration");
+        }
+    }
+
+    if (enable_multi_threading_) {
+        // We get it from staging because applying the DHCP multi-threading configuration
+        // occurs after library loading during the (re)configuration process.
+        auto mcfg = CfgMgr::instance().getStagingCfg()->getDHCPMultiThreading();
+        bool dhcp_mt_enabled = false;
+        uint32_t dhcp_threads = 0;
+        uint32_t dummy_queue_size = 0;
+        CfgMultiThreading::extract(mcfg, dhcp_mt_enabled, dhcp_threads, dummy_queue_size);
+
+        if (!dhcp_mt_enabled) {
+            // HA+MT requires DHCP multi-threading.
+            LOG_INFO(ha_logger, HA_CONFIG_DHCP_MT_DISABLED);
+            enable_multi_threading_ = false;
+            return;
+        }
+
+        // When DHCP threads is configured as zero, we should auto-detect.
+        if (!dhcp_threads) {
+            dhcp_threads = MultiThreadingMgr::detectThreadCount();
+            // If machine says it cannot support threads.
+            if (!dhcp_threads) {
+                LOG_INFO(ha_logger, HA_CONFIG_SYSTEM_MT_UNSUPPORTED);
+                enable_multi_threading_ = false;
+                return;
+            }
+        }
+
+        // If http_listener_threads_ is 0, then we use the same number of
+        // threads as DHCP does.
+        if (http_listener_threads_ == 0) {
+            http_listener_threads_ = dhcp_threads;
+        }
+
+        // If http_client_threads_ is 0, then we use the same number of
+        // threads as DHCP does.
+        if (http_client_threads_ == 0) {
+            http_client_threads_ = dhcp_threads;
         }
     }
 }

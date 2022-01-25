@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -80,6 +80,7 @@ class OptionIntArray;
 /// the format of the option. In particular, it defines:
 /// - option name,
 /// - option code,
+/// - option space,
 /// - data fields order and their types,
 /// - sub options space that the particular option encapsulates.
 ///
@@ -132,7 +133,6 @@ class OptionIntArray;
 /// - "record" (set of data fields of different types)
 ///
 /// @todo Extend the comment to describe "generic factories".
-/// @todo Extend this class to use custom namespaces.
 /// @todo Extend this class with more factory functions.
 /// @todo Derive from UserContext without breaking the multi index.
 class OptionDefinition : public data::StampedElement {
@@ -147,11 +147,13 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type as string.
     /// @param array_type array indicator, if true it indicates that the
     /// option fields are the array.
     explicit OptionDefinition(const std::string& name,
                               const uint16_t code,
+                              const std::string& space,
                               const std::string& type,
                               const bool array_type = false);
 
@@ -159,11 +161,13 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type.
     /// @param array_type array indicator, if true it indicates that the
     /// option fields are the array.
     explicit OptionDefinition(const std::string& name,
                               const uint16_t code,
+                              const std::string& space,
                               const OptionDataType type,
                               const bool array_type = false);
 
@@ -178,11 +182,13 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type given as string.
     /// @param encapsulated_space name of the option space being
     /// encapsulated by this option.
     explicit OptionDefinition(const std::string& name,
                               const uint16_t code,
+                              const std::string& space,
                               const std::string& type,
                               const char* encapsulated_space);
 
@@ -197,11 +203,13 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type.
     /// @param encapsulated_space name of the option space being
     /// encapsulated by this option.
     explicit OptionDefinition(const std::string& name,
                               const uint16_t code,
+                              const std::string& space,
                               const OptionDataType type,
                               const char* encapsulated_space);
 
@@ -214,6 +222,7 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type as string.
     /// @param array_type array indicator, if true it indicates that the
     /// option fields are the array.
@@ -221,6 +230,7 @@ public:
     /// @return Pointer to the @c OptionDefinition instance.
     static OptionDefinitionPtr create(const std::string& name,
                                       const uint16_t code,
+                                      const std::string& space,
                                       const std::string& type,
                                       const bool array_type = false);
 
@@ -233,6 +243,7 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type.
     /// @param array_type array indicator, if true it indicates that the
     /// option fields are the array.
@@ -240,6 +251,7 @@ public:
     /// @return Pointer to the @c OptionDefinition instance.
     static OptionDefinitionPtr create(const std::string& name,
                                       const uint16_t code,
+                                      const std::string& space,
                                       const OptionDataType type,
                                       const bool array_type = false);
 
@@ -252,6 +264,7 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type given as string.
     /// @param encapsulated_space name of the option space being
     /// encapsulated by this option.
@@ -259,6 +272,7 @@ public:
     /// @return Pointer to the @c OptionDefinition instance.
     static OptionDefinitionPtr create(const std::string& name,
                                       const uint16_t code,
+                                      const std::string& space,
                                       const std::string& type,
                                       const char* encapsulated_space);
 
@@ -271,6 +285,7 @@ public:
     ///
     /// @param name option name.
     /// @param code option code.
+    /// @param space option space.
     /// @param type option data type.
     /// @param encapsulated_space name of the option space being
     /// encapsulated by this option.
@@ -278,6 +293,7 @@ public:
     /// @return Pointer to the @c OptionDefinition instance.
     static OptionDefinitionPtr create(const std::string& name,
                                       const uint16_t code,
+                                      const std::string& space,
                                       const OptionDataType type,
                                       const char* encapsulated_space);
 
@@ -358,6 +374,13 @@ public:
         return (record_fields_);
     }
 
+    /// @brief Returns option space name.
+    ///
+    /// @return Option space name.
+    std::string getOptionSpaceName() const {
+        return (option_space_name_);
+    }
+
     /// @brief Return option data type.
     ///
     /// @return option data type.
@@ -384,32 +407,6 @@ public:
         user_context_.contextToElement(map);
     }
 
-    /// @brief Returns option space name.
-    ///
-    /// Option definitions are associated with option spaces. Typically,
-    /// such association is made when the option definition is put into
-    /// the @c CfgOptionDef structure. However, in some cases it is also
-    /// required to associate option definition with the particular option
-    /// space outside of that structure. In particular, when the option
-    /// definition is fetched from a database. The database configuration
-    /// backend will set option space upon return of the option definition.
-    /// In other cases this value won't be set.
-    ///
-    /// @return Option space name or empty string if option space
-    /// name is not set.
-    std::string getOptionSpaceName() const {
-        return (option_space_name_);
-    }
-
-    /// @brief Sets option space name for option definition.
-    ///
-    /// See @c getOptionSpaceName to learn when option space name is set.
-    ///
-    /// @param option_space_name New option space name.
-    void setOptionSpaceName(const std::string& option_space_name) {
-        option_space_name_ = option_space_name;
-    }
-
     /// @brief Check if the option definition is valid.
     ///
     /// Note that it is a responsibility of the code that created
@@ -421,96 +418,6 @@ public:
     ///
     /// @throw MalformedOptionDefinition option definition is invalid.
     void validate() const;
-
-    /// @brief Check if specified format is IA_NA option format.
-    ///
-    /// @return true if specified format is IA_NA option format.
-    bool haveIA6Format() const;
-
-    /// @brief Check if specified format is IAADDR option format.
-    ///
-    /// @return true if specified format is IAADDR option format.
-    bool haveIAAddr6Format() const;
-
-    /// @brief Check if specified format is IAPREFIX option format.
-    ///
-    /// @return true if specified format is IAPREFIX option format.
-    bool haveIAPrefix6Format() const;
-
-    /// @brief Check if specified format is OPTION_CLIENT_FQDN option format.
-    ///
-    /// @return true of specified format is OPTION_CLIENT_FQDN option format,
-    /// false otherwise.
-    bool haveClientFqdnFormat() const;
-
-    /// @brief Check if option has format of the DHCPv4 Client FQDN
-    /// %Option.
-    ///
-    /// The encoding of the domain-name carried by the FQDN option is
-    /// conditional and is specified in the flags field of the option.
-    /// The domain-name can be encoded in the ASCII format or canonical
-    /// wire format. The ASCII format is deprecated, therefore canonical
-    /// format is selected for the FQDN option definition and this function
-    /// returns true if the option definition comprises the domain-name
-    /// field encoded in canonical format.
-    ///
-    /// @return true if option has the format of DHCPv4 Client FQDN
-    /// %Option.
-    bool haveFqdn4Format() const;
-
-    /// @brief Check if the option has format of Vendor-Identifying Vendor
-    /// Specific Options.
-    ///
-    /// @return Always true.
-    /// @todo The Vendor-Identifying Vendor-Specific Option has a complex format
-    /// which we do not support here. Therefore it is not really possible to
-    /// check that the current definition is valid. We may need to add support
-    /// for such option format or simply do not check the format for certain
-    /// options, e.g. vendor options, IA_NA, IAADDR and always return objects
-    /// of the certain type.
-    bool haveVendor4Format() const;
-
-    /// @brief Check if option has a format of the Vendor-Specific Information
-    /// %Option.
-    ///
-    /// The Vendor-Specific Information %Option comprises 32-bit enterprise id
-    /// and the suboptions.
-    ///
-    /// @return true if option definition conforms to the format of the
-    /// Vendor-Specific Information %Option.
-    bool haveVendor6Format() const;
-
-    /// @brief Check if the option has format of DHCPv4 V-I Vendor Class option.
-    ///
-    /// @return true if the option has the format of DHCPv4 Vendor Class option.
-    bool haveVendorClass4Format() const;
-
-    /// @brief Check if the option has format of DHCPv6 Vendor Class option.
-    ///
-    /// @return true if option has the format of DHCPv6 Vendor Class option.
-    bool haveVendorClass6Format() const;
-
-    /// @brief Check if option has format of the SLP Service Scope
-    /// %Option.
-    ///
-    /// The scope list in the SLP Service Scope option is optional
-    /// (i.e., as the error message in the DHCPv6 Status code option).
-    ///
-    /// @return true if option has the format of SLP Service Scope %Option.
-    bool haveServiceScopeFormat() const;
-
-    /// @brief Check if the option has format of DHCPv6 Status Code option.
-    ///
-    /// @return true if option has the format of DHCPv6 Status code option.
-    bool haveStatusCodeFormat() const;
-
-    /// @brief Check if the option has format of OpaqueDataTuples type options.
-    ///
-    /// @return true if option has the format of OpaqueDataTuples type options.
-    bool haveOpaqueDataTuplesFormat() const;
-
-    /// @brief Check if the option has format of CompressedFqdnList options.
-    bool haveCompressedFqdnListFormat() const;
 
     /// @brief Option factory.
     ///
@@ -717,6 +624,9 @@ public:
 
 private:
 
+    /// @brief Check if the option has format of CompressedFqdnList options.
+    bool haveCompressedFqdnListFormat() const;
+
     /// @brief Factory function to create option with a compressed FQDN list.
     ///
     /// @param u universe (V4 or V6).
@@ -750,22 +660,18 @@ private:
                                          OptionBufferConstIter begin,
                                          OptionBufferConstIter end) const;
 
-    /// @brief Check if specified option format is a record with 3 fields
-    /// where first one is custom, and two others are uint32.
-    ///
-    /// This is a helper function for functions that detect IA_NA and IAAddr
-    /// option formats.
-    ///
-    /// @param first_type type of the first data field.
-    ///
-    /// @return true if actual option format matches expected format.
-    bool haveIAx6Format(const OptionDataType first_type) const;
-
     /// @brief Check if specified type matches option definition type.
     ///
     /// @return true if specified type matches option definition type.
     inline bool haveType(const OptionDataType type) const {
         return (type == type_);
+    }
+
+    /// @brief Check if specified type matches option definition space.
+    ///
+    /// @return true if specified type matches option definition space.
+    inline bool haveSpace(const std::string& space) const {
+        return (space == option_space_name_);
     }
 
     /// @brief Converts a string value to a boolean value.
@@ -935,10 +841,27 @@ typedef OptionDefContainer::nth_index<2>::type OptionDefContainerNameIndex;
 typedef std::pair<OptionDefContainerNameIndex::const_iterator,
                   OptionDefContainerNameIndex::const_iterator> OptionDefContainerNameRange;
 
+/// Base type of option definition space container.
 typedef OptionSpaceContainer<
     OptionDefContainer, OptionDefinitionPtr, std::string
-> OptionDefSpaceContainer;
+> BaseOptionDefSpaceContainer;
 
+/// @brief Class of option definition space container.
+class OptionDefSpaceContainer : public BaseOptionDefSpaceContainer {
+public:
+
+    /// @brief Adds a new option definition to the container.
+    ///
+    /// The option definition already contains the option space.
+    ///
+    /// @note: this method hides the parent one so it becomes hard to get
+    /// a mismatch between the option definition and the space container.
+    ///
+    /// @param def reference to the option definition being added.
+    void addItem(const OptionDefinitionPtr& def) {
+        BaseOptionDefSpaceContainer::addItem(def, def->getOptionSpaceName());
+    }
+};
 
 } // namespace isc::dhcp
 } // namespace isc

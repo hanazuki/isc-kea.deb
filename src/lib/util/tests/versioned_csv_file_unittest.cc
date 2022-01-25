@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -293,7 +293,7 @@ TEST_F(VersionedCSVFileTest, upgradeOlderVersions) {
     ASSERT_NO_THROW(csv->close());
 
 
-    // Check the the file contents are correct.
+    // Check the file contents are correct.
     EXPECT_EQ("animal\n"
               "cat\n"
               "lion\n"

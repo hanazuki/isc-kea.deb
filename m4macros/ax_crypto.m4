@@ -94,9 +94,9 @@ if test "${use_openssl}" != "auto" -a "${use_openssl}" != "no" ; then
    botan_config="no"
 fi
 AC_ARG_WITH([botan-config],
-  AC_HELP_STRING([--with-botan-config=PATH],
+  AS_HELP_STRING([--with-botan-config=PATH],
     [specify the path to the botan-config script]),
-    [botan_config="$withval"])
+  [botan_config="$withval"])
 distcheck_botan="--with-botan-config=$botan_config"
 if test "${botan_config}" = "no" ; then
     if test "${use_openssl}" = "no" ; then
@@ -169,7 +169,7 @@ EOF
 
    # # check -R, "-Wl,-R" or -rpath
    AX_ISC_RPATH
-   
+
    # See crypto_rpath for some info on why we do this
    if test "x$ISC_RPATH_FLAG" != "x"; then
        CRYPTO_RPATH=
@@ -199,21 +199,20 @@ EOF
    # failure handler we can detect the difference between a header not existing
    # (or not even passing the pre-processor phase) and a header file resulting
    # in compilation failures.
-   HEADER_TO_CHECK=botan/botan.h
-   AC_CHECK_HEADERS([${HEADER_TO_CHECK}],,[
+   AC_CHECK_HEADERS([botan/botan.h],,[
         CRYPTO_INCLUDES=""
         CRYPTO_LIBS=""
         CRYPTO_LDFLAGS=""
         CRYPTO_RPATH=""
         if test "x$ac_header_preproc" = "xyes"; then
-                AC_MSG_RESULT([${HEADER_TO_CHECK}
+                AC_MSG_RESULT([botan/botan.h
 was found but is unusable. The most common cause of this problem
 is attempting to use an updated C++ compiler with older C++ libraries, such as
 the version of Botan that comes with your distribution. If you have updated
 your C++ compiler we highly recommend that you use support libraries such as
 Boost and Botan that were compiled with the same compiler version.])
         else
-                AC_MSG_RESULT([Missing required header files.])
+                AC_MSG_RESULT([Missing required libcrypto header files])
         fi]
    )
    CPPFLAGS=$CPPFLAGS_SAVED
@@ -231,7 +230,7 @@ then
                          [using namespace Botan;
                           HashFunction *h = HashFunction::create("MD5")
 .release();
-                         ])],   
+                         ])],
         [AC_MSG_RESULT([checking for Botan library... yes])],
         [AC_MSG_RESULT([checking for Botan library... no])
          CRYPTO_INCLUDES=""
@@ -260,52 +259,72 @@ else
    CRYPTO_NAME="OpenSSL"
    DISABLED_CRYPTO="Botan"
    CRYPTO_PACKAGE="openssl-1.1.0"
+   DISTCHECK_CRYPTO_CONFIGURE_FLAG="--with-openssl=${use_openssl}"
    AC_DEFINE_UNQUOTED([WITH_OPENSSL], [], [Compile with OpenSSL crypto])
    AC_MSG_CHECKING(for OpenSSL library)
-   # from bind9
+   openssl_headers=
+   openssl_libraries=
 
-   if test "${use_openssl}" = "auto" ; then
-      use_openssl="yes"
-   fi
+   case "${use_openssl}" in
+      auto)
+         use_openssl="yes"
+         ;;
+      yes)
+         ;;
+      *)
+         # no was already handled
+         openssl_headers="${use_openssl}/include"
+         openssl_libraries="${use_openssl}/lib"
+         ;;
+   esac
+
+   # Now search for the system OpenSSL library.
    if test "${use_openssl}" = "yes" ; then
       for d in /usr /usr/local /usr/local/ssl /usr/local/opt/openssl /usr/pkg /usr/sfw; do
-          if test -f $d/include/openssl/opensslv.h; then
-             use_openssl=$d; break
-          fi
+         if test -f $d/include/openssl/opensslv.h; then
+            use_openssl="${d}"
+            openssl_headers="${d}/include"
+            for l in lib lib64; do
+               if test -f "${d}/${l}/libssl.so"; then
+                  openssl_libraries="${d}/${l}"
+                  break
+               fi
+            done
+            if test -n "${openssl_headers}" && test -n "${openssl_libraries}"; then
+               break
+            fi
+         fi
       done
    fi
+
    if test "${use_openssl}" = "yes" ; then
       AC_MSG_ERROR([OpenSSL auto detection failed])
    fi
-   if ! test -f "${use_openssl}"/include/openssl/opensslv.h ; then
-      AC_MSG_ERROR([OpenSSL not found at ${use_openssl}])
-   fi
    AC_MSG_RESULT(yes)
-   if test "${use_openssl}" = "/usr" ; then
+
+   if test "${openssl_headers}" = "/usr/include" ; then
       CRYPTO_CFLAGS=""
       CRYPTO_INCLUDES=""
-      CRYPTO_LIBS="-lcrypto"
-      DISTCHECK_CRYPTO_CONFIGURE_FLAG="--with-openssl"
+      CRYPTO_LIBS="-lssl -lcrypto"
    else
       CRYPTO_CFLAGS=""
-      CRYPTO_INCLUDES="-I${use_openssl}/include"
-      DISTCHECK_CRYPTO_CONFIGURE_FLAG="--with-openssl=${use_openssl}"
+      CRYPTO_INCLUDES="-I${openssl_headers}"
       case $host in
           *-solaris*)
-              CRYPTO_LIBS="-L${use_openssl}/lib -R${use_openssl}/lib -lcrypto"
+              CRYPTO_LIBS="-L${openssl_libraries} -R${openssl_libraries} -lssl -lcrypto"
               ;;
           *-hp-hpux*)
-              CRYPTO_LIBS="-L${use_openssl}/lib -Wl,+b: -lcrypto"
+              CRYPTO_LIBS="-L${openssl_libraries} -Wl,+b: -lssl -lcrypto"
               ;;
           *-apple-darwin*)
-              if test -f "${use_openssl}/lib/libcrypto.dylib" ; then
-                 CRYPTO_LIBS="-L${use_openssl}/lib -lcrypto"
+              if test -f "${openssl_libraries}/libcrypto.dylib" ; then
+                 CRYPTO_LIBS="-L${openssl_libraries} -lssl -lcrypto"
               else
-                 CRYPTO_LIBS="${use_openssl}/lib/libcrypto.a"
+                 CRYPTO_LIBS="${openssl_libraries}/libssl.a ${openssl_libraries}/libcrypto.a"
               fi
               ;;
           *)
-              CRYPTO_LIBS="-L${use_openssl}/lib -lcrypto"
+              CRYPTO_LIBS="-L${openssl_libraries} -lssl -lcrypto"
               ;;
       esac
     fi
@@ -372,3 +391,79 @@ AC_SUBST(CRYPTO_RPATH)
 AC_SUBST(DISTCHECK_CRYPTO_CONFIGURE_FLAG)
 ]
 )
+# End of AX_CRYPTO
+
+# Test TLS support using both crypto and boost.
+AC_DEFUN([AX_TLS], [
+if test "x${CRYPTO_NAME}" = "xBotan"
+then
+    dnl Check Botan boost ASIO TLS
+    CPPFLAGS_SAVED=$CPPFLAGS
+    CPPFLAGS="$CRYPTO_INCLUDES $CPPFLAGS $BOOST_INCLUDES"
+    BOTAN_BOOST=""
+    AC_CHECK_HEADERS([botan/asio_stream.h],
+        [BOTAN_BOOST="maybe"
+         AC_MSG_CHECKING([Botan boost TLS support])
+         AC_COMPILE_IFELSE(
+             [AC_LANG_PROGRAM([#include <botan/asio_stream.h>],
+                              [#ifndef BOTAN_TLS_SERVER_H_
+                               #error botan/tls_server.h is not included by botan/asio_stream.h
+                               #endif])],
+              [AC_MSG_RESULT(yes)
+               BOTAN_BOOST="yes"
+               AC_DEFINE([WITH_BOTAN_BOOST], [1],
+               [Define to 1 if Botan boost TLS is available])],
+              [AC_MSG_RESULT(no)
+               BOTAN_BOOST="no"
+               AC_MSG_WARN([Botan is configured with boost support but is too old: only Botan >= 2.14.0 can be used for TLS support.])])],
+        [BOTAN_BOOST="no"
+         AC_MSG_WARN([Botan cannot be used for TLS support, because it was compiled without boost support, so required headers are missing.])])
+    CPPFLAGS=${CPPFLAGS_SAVED}
+fi
+if test "x${CRYPTO_NAME}" = "xOpenSSL"
+then
+    CPPFLAGS_SAVED=$CPPFLAGS
+    CPPFLAGS="$CRYPTO_INCLUDES $CPPFLAGS $BOOST_INCLUDES"
+    dnl Check boost ASIO SSL
+    AC_CHECK_HEADERS([boost/asio/ssl.hpp],,
+        [AC_MSG_ERROR([Missing required boost ssl header file])])
+    dnl Check if the generic TLS method is available
+    AC_MSG_CHECKING([Generic TLS method])
+    AC_COMPILE_IFELSE(
+        [AC_LANG_PROGRAM([#include <boost/asio/ssl.hpp>],
+                         [auto ctx(boost::asio::ssl::context::tls);])],
+        [AC_MSG_RESULT(yes)
+         AC_DEFINE([HAVE_GENERIC_TLS_METHOD], [1],
+         [Define to 1 if boost::asio::ssl::context::tls is available])],
+        [AC_MSG_RESULT(no)
+         AC_MSG_CHECKING([Verifying TLS 1.2 fallback])
+         AC_COMPILE_IFELSE(
+             [AC_LANG_PROGRAM([#include <boost/asio/ssl.hpp>],
+                              [auto ctx(boost::asio::ssl::context::tlsv12);])],
+             [AC_MSG_RESULT(yes)
+              AC_DEFINE([HAVE_TLS_1_2_METHOD], [1],
+              [Define to 1 if boost::asio::ssl::context::tlsv12 is available])],
+             [AC_MSG_RESULT(no)
+              AC_MSG_WARN([The boost version is very old: TLS support can use insecure features])])])
+    dnl Check if the stream_truncated (SSL short read) error is available
+    AC_MSG_CHECKING([stream_truncated (SSL short read) error])
+    AC_COMPILE_IFELSE(
+        [AC_LANG_PROGRAM([#include <boost/asio/ssl.hpp>],
+                         [const int ec =
+                          boost::asio::ssl::error::stream_truncated;])],
+        [AC_MSG_RESULT(yes)
+         AC_DEFINE([HAVE_STREAM_TRUNCATED_ERROR], [1],
+         [Define to 1 if boost::asio::ssl::error::stream_truncated is available])],
+        [AC_MSG_RESULT(no)
+         AC_COMPILE_IFELSE(
+             [AC_LANG_PROGRAM([#include <boost/asio/ssl.hpp>],
+                              [const int ec =
+                               ERR_PACK(ERR_LIB_SSL, 0, SSL_R_SHORT_READ);])],
+             [],
+             [AC_MSG_ERROR([Can not find a definition for stream_truncated (SSL short read) error: sorry, your boost library is too old])])])
+    CPPFLAGS=${CPPFLAGS_SAVED}
+fi
+AM_CONDITIONAL(HAVE_BOTAN_BOOST,
+    test "$CRYPTO_NAME" = "Botan" && test "$BOTAN_BOOST" = "yes")
+])
+# End of AX_TLS

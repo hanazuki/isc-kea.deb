@@ -1,4 +1,4 @@
-// Copyright (C) 2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -12,6 +12,7 @@
 #include <boost/exception/diagnostic_information.hpp>
 #include <boost/exception_ptr.hpp>
 #include <iostream>
+#include <sys/resource.h>
 
 using namespace std;
 using namespace isc::lfc;
@@ -24,20 +25,30 @@ using namespace isc::lfc;
 /// errors, EXIT_FAILURE otherwise.
 int main(int argc, char* argv[]) {
     int ret = EXIT_SUCCESS;
-    LFCController lfc_controller;
+    try {
+        // Ask scheduling to not give too much resources to LFC.
+        // First parameter means to change only the process priority.
+        // Second parameter (0) means the calling process.
+        // Third parameter 4 is a bit below the default priority of 0 in
+        // a range of -20 (highest priority) and 19 or 20 (lowest priority).
+        static_cast<void>(setpriority(PRIO_PROCESS, 0, 4));
 
-    // Launch the controller passing in command line arguments.
-    // Exit program with the controller's return code.
-    try  {
+        LFCController lfc_controller;
+
+        // Launch the controller passing in command line arguments.
+        // Exit program with the controller's return code.
+
         // 'false' value disables test mode.
         lfc_controller.launch(argc, argv, false);
 
     } catch (const boost::exception& ex) {
         std::cerr << boost::diagnostic_information(ex) << std::endl;
         ret = EXIT_FAILURE;
-
     } catch (const std::exception& ex) {
         std::cerr << "Service failed: " << ex.what() << std::endl;
+        ret = EXIT_FAILURE;
+    } catch (...) {
+        std::cerr << "Service failed" << std::endl;
         ret = EXIT_FAILURE;
     }
 

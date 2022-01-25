@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,7 +19,10 @@
 #include <gtest/gtest.h>
 
 #include <algorithm>
+#include <fstream>
 #include <string>
+
+#include <unistd.h>
 
 using namespace isc;
 using namespace isc::hooks;
@@ -38,17 +41,49 @@ public:
     /// Reset the hooks manager.  The hooks manager is a singleton, so needs
     /// to be reset for each test.
     HooksManagerTest() {
-        HooksManager::unloadLibraries();
+        HooksManager::setTestMode(false);
+        HooksManager::prepareUnloadLibraries();
+        bool status = HooksManager::unloadLibraries();
+        if (!status) {
+            cerr << "(fixture ctor) unloadLibraries failed" << endl;
+        }
+        // Ensure the marker file is not present at the start of a test.
+        static_cast<void>(remove(MARKER_FILE));
     }
 
     /// @brief Destructor
     ///
-    /// Unload all libraries and reset the shared manager.
+    /// Unload all libraries.
     ~HooksManagerTest() {
-        HooksManager::unloadLibraries();
-        HooksManager::getSharedCalloutManager().reset();
+        static_cast<void>(remove(MARKER_FILE));
+        HooksManager::setTestMode(false);
+        HooksManager::prepareUnloadLibraries();
+        bool status = HooksManager::unloadLibraries();
+        if (!status) {
+            cerr << "(fixture dtor) unloadLibraries failed" << endl;
+        }
     }
 
+    /// @brief Marker file present
+    ///
+    /// Convenience function to check whether a marker file is present.  It
+    /// does this by opening the file.
+    ///
+    /// @return true if the marker file is present.
+    bool markerFilePresent() const {
+
+        // Try to open it.
+        std::fstream marker;
+        marker.open(MARKER_FILE, std::fstream::in);
+
+        // Check if it is open and close it if so.
+        bool exists = marker.is_open();
+        if (exists) {
+            marker.close();
+        }
+
+        return (exists);
+    }
 
     /// @brief Call callouts test
     ///
@@ -136,8 +171,6 @@ private:
     /// To avoid unused variable errors
     std::string dummy(int i) {
         if (i == 0) {
-            return (MARKER_FILE);
-        } else if (i > 0) {
             return (LOAD_CALLOUT_LIBRARY);
         } else {
             return (LOAD_ERROR_CALLOUT_LIBRARY);
@@ -184,7 +217,10 @@ TEST_F(HooksManagerTest, LoadLibraries) {
     }
 
     // Try unloading the libraries.
-    EXPECT_NO_THROW(HooksManager::unloadLibraries());
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
 
     // Re-execute the calculation - callouts can be called but as nothing
     // happens, the result should always be -1.
@@ -243,10 +279,14 @@ TEST_F(HooksManagerTest, CalloutHandleUnloadLibrary) {
     HooksManager::callCallouts(ServerHooks::CONTEXT_CREATE, *handle);
 
     // Unload the libraries.
-    HooksManager::unloadLibraries();
+    HooksManager::prepareUnloadLibraries();
+    EXPECT_FALSE(HooksManager::unloadLibraries());
 
     // Deleting the callout handle should not cause a segmentation fault.
     handle.reset();
+
+    // And allows unload.
+    EXPECT_TRUE(HooksManager::unloadLibraries());
 }
 
 // Test that we can load a new set of libraries while we have a CalloutHandle
@@ -284,17 +324,20 @@ TEST_F(HooksManagerTest, CalloutHandleLoadLibrary) {
                                           data::ConstElementPtr()));
 
     // Load the libraries.
+    EXPECT_THROW(HooksManager::loadLibraries(new_library_names),
+                 LibrariesStillOpened);
+
+    // Deleting the old callout handle should not cause a segmentation fault.
+    handle.reset();
+
+    // But it allows the load of the new library.
     EXPECT_TRUE(HooksManager::loadLibraries(new_library_names));
 
-    // Execute the calculation.  Note that we still have the CalloutHandle
-    // for the old library: however, this should not affect the new calculation.
+    // Execute the calculation.
     {
         SCOPED_TRACE("Calculation with basic callout library loaded");
         executeCallCallouts(10, 7, 17, 3, 51, 16, 35);
     }
-
-    // Deleting the old callout handle should not cause a segmentation fault.
-    handle.reset();
 }
 
 // This is effectively the same test as the LoadLibraries test.
@@ -422,8 +465,15 @@ TEST_F(HooksManagerTest, PrePostCalloutTest) {
     handle->getArgument("result", result);
     EXPECT_EQ(2024, result);
 
+    // Reset the handle to allow a reload.
+    handle.reset();
+
     // ... and check that the pre- and post- callout functions don't survive a
     // reload.
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
     EXPECT_TRUE(HooksManager::loadLibraries(library_names));
     handle = HooksManager::createCalloutHandle();
 
@@ -437,21 +487,23 @@ TEST_F(HooksManagerTest, PrePostCalloutTest) {
     EXPECT_EQ(-15, result);
 }
 
-// Test with a shared manager the pre- and post- callout functions survive
+// Test with test mode enabled and the pre- and post- callout functions survive
 // a reload
 
-TEST_F(HooksManagerTest, PrePostCalloutShared) {
+TEST_F(HooksManagerTest, TestModeEnabledPrePostSurviveLoad) {
 
+    // Load a single library.
     HookLibsCollection library_names;
-
-    // Initialize the shared manager.
-    HooksManager::getSharedCalloutManager().reset(new CalloutManager(0));
+    library_names.push_back(make_pair(std::string(FULL_CALLOUT_LIBRARY),
+                                      data::ConstElementPtr()));
 
     // Load the pre- and post- callouts.
     HooksManager::preCalloutsLibraryHandle().registerCallout("hookpt_two",
                                                              testPreCallout);
     HooksManager::postCalloutsLibraryHandle().registerCallout("hookpt_two",
                                                               testPostCallout);
+
+    HooksManager::setTestMode(true);
 
     // With the pre- and post- callouts above, the result expected is
     //
@@ -466,8 +518,15 @@ TEST_F(HooksManagerTest, PrePostCalloutShared) {
     handle->getArgument("result", result);
     EXPECT_EQ(2054, result);
 
+    // Reset the handle to allow a reload.
+    handle.reset();
+
     // ... and check that the pre- and post- callout functions survive a
     // reload.
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
     EXPECT_TRUE(HooksManager::loadLibraries(library_names));
     handle = HooksManager::createCalloutHandle();
 
@@ -482,23 +541,23 @@ TEST_F(HooksManagerTest, PrePostCalloutShared) {
     EXPECT_EQ(2054, result);
 }
 
-// Test with a shared manager the pre- and post- callout functions survive
-// a reload but not with a not empty list of libraries
+// Test with test mode disabled and the pre- and post- callout functions do not
+// survive a reload
 
-TEST_F(HooksManagerTest, PrePostCalloutSharedNotEmpty) {
+TEST_F(HooksManagerTest, TestModeDisabledPrePostDoNotSurviveLoad) {
 
+    // Load a single library.
     HookLibsCollection library_names;
     library_names.push_back(make_pair(std::string(FULL_CALLOUT_LIBRARY),
                                       data::ConstElementPtr()));
-
-    // Initialize the shared manager.
-    HooksManager::getSharedCalloutManager().reset(new CalloutManager(0));
 
     // Load the pre- and post- callouts.
     HooksManager::preCalloutsLibraryHandle().registerCallout("hookpt_two",
                                                              testPreCallout);
     HooksManager::postCalloutsLibraryHandle().registerCallout("hookpt_two",
                                                               testPostCallout);
+
+    HooksManager::setTestMode(false);
 
     // With the pre- and post- callouts above, the result expected is
     //
@@ -513,8 +572,15 @@ TEST_F(HooksManagerTest, PrePostCalloutSharedNotEmpty) {
     handle->getArgument("result", result);
     EXPECT_EQ(2054, result);
 
+    // Reset the handle to allow a reload.
+    handle.reset();
+
     // ... and check that the pre- and post- callout functions don't survive a
-    // reload with a not empty list of libraries.
+    // reload.
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
     EXPECT_TRUE(HooksManager::loadLibraries(library_names));
     handle = HooksManager::createCalloutHandle();
 
@@ -523,22 +589,20 @@ TEST_F(HooksManagerTest, PrePostCalloutSharedNotEmpty) {
 
     HooksManager::callCallouts(hookpt_two_index_, *handle);
 
-    // Expect result - data_2
     result = 0;
     handle->getArgument("result", result);
     EXPECT_EQ(-15, result);
 }
 
-// Test with a shared manager the pre- and post- callout functions don't
-// survive a reload if the shared manager is initialized too late.
+// Test with test mode enabled and the pre- and post- callout functions do not
+// survive a reload if the test mode is set too late.
 
-TEST_F(HooksManagerTest, PrePostCalloutSharedTooLate) {
+TEST_F(HooksManagerTest, TestModeEnabledTooLatePrePostDoNotSurvive) {
 
+    // Load a single library.
     HookLibsCollection library_names;
-    EXPECT_TRUE(HooksManager::loadLibraries(library_names));
-
-    // Initialize the shared manager (after loadLibraries so too late)
-    HooksManager::getSharedCalloutManager().reset(new CalloutManager(0));
+    library_names.push_back(make_pair(std::string(FULL_CALLOUT_LIBRARY),
+                                      data::ConstElementPtr()));
 
     // Load the pre- and post- callouts.
     HooksManager::preCalloutsLibraryHandle().registerCallout("hookpt_two",
@@ -559,20 +623,28 @@ TEST_F(HooksManagerTest, PrePostCalloutSharedTooLate) {
     handle->getArgument("result", result);
     EXPECT_EQ(2054, result);
 
+    // Reset the handle to allow a reload.
+    handle.reset();
+
     // ... and check that the pre- and post- callout functions don't survive a
     // reload.
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
     EXPECT_TRUE(HooksManager::loadLibraries(library_names));
     handle = HooksManager::createCalloutHandle();
+
+    HooksManager::setTestMode(true);
 
     handle->setArgument("result", static_cast<int>(0));
     handle->setArgument("data_2", static_cast<int>(15));
 
     HooksManager::callCallouts(hookpt_two_index_, *handle);
 
-    // Expect no change so result = 0
     result = 0;
     handle->getArgument("result", result);
-    EXPECT_EQ(0, result);
+    EXPECT_EQ(-15, result);
 }
 
 // Check that everything works even with no libraries loaded.  First that
@@ -652,7 +724,10 @@ TEST_F(HooksManagerTest, LibraryNames) {
     EXPECT_TRUE(extractNames(library_names) == loaded_names);
 
     // Unload the libraries and check again.
-    EXPECT_NO_THROW(HooksManager::unloadLibraries());
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
     loaded_names = HooksManager::getLibraryNames();
     EXPECT_TRUE(loaded_names.empty());
 }
@@ -730,6 +805,25 @@ TEST_F(HooksManagerTest, validateLibraries) {
     EXPECT_TRUE(failed == expected_failures);
 }
 
+// This test verifies that unload is called by the prepare method.
+TEST_F(HooksManagerTest, prepareUnload) {
+
+    // Set up the list of libraries to be loaded and load them.
+    HookLibsCollection library_names;
+    library_names.push_back(make_pair(std::string(UNLOAD_CALLOUT_LIBRARY),
+                                      data::ConstElementPtr()));
+    EXPECT_TRUE(HooksManager::loadLibraries(library_names));
+
+    // Check that the marker file is not present.
+    EXPECT_FALSE(markerFilePresent());
+
+    // Prepare unload libraries runs unload functions.
+    HooksManager::prepareUnloadLibraries();
+
+    // Now the marker file is present.
+    EXPECT_TRUE(markerFilePresent());
+}
+
 // This test verifies that the specified parameters are accessed properly.
 TEST_F(HooksManagerTest, LibraryParameters) {
 
@@ -753,7 +847,10 @@ TEST_F(HooksManagerTest, LibraryParameters) {
     EXPECT_TRUE(HooksManager::loadLibraries(library_names));
 
     // Try unloading the libraries.
-    EXPECT_NO_THROW(HooksManager::unloadLibraries());
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
 }
 
 // This test verifies that an object can be parked in two different
@@ -778,9 +875,6 @@ TEST_F(HooksManagerTest, Parking) {
     std::string parked_object = "foo";
     handle->setArgument("parked_object", parked_object);
 
-    // Call both installed callouts.
-    HooksManager::callCallouts(hookpt_one_index_, *handle);
-
     // This boolean value will be set to true when the packet gets unparked.
     bool unparked = false;
 
@@ -795,8 +889,11 @@ TEST_F(HooksManagerTest, Parking) {
         })
     );
 
+    // Call both installed callouts.
+    HooksManager::callCallouts(hookpt_one_index_, *handle);
+
     // We have two callouts which should have returned pointers to the
-    // functions which we can call to siumulate completion of asynchronous
+    // functions which we can call to simulate completion of asynchronous
     // tasks.
     std::function<void()> unpark_trigger_func1;
     handle->getArgument("unpark_trigger1", unpark_trigger_func1);
@@ -814,8 +911,14 @@ TEST_F(HooksManagerTest, Parking) {
     unpark_trigger_func2();
     EXPECT_TRUE(unparked);
 
+    // Resetting the handle makes return from test body to crash.
+
     // Try unloading the libraries.
-    EXPECT_NO_THROW(HooksManager::unloadLibraries());
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    // Handle is still active.
+    EXPECT_FALSE(status);
 }
 
 // This test verifies that the server can also unpark the packet.
@@ -837,14 +940,8 @@ TEST_F(HooksManagerTest, ServerUnpark) {
     std::string parked_object = "foo";
     handle->setArgument("parked_object", parked_object);
 
-    // Call installed callout.
-    HooksManager::callCallouts(hookpt_one_index_, *handle);
-
     // This boolean value will be set to true when the packet gets unparked.
     bool unparked = false;
-
-    // It should be possible for the server to increase reference counter.
-    ASSERT_NO_THROW(HooksManager::reference<std::string>("hookpt_one", "foo"));
 
     // The callouts instruct us to park the object. We associated the callback
     // function with the parked object, which sets "unparked" flag to true. We
@@ -855,13 +952,25 @@ TEST_F(HooksManagerTest, ServerUnpark) {
         unparked = true;
     });
 
+    // It should be possible for the server to increase reference counter.
+    ASSERT_NO_THROW(HooksManager::reference<std::string>("hookpt_one", "foo"));
+
+    // Call installed callout.
+    HooksManager::callCallouts(hookpt_one_index_, *handle);
+
     // Server can force unparking the object.
     EXPECT_TRUE(HooksManager::unpark<std::string>("hookpt_one", "foo"));
 
     EXPECT_TRUE(unparked);
 
+    // Reset the handle to allow unload.
+    handle.reset();
+
     // Try unloading the libraries.
-    EXPECT_NO_THROW(HooksManager::unloadLibraries());
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
 }
 
 // This test verifies that the server can drop parked packet.
@@ -879,14 +988,8 @@ TEST_F(HooksManagerTest, ServerDropParked) {
     std::string parked_object = "foo";
     handle->setArgument("parked_object", parked_object);
 
-    // Call installed callout.
-    HooksManager::callCallouts(hookpt_one_index_, *handle);
-
     // This boolean value will be set to true when the packet gets unparked.
     bool unparked = false;
-
-    // It should be possible for the server to increase reference counter.
-    ASSERT_NO_THROW(HooksManager::reference<std::string>("hookpt_one", "foo"));
 
     // The callouts instruct us to park the object. We associated the callback
     // function with the parked object, which sets "unparked" flag to true. We
@@ -897,6 +1000,12 @@ TEST_F(HooksManagerTest, ServerDropParked) {
         unparked = true;
     });
 
+    // It should be possible for the server to increase reference counter.
+    ASSERT_NO_THROW(HooksManager::reference<std::string>("hookpt_one", "foo"));
+
+    // Call installed callout.
+    HooksManager::callCallouts(hookpt_one_index_, *handle);
+
     // Drop the parked packet. The callback should not be called.
     EXPECT_TRUE(HooksManager::drop<std::string>("hookpt_one", "foo"));
 
@@ -906,8 +1015,14 @@ TEST_F(HooksManagerTest, ServerDropParked) {
     // is not parked anymore.
     EXPECT_FALSE(HooksManager::unpark<std::string>("hookpt_one", "foo"));
 
+    // Reset the handle to allow unload.
+    handle.reset();
+
     // Try unloading the libraries.
-    EXPECT_NO_THROW(HooksManager::unloadLibraries());
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
 }
 
 // This test verifies that parked objects are removed when libraries are
@@ -930,9 +1045,6 @@ TEST_F(HooksManagerTest, UnloadBeforeUnpark) {
     std::string parked_object = "foo";
     handle->setArgument("parked_object", parked_object);
 
-    // Call installed callout.
-    HooksManager::callCallouts(hookpt_one_index_, *handle);
-
     // This boolean value will be set to true when the packet gets unparked.
     bool unparked = false;
 
@@ -945,8 +1057,17 @@ TEST_F(HooksManagerTest, UnloadBeforeUnpark) {
         unparked = true;
     });
 
+    // Call installed callout.
+    HooksManager::callCallouts(hookpt_one_index_, *handle);
+
+    // Reset the handle to allow a reload.
+    handle.reset();
+
     // Try reloading the libraries.
-    EXPECT_NO_THROW(HooksManager::unloadLibraries());
+    EXPECT_NO_THROW(HooksManager::prepareUnloadLibraries());
+    bool status = false;
+    EXPECT_NO_THROW(status = HooksManager::unloadLibraries());
+    EXPECT_TRUE(status);
     EXPECT_TRUE(HooksManager::loadLibraries(library_names));
 
     // Parked object should have been removed.

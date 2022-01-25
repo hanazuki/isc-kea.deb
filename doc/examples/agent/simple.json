@@ -8,8 +8,43 @@
         // on its own, so limiting the traffic to localhost is a good idea.
         "http-host": "127.0.0.1",
 
-        // Another mandatory parameter is the HTTP port.
+        // If enabling HA and multi-threading, the 8000 port is used by the HA
+        // hook library http listener. When using HA hook library with
+        // multi-threading to function, make sure the port used by dedicated
+        // listener is different (e.g. 8001) than the one used by CA. Note
+        // the commands should still be sent via CA. The dedicated listener
+        // is specifically for HA updates only.
         "http-port": 8000,
+
+        // Optional authentication.
+        "authentication":
+        {
+            // Required authentication type. The only supported value is
+            // basic for the basic HTTP authentication.
+            "type": "basic",
+
+            // An optional parameter is the basic HTTP authentication realm.
+            // Its default is "kea-control-agent".
+            "realm": "kea-control-agent",
+
+            // This list specifies the user ids and passwords to use for
+            // basic HTTP authentication. If empty or not present any client
+            // is authorized.
+            "clients":
+            [
+                // This specifies an authorized client.
+                {
+                    "comment": "admin is authorized",
+
+                    // The user id must not be empty or contain the ':'
+                    // character. It is a mandatory parameter.
+                    "user": "admin",
+
+                    // If password is not specified an empty password is used.
+                    "password": "1234"
+                }
+            ]
+        },
 
         // This map specifies where control channel of each server is configured
         // to listen on. See 'control-socket' object in the respective

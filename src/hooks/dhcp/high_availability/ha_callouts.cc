@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -60,6 +60,11 @@ int dhcp4_srv_configured(CalloutHandle& handle) {
 ///
 /// @param handle callout handle.
 int buffer4_receive(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP) {
+        return (0);
+    }
+
     try {
         impl->buffer4Receive(handle);
 
@@ -76,6 +81,12 @@ int buffer4_receive(CalloutHandle& handle) {
 ///
 /// @param handle callout handle.
 int leases4_committed(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP ||
+        status == CalloutHandle::NEXT_STEP_SKIP) {
+        return (0);
+    }
+
     try {
         impl->leases4Committed(handle);
 
@@ -111,6 +122,12 @@ int dhcp6_srv_configured(CalloutHandle& handle) {
 ///
 /// @param handle callout handle.
 int buffer6_receive(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP ||
+        status == CalloutHandle::NEXT_STEP_SKIP) {
+        return (0);
+    }
+
     try {
         impl->buffer6Receive(handle);
 
@@ -127,6 +144,12 @@ int buffer6_receive(CalloutHandle& handle) {
 ///
 /// @param handle callout handle.
 int leases6_committed(CalloutHandle& handle) {
+    CalloutHandle::CalloutNextStep status = handle.getStatus();
+    if (status == CalloutHandle::NEXT_STEP_DROP ||
+        status == CalloutHandle::NEXT_STEP_SKIP) {
+        return (0);
+    }
+
     try {
         impl->leases6Committed(handle);
 
@@ -139,7 +162,7 @@ int leases6_committed(CalloutHandle& handle) {
     return (0);
 }
 
-/// @brief comand_processed callout implementation.
+/// @brief command_processed callout implementation.
 ///
 /// @param handle callout handle.
 int command_processed(CalloutHandle& handle) {
@@ -247,6 +270,31 @@ int maintenance_cancel_command(CalloutHandle& handle) {
     return (0);
 }
 
+/// @brief ha-reset command handler implementation.
+int ha_reset_command(CalloutHandle& handle) {
+    try {
+        impl->haResetHandler(handle);
+
+    } catch (const std::exception& ex) {
+        LOG_ERROR(ha_logger, HA_RESET_HANDLER_FAILED)
+            .arg(ex.what());
+    }
+
+    return (0);
+}
+
+/// @brief ha-sync-complete-notify command handler implementation.
+int sync_complete_notify_command(CalloutHandle& handle) {
+    try {
+        impl->syncCompleteNotifyHandler(handle);
+    } catch (const std::exception& ex) {
+        LOG_ERROR(ha_logger, HA_SYNC_COMPLETE_NOTIFY_HANDLER_FAILED)
+            .arg(ex.what());
+    }
+
+    return (0);
+}
+
 /// @brief This function is called when the library is loaded.
 ///
 /// @param handle library handle
@@ -284,6 +332,8 @@ int load(LibraryHandle& handle) {
         handle.registerCommandCallout("ha-maintenance-notify", maintenance_notify_command);
         handle.registerCommandCallout("ha-maintenance-start", maintenance_start_command);
         handle.registerCommandCallout("ha-maintenance-cancel", maintenance_cancel_command);
+        handle.registerCommandCallout("ha-reset", ha_reset_command);
+        handle.registerCommandCallout("ha-sync-complete-notify", sync_complete_notify_command);
 
     } catch (const std::exception& ex) {
         LOG_ERROR(ha_logger, HA_CONFIGURATION_FAILED)
@@ -299,18 +349,16 @@ int load(LibraryHandle& handle) {
 ///
 /// @return 0 if deregistration was successful, 1 otherwise
 int unload() {
+    impl.reset();
     LOG_INFO(ha_logger, HA_DEINIT_OK);
     return (0);
 }
 
 /// @brief This function is called to retrieve the multi-threading compatibility.
 ///
-/// @note: this should be revisited as the library is not essentially
-/// incompatible.
-///
-/// @return 0 which means not compatible with multi-threading.
+/// @return 1 which means compatible with multi-threading.
 int multi_threading_compatible() {
-    return (0);
+    return (1);
 }
 
 } // end extern "C"

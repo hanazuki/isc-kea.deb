@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2015,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,7 +16,7 @@ namespace isc {
 namespace dhcp {
 namespace test {
 
-/// @brief Base class for test fixure classes used to validate the DHCPv6
+/// @brief Base class for test fixture classes used to validate the DHCPv6
 /// message processing by the server.
 class Dhcpv6MessageTest : public Dhcpv6SrvTest {
 public:

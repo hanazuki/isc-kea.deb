@@ -1,0 +1,43 @@
+#!/bin/sh
+
+# This script generates API documentation templates.
+# Usage:
+#
+# ./generate-templates cmd...
+#
+# Arguments are a list of new commands.
+# The templates will be created in local directory.
+
+if [ $# -eq 0 ]; then
+    echo "Usage: ./generate-templates cmd..."
+    exit
+fi
+
+while [ $# -ne 0 ]; do
+    CMD="$1"
+    shift
+    F=$CMD.json
+
+    if [ -e "$F" ]; then
+        echo "$F exists, skipping"
+        continue;
+    fi
+    echo "{" > "$F"
+
+    echo "    \"name\": \"$CMD\"," >> "$F"
+    echo "    \"brief\": [ \"a sentence or two explaining what this command does\" ]," >> "$F"
+    echo "    \"description\": [ \"See <xref linkend=\\\"cmd-$LINE\\\"/>\" ]," >> "$F"
+    echo "    \"support\": [ \"undocumented\" ]," >> "$F"
+    echo "    \"avail\": \"0.0.0\"," >> "$F"
+    echo "    \"hook\": \"undocumented\"," >> "$F"
+    echo "    \"access\": \"write\"," >> $F
+
+    echo "    \"cmd-syntax\": [ \"Syntax of the command\" ]," >> "$F"
+    echo "    \"cmd-comment\": [ \"Possibly some extra comments after the syntax.\" ]," >> "$F"
+
+    echo "    \"resp-syntax\": [ \"Syntax of the response\" ]," >> "$F"
+    echo "    \"resp-comment\": [ \"Optional extra comments after the response syntax.\" ]" >> "$F"
+    echo "}" >> "$F"
+
+    echo "$CMD generated."
+done

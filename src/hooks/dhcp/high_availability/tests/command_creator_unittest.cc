@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #include <config.h>
 
 #include <ha_server_type.h>
+#include <lease_update_backlog.h>
 #include <command_creator.h>
 #include <asiolink/io_address.h>
 #include <cc/data.h>
@@ -153,20 +154,41 @@ TEST(CommandCreatorTest, createDHCPDisable4) {
     ConstElementPtr arguments;
     ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-disable", "dhcp4",
                                               arguments));
+    ASSERT_EQ(2, arguments->size());
     ConstElementPtr max_period = arguments->get("max-period");
     ASSERT_TRUE(max_period);
     ASSERT_EQ(Element::integer, max_period->getType());
     EXPECT_EQ(20, max_period->intValue());
+    ConstElementPtr origin = arguments->get("origin");
+    ASSERT_TRUE(origin);
+    ASSERT_EQ("ha-partner", origin->stringValue());
 
     // Repeat the test but this time the max-period is not specified.
     command = CommandCreator::createDHCPDisable(0, HAServerType::DHCPv4);
-    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-disable", "dhcp4"));
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-disable", "dhcp4",
+                                              arguments));
+    ASSERT_EQ(1, arguments->size());
+    origin = arguments->get("origin");
+    ASSERT_TRUE(origin);
+    ASSERT_EQ("ha-partner", origin->stringValue());
 }
 
 // This test verifies that the dhcp-enable command is correct.
 TEST(CommandCreatorTest, createDHCPEnable4) {
+    ConstElementPtr arguments;
     ConstElementPtr command = CommandCreator::createDHCPEnable(HAServerType::DHCPv4);
-    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-enable", "dhcp4"));
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-enable", "dhcp4",
+                                              arguments));
+    ASSERT_EQ(1, arguments->size());
+    ConstElementPtr origin = arguments->get("origin");
+    ASSERT_TRUE(origin);
+    ASSERT_EQ("ha-partner", origin->stringValue());
+}
+
+// This test verifies that the ha-reset command sent to DHCPv4 server is correct.
+TEST(CommandCreatorTest, createHAReset4) {
+    ConstElementPtr command = CommandCreator::createHAReset(HAServerType::DHCPv4);
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "ha-reset", "dhcp4"));
 }
 
 // This test verifies that the ha-heartbeat command is correct.
@@ -263,23 +285,46 @@ TEST(CommandCreatorTest, createDHCPDisable6) {
     ConstElementPtr arguments;
     ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-disable", "dhcp6",
                                               arguments));
+    ASSERT_EQ(2, arguments->size());
     ConstElementPtr max_period = arguments->get("max-period");
     ASSERT_TRUE(max_period);
     ASSERT_EQ(Element::integer, max_period->getType());
     EXPECT_EQ(20, max_period->intValue());
+    ConstElementPtr origin = arguments->get("origin");
+    ASSERT_TRUE(origin);
+    ASSERT_EQ("ha-partner", origin->stringValue());
 
     // Repeat the test but this time the max-period is not specified.
     command = CommandCreator::createDHCPDisable(0, HAServerType::DHCPv6);
-    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-disable", "dhcp6"));
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-disable", "dhcp6",
+                                              arguments));
+    ASSERT_EQ(1, arguments->size());
+    origin = arguments->get("origin");
+    ASSERT_TRUE(origin);
+    ASSERT_EQ("ha-partner", origin->stringValue());
 }
 
 // This test verifies that the dhcp-enable command (DHCPv6 case) is
 // correct.
 TEST(CommandCreatorTest, createDHCPEnable6) {
+    ConstElementPtr arguments;
     ConstElementPtr command = CommandCreator::createDHCPEnable(HAServerType::DHCPv6);
-    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-enable", "dhcp6"));
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "dhcp-enable", "dhcp6",
+                                              arguments));
+    ASSERT_EQ(1, arguments->size());
+    ConstElementPtr origin = arguments->get("origin");
+    ASSERT_TRUE(origin);
+    ASSERT_EQ("ha-partner", origin->stringValue());
 }
 
+// This test verifies that the ha-reset command sent to DHCPv6 server is correct.
+TEST(CommandCreatorTest, createHAReset6) {
+    ConstElementPtr command = CommandCreator::createHAReset(HAServerType::DHCPv6);
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "ha-reset", "dhcp6"));
+}
+
+// This test verifies that the command generated for the lease update
+// is correct.
 TEST(CommandCreatorTest, createLease6Update) {
     ConstElementPtr command = CommandCreator::createLease6Update(*createLease6());
     ConstElementPtr arguments;
@@ -334,6 +379,41 @@ TEST(CommandCreatorTest, createLease6BulkApply) {
     ASSERT_EQ(1, leases_json->size());
     lease_as_json = leases_json->get(0);
     EXPECT_EQ(leaseAsJson(createLease6())->str(), lease_as_json->str());
+}
+
+// This test verifies that the lease6-bulk-apply command can be created
+// from DHCPv6 leases backlog.
+TEST(CommandCreatorTest, createLease6BulkApplyFromBacklog) {
+    Lease6Ptr lease = createLease6();
+    Lease6Ptr deleted_lease = createLease6();
+
+    LeaseUpdateBacklog backlog(100);
+    backlog.push(LeaseUpdateBacklog::ADD, lease);
+    backlog.push(LeaseUpdateBacklog::DELETE, deleted_lease);
+
+    ConstElementPtr command = CommandCreator::createLease6BulkApply(backlog);
+    ConstElementPtr arguments;
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "lease6-bulk-apply",
+                                              "dhcp6", arguments));
+
+    // Verify deleted-leases.
+    auto deleted_leases_json = arguments->get("deleted-leases");
+    ASSERT_TRUE(deleted_leases_json);
+    ASSERT_EQ(Element::list, deleted_leases_json->getType());
+    ASSERT_EQ(1, deleted_leases_json->size());
+    auto lease_as_json = deleted_leases_json->get(0);
+    EXPECT_EQ(leaseAsJson(createLease6())->str(), lease_as_json->str());
+
+    // Verify leases.
+    auto leases_json = arguments->get("leases");
+    ASSERT_TRUE(leases_json);
+    ASSERT_EQ(Element::list, leases_json->getType());
+    ASSERT_EQ(1, leases_json->size());
+    lease_as_json = leases_json->get(0);
+    EXPECT_EQ(leaseAsJson(createLease6())->str(), lease_as_json->str());
+
+    // Make sure the backlog is now empty.
+    EXPECT_EQ(0, backlog.size());
 }
 
 // This test verifies that the lease6-get-all command is correct.
@@ -418,6 +498,21 @@ TEST(CommandCreatorTest, createMaintenanceNotify6) {
     ASSERT_TRUE(cancel);
     ASSERT_EQ(Element::boolean, cancel->getType());
     EXPECT_FALSE(cancel->boolValue());
+}
+
+// This test verifies that the ha-sync-complete-notify command sent to a
+// DHCPv4 server is correct.
+TEST(CommandCreatorTest, createSyncCompleteNotify4) {
+    ConstElementPtr command = CommandCreator::createSyncCompleteNotify(HAServerType::DHCPv4);
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "ha-sync-complete-notify", "dhcp4"));
+}
+
+// This test verifies that the ha-sync-complete-notify command sent to a
+// DHCPv4 server is correct.
+TEST(CommandCreatorTest, createSyncCompleteNotify6) {
+    ConstElementPtr command = CommandCreator::createSyncCompleteNotify(HAServerType::DHCPv6);
+    ConstElementPtr arguments;
+    ASSERT_NO_FATAL_FAILURE(testCommandBasics(command, "ha-sync-complete-notify", "dhcp6"));
 }
 
 }

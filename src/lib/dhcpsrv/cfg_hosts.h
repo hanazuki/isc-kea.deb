@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -261,6 +261,70 @@ public:
              uint64_t lower_host_id,
              const HostPageSize& page_size);
 
+    /// @brief Returns range of hosts.
+    ///
+    /// This method returns a page of @c Host objects which represent
+    /// reservations.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of const @c Host objects (may be empty).
+    virtual ConstHostCollection
+    getPage4(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
+    /// @brief Returns range of hosts.
+    ///
+    /// This method returns a page of @c Host objects which represent
+    /// reservations.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of non-const @c Host objects (may be empty).
+    virtual HostCollection
+    getPage4(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size);
+
+    /// @brief Returns range of hosts.
+    ///
+    /// This method returns a page of @c Host objects which represent
+    /// reservations.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of const @c Host objects (may be empty).
+    virtual ConstHostCollection
+    getPage6(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
+    /// @brief Returns range of hosts.
+    ///
+    /// This method returns a page of @c Host objects which represent
+    /// reservations.
+    ///
+    /// @param source_index Index of the source (unused).
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Collection of non-const @c Host objects (may be empty).
+    virtual HostCollection
+    getPage6(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size);
+
     /// @brief Returns a collection of hosts using the specified IPv4 address.
     ///
     /// This method may return multiple @c Host objects if they are connected
@@ -343,6 +407,33 @@ public:
     virtual ConstHostPtr
     get4(const SubnetID& subnet_id, const asiolink::IOAddress& address) const;
 
+    /// @brief Returns all hosts connected to the IPv4 subnet and having
+    /// a reservation for a specified address.
+    ///
+    /// In most cases it is desired that there is at most one reservation
+    /// for a given IPv4 address within a subnet. In a default configuration,
+    /// the backend does not allow for inserting more than one host with
+    /// the same IPv4 reservation. In that case, the number of hosts returned
+    /// by this function is 0 or 1.
+    ///
+    /// If the backend is configured to allow multiple hosts with reservations
+    /// for the same IPv4 address in the given subnet, this method can return
+    /// more than one host.
+    ///
+    /// The typical use case when a single IPv4 address is reserved for multiple
+    /// hosts is when these hosts represent different interfaces of the same
+    /// machine and each interface comes with a different MAC address. In that
+    /// case, the same IPv4 address is assigned regardless of which interface is
+    /// used by the DHCP client to communicate with the server.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv4 address.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll4(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const;
+
     /// @brief Returns a host connected to the IPv6 subnet.
     ///
     /// @param subnet_id Subnet identifier.
@@ -410,6 +501,33 @@ public:
     virtual HostPtr
     get6(const SubnetID& subnet_id, const asiolink::IOAddress& address);
 
+    /// @brief Returns all hosts connected to the IPv6 subnet and having
+    /// a reservation for a specified address or delegated prefix (lease).
+    ///
+    /// In most cases it is desired that there is at most one reservation
+    /// for a given IPv6 lease within a subnet. In a default configuration,
+    /// the backend does not allow for inserting more than one host with
+    /// the same IPv6 address or prefix. In that case, the number of hosts
+    /// returned by this function is 0 or 1.
+    ///
+    /// If the backend is configured to allow multiple hosts with reservations
+    /// for the same IPv6 lease in the given subnet, this method can return
+    /// more than one host.
+    ///
+    /// The typical use case when a single IPv6 lease is reserved for multiple
+    /// hosts is when these hosts represent different interfaces of the same
+    /// machine and each interface comes with a different MAC address. In that
+    /// case, the same IPv6 lease is assigned regardless of which interface is
+    /// used by the DHCP client to communicate with the server.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv6 address/prefix.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll6(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const;
+
     /// @brief Adds a new host to the collection.
     ///
     /// @param host Pointer to the new @c Host object being added.
@@ -418,7 +536,7 @@ public:
     /// has already been added to the IPv4 or IPv6 subnet.
     virtual void add(const HostPtr& host);
 
-    /// @brief Attempts to delete a host by address.
+    /// @brief Attempts to delete a hosts by address.
     ///
     /// This method supports both v4 and v6.
     /// @todo: Not implemented.
@@ -479,6 +597,23 @@ public:
     virtual std::string getType() const {
         return (std::string("configuration file"));
     }
+
+    /// @brief Controls whether IP reservations are unique or non-unique.
+    ///
+    /// In a typical case, the IP reservations are unique and backends verify
+    /// prior to adding a host reservation to the database that the reservation
+    /// for a given IP address/subnet does not exist. In some cases it may be
+    /// required to allow non-unique IP reservations, e.g. in the case when a
+    /// host has several interfaces and independently of which interface is used
+    /// by this host to communicate with the DHCP server the same IP address
+    /// should be assigned. In this case the @c unique value should be set to
+    /// false to disable the checks for uniqueness on the backend side.
+    ///
+    /// @param unique boolean flag indicating if the IP reservations must be
+    /// unique or can be non-unique.
+    /// @return always true because this data source supports both the case when
+    /// the addresses must be unique and when they may be non-unique.
+    virtual bool setIPReservationsUnique(const bool unique);
 
     /// @brief Unparse a configuration object
     ///
@@ -630,6 +765,23 @@ private:
                           const HostPageSize& page_size,
                           Storage& storage) const;
 
+    /// @brief Returns a page of @c Host objects.
+    ///
+    /// This private method is called by the @c CfgHosts::getPage4
+    /// and @c CfgHosts::getPage6 methods which find the @c Host objects.
+    /// The retrieved objects are appended to the @c storage container.
+    ///
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param [out] storage Container to which the retrieved objects are
+    /// appended.
+    /// @tparam One of the @c ConstHostCollection of @c HostCollection.
+    template<typename Storage>
+    void getPageInternal(uint64_t lower_host_id,
+                         const HostPageSize& page_size,
+                         Storage& storage) const;
+
     /// @brief Returns @c Host objects for the specified IPv4 address.
     ///
     /// This private method is called by the @c CfgHosts::getAll4 methods
@@ -767,6 +919,10 @@ private:
     /// - IPv6 address
     /// - IPv6 prefix
     HostContainer6 hosts6_;
+
+    /// @brief Holds the setting whether the IP reservations must be unique or
+    /// may be non-unique.
+    bool ip_reservations_unique_ = true;
 
     /// @brief Unparse a configuration object (DHCPv4 reservations)
     ///

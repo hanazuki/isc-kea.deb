@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,7 +10,7 @@
 #include <process/testutils/d_test_stubs.h>
 #include <process/daemon.h>
 #include <cc/command_interpreter.h>
-#include <boost/bind.hpp>
+#include <functional>
 
 using namespace boost::asio;
 
@@ -47,7 +47,7 @@ DStubProcess::run() {
             io_service->run_one();
         } catch (const std::exception& ex) {
             isc_throw (DProcessBaseError,
-                std::string("Process run method failed:") + ex.what());
+                std::string("Process run method failed: ") + ex.what());
         }
     }
 };
@@ -194,7 +194,7 @@ DControllerTest::scheduleTimedWrite(const std::string& config,
                                     int write_time_ms) {
     new_cfg_content_ = config;
     write_timer_.reset(new asiolink::IntervalTimer(*getIOService()));
-    write_timer_->setup(boost::bind(&DControllerTest::timedWriteCallback, this),
+    write_timer_->setup(std::bind(&DControllerTest::timedWriteCallback, this),
                         write_time_ms, asiolink::IntervalTimer::ONE_SHOT);
 }
 
@@ -207,6 +207,36 @@ DControllerTest::runWithConfig(const std::string& config, int run_time_ms,
     // Shutdown (without error) after runtime.
     isc::asiolink::IntervalTimer timer(*getIOService());
     timer.setup(genShutdownCallback, run_time_ms);
+
+    // Record start time, and invoke launch().
+    // We catch and rethrow to allow testing error scenarios.
+    ptime start = microsec_clock::universal_time();
+    try  {
+        // Set up valid command line arguments
+        char* argv[] = { const_cast<char*>("progName"),
+                         const_cast<char*>("-c"),
+                         const_cast<char*>(DControllerTest::CFG_TEST_FILE),
+                         const_cast<char*>("-d") };
+        launch(4, argv);
+    } catch (...) {
+        // calculate elapsed time, then rethrow it
+        elapsed_time = microsec_clock::universal_time() - start;
+        throw;
+    }
+
+    elapsed_time = microsec_clock::universal_time() - start;
+}
+
+void
+DControllerTest::runWithConfig(const std::string& config, int run_time_ms,
+                               const TestCallback& callback,
+                               time_duration& elapsed_time) {
+    // Create the config file.
+    writeFile(config);
+
+    // Shutdown (without error) after runtime.
+    isc::asiolink::IntervalTimer timer(*getIOService());
+    timer.setup([&] { callback(); genShutdownCallback(); }, run_time_ms);
 
     // Record start time, and invoke launch().
     // We catch and rethrow to allow testing error scenarios.
@@ -302,5 +332,5 @@ DStubCfgMgr::parse(isc::data::ConstElementPtr /*config*/, bool /*check_only*/) {
     return (isc::config::createAnswer(0, "It all went fine. I promise"));
 }
 
-}; // namespace isc::process
-}; // namespace isc
+} // namespace isc::process
+} // namespace isc

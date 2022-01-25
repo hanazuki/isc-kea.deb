@@ -1,4 +1,4 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,6 +6,8 @@
 
 #ifndef BASE_CONFIG_BACKEND_H
 #define BASE_CONFIG_BACKEND_H
+
+#include <database/database_connection.h>
 
 #include <boost/shared_ptr.hpp>
 #include <cstdint>
@@ -25,7 +27,7 @@ namespace cb {
 /// be implemented (and extended) by respective Kea servers to provide
 /// API to store and fetch configuration information from a database.
 /// Such implementation is called configuration backend. Each
-/// configuration backend faciliates a single database type, e.g. MySQL
+/// configuration backend facilitates a single database type, e.g. MySQL
 /// database. In order to support multiple database types, i.e. MySQL,
 /// Postgres, Cassandra, each Kea server will have to implement
 /// 3 separate configuration backends, one for each database type.
@@ -56,6 +58,24 @@ public:
     ///
     /// @return Port number on which database service is available.
     virtual uint16_t getPort() const = 0;
+
+    /// @brief Flag which indicates if the config backend has an unusable
+    /// connection.
+    ///
+    /// @return true if there is at least one unusable connection, false
+    /// otherwise.
+    virtual bool isUnusable() {
+        return (false);
+    }
+
+    /// @brief Return backend parameters.
+    ///
+    /// Returns the backend parameters.
+    ///
+    /// @return Parameters of the backend.
+    virtual isc::db::DatabaseConnection::ParameterMap getParameters() const {
+        return (isc::db::DatabaseConnection::ParameterMap());
+    }
 };
 
 /// @brief Shared pointer to the @c BaseConfigBackend.

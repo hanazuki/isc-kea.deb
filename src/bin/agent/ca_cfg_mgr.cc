@@ -1,15 +1,17 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <agent/ca_cfg_mgr.h>
 #include <agent/ca_log.h>
 #include <agent/simple_parser.h>
 #include <cc/simple_parser.h>
 #include <cc/command_interpreter.h>
+#include <http/basic_auth_config.h>
 #include <exceptions/exceptions.h>
 
 using namespace isc::config;
@@ -21,13 +23,16 @@ namespace isc {
 namespace agent {
 
 CtrlAgentCfgContext::CtrlAgentCfgContext()
-    :http_host_(""), http_port_(0) {
+    : http_host_(""), http_port_(0),
+      trust_anchor_(""), cert_file_(""), key_file_(""), cert_required_(true) {
 }
 
 CtrlAgentCfgContext::CtrlAgentCfgContext(const CtrlAgentCfgContext& orig)
     : ConfigBase(), ctrl_sockets_(orig.ctrl_sockets_),
       http_host_(orig.http_host_), http_port_(orig.http_port_),
-      hooks_config_(orig.hooks_config_) {
+      trust_anchor_(orig.trust_anchor_), cert_file_(orig.cert_file_),
+      key_file_(orig.key_file_), cert_required_(orig.cert_required_),
+      hooks_config_(orig.hooks_config_), auth_config_(orig.auth_config_) {
 }
 
 CtrlAgentCfgMgr::CtrlAgentCfgMgr()
@@ -45,10 +50,29 @@ CtrlAgentCfgMgr::getConfigSummary(const uint32_t /*selection*/) {
     // First print the http stuff.
     std::ostringstream s;
     s << "listening on " << ctx->getHttpHost() << ", port "
-      << ctx->getHttpPort() << ", control sockets: ";
+      << ctx->getHttpPort();
+
+    // When TLS is setup print its config.
+    if (!ctx->getTrustAnchor().empty()) {
+        s << ", trust anchor " << ctx->getTrustAnchor()
+          << ", cert file " << ctx->getCertFile()
+          << ", key file " << ctx->getKeyFile();
+        if (ctx->getCertRequired()) {
+            s << ", client certs are required";
+        } else {
+            s << ", client certs are optional";
+        }
+    }
+    s << ", control sockets: ";
 
     // Then print the control-sockets
     s << ctx->getControlSocketInfoSummary();
+
+    // Add something if authentication is required.
+    const isc::http::HttpAuthConfigPtr& auth = ctx->getAuthConfig();
+    if (auth && !auth->empty()) {
+        s << ", requires basic HTTP authentication";
+    }
 
     // Finally, print the hook libraries names
     const isc::hooks::HookLibsCollection libs = ctx->getHooksConfig().get();
@@ -65,8 +89,8 @@ CtrlAgentCfgMgr::createNewContext() {
     return (ConfigPtr(new CtrlAgentCfgContext()));
 }
 
-isc::data::ConstElementPtr
-CtrlAgentCfgMgr::parse(isc::data::ConstElementPtr config_set, bool check_only) {
+ConstElementPtr
+CtrlAgentCfgMgr::parse(ConstElementPtr config_set, bool check_only) {
     // Do a sanity check first.
     if (!config_set) {
         isc_throw(DhcpConfigError, "Mandatory config parameter not provided");
@@ -84,6 +108,7 @@ CtrlAgentCfgMgr::parse(isc::data::ConstElementPtr config_set, bool check_only) {
     try {
         // Do the actual parsing
         AgentSimpleParser parser;
+        parser.checkTlsSetup(cfg);
         parser.parse(ctx, cfg, check_only);
     } catch (const isc::Exception& ex) {
         excuse = ex.what();
@@ -114,6 +139,15 @@ CtrlAgentCfgMgr::parse(isc::data::ConstElementPtr config_set, bool check_only) {
     return (answer);
 }
 
+std::list<std::list<std::string>>
+CtrlAgentCfgMgr::jsonPathsToRedact() const {
+    static std::list<std::list<std::string>> const list({
+        {"authentication", "clients", "[]"},
+        {"hooks-libraries", "[]", "parameters", "*"},
+    });
+    return list;
+}
+
 data::ConstElementPtr
 CtrlAgentCfgContext::getControlSocketInfo(const std::string& service) const {
     auto si = ctrl_sockets_.find(service);
@@ -121,7 +155,7 @@ CtrlAgentCfgContext::getControlSocketInfo(const std::string& service) const {
 }
 
 void
-CtrlAgentCfgContext::setControlSocketInfo(const isc::data::ConstElementPtr& control_socket,
+CtrlAgentCfgContext::setControlSocketInfo(const ConstElementPtr& control_socket,
                                           const std::string& service) {
     ctrl_sockets_[service] = control_socket;
 }
@@ -152,7 +186,17 @@ CtrlAgentCfgContext::toElement() const {
     ca->set("http-host", Element::create(http_host_));
     // Set http-port
     ca->set("http-port", Element::create(static_cast<int64_t>(http_port_)));
-    // Set hooks-libraries
+    // Set TLS setup when enabled
+    if (!trust_anchor_.empty()) {
+        ca->set("trust-anchor", Element::create(trust_anchor_));
+        ca->set("cert-file", Element::create(cert_file_));
+        ca->set("key-file", Element::create(key_file_));
+        ca->set("cert-required", Element::create(cert_required_));
+    }
+    // Set authentication
+    if (auth_config_) {
+        ca->set("authentication", auth_config_->toElement());
+    }
     ca->set("hooks-libraries", hooks_config_.toElement());
     // Set control-sockets
     ElementPtr control_sockets = Element::createMap();

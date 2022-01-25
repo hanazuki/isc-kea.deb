@@ -74,6 +74,8 @@ EXTRA_DIST += rdata/generic/sshfp_44.cc
 EXTRA_DIST += rdata/generic/sshfp_44.h
 EXTRA_DIST += rdata/generic/tlsa_52.cc
 EXTRA_DIST += rdata/generic/tlsa_52.h
+EXTRA_DIST += rdata/generic/tkey_249.cc
+EXTRA_DIST += rdata/generic/tkey_249.h
 EXTRA_DIST += rdata/generic/txt_16.cc
 EXTRA_DIST += rdata/generic/txt_16.h
 EXTRA_DIST += rdata/generic/minfo_14.cc
@@ -103,7 +105,7 @@ BUILT_SOURCES += rdataclass.h rdataclass.cc
 
 lib_LTLIBRARIES = libkea-dns++.la
 
-libkea_dns___la_LDFLAGS = -no-undefined -version-info 3:2:0
+libkea_dns___la_LDFLAGS = -no-undefined -version-info 19:0:0
 libkea_dns___la_LDFLAGS += $(AM_LDFLAGS) $(CRYPTO_LDFLAGS)
 
 libkea_dns___la_SOURCES =
@@ -131,6 +133,7 @@ libkea_dns___la_SOURCES += rrset.h rrset.cc
 libkea_dns___la_SOURCES += rrttl.h rrttl.cc
 libkea_dns___la_SOURCES += rrtype.cc
 libkea_dns___la_SOURCES += rrcollator.h rrcollator.cc
+libkea_dns___la_SOURCES += qid_gen.h qid_gen.cc
 libkea_dns___la_SOURCES += question.h question.cc
 libkea_dns___la_SOURCES += serial.h serial.cc
 libkea_dns___la_SOURCES += tsig.h tsig.cc
@@ -195,6 +198,7 @@ libdns___include_HEADERS = \
 	name.h \
 	nsec3hash.h \
 	opcode.h \
+	qid_gen.h \
 	question.h \
 	rcode.h \
 	rdata.h \

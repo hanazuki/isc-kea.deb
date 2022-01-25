@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -66,7 +66,7 @@ namespace {
     "  s.relay," \
     "  s.renew_timer," \
     "  s.require_client_classes," \
-    "  s.reservation_mode," \
+    "  s.reservations_global," \
     "  s.server_hostname," \
     "  s.shared_network_name," \
     "  s.user_context," \
@@ -115,6 +115,10 @@ namespace {
     "  s.ddns_replace_client_name," \
     "  s.ddns_generated_prefix," \
     "  s.ddns_qualifying_suffix," \
+    "  s.reservations_in_subnet," \
+    "  s.reservations_out_of_pool," \
+    "  s.cache_threshold," \
+    "  s.cache_max_age," \
     "  srv.tag " \
     "FROM dhcp4_subnet AS s " \
     server_join \
@@ -164,7 +168,7 @@ namespace {
     "  s.relay," \
     "  s.renew_timer," \
     "  s.require_client_classes," \
-    "  s.reservation_mode," \
+    "  s.reservations_global," \
     "  s.shared_network_name," \
     "  s.user_context," \
     "  s.valid_lifetime," \
@@ -240,6 +244,10 @@ namespace {
     "  s.ddns_replace_client_name," \
     "  s.ddns_generated_prefix," \
     "  s.ddns_qualifying_suffix," \
+    "  s.reservations_in_subnet," \
+    "  s.reservations_out_of_pool," \
+    "  s.cache_threshold," \
+    "  s.cache_max_age," \
     "  srv.tag " \
     "FROM dhcp6_subnet AS s " \
     server_join \
@@ -415,7 +423,7 @@ namespace {
     "  n.relay," \
     "  n.renew_timer," \
     "  n.require_client_classes," \
-    "  n.reservation_mode," \
+    "  n.reservations_global," \
     "  n.user_context," \
     "  n.valid_lifetime," \
     "  o.option_id," \
@@ -445,6 +453,10 @@ namespace {
     "  n.ddns_replace_client_name," \
     "  n.ddns_generated_prefix," \
     "  n.ddns_qualifying_suffix," \
+    "  n.reservations_in_subnet," \
+    "  n.reservations_out_of_pool," \
+    "  n.cache_threshold," \
+    "  n.cache_max_age," \
     "  s.tag " \
     "FROM dhcp4_shared_network AS n " \
     server_join \
@@ -492,7 +504,7 @@ namespace {
     "  n.relay," \
     "  n.renew_timer," \
     "  n.require_client_classes," \
-    "  n.reservation_mode," \
+    "  n.reservations_global," \
     "  n.user_context," \
     "  n.valid_lifetime," \
     "  o.option_id," \
@@ -522,6 +534,10 @@ namespace {
     "  n.ddns_replace_client_name," \
     "  n.ddns_generated_prefix," \
     "  n.ddns_qualifying_suffix," \
+    "  n.reservations_in_subnet," \
+    "  n.reservations_out_of_pool," \
+    "  n.cache_threshold," \
+    "  n.cache_max_age," \
     "  s.tag " \
     "FROM dhcp6_shared_network AS n " \
     server_join \
@@ -617,14 +633,15 @@ namespace {
     "  a.object_id," \
     "  a.modification_type," \
     "  r.modification_ts," \
+    "  r.id, " \
     "  r.log_message " \
     "FROM " #table_prefix "_audit AS a " \
     "INNER JOIN " #table_prefix "_audit_revision AS r " \
     "  ON a.revision_id = r.id " \
     "INNER JOIN " #table_prefix "_server AS s" \
     "  ON r.server_id = s.id " \
-    "WHERE (s.tag = ? OR s.id = 1) AND (r.modification_ts > ?) " \
-    "ORDER BY r.modification_ts, r.id"
+    "WHERE (s.tag = ? OR s.id = 1) AND ((r.modification_ts, r.id)  > (?, ?))" \
+    " ORDER BY r.modification_ts, r.id"
 #endif
 
 #ifndef MYSQL_GET_SERVERS_COMMON
@@ -642,6 +659,138 @@ namespace {
     MYSQL_GET_SERVERS_COMMON(table_prefix, "")
 #define MYSQL_GET_SERVER(table_prefix) \
     MYSQL_GET_SERVERS_COMMON(table_prefix, "AND s.tag = ? ")
+#endif
+
+#ifndef MYSQL_GET_CLIENT_CLASS4_COMMON
+#define MYSQL_GET_CLIENT_CLASS4_COMMON(server_join, ...) \
+    "SELECT " \
+    "  c.id," \
+    "  c.name," \
+    "  c.test," \
+    "  c.next_server," \
+    "  c.server_hostname," \
+    "  c.boot_file_name," \
+    "  c.only_if_required," \
+    "  c.valid_lifetime," \
+    "  c.min_valid_lifetime," \
+    "  c.max_valid_lifetime," \
+    "  c.depend_on_known_directly," \
+    "  o.depend_on_known_indirectly, " \
+    "  c.modification_ts," \
+    "  d.id," \
+    "  d.code," \
+    "  d.name," \
+    "  d.space," \
+    "  d.type," \
+    "  d.modification_ts," \
+    "  d.is_array," \
+    "  d.encapsulate," \
+    "  d.record_types," \
+    "  d.user_context," \
+    "  x.option_id," \
+    "  x.code," \
+    "  x.value," \
+    "  x.formatted_value," \
+    "  x.space," \
+    "  x.persistent," \
+    "  x.dhcp4_subnet_id," \
+    "  x.scope_id," \
+    "  x.user_context," \
+    "  x.shared_network_name," \
+    "  x.pool_id," \
+    "  x.modification_ts," \
+    "  s.tag " \
+    "FROM dhcp4_client_class AS c " \
+    "INNER JOIN dhcp4_client_class_order AS o " \
+    "  ON c.id = o.class_id " \
+    server_join \
+    "LEFT JOIN dhcp4_option_def AS d ON c.id = d.class_id " \
+    "LEFT JOIN dhcp4_options AS x ON x.scope_id = 2 AND c.name = x.dhcp_client_class " \
+    #__VA_ARGS__ \
+    "  ORDER BY o.order_index, d.id, x.option_id"
+
+#define MYSQL_GET_CLIENT_CLASS4_WITH_TAG(...) \
+    MYSQL_GET_CLIENT_CLASS4_COMMON( \
+    "INNER JOIN dhcp4_client_class_server AS a " \
+    "  ON c.id = a.class_id " \
+    "INNER JOIN dhcp4_server AS s " \
+    "  ON a.server_id = s.id ", \
+    __VA_ARGS__)
+
+#define MYSQL_GET_CLIENT_CLASS4_UNASSIGNED(...) \
+    MYSQL_GET_CLIENT_CLASS4_COMMON( \
+    "LEFT JOIN dhcp4_client_class_server AS a " \
+    "  ON c.id = a.class_id " \
+    "LEFT JOIN dhcp4_server AS s " \
+    "  ON a.server_id = s.id ", \
+    WHERE a.class_id IS NULL __VA_ARGS__)
+
+#endif
+
+#ifndef MYSQL_GET_CLIENT_CLASS6_COMMON
+#define MYSQL_GET_CLIENT_CLASS6_COMMON(server_join, ...) \
+    "SELECT " \
+    "  c.id," \
+    "  c.name," \
+    "  c.test," \
+    "  c.only_if_required," \
+    "  c.valid_lifetime," \
+    "  c.min_valid_lifetime," \
+    "  c.max_valid_lifetime," \
+    "  c.depend_on_known_directly," \
+    "  o.depend_on_known_indirectly, " \
+    "  c.modification_ts," \
+    "  d.id," \
+    "  d.code," \
+    "  d.name," \
+    "  d.space," \
+    "  d.type," \
+    "  d.modification_ts," \
+    "  d.is_array," \
+    "  d.encapsulate," \
+    "  d.record_types," \
+    "  d.user_context," \
+    "  x.option_id," \
+    "  x.code," \
+    "  x.value," \
+    "  x.formatted_value," \
+    "  x.space," \
+    "  x.persistent," \
+    "  x.dhcp6_subnet_id," \
+    "  x.scope_id," \
+    "  x.user_context," \
+    "  x.shared_network_name," \
+    "  x.pool_id," \
+    "  x.modification_ts," \
+    "  s.tag, " \
+    "  c.preferred_lifetime," \
+    "  c.min_preferred_lifetime, " \
+    "  c.max_preferred_lifetime " \
+    "FROM dhcp6_client_class AS c " \
+    "INNER JOIN dhcp6_client_class_order AS o " \
+    "  ON c.id = o.class_id " \
+    server_join \
+    "LEFT JOIN dhcp6_option_def AS d ON c.id = d.class_id " \
+    "LEFT JOIN dhcp6_options AS x ON x.scope_id = 2 AND c.name = x.dhcp_client_class " \
+    #__VA_ARGS__ \
+    "  ORDER BY o.order_index, d.id, x.option_id"
+
+#define MYSQL_GET_CLIENT_CLASS6_WITH_TAG(...) \
+    MYSQL_GET_CLIENT_CLASS6_COMMON( \
+    "INNER JOIN dhcp6_client_class_server AS a " \
+    "  ON c.id = a.class_id " \
+    "INNER JOIN dhcp6_server AS s " \
+    "  ON a.server_id = s.id ", \
+    __VA_ARGS__)
+
+#define MYSQL_GET_CLIENT_CLASS6_UNASSIGNED(...) \
+    MYSQL_GET_CLIENT_CLASS6_COMMON( \
+    "LEFT JOIN dhcp6_client_class_server AS a " \
+    "  ON c.id = a.class_id " \
+    "LEFT JOIN dhcp6_server AS s " \
+    "  ON a.server_id = s.id ", \
+    WHERE a.class_id IS NULL __VA_ARGS__)
+
 #endif
 
 #ifndef MYSQL_INSERT_GLOBAL_PARAMETER
@@ -724,8 +873,25 @@ namespace {
     "  is_array," \
     "  encapsulate," \
     "  record_types," \
-    "  user_context" \
-    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)"
+    "  user_context," \
+    "  class_id" \
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+#endif
+
+#ifndef MYSQL_INSERT_OPTION_DEF_CLIENT_CLASS
+#define MYSQL_INSERT_OPTION_DEF_CLIENT_CLASS(table_prefix) \
+    "INSERT INTO " #table_prefix "_option_def (" \
+    "  code," \
+    "  name," \
+    "  space," \
+    "  type," \
+    "  modification_ts," \
+    "  is_array," \
+    "  encapsulate," \
+    "  record_types," \
+    "  user_context," \
+    "  class_id" \
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, (SELECT id FROM " #table_prefix "_client_class WHERE name = ?))"
 #endif
 
 #ifndef MYSQL_INSERT_OPTION_DEF_SERVER
@@ -770,6 +936,23 @@ namespace {
     ") VALUES (?, ?, (SELECT id FROM " #table_prefix "_server WHERE tag = ?))"
 #endif
 
+#ifndef MYSQL_INSERT_CLIENT_CLASS_SERVER
+#define MYSQL_INSERT_CLIENT_CLASS_SERVER(table_prefix) \
+    "INSERT INTO " #table_prefix "_client_class_server (" \
+    "  class_id," \
+    "  modification_ts," \
+    "  server_id" \
+    ") VALUES ((SELECT id FROM " #table_prefix "_client_class WHERE name = ?), ?, (SELECT id FROM " #table_prefix "_server WHERE tag = ?))"
+#endif
+
+#ifndef MYSQL_INSERT_CLIENT_CLASS_DEPENDENCY
+#define MYSQL_INSERT_CLIENT_CLASS_DEPENDENCY(table_prefix) \
+    "INSERT INTO " #table_prefix "_client_class_dependency (" \
+    "  class_id," \
+    "  dependency_id" \
+    ") VALUES ((SELECT id FROM " #table_prefix "_client_class WHERE name = ?), (SELECT id FROM " #table_prefix "_client_class WHERE name = ?))"
+#endif
+
 #ifndef MYSQL_INSERT_SERVER
 #define MYSQL_INSERT_SERVER(table_prefix) \
     "INSERT INTO " #table_prefix "_server (" \
@@ -810,8 +993,30 @@ namespace {
     "  d.is_array = ?," \
     "  d.encapsulate = ?," \
     "  d.record_types = ?," \
-    "  d.user_context = ? " \
+    "  d.user_context = ?, " \
+    "  d.class_id = ? " \
     "WHERE s.tag = ? AND d.code = ? AND d.space = ?"
+#endif
+
+#ifndef MYSQL_UPDATE_OPTION_DEF_CLIENT_CLASS
+#define MYSQL_UPDATE_OPTION_DEF_CLIENT_CLASS(table_prefix) \
+    "UPDATE " #table_prefix "_option_def AS d " \
+    "INNER JOIN " #table_prefix "_option_def_server AS a" \
+    "  ON d.id = a.option_def_id " \
+    "INNER JOIN " #table_prefix "_server AS s" \
+    "  ON a.server_id = s.id " \
+    "SET" \
+    "  d.code = ?," \
+    "  d.name = ?," \
+    "  d.space = ?," \
+    "  d.type = ?," \
+    "  d.modification_ts = ?," \
+    "  d.is_array = ?," \
+    "  d.encapsulate = ?," \
+    "  d.record_types = ?," \
+    "  d.user_context = ? " \
+    "WHERE d.class_id = (SELECT id FROM dhcp4_client_class WHERE name = ?) " \
+    "  AND s.tag = ? AND d.code = ? AND d.space = ?"
 #endif
 
 #ifndef MYSQL_UPDATE_OPTION_COMMON
@@ -855,6 +1060,42 @@ namespace {
 
 #define MYSQL_UPDATE_OPTION6_NO_TAG(...) \
     MYSQL_UPDATE_OPTION_COMMON(dhcp6, "", ", o.pd_pool_id = ? ", __VA_ARGS__)
+#endif
+
+#ifndef MYSQL_UPDATE_CLIENT_CLASS4
+#define MYSQL_UPDATE_CLIENT_CLASS4(follow_class_name_set) \
+    "UPDATE dhcp4_client_class SET" \
+    "  name = ?," \
+    "  test = ?," \
+    "  next_server = ?," \
+    "  server_hostname = ?," \
+    "  boot_file_name = ?," \
+    "  only_if_required = ?," \
+    "  valid_lifetime = ?," \
+    "  min_valid_lifetime = ?," \
+    "  max_valid_lifetime = ?," \
+    "  depend_on_known_directly = ?," \
+    follow_class_name_set \
+    "  modification_ts = ? " \
+    "WHERE name = ?"
+#endif
+
+#ifndef MYSQL_UPDATE_CLIENT_CLASS6
+#define MYSQL_UPDATE_CLIENT_CLASS6(follow_class_name_set) \
+    "UPDATE dhcp6_client_class SET" \
+    "  name = ?," \
+    "  test = ?," \
+    "  only_if_required = ?," \
+    "  valid_lifetime = ?," \
+    "  min_valid_lifetime = ?," \
+    "  max_valid_lifetime = ?," \
+    "  depend_on_known_directly = ?," \
+    follow_class_name_set \
+    "  modification_ts = ?, " \
+    "  preferred_lifetime = ?, " \
+    "  min_preferred_lifetime = ?, " \
+    "  max_preferred_lifetime = ? " \
+    "WHERE name = ?"
 #endif
 
 #ifndef MYSQL_UPDATE_SERVER
@@ -980,6 +1221,12 @@ namespace {
     "WHERE a.option_def_id IS NULL " #__VA_ARGS__
 #endif
 
+#ifndef MYSQL_DELETE_OPTION_DEFS_CLIENT_CLASS
+#define MYSQL_DELETE_OPTION_DEFS_CLIENT_CLASS(table_prefix) \
+    "DELETE FROM " #table_prefix "_option_def " \
+    "WHERE class_id = (SELECT id FROM " #table_prefix "_client_class WHERE name = ?)"
+#endif
+
 #ifndef MYSQL_DELETE_OPTION_WITH_TAG
 #define MYSQL_DELETE_OPTION_WITH_TAG(table_prefix, ...) \
     "DELETE o FROM " #table_prefix "_options AS o " \
@@ -994,6 +1241,14 @@ namespace {
 #define MYSQL_DELETE_OPTION_NO_TAG(table_prefix, ...) \
     "DELETE o FROM " #table_prefix "_options AS o " \
     #__VA_ARGS__
+#endif
+
+#ifndef MYSQL_DELETE_OPTION_SUBNET_ID_PREFIX
+#define MYSQL_DELETE_OPTION_SUBNET_ID_PREFIX(table_prefix) \
+    "DELETE o FROM " #table_prefix "_options AS o " \
+    "INNER JOIN " #table_prefix "_subnet AS s " \
+    "  ON s.subnet_id = o." #table_prefix "_subnet_id " \
+    "WHERE o.scope_id = 1 AND (s.subnet_id = ? OR s.subnet_prefix = ?)"
 #endif
 
 #ifndef MYSQL_DELETE_OPTION_UNASSIGNED
@@ -1020,6 +1275,42 @@ namespace {
     "  AND o.pd_pool_id = " \
     "  (SELECT id FROM dhcp6_pd_pool" \
     "   WHERE prefix = ? AND prefix_length = ?)"
+#endif
+
+#ifndef MYSQL_DELETE_CLIENT_CLASS_DEPENDENCY
+#define MYSQL_DELETE_CLIENT_CLASS_DEPENDENCY(table_prefix) \
+    "DELETE FROM " #table_prefix "_client_class_dependency " \
+    "WHERE class_id = (SELECT id FROM " #table_prefix "_client_class WHERE name = ?)"
+#endif
+
+#ifndef MYSQL_DELETE_CLIENT_CLASS_SERVER
+#define MYSQL_DELETE_CLIENT_CLASS_SERVER(table_prefix) \
+    "DELETE FROM " #table_prefix "_client_class_server " \
+    "WHERE class_id = " \
+    "(SELECT id FROM " #table_prefix "_client_class WHERE name = ?)"
+#endif
+
+#ifndef MYSQL_DELETE_CLIENT_CLASS_COMMON
+#define MYSQL_DELETE_CLIENT_CLASS_COMMON(table_prefix, ...) \
+    "DELETE c FROM " #table_prefix "_client_class AS c " \
+    "INNER JOIN " #table_prefix "_client_class_server AS a" \
+    "  ON c.id = a.class_id " \
+    "INNER JOIN " #table_prefix "_server AS s" \
+    "  ON a.server_id = s.id " \
+    #__VA_ARGS__
+
+#define MYSQL_DELETE_CLIENT_CLASS_WITH_TAG(table_prefix, ...) \
+    MYSQL_DELETE_CLIENT_CLASS_COMMON(table_prefix, WHERE s.tag = ? __VA_ARGS__)
+
+#define MYSQL_DELETE_CLIENT_CLASS_ANY(table_prefix, ...) \
+    MYSQL_DELETE_CLIENT_CLASS_COMMON(table_prefix, __VA_ARGS__)
+
+#define MYSQL_DELETE_CLIENT_CLASS_UNASSIGNED(table_prefix, ...) \
+    "DELETE c FROM " #table_prefix "_client_class AS c " \
+    "LEFT JOIN " #table_prefix "_client_class_server AS a" \
+    "  ON c.id = a.class_id " \
+    "WHERE a.class_id IS NULL " #__VA_ARGS__
+
 #endif
 
 #ifndef MYSQL_DELETE_SERVER

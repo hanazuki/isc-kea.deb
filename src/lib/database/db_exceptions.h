@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,7 +16,7 @@ namespace db {
 ///
 /// Cassandra have a concept of mutation (any statement that does change the
 /// data, like INSERT, UPDATE or DELETE). Under certain conditions it may be
-/// possible that those statesments may fail to apply.
+/// possible that those statements may fail to apply.
 class StatementNotApplied : public Exception {
 public:
     StatementNotApplied(const char* file, size_t line, const char* what)

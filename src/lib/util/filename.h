@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -52,8 +52,7 @@ public:
 
     /// \brief Constructor
     Filename(const std::string& name) :
-        full_name_(""), directory_(""), name_(""), extension_("")
-    {
+        full_name_(""), directory_(""), name_(""), extension_("") {
         setName(name);
     }
 
@@ -149,7 +148,7 @@ private:
     /// \param name Returned name part
     /// \param extension Returned extension part
     void split(const std::string& full_name, std::string& directory,
-       std::string& name, std::string& extension) const;
+               std::string& name, std::string& extension) const;
 
     // Members
 

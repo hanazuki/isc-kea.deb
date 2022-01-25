@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -184,7 +184,7 @@ TEST_F(IntervalTimerTest, startIntervalTimer) {
     // Allow 1% of clock skew
     EXPECT_TRUE(test_runtime >= boost::posix_time::milliseconds(99)) <<
                 "test runtime " << test_runtime.total_milliseconds() <<
-                "msec " << ">= 100";
+                "msec >= 100";
 }
 
 TEST_F(IntervalTimerTest, destructIntervalTimer) {
@@ -312,7 +312,7 @@ TEST_F(IntervalTimerTest, intervalModeTest) {
 
     // As long as service runs at least one event handler, loop until
     // we've hit our goals.  It won't return zero unless is out of
-    // work or the the service has been stopped by the test timer.
+    // work or the service has been stopped by the test timer.
     int cnt = 0;
     while (((cnt = io_service_.get_io_service().run_one()) > 0)
            && (repeater_count < 5)) {
@@ -362,7 +362,7 @@ TEST_F(IntervalTimerTest, timerReuseTest) {
 
     // As long as service runs at least one event handler, loop until
     // we've hit our goals.  It won't return zero unless is out of
-    // work or the the service has been stopped by the test timer.
+    // work or the service has been stopped by the test timer.
     int cnt = 0;
     while ((cnt = io_service_.get_io_service().run_one())
             && (one_shot_count < 4)) {

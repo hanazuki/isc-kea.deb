@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -305,7 +305,7 @@ TEST_F(CalloutHandleTest, DeleteAllArguments) {
 TEST_F(CalloutHandleTest, StatusField) {
     CalloutHandle handle(getCalloutManager());
 
-    // Should be false on construction.
+    // Should be continue on construction.
     EXPECT_EQ(CalloutHandle::NEXT_STEP_CONTINUE, handle.getStatus());
 
     handle.setStatus(CalloutHandle::NEXT_STEP_SKIP);

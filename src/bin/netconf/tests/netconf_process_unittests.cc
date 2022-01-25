@@ -1,18 +1,23 @@
-// Copyright (C) 2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <netconf/netconf_cfg_mgr.h>
 #include <netconf/netconf_process.h>
 #include <asiolink/interval_timer.h>
 #include <asiolink/io_service.h>
 #include <process/testutils/d_test_stubs.h>
-#include <boost/bind.hpp>
+#include <testutils/gtest_utils.h>
+
 #include <boost/date_time/posix_time/posix_time.hpp>
+
 #include <gtest/gtest.h>
+
+#include <functional>
 
 using namespace boost::posix_time;
 using namespace isc;
@@ -52,7 +57,7 @@ TEST(NetconfProcess, construction) {
 
     // Verify that the constructor succeeds with a valid io_service
     lcl_io_service.reset(new IOService());
-    ASSERT_NO_THROW(NetconfProcess("TestProcess", lcl_io_service));
+    ASSERT_NO_THROW_LOG(NetconfProcess("TestProcess", lcl_io_service));
 
     // Verify tha the configuration is accessible after construction.
     NetconfProcess netconf_process("TestProcess", lcl_io_service);
@@ -66,7 +71,7 @@ TEST_F(NetconfProcessTest, shutdown) {
     // Use an asiolink IntervalTimer and callback to generate the
     // shutdown invocation. (Note IntervalTimer setup is in milliseconds).
     IntervalTimer timer(*getIoService());
-    timer.setup(boost::bind(&NetconfProcessTest::genShutdownCallback, this),
+    timer.setup(std::bind(&NetconfProcessTest::genShutdownCallback, this),
                 200);
 
     // Record start time, and invoke run().

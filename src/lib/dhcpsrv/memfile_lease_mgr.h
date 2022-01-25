@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,13 +8,13 @@
 #define MEMFILE_LEASE_MGR_H
 
 #include <asiolink/interval_timer.h>
+#include <asiolink/process_spawn.h>
 #include <database/database_connection.h>
 #include <dhcp/hwaddr.h>
 #include <dhcpsrv/csv_lease_file4.h>
 #include <dhcpsrv/csv_lease_file6.h>
 #include <dhcpsrv/memfile_lease_storage.h>
 #include <dhcpsrv/lease_mgr.h>
-#include <util/process_spawn.h>
 
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
@@ -199,21 +199,6 @@ public:
     ///
     /// @return lease collection
     virtual Lease4Collection getLease4(const ClientId& client_id) const;
-
-    /// @brief Returns IPv4 lease for specified client-id/hwaddr/subnet-id tuple
-    ///
-    /// There can be at most one lease for a given client-id/hwaddr tuple
-    /// in a single pool, so this method with either return a single lease
-    /// or NULL.
-    ///
-    /// @param clientid client identifier
-    /// @param hwaddr hardware address of the client
-    /// @param subnet_id identifier of the subnet that lease must belong to
-    ///
-    /// @return a pointer to the lease (or NULL if a lease is not found)
-    virtual Lease4Ptr getLease4(const ClientId& clientid,
-                                const HWAddr& hwaddr,
-                                SubnetID subnet_id) const;
 
     /// @brief Returns existing IPv4 lease for specified client-id
     ///
@@ -403,7 +388,16 @@ public:
     ///
     /// @param lease4 The lease to be updated.
     ///
-    /// If no such lease is present, an exception will be thrown.
+    /// @throw NoSuchLease if there is no such lease to be updated.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the update
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and UPDATE with different expiration time.
     virtual void updateLease4(const Lease4Ptr& lease4);
 
     /// @brief Updates IPv6 lease.
@@ -413,7 +407,16 @@ public:
     ///
     /// @param lease6 The lease to be updated.
     ///
-    /// If no such lease is present, an exception will be thrown.
+    /// @throw NoSuchLease if there is no such lease to be updated.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the update
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and UPDATE with different expiration time.
     virtual void updateLease6(const Lease6Ptr& lease6);
 
     /// @brief Deletes an IPv4 lease.
@@ -421,6 +424,15 @@ public:
     /// @param lease IPv4 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the deletion
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and DELETE with different expiration time.
     virtual bool deleteLease(const Lease4Ptr& lease);
 
     /// @brief Deletes an IPv6 lease.
@@ -428,6 +440,15 @@ public:
     /// @param lease IPv6 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the deletion
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and DELETE with different expiration time.
     virtual bool deleteLease(const Lease6Ptr& lease);
 
     /// @brief Deletes all expired-reclaimed DHCPv4 leases.
@@ -470,7 +491,7 @@ public:
 
 private:
 
-    /// @name Internal methods called holding the mutex in multi threading
+    /// @name Internal methods called while holding the mutex in multi threading
     /// mode.
     ///@{
 
@@ -660,11 +681,33 @@ private:
     /// @brief Updates IPv4 lease.
     ///
     /// @param lease4 The lease to be updated.
+    ///
+    /// @throw NoSuchLease if there is no such lease to be updated.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the update
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and UPDATE with different expiration time.
     void updateLease4Internal(const Lease4Ptr& lease4);
 
     /// @brief Updates IPv6 lease.
     ///
     /// @param lease6 The lease to be updated.
+    ///
+    /// @throw NoSuchLease if there is no such lease to be updated.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the update
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and UPDATE with different expiration time.
     void updateLease6Internal(const Lease6Ptr& lease6);
 
     /// @brief Deletes an IPv4 lease.
@@ -672,6 +715,15 @@ private:
     /// @param lease IPv4 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the deletion
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and DELETE with different expiration time.
     bool deleteLeaseInternal(const Lease4Ptr& addr);
 
     /// @brief Deletes an IPv6 lease.
@@ -679,6 +731,15 @@ private:
     /// @param lease IPv6 lease being deleted.
     ///
     /// @return true if deletion was successful, false if no such lease exists.
+    ///
+    /// @note The current_cltt_ and current_valid_lft_ are used to maximize the
+    /// chance that only one thread or process performs an update or delete
+    /// operation on the lease by matching these values with the expiration time
+    /// data in the database.
+    /// @note For test purposes only, when persistence is disabled, the deletion
+    /// of the lease is performed only if the value matches the one received on
+    /// the SELECT query, effectively enforcing no update on the lease between
+    /// SELECT and DELETE with different expiration time.
     bool deleteLeaseInternal(const Lease6Ptr& addr);
 
     /// @brief Removes specified IPv4 leases.

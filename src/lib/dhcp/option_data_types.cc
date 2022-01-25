@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,6 +15,20 @@
 #include <limits>
 
 using namespace isc::asiolink;
+
+namespace {
+/// @brief Bit mask used to compute PSID value.
+///
+/// The mask represents the useful bits of the PSID. The value 0 is a special
+/// case because the RFC explicitly specifies that PSID value should be ignored
+/// if psid_len is 0.
+std::vector<uint16_t> psid_bitmask = { 0xffff,
+    0x8000, 0xc000, 0xe000, 0xf000,
+    0xf800, 0xfc00, 0xfe00, 0xff00,
+    0xff80, 0xffc0, 0xffe0, 0xfff0,
+    0xfff8, 0xfffc, 0xfffe, 0xffff
+};
+}
 
 namespace isc {
 namespace dhcp {
@@ -236,7 +250,7 @@ OptionDataTypeUtil::writeTuple(const std::string& value,
         if (value.size() > std::numeric_limits<uint8_t>::max()) {
             isc_throw(BadDataTypeCast, "invalid tuple value (size "
                       << value.size() << " larger than "
-                      << std::numeric_limits<uint8_t>::max() << ")");
+                      << +std::numeric_limits<uint8_t>::max() << ")");
         }
         buf.push_back(static_cast<uint8_t>(value.size()));
 
@@ -267,7 +281,7 @@ OptionDataTypeUtil::writeTuple(const OpaqueDataTuple& tuple,
         if (tuple.getLength() > std::numeric_limits<uint8_t>::max()) {
             isc_throw(BadDataTypeCast, "invalid tuple value (size "
                       << tuple.getLength() << " larger than "
-                      << std::numeric_limits<uint8_t>::max() << ")");
+                      << +std::numeric_limits<uint8_t>::max() << ")");
         }
         buf.push_back(static_cast<uint8_t>(tuple.getLength()));
 
@@ -511,7 +525,7 @@ OptionDataTypeUtil::readPsid(const std::vector<uint8_t>& buf) {
     uint8_t psid_len = buf[0];
 
     // PSID length must not be greater than 16 bits.
-    if (psid_len > sizeof(uint16_t) * 8) {
+    if (psid_len > (sizeof(uint16_t) * 8)) {
         isc_throw(BadDataTypeCast, "invalid PSID length value "
                   << static_cast<unsigned>(psid_len)
                   << ", this value is expected to be in range of 0 to 16");
@@ -522,15 +536,10 @@ OptionDataTypeUtil::readPsid(const std::vector<uint8_t>& buf) {
 
     // We need to check that the PSID value does not exceed the maximum value
     // for a specified PSID length. That means that all bits placed further than
-    // psid_len from the left must be set to 0. So, we create a bit mask
-    // by shifting a value of 0xFFFF to the left and right by psid_len. This
-    // leaves us with psid_len leftmost bits unset and the rest set. Next, we
-    // apply the mask on the PSID value from the buffer and make sure the result
-    // is 0. Otherwise, it means that there are some bits set in the PSID which
-    // aren't supposed to be set.
-    if ((psid_len > 0) &&
-        ((psid & static_cast<uint16_t>(static_cast<uint16_t>(0xFFFF << psid_len)
-                                       >> psid_len)) != 0)) {
+    // psid_len from the left must be set to 0.
+    // The value 0 is a special case because the RFC explicitly says that the
+    // PSID value should be ignored if psid_len is 0.
+    if ((psid & ~psid_bitmask[psid_len]) != 0) {
         isc_throw(BadDataTypeCast, "invalid PSID value " << psid
                   << " for a specified PSID length "
                   << static_cast<unsigned>(psid_len));
@@ -538,11 +547,11 @@ OptionDataTypeUtil::readPsid(const std::vector<uint8_t>& buf) {
 
     // All is good, so we can convert the PSID value read from the buffer to
     // the port set number.
-    if (psid_len == sizeof(psid) * 8) {
+    if (psid_len == 0) {
         // Shift by 16 always gives zero (CID 1398333)
         psid = 0;
     } else {
-        psid = psid >> (sizeof(psid) * 8 - psid_len);
+        psid >>= (sizeof(psid) * 8 - psid_len);
     }
     return (std::make_pair(PSIDLen(psid_len), PSID(psid)));
 }
@@ -550,13 +559,13 @@ OptionDataTypeUtil::readPsid(const std::vector<uint8_t>& buf) {
 void
 OptionDataTypeUtil::writePsid(const PSIDLen& psid_len, const PSID& psid,
                               std::vector<uint8_t>& buf) {
-    if (psid_len.asUint8() > sizeof(psid) * 8) {
+    if (psid_len.asUint8() > (sizeof(psid) * 8)) {
         isc_throw(BadDataTypeCast, "invalid PSID length value "
                   << psid_len.asUnsigned()
                   << ", this value is expected to be in range of 0 to 16");
     }
 
-    if (psid_len.asUint8() > 0 &&
+    if ((psid_len.asUint8() > 0) &&
         (psid.asUint16() > (0xFFFF >> (sizeof(uint16_t) * 8 - psid_len.asUint8())))) {
         isc_throw(BadDataTypeCast, "invalid PSID value " << psid.asUint16()
                   << " for a specified PSID length "
@@ -570,7 +579,6 @@ OptionDataTypeUtil::writePsid(const PSIDLen& psid_len, const PSID& psid,
                            &buf[buf.size() - 2], 2);
 }
 
-
 std::string
 OptionDataTypeUtil::readString(const std::vector<uint8_t>& buf) {
     std::string value;
@@ -580,7 +588,7 @@ OptionDataTypeUtil::readString(const std::vector<uint8_t>& buf) {
         auto end = util::str::seekTrimmed(begin, buf.end(), 0x0);
         if (std::distance(begin, end) == 0) {
             isc_throw(isc::OutOfRange, "string value carried by the option "
-                      << " contained only NULLs");
+                                       "contained only NULLs");
         }
 
         value.insert(value.end(), begin, end);

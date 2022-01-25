@@ -1,7 +1,7 @@
 SUBDIRS = . libloadtests tests
 
 AM_CPPFLAGS  = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
-AM_CPPFLAGS += $(BOOST_INCLUDES)
+AM_CPPFLAGS += $(BOOST_INCLUDES) $(CRYPTO_CFLAGS) $(CRYPTO_INCLUDES)
 AM_CXXFLAGS  = $(KEA_CXXFLAGS)
 
 # Ensure that the message file is included in the distribution
@@ -25,6 +25,7 @@ libha_la_SOURCES += ha_messages.cc ha_messages.h
 libha_la_SOURCES += ha_server_type.h
 libha_la_SOURCES += ha_service.cc ha_service.h
 libha_la_SOURCES += ha_service_states.cc ha_service_states.h
+libha_la_SOURCES += lease_update_backlog.cc lease_update_backlog.h
 libha_la_SOURCES += query_filter.cc query_filter.h
 libha_la_SOURCES += version.cc
 
@@ -49,6 +50,7 @@ libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
 libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/http/libkea-http.la
 libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
+libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/database/libkea-database.la
 libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/cc/libkea-cc.la
 libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 libdhcp_ha_la_LIBADD += $(top_builddir)/src/lib/dns/libkea-dns++.la

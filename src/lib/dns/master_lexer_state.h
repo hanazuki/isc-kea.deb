@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,8 +8,6 @@
 #define MASTER_LEXER_STATE_H 1
 
 #include <dns/master_lexer.h>
-
-#include <boost/function.hpp>
 
 namespace isc {
 namespace dns {

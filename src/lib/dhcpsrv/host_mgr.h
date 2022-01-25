@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #ifndef HOST_MGR_H
 #define HOST_MGR_H
 
+#include <asiolink/io_service.h>
 #include <database/database_connection.h>
 #include <dhcpsrv/base_host_data_source.h>
 #include <dhcpsrv/cache_host_data_source.h>
@@ -66,6 +67,7 @@ public:
     ///
     /// @param access Host backend access parameters for the alternate
     /// host backend. It holds "keyword=value" pairs, separated by spaces.
+    ///
     /// The supported values are specific to the alternate backend in use.
     /// However, the "type" parameter will be common and it will specify which
     /// backend is to be used. Currently, no parameters are supported
@@ -77,6 +79,19 @@ public:
     /// @param db_type database backend type.
     /// @return true when found and removed, false when not found.
     static bool delBackend(const std::string& db_type);
+
+    /// @brief Delete an alternate host backend (aka host data source).
+    ///
+    /// @param db_type database backend type.
+    /// @param access Host backend access parameters for the alternate
+    /// host backend. It holds "keyword=value" pairs, separated by spaces.
+    /// @param if_unusable flag which indicates if the host data source should
+    /// be deleted only if it is unusable.
+    /// @return false when not removed because it is not found or because it is
+    /// still usable (if_unusable is true), true otherwise.
+    static bool delBackend(const std::string& db_type,
+                           const std::string& access,
+                           bool if_unusable = false);
 
     /// @brief Delete all alternate backends.
     static void delAllBackends();
@@ -255,6 +270,60 @@ public:
              uint64_t lower_host_id,
              const HostPageSize& page_size) const;
 
+    /// @brief Returns range of hosts.
+    ///
+    /// This method returns a page of @c Host objects representing
+    /// reservations as documented in the @c BaseHostDataSource::getPage4
+    ///
+    /// The typical usage of this method is as follows:
+    /// - Get the first page of hosts by specifying zero index and id
+    ///   as the beginning of the range.
+    /// - Index and last id of the returned range should be used as
+    ///   starting index and id for the next page in the subsequent call.
+    /// - All returned hosts are from the same source so if the number of
+    ///   hosts returned is lower than the page size, it does not indicate
+    ///   that the last page has been retrieved.
+    /// - If there are no hosts returned it indicates that the previous page
+    ///   was the last page.
+    ///
+    /// @param source_index Index of the source.
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Host collection (may be empty).
+    virtual ConstHostCollection
+    getPage4(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
+    /// @brief Returns range of hosts.
+    ///
+    /// This method returns a page of @c Host objects representing
+    /// reservations as documented in the @c BaseHostDataSource::getPage6
+    ///
+    /// The typical usage of this method is as follows:
+    /// - Get the first page of hosts by specifying zero index and id
+    ///   as the beginning of the range.
+    /// - Index and last id of the returned range should be used as
+    ///   starting index and id for the next page in the subsequent call.
+    /// - All returned hosts are from the same source so if the number of
+    ///   hosts returned is lower than the page size, it does not indicate
+    ///   that the last page has been retrieved.
+    /// - If there are no hosts returned it indicates that the previous page
+    ///   was the last page.
+    ///
+    /// @param source_index Index of the source.
+    /// @param lower_host_id Host identifier used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return Host collection (may be empty).
+    virtual ConstHostCollection
+    getPage6(size_t& source_index,
+             uint64_t lower_host_id,
+             const HostPageSize& page_size) const;
+
     /// @brief Returns a collection of hosts using the specified IPv4 address.
     ///
     /// This method may return multiple @c Host objects if they are connected to
@@ -323,6 +392,33 @@ public:
     virtual ConstHostPtr
     get4(const SubnetID& subnet_id, const asiolink::IOAddress& address) const;
 
+    /// @brief Returns all hosts connected to the IPv4 subnet and having
+    /// a reservation for a specified address.
+    ///
+    /// In most cases it is desired that there is at most one reservation
+    /// for a given IPv4 address within a subnet. In a default configuration,
+    /// the backend does not allow for inserting more than one host with
+    /// the same IPv4 reservation. In that case, the number of hosts returned
+    /// by this function is 0 or 1.
+    ///
+    /// If the backend is configured to allow multiple hosts with reservations
+    /// for the same IPv4 address in the given subnet, this method can return
+    /// more than one host.
+    ///
+    /// The typical use case when a single IPv4 address is reserved for multiple
+    /// hosts is when these hosts represent different interfaces of the same
+    /// machine and each interface comes with a different MAC address. In that
+    /// case, the same IPv4 address is assigned regardless of which interface is
+    /// used by the DHCP client to communicate with the server.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv4 address.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll4(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const;
+
     /// @brief Returns any host connected to the IPv6 subnet.
     ///
     /// This method returns a host connected to the IPv6 subnet as described
@@ -382,6 +478,33 @@ public:
     virtual ConstHostPtr
     get6(const SubnetID& subnet_id, const asiolink::IOAddress& addr) const;
 
+    /// @brief Returns all hosts connected to the IPv6 subnet and having
+    /// a reservation for a specified address or delegated prefix (lease).
+    ///
+    /// In most cases it is desired that there is at most one reservation
+    /// for a given IPv6 lease within a subnet. In a default configuration,
+    /// the backend does not allow for inserting more than one host with
+    /// the same IPv6 address or prefix. In that case, the number of hosts
+    /// returned by this function is 0 or 1.
+    ///
+    /// If the backend is configured to allow multiple hosts with reservations
+    /// for the same IPv6 lease in the given subnet, this method can return
+    /// more than one host.
+    ///
+    /// The typical use case when a single IPv6 lease is reserved for multiple
+    /// hosts is when these hosts represent different interfaces of the same
+    /// machine and each interface comes with a different MAC address. In that
+    /// case, the same IPv6 lease is assigned regardless of which interface is
+    /// used by the DHCP client to communicate with the server.
+    ///
+    /// @param subnet_id Subnet identifier.
+    /// @param address reserved IPv6 address/prefix.
+    ///
+    /// @return Collection of const @c Host objects.
+    virtual ConstHostCollection
+    getAll6(const SubnetID& subnet_id,
+            const asiolink::IOAddress& address) const;
+
     /// @brief Adds a new host to the alternate data source.
     ///
     /// This method will throw an exception if no alternate data source is
@@ -390,7 +513,12 @@ public:
     /// @param host Pointer to the new @c Host object being added.
     virtual void add(const HostPtr& host);
 
-    /// @brief Attempts to delete a host by address.
+    /// @brief Attempts to delete hosts by address.
+    ///
+    /// It deletes hosts from the first alternate source in which at least
+    /// one matching host is found. In unlikely case that the hosts having
+    /// the same IP address exist in other alternate sources, the hosts
+    /// from these other sources are not deleted.
     ///
     /// This method supports both v4 and v6.
     ///
@@ -475,7 +603,49 @@ public:
         disable_single_query_ = disable_single_query;
     }
 
+    /// @brief Controls whether IP reservations are unique or non-unique.
+    ///
+    /// In a typical case, the IP reservations are unique and backends verify
+    /// prior to adding a host reservation to the database that the reservation
+    /// for a given IP address/subnet does not exist. In some cases it may be
+    /// required to allow non-unique IP reservations, e.g. in the case when a
+    /// host has several interfaces and independently of which interface is used
+    /// by this host to communicate with the DHCP server the same IP address
+    /// should be assigned. In this case the @c unique value should be set to
+    /// false to disable the checks for uniqueness on the backend side.
+    ///
+    /// Calling this function on @c HostMgr causes the manager to attempt to
+    /// set this flag on all backends in use.
+    ///
+    /// @param unique boolean flag indicating if the IP reservations must be
+    /// unique or can be non-unique.
+    /// @return true if the new setting was accepted by the backend or false
+    /// otherwise.
+    virtual bool setIPReservationsUnique(const bool unique);
+
+    /// @brief Returns the boolean flag indicating if the IP reservations
+    /// must be unique or can be non-unique.
+    ///
+    /// @return true if IP reservations must be unique or false if IP
+    /// reservations can be non-unique.
+    bool getIPReservationsUnique() const {
+        return (ip_reservations_unique_);
+    }
+
+    /// @brief Sets IO service to be used by the Host Manager.
+    ///
+    /// @param io_service IOService object, used for all ASIO operations.
+    static void setIOService(const isc::asiolink::IOServicePtr& io_service) {
+        io_service_ = io_service;
+    }
+
+    /// @brief Returns pointer to the IO service.
+    static isc::asiolink::IOServicePtr& getIOService() {
+        return (io_service_);
+    }
+
 protected:
+
     /// @brief The negative caching flag.
     ///
     /// When true and the first backend is a cache
@@ -492,7 +662,7 @@ protected:
 
     /// @brief Cache an answer.
     ///
-    /// @param host Pointer to the missied host.
+    /// @param host Pointer to the missed host.
     virtual void cache(ConstHostPtr host) const;
 
     /// @brief Cache a negative answer.
@@ -510,8 +680,17 @@ protected:
 
 private:
 
+    /// @brief Indicates if backends are running in the mode in which IP
+    /// reservations must be unique (true) or non-unique (false).
+    ///
+    /// This flag is set to false only after calling @c setIPReservationsUnique
+    /// with the @c unique value set to false and after this setting was
+    /// successfully applied to all backends.
+    bool ip_reservations_unique_;
+
     /// @brief Private default constructor.
-    HostMgr() : negative_caching_(false), disable_single_query_(false) { }
+    HostMgr() : negative_caching_(false), disable_single_query_(false),
+                ip_reservations_unique_(true) { }
 
     /// @brief List of alternate host data sources.
     HostDataSourceList alternate_sources_;
@@ -523,8 +702,11 @@ private:
     /// @c HostMgr.
     static boost::scoped_ptr<HostMgr>& getHostMgrPtr();
 
+    /// The IOService object, used for all ASIO operations.
+    static isc::asiolink::IOServicePtr io_service_;
 };
-}
-}
+
+}  // namespace dhcp
+}  // namespace isc
 
 #endif // HOST_MGR_H

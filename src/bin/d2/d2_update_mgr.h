@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,11 +10,11 @@
 /// @file d2_update_mgr.h This file defines the class D2UpdateMgr.
 
 #include <asiolink/io_service.h>
-#include <exceptions/exceptions.h>
-#include <d2/d2_log.h>
 #include <d2/d2_queue_mgr.h>
-#include <d2/d2_cfg_mgr.h>
-#include <d2/nc_trans.h>
+#include <d2srv/nc_trans.h>
+#include <d2srv/d2_cfg_mgr.h>
+#include <d2srv/d2_log.h>
+#include <exceptions/exceptions.h>
 
 #include <boost/noncopyable.hpp>
 #include <boost/shared_ptr.hpp>
@@ -68,18 +68,6 @@ public:
     /// NOTE that 32 is an arbitrary choice picked for the initial
     /// implementation.
     static const size_t MAX_TRANSACTIONS_DEFAULT = 32;
-
-    // @todo This structure is not yet used. It is here in anticipation of
-    // enabled statistics capture.
-    struct Stats {
-        uint64_t start_time_;
-        uint64_t stop_time_;
-        uint64_t update_count_;
-        uint64_t min_update_time_;
-        uint64_t max_update_time_;
-        uint64_t server_rejects_;
-        uint64_t server_timeouts_;
-    };
 
     /// @brief Constructor
     ///
@@ -154,6 +142,10 @@ protected:
     /// updates in that direction, failing to match the request to a list
     /// of servers is an error which will be logged and the request will be
     /// discarded.
+    ///
+    /// Finally, If conflict resolution is enabled, it will instantiate either
+    /// a NameAddTransaction or a NameRemoveTransaction. If disabled it will
+    /// instantiate either a SimpleAddTransaction or a SimpleRemoveTransaction.
     ///
     /// @param ncr the NameChangeRequest for which to create a transaction.
     ///

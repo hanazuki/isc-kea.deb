@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,9 +14,7 @@
 #include <gtest/gtest.h>
 
 #include <boost/lexical_cast.hpp>
-#include <boost/function.hpp>
 #include <boost/scoped_ptr.hpp>
-#include <boost/bind.hpp>
 
 #include <string>
 #include <sstream>

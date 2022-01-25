@@ -1,0 +1,103 @@
+// Copyright (C) 2020-2021 Internet Systems Consortium, Inc. ("ISC")
+//
+// This Source Code Form is subject to the terms of the Mozilla Public
+// License, v. 2.0. If a copy of the MPL was not distributed with this
+// file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+/**
+ @page libasiolink libkea-asiolink - Kea Boost ASIO Library
+
+@section asiolinkUtilities Boost ASIO Utilities
+
+The asiolink library (libkea-asiolink) encapsulates Boost ASIO tools:
+
+ - addr utilities: prefix (IOAddress and length pair) tools.
+
+ - dummy I/O callback.
+
+ - interval timer.
+
+ - I/O acceptor: asynchronous server ASIO socket (base class).
+
+ - I/O address: ASIO IP address.
+
+ - I/O ASIO socket (derived from I/O socket).
+
+ - I/O endpoint: ASIO IP endpoint (abstraction of a socket address).
+
+ - I/O error: @c isc::asiolink::IOError exception declaration.
+
+ - I/O service: ASIO I/O service (named I/O context in recent versions).
+
+ - I/O socket: ASIO I/O socket base class.
+
+ - TCP acceptor: TCP derivation of I/O acceptor.
+
+ - TCP endpoint: TCP derivation of I/O endpoint.
+
+ - TCP socket: TCP derivation of I/O socket.
+
+ - TLS acceptor: TLS derivation of TCP acceptor.
+
+ - TLS socket: TLS derivation of I/O socket embedding a TCP socket.
+
+ - UDP endpoint: UDP derivation of I/O endpoint.
+
+ - UDP socket: UDP derivation of I/O socket.
+
+ - Unix domain socket: Unix socket (AF_LOCAL) derivation of I/O socket.
+
+ - Unix domain acceptor: Unix socket (AF_LOCAL) derivation of I/O acceptor.
+
+ - Unix domain endpoint: Unix socket (AF_LOCAL) derivation of I/O endpoint.
+
+These tools in general use the error code (vs throwing exception) overload
+and for asynchronous methods / functions a callback taking the error code
+as its first argument.
+
+@section asiolinkTLSSupport TLS ASIO support
+
+The TLS support is an extension of the TCP one:
+
+ - the TLS acceptor is derived from the TCP acceptor.
+
+ - the TLS socket embeds a TCP socket.
+
+Basic socket operations as accept, connect, close, etc, are performed on
+the parent or embedded TCP socket.
+
+TLS adds a TLS context (TLS context objects encapsulate the TLS setup e.g.
+certificates) and two new operations:
+
+ - TLS handshake which must be called after accept or connect before
+  any read or write.
+
+ - TLS shutdown which is an optional orderly close prepare. It must not
+  be called on any kind of errors and after a TLS shutdown the TLS stream
+  can not be used: the only valid operation on it is to close it.
+
+@note TLS shows a stream of sequenced records interface but there is
+no direct mapping between high level TLS operations and TCP I/O,
+e.g. a TLS read can involve a TCP write and the opposite.
+
+@note TLS introduces a new error code "stream_truncated" which is
+the TLS short read.
+
+To debug or extend the TLS support two tools are available:
+
+ - client and server samples for both OpenSSL and Botan.
+
+ - TLS unit tests (tls_unittest.cc file).
+
+@section asiolinkMTConsiderations Multi-Threading Consideration for Boost ASIO Utilities
+
+By default Boost ASIO utilities are not thread safe even if Boost ASIO tools
+themselves are. When there is no state and the encapsulation is direct
+the thread safety property is preserved. Exceptions to the by default
+no thread safe are:
+
+ - I/O address (direct encapsulation) is thread safe.
+
+ - interval timer setup and cancel methods are thread safe.
+
+*/

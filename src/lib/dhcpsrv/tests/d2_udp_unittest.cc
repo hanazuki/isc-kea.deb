@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,15 +15,15 @@
 #include <dhcpsrv/d2_client_mgr.h>
 #include <exceptions/exceptions.h>
 
-#include <boost/function.hpp>
-#include <boost/bind.hpp>
 #include <gtest/gtest.h>
 
+#include <functional>
 #include <sys/select.h>
 
 using namespace std;
 using namespace isc::dhcp;
 using namespace isc;
+namespace ph = std::placeholders;
 
 namespace {
 
@@ -165,7 +165,7 @@ public:
 
     /// @brief Returns D2ClientErroHandler bound to this::error_handler_.
     D2ClientErrorHandler getErrorHandler() {
-        return (boost::bind(&D2ClientMgrTest::error_handler, this, _1, _2));
+        return (std::bind(&D2ClientMgrTest::error_handler, this, ph::_1, ph::_2));
     }
 
     /// @brief Constructs a NameChangeRequest message from a fixed JSON string.
@@ -180,7 +180,8 @@ public:
             " \"ip-address\" : \"192.168.2.1\" , "
             " \"dhcid\" : \"010203040A7F8E3D\" , "
             " \"lease-expires-on\" : \"20140121132405\" , "
-            " \"lease-length\" : 1300 "
+            " \"lease-length\" : 1300, "
+            " \"use-conflict-resolution\" : true "
             "}";
 
         return (dhcp_ddns::NameChangeRequest::fromJSON(ncr_str));
@@ -434,7 +435,7 @@ TEST_F(D2ClientMgrTest, ifaceRegister) {
     // Calling receive should complete the first message and start the second.
     IfaceMgr::instance().receive4(0, 0);
 
-    // Verify the callback hander was invoked, no errors counted.
+    // Verify the callback handler was invoked, no errors counted.
     EXPECT_EQ(2, getQueueSize());
     ASSERT_EQ(1, callback_count_);
     ASSERT_EQ(0, error_handler_count_);

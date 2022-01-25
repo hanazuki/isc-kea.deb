@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -40,8 +40,9 @@ Lease::Lease(const isc::asiolink::IOAddress& addr,
              uint32_t valid_lft, SubnetID subnet_id, time_t cltt,
              const bool fqdn_fwd, const bool fqdn_rev,
              const std::string& hostname, const HWAddrPtr& hwaddr)
-    : addr_(addr), valid_lft_(valid_lft), old_valid_lft_(valid_lft),
-      cltt_(cltt), old_cltt_(cltt), subnet_id_(subnet_id),
+    : addr_(addr), valid_lft_(valid_lft), current_valid_lft_(valid_lft),
+      reuseable_valid_lft_(0),
+      cltt_(cltt), current_cltt_(cltt), subnet_id_(subnet_id),
       hostname_(boost::algorithm::to_lower_copy(hostname)), fqdn_fwd_(fqdn_fwd),
       fqdn_rev_(fqdn_rev), hwaddr_(hwaddr), state_(STATE_DEFAULT) {
 }
@@ -274,6 +275,19 @@ Lease::fromElementCommon(const LeasePtr& lease, const data::ConstElementPtr& ele
         }
         lease->setContext(ctx);
     }
+
+    lease->updateCurrentExpirationTime();
+}
+
+void
+Lease::updateCurrentExpirationTime() {
+    Lease::syncCurrentExpirationTime(*this, *this);
+}
+
+void
+Lease::syncCurrentExpirationTime(const Lease& from, Lease& to) {
+    to.current_cltt_ = from.cltt_;
+    to.current_valid_lft_ = from.valid_lft_;
 }
 
 Lease4::Lease4(const Lease4& other)
@@ -377,9 +391,10 @@ Lease4::operator=(const Lease4& other) {
     if (this != &other) {
         addr_ = other.addr_;
         valid_lft_ = other.valid_lft_;
-        old_valid_lft_ = other.old_valid_lft_;
+        current_valid_lft_ = other.current_valid_lft_;
+        reuseable_valid_lft_ = other.reuseable_valid_lft_;
         cltt_ = other.cltt_;
-        old_cltt_ = other.old_cltt_;
+        current_cltt_ = other.current_cltt_;
         subnet_id_ = other.subnet_id_;
         hostname_ = other.hostname_;
         fqdn_fwd_ = other.fqdn_fwd_;
@@ -474,13 +489,13 @@ Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
                SubnetID subnet_id, const HWAddrPtr& hwaddr, uint8_t prefixlen)
     : Lease(addr, valid, subnet_id, 0/*cltt*/, false, false, "", hwaddr),
       type_(type), prefixlen_(prefixlen), iaid_(iaid), duid_(duid),
-      preferred_lft_(preferred) {
+      preferred_lft_(preferred), reuseable_preferred_lft_(0) {
     if (!duid) {
         isc_throw(InvalidOperation, "DUID is mandatory for an IPv6 lease");
     }
 
     cltt_ = time(NULL);
-    old_cltt_ = cltt_;
+    current_cltt_ = cltt_;
 }
 
 Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
@@ -491,19 +506,19 @@ Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
     : Lease(addr, valid, subnet_id, 0/*cltt*/,
             fqdn_fwd, fqdn_rev, hostname, hwaddr),
       type_(type), prefixlen_(prefixlen), iaid_(iaid), duid_(duid),
-      preferred_lft_(preferred) {
+      preferred_lft_(preferred), reuseable_preferred_lft_(0) {
     if (!duid) {
         isc_throw(InvalidOperation, "DUID is mandatory for an IPv6 lease");
     }
 
     cltt_ = time(NULL);
-    old_cltt_ = cltt_;
+    current_cltt_ = cltt_;
 }
 
 Lease6::Lease6()
     : Lease(isc::asiolink::IOAddress("::"), 0, 0, 0, false, false, "",
             HWAddrPtr()), type_(TYPE_NA), prefixlen_(0), iaid_(0),
-            duid_(DuidPtr()), preferred_lft_(0) {
+            duid_(DuidPtr()), preferred_lft_(0), reuseable_preferred_lft_(0) {
 }
 
 std::string
@@ -586,9 +601,10 @@ Lease4::operator==(const Lease4& other) const {
             addr_ == other.addr_ &&
             subnet_id_ == other.subnet_id_ &&
             valid_lft_ == other.valid_lft_ &&
-            old_valid_lft_ == other.old_valid_lft_ &&
+            current_valid_lft_ == other.current_valid_lft_ &&
+            reuseable_valid_lft_ == other.reuseable_valid_lft_ &&
             cltt_ == other.cltt_ &&
-            old_cltt_ == other.old_cltt_ &&
+            current_cltt_ == other.current_cltt_ &&
             hostname_ == other.hostname_ &&
             fqdn_fwd_ == other.fqdn_fwd_ &&
             fqdn_rev_ == other.fqdn_rev_ &&
@@ -605,10 +621,12 @@ Lease6::operator==(const Lease6& other) const {
             prefixlen_ == other.prefixlen_ &&
             iaid_ == other.iaid_ &&
             preferred_lft_ == other.preferred_lft_ &&
+            reuseable_preferred_lft_ == other.reuseable_preferred_lft_ &&
             valid_lft_ == other.valid_lft_ &&
-            old_valid_lft_ == other.old_valid_lft_ &&
+            current_valid_lft_ == other.current_valid_lft_ &&
+            reuseable_valid_lft_ == other.reuseable_valid_lft_ &&
             cltt_ == other.cltt_ &&
-            old_cltt_ == other.old_cltt_ &&
+            current_cltt_ == other.current_cltt_ &&
             subnet_id_ == other.subnet_id_ &&
             hostname_ == other.hostname_ &&
             fqdn_fwd_ == other.fqdn_fwd_ &&

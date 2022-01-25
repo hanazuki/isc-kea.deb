@@ -1,4 +1,4 @@
-// File created from ../../../src/bin/dhcp6/dhcp6_messages.mes on Wed Feb 19 2020 16:59
+// File created from ../../../src/bin/dhcp6/dhcp6_messages.mes
 
 #include <cstddef>
 #include <log/message_types.h>
@@ -27,14 +27,15 @@ extern const isc::log::MessageID DHCP6_CONFIG_LOAD_FAIL = "DHCP6_CONFIG_LOAD_FAI
 extern const isc::log::MessageID DHCP6_CONFIG_PACKET_QUEUE = "DHCP6_CONFIG_PACKET_QUEUE";
 extern const isc::log::MessageID DHCP6_CONFIG_RECEIVED = "DHCP6_CONFIG_RECEIVED";
 extern const isc::log::MessageID DHCP6_CONFIG_START = "DHCP6_CONFIG_START";
+extern const isc::log::MessageID DHCP6_CONFIG_UNRECOVERABLE_ERROR = "DHCP6_CONFIG_UNRECOVERABLE_ERROR";
 extern const isc::log::MessageID DHCP6_CONFIG_UNSUPPORTED_OBJECT = "DHCP6_CONFIG_UNSUPPORTED_OBJECT";
 extern const isc::log::MessageID DHCP6_CONFIG_UPDATE = "DHCP6_CONFIG_UPDATE";
 extern const isc::log::MessageID DHCP6_DB_BACKEND_STARTED = "DHCP6_DB_BACKEND_STARTED";
-extern const isc::log::MessageID DHCP6_DB_RECONNECT_ATTEMPT_FAILED = "DHCP6_DB_RECONNECT_ATTEMPT_FAILED";
-extern const isc::log::MessageID DHCP6_DB_RECONNECT_ATTEMPT_SCHEDULE = "DHCP6_DB_RECONNECT_ATTEMPT_SCHEDULE";
 extern const isc::log::MessageID DHCP6_DB_RECONNECT_DISABLED = "DHCP6_DB_RECONNECT_DISABLED";
+extern const isc::log::MessageID DHCP6_DB_RECONNECT_FAILED = "DHCP6_DB_RECONNECT_FAILED";
+extern const isc::log::MessageID DHCP6_DB_RECONNECT_LOST_CONNECTION = "DHCP6_DB_RECONNECT_LOST_CONNECTION";
 extern const isc::log::MessageID DHCP6_DB_RECONNECT_NO_DB_CTL = "DHCP6_DB_RECONNECT_NO_DB_CTL";
-extern const isc::log::MessageID DHCP6_DB_RECONNECT_RETRIES_EXHAUSTED = "DHCP6_DB_RECONNECT_RETRIES_EXHAUSTED";
+extern const isc::log::MessageID DHCP6_DB_RECONNECT_SUCCEEDED = "DHCP6_DB_RECONNECT_SUCCEEDED";
 extern const isc::log::MessageID DHCP6_DDNS_CREATE_ADD_NAME_CHANGE_REQUEST = "DHCP6_DDNS_CREATE_ADD_NAME_CHANGE_REQUEST";
 extern const isc::log::MessageID DHCP6_DDNS_FQDN_GENERATED = "DHCP6_DDNS_FQDN_GENERATED";
 extern const isc::log::MessageID DHCP6_DDNS_GENERATED_FQDN_UPDATE_FAIL = "DHCP6_DDNS_GENERATED_FQDN_UPDATE_FAIL";
@@ -45,18 +46,21 @@ extern const isc::log::MessageID DHCP6_DDNS_REQUEST_SEND_FAILED = "DHCP6_DDNS_RE
 extern const isc::log::MessageID DHCP6_DDNS_RESPONSE_FQDN_DATA = "DHCP6_DDNS_RESPONSE_FQDN_DATA";
 extern const isc::log::MessageID DHCP6_DDNS_SEND_FQDN = "DHCP6_DDNS_SEND_FQDN";
 extern const isc::log::MessageID DHCP6_DEACTIVATE_INTERFACE = "DHCP6_DEACTIVATE_INTERFACE";
+extern const isc::log::MessageID DHCP6_DECLINE_FAIL = "DHCP6_DECLINE_FAIL";
 extern const isc::log::MessageID DHCP6_DECLINE_FAIL_DUID_MISMATCH = "DHCP6_DECLINE_FAIL_DUID_MISMATCH";
 extern const isc::log::MessageID DHCP6_DECLINE_FAIL_IAID_MISMATCH = "DHCP6_DECLINE_FAIL_IAID_MISMATCH";
 extern const isc::log::MessageID DHCP6_DECLINE_FAIL_LEASE_WITHOUT_DUID = "DHCP6_DECLINE_FAIL_LEASE_WITHOUT_DUID";
 extern const isc::log::MessageID DHCP6_DECLINE_FAIL_NO_LEASE = "DHCP6_DECLINE_FAIL_NO_LEASE";
 extern const isc::log::MessageID DHCP6_DECLINE_LEASE = "DHCP6_DECLINE_LEASE";
 extern const isc::log::MessageID DHCP6_DECLINE_PROCESS_IA = "DHCP6_DECLINE_PROCESS_IA";
+extern const isc::log::MessageID DHCP6_DEVELOPMENT_VERSION = "DHCP6_DEVELOPMENT_VERSION";
 extern const isc::log::MessageID DHCP6_DHCP4O6_PACKET_RECEIVED = "DHCP6_DHCP4O6_PACKET_RECEIVED";
 extern const isc::log::MessageID DHCP6_DHCP4O6_RECEIVE_FAIL = "DHCP6_DHCP4O6_RECEIVE_FAIL";
 extern const isc::log::MessageID DHCP6_DHCP4O6_RECEIVING = "DHCP6_DHCP4O6_RECEIVING";
 extern const isc::log::MessageID DHCP6_DHCP4O6_SEND_FAIL = "DHCP6_DHCP4O6_SEND_FAIL";
 extern const isc::log::MessageID DHCP6_DYNAMIC_RECONFIGURATION = "DHCP6_DYNAMIC_RECONFIGURATION";
 extern const isc::log::MessageID DHCP6_DYNAMIC_RECONFIGURATION_FAIL = "DHCP6_DYNAMIC_RECONFIGURATION_FAIL";
+extern const isc::log::MessageID DHCP6_DYNAMIC_RECONFIGURATION_SUCCESS = "DHCP6_DYNAMIC_RECONFIGURATION_SUCCESS";
 extern const isc::log::MessageID DHCP6_FLEX_ID = "DHCP6_FLEX_ID";
 extern const isc::log::MessageID DHCP6_HANDLE_SIGNAL_EXCEPTION = "DHCP6_HANDLE_SIGNAL_EXCEPTION";
 extern const isc::log::MessageID DHCP6_HOOKS_LIBS_RELOAD_FAIL = "DHCP6_HOOKS_LIBS_RELOAD_FAIL";
@@ -69,6 +73,7 @@ extern const isc::log::MessageID DHCP6_HOOK_LEASE6_RELEASE_NA_SKIP = "DHCP6_HOOK
 extern const isc::log::MessageID DHCP6_HOOK_LEASE6_RELEASE_PD_SKIP = "DHCP6_HOOK_LEASE6_RELEASE_PD_SKIP";
 extern const isc::log::MessageID DHCP6_HOOK_LEASES6_COMMITTED_DROP = "DHCP6_HOOK_LEASES6_COMMITTED_DROP";
 extern const isc::log::MessageID DHCP6_HOOK_LEASES6_COMMITTED_PARK = "DHCP6_HOOK_LEASES6_COMMITTED_PARK";
+extern const isc::log::MessageID DHCP6_HOOK_LEASES6_PARKING_LOT_FULL = "DHCP6_HOOK_LEASES6_PARKING_LOT_FULL";
 extern const isc::log::MessageID DHCP6_HOOK_PACKET_RCVD_SKIP = "DHCP6_HOOK_PACKET_RCVD_SKIP";
 extern const isc::log::MessageID DHCP6_HOOK_PACKET_SEND_DROP = "DHCP6_HOOK_PACKET_SEND_DROP";
 extern const isc::log::MessageID DHCP6_HOOK_PACKET_SEND_SKIP = "DHCP6_HOOK_PACKET_SEND_SKIP";
@@ -83,6 +88,7 @@ extern const isc::log::MessageID DHCP6_LEASE_DATA = "DHCP6_LEASE_DATA";
 extern const isc::log::MessageID DHCP6_LEASE_NA_WITHOUT_DUID = "DHCP6_LEASE_NA_WITHOUT_DUID";
 extern const isc::log::MessageID DHCP6_LEASE_PD_WITHOUT_DUID = "DHCP6_LEASE_PD_WITHOUT_DUID";
 extern const isc::log::MessageID DHCP6_LEASE_RENEW = "DHCP6_LEASE_RENEW";
+extern const isc::log::MessageID DHCP6_LEASE_REUSE = "DHCP6_LEASE_REUSE";
 extern const isc::log::MessageID DHCP6_MULTI_THREADING_INFO = "DHCP6_MULTI_THREADING_INFO";
 extern const isc::log::MessageID DHCP6_NOT_RUNNING = "DHCP6_NOT_RUNNING";
 extern const isc::log::MessageID DHCP6_NO_INTERFACES = "DHCP6_NO_INTERFACES";
@@ -91,6 +97,8 @@ extern const isc::log::MessageID DHCP6_OPEN_SOCKET = "DHCP6_OPEN_SOCKET";
 extern const isc::log::MessageID DHCP6_OPEN_SOCKET_FAIL = "DHCP6_OPEN_SOCKET_FAIL";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_DHCP_DISABLED = "DHCP6_PACKET_DROP_DHCP_DISABLED";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_DROP_CLASS = "DHCP6_PACKET_DROP_DROP_CLASS";
+extern const isc::log::MessageID DHCP6_PACKET_DROP_DROP_CLASS2 = "DHCP6_PACKET_DROP_DROP_CLASS2";
+extern const isc::log::MessageID DHCP6_PACKET_DROP_DUPLICATE = "DHCP6_PACKET_DROP_DUPLICATE";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_PARSE_FAIL = "DHCP6_PACKET_DROP_PARSE_FAIL";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_SERVERID_MISMATCH = "DHCP6_PACKET_DROP_SERVERID_MISMATCH";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_UNICAST = "DHCP6_PACKET_DROP_UNICAST";
@@ -98,6 +106,7 @@ extern const isc::log::MessageID DHCP6_PACKET_OPTIONS_SKIPPED = "DHCP6_PACKET_OP
 extern const isc::log::MessageID DHCP6_PACKET_PROCESS_EXCEPTION = "DHCP6_PACKET_PROCESS_EXCEPTION";
 extern const isc::log::MessageID DHCP6_PACKET_PROCESS_FAIL = "DHCP6_PACKET_PROCESS_FAIL";
 extern const isc::log::MessageID DHCP6_PACKET_PROCESS_STD_EXCEPTION = "DHCP6_PACKET_PROCESS_STD_EXCEPTION";
+extern const isc::log::MessageID DHCP6_PACKET_QUEUE_FULL = "DHCP6_PACKET_QUEUE_FULL";
 extern const isc::log::MessageID DHCP6_PACKET_RECEIVED = "DHCP6_PACKET_RECEIVED";
 extern const isc::log::MessageID DHCP6_PACKET_RECEIVE_FAIL = "DHCP6_PACKET_RECEIVE_FAIL";
 extern const isc::log::MessageID DHCP6_PACKET_SEND = "DHCP6_PACKET_SEND";
@@ -112,6 +121,7 @@ extern const isc::log::MessageID DHCP6_PD_LEASE_ADVERT_FAIL = "DHCP6_PD_LEASE_AD
 extern const isc::log::MessageID DHCP6_PD_LEASE_ALLOC = "DHCP6_PD_LEASE_ALLOC";
 extern const isc::log::MessageID DHCP6_PD_LEASE_ALLOC_FAIL = "DHCP6_PD_LEASE_ALLOC_FAIL";
 extern const isc::log::MessageID DHCP6_PD_LEASE_RENEW = "DHCP6_PD_LEASE_RENEW";
+extern const isc::log::MessageID DHCP6_PD_LEASE_REUSE = "DHCP6_PD_LEASE_REUSE";
 extern const isc::log::MessageID DHCP6_PROCESS_IA_NA_EXTEND = "DHCP6_PROCESS_IA_NA_EXTEND";
 extern const isc::log::MessageID DHCP6_PROCESS_IA_NA_RELEASE = "DHCP6_PROCESS_IA_NA_RELEASE";
 extern const isc::log::MessageID DHCP6_PROCESS_IA_NA_REQUEST = "DHCP6_PROCESS_IA_NA_REQUEST";
@@ -119,6 +129,7 @@ extern const isc::log::MessageID DHCP6_PROCESS_IA_PD_EXTEND = "DHCP6_PROCESS_IA_
 extern const isc::log::MessageID DHCP6_PROCESS_IA_PD_REQUEST = "DHCP6_PROCESS_IA_PD_REQUEST";
 extern const isc::log::MessageID DHCP6_QUERY_DATA = "DHCP6_QUERY_DATA";
 extern const isc::log::MessageID DHCP6_RAPID_COMMIT = "DHCP6_RAPID_COMMIT";
+extern const isc::log::MessageID DHCP6_RECLAIM_EXPIRED_LEASES_FAIL = "DHCP6_RECLAIM_EXPIRED_LEASES_FAIL";
 extern const isc::log::MessageID DHCP6_RELEASE_NA = "DHCP6_RELEASE_NA";
 extern const isc::log::MessageID DHCP6_RELEASE_NA_FAIL = "DHCP6_RELEASE_NA_FAIL";
 extern const isc::log::MessageID DHCP6_RELEASE_NA_FAIL_WRONG_DUID = "DHCP6_RELEASE_NA_FAIL_WRONG_DUID";
@@ -135,6 +146,7 @@ extern const isc::log::MessageID DHCP6_SHUTDOWN_REQUEST = "DHCP6_SHUTDOWN_REQUES
 extern const isc::log::MessageID DHCP6_SOCKET_UNICAST = "DHCP6_SOCKET_UNICAST";
 extern const isc::log::MessageID DHCP6_SRV_CONSTRUCT_ERROR = "DHCP6_SRV_CONSTRUCT_ERROR";
 extern const isc::log::MessageID DHCP6_SRV_D2STOP_ERROR = "DHCP6_SRV_D2STOP_ERROR";
+extern const isc::log::MessageID DHCP6_SRV_UNLOAD_LIBRARIES_ERROR = "DHCP6_SRV_UNLOAD_LIBRARIES_ERROR";
 extern const isc::log::MessageID DHCP6_STANDALONE = "DHCP6_STANDALONE";
 extern const isc::log::MessageID DHCP6_STARTED = "DHCP6_STARTED";
 extern const isc::log::MessageID DHCP6_STARTING = "DHCP6_STARTING";
@@ -158,7 +170,7 @@ const char* values[] = {
     "DHCP6_ALREADY_RUNNING", "%1 already running? %2",
     "DHCP6_BUFFER_RECEIVED", "received buffer from %1:%2 to %3:%4 over interface %5",
     "DHCP6_BUFFER_UNPACK", "parsing buffer received from %1 to %2 over interface %3",
-    "DHCP6_BUFFER_WAIT_SIGNAL", "signal received while waiting for next packet, next waiting signal is %1",
+    "DHCP6_BUFFER_WAIT_SIGNAL", "signal received while waiting for next packet",
     "DHCP6_CB_ON_DEMAND_FETCH_UPDATES_FAIL", "error on demand attempt to fetch configuration updates from the configuration backend(s): %1",
     "DHCP6_CB_PERIODIC_FETCH_UPDATES_FAIL", "error on periodic attempt to fetch configuration updates from the configuration backend(s): %1",
     "DHCP6_CB_PERIODIC_FETCH_UPDATES_RETRIES_EXHAUSTED", "maximum number of configuration fetch attempts: 10, has been exhausted without success",
@@ -172,14 +184,15 @@ const char* values[] = {
     "DHCP6_CONFIG_PACKET_QUEUE", "DHCPv6 packet queue info after configuration: %1",
     "DHCP6_CONFIG_RECEIVED", "received configuration: %1",
     "DHCP6_CONFIG_START", "DHCPv6 server is processing the following configuration: %1",
+    "DHCP6_CONFIG_UNRECOVERABLE_ERROR", "DHCPv6 server new configuration failed with an error which cannot be recovered",
     "DHCP6_CONFIG_UNSUPPORTED_OBJECT", "DHCPv6 server configuration includes an unsupported object: %1",
     "DHCP6_CONFIG_UPDATE", "updated configuration received: %1",
     "DHCP6_DB_BACKEND_STARTED", "lease database started (type: %1, name: %2)",
-    "DHCP6_DB_RECONNECT_ATTEMPT_FAILED", "database reconnect failed: %1",
-    "DHCP6_DB_RECONNECT_ATTEMPT_SCHEDULE", "scheduling attempt %1 of %2 in %3 milliseconds",
     "DHCP6_DB_RECONNECT_DISABLED", "database reconnect is disabled: max-reconnect-tries %1, reconnect-wait-time %2",
+    "DHCP6_DB_RECONNECT_FAILED", "maximum number of database reconnect attempts: %1, has been exhausted without success",
+    "DHCP6_DB_RECONNECT_LOST_CONNECTION", "database connection lost.",
     "DHCP6_DB_RECONNECT_NO_DB_CTL", "unexpected error in database reconnect",
-    "DHCP6_DB_RECONNECT_RETRIES_EXHAUSTED", "maximum number of database reconnect attempts: %1, has been exhausted without success, server is shutting down!",
+    "DHCP6_DB_RECONNECT_SUCCEEDED", "database connection recovered.",
     "DHCP6_DDNS_CREATE_ADD_NAME_CHANGE_REQUEST", "created name change request: %1",
     "DHCP6_DDNS_FQDN_GENERATED", "%1: generated FQDN for the client: %2",
     "DHCP6_DDNS_GENERATED_FQDN_UPDATE_FAIL", "%1: failed to update the lease using address %2, after generating FQDN for a client, reason: %3",
@@ -190,18 +203,21 @@ const char* values[] = {
     "DHCP6_DDNS_RESPONSE_FQDN_DATA", "%1: including FQDN option in the server's response: %2",
     "DHCP6_DDNS_SEND_FQDN", "sending DHCPv6 Client FQDN Option to the client: %1",
     "DHCP6_DEACTIVATE_INTERFACE", "deactivate interface %1",
+    "DHCP6_DECLINE_FAIL", "%1: error on decline lease for address %2: %3",
     "DHCP6_DECLINE_FAIL_DUID_MISMATCH", "Client %1 sent DECLINE for address %2, but it belongs to client with DUID %3",
     "DHCP6_DECLINE_FAIL_IAID_MISMATCH", "Client %1 sent DECLINE for address %2, but used a wrong IAID (%3), instead of expected %4",
     "DHCP6_DECLINE_FAIL_LEASE_WITHOUT_DUID", "Client %1 sent DECLINE for address %2, but the associated lease has no DUID",
     "DHCP6_DECLINE_FAIL_NO_LEASE", "Client %1 sent DECLINE for address %2, but there's no lease for it",
     "DHCP6_DECLINE_LEASE", "Client %1 sent DECLINE for address %2 and the server marked it as declined. The lease will be recovered in %3 seconds.",
     "DHCP6_DECLINE_PROCESS_IA", "Processing of IA (IAID: %1) from client %2 started.",
+    "DHCP6_DEVELOPMENT_VERSION", "This software is a development branch of Kea. It is not recommended for production use.",
     "DHCP6_DHCP4O6_PACKET_RECEIVED", "received DHCPv4o6 packet from DHCPv4 server (type %1) for %2 port %3 on interface %4",
     "DHCP6_DHCP4O6_RECEIVE_FAIL", "failed to receive DHCPv4o6: %1",
     "DHCP6_DHCP4O6_RECEIVING", "receiving DHCPv4o6 packet from DHCPv4 server",
     "DHCP6_DHCP4O6_SEND_FAIL", "failed to send DHCPv4o6 packet: %1",
     "DHCP6_DYNAMIC_RECONFIGURATION", "initiate server reconfiguration using file: %1, after receiving SIGHUP signal or config-reload command",
     "DHCP6_DYNAMIC_RECONFIGURATION_FAIL", "dynamic server reconfiguration failed with file: %1",
+    "DHCP6_DYNAMIC_RECONFIGURATION_SUCCESS", "dynamic server reconfiguration succeeded with file: %1",
     "DHCP6_FLEX_ID", "flexible identifier generated for incoming packet: %1",
     "DHCP6_HANDLE_SIGNAL_EXCEPTION", "An exception was thrown while handing signal: %1",
     "DHCP6_HOOKS_LIBS_RELOAD_FAIL", "reload of hooks libraries failed",
@@ -214,6 +230,7 @@ const char* values[] = {
     "DHCP6_HOOK_LEASE6_RELEASE_PD_SKIP", "%1: prefix lease was not released because a callout set the next step to SKIP",
     "DHCP6_HOOK_LEASES6_COMMITTED_DROP", "%1: packet is dropped, because a callout set the next step to DROP",
     "DHCP6_HOOK_LEASES6_COMMITTED_PARK", "%1: packet is parked, because a callout set the next step to PARK",
+    "DHCP6_HOOK_LEASES6_PARKING_LOT_FULL", "The parked-packet-limit %1, has been reached, dropping query: %2",
     "DHCP6_HOOK_PACKET_RCVD_SKIP", "%1: packet is dropped, because a callout set the next step to SKIP",
     "DHCP6_HOOK_PACKET_SEND_DROP", "%1: prepared DHCPv6 response was not sent because a callout set the next ste to DROP",
     "DHCP6_HOOK_PACKET_SEND_SKIP", "%1: prepared DHCPv6 response is not built because a callout set the next step to SKIP",
@@ -228,7 +245,8 @@ const char* values[] = {
     "DHCP6_LEASE_NA_WITHOUT_DUID", "%1: address lease for address %2 does not have a DUID",
     "DHCP6_LEASE_PD_WITHOUT_DUID", "%1: lease for prefix %2/%3 does not have a DUID",
     "DHCP6_LEASE_RENEW", "%1: lease for address %2 and iaid=%3 has been allocated",
-    "DHCP6_MULTI_THREADING_INFO", "enabled: %1, number of threads: %2, queue size per thread: %3",
+    "DHCP6_LEASE_REUSE", "%1: lease for address %2 and iaid=%3 has been reused for %4 seconds",
+    "DHCP6_MULTI_THREADING_INFO", "enabled: %1, number of threads: %2, queue size: %3",
     "DHCP6_NOT_RUNNING", "IPv6 DHCP server is not running",
     "DHCP6_NO_INTERFACES", "failed to detect any network interfaces",
     "DHCP6_NO_SOCKETS_OPEN", "no interface configured to listen to DHCP traffic",
@@ -236,13 +254,16 @@ const char* values[] = {
     "DHCP6_OPEN_SOCKET_FAIL", "failed to open socket: %1",
     "DHCP6_PACKET_DROP_DHCP_DISABLED", "%1: DHCP service is globally disabled",
     "DHCP6_PACKET_DROP_DROP_CLASS", "dropped as member of the special class 'DROP': %1",
+    "DHCP6_PACKET_DROP_DROP_CLASS2", "dropped as member of the special class 'DROP' after host reservation lookup: %1",
+    "DHCP6_PACKET_DROP_DUPLICATE", "dropped as sent by the same client than a packet being processed by another thread: dropped %1 by thread %2 as duplicate of %3 processed by %4",
     "DHCP6_PACKET_DROP_PARSE_FAIL", "failed to parse packet from %1 to %2, received over interface %3, reason: %4",
     "DHCP6_PACKET_DROP_SERVERID_MISMATCH", "%1: dropping packet with server identifier: %2, server is using: %3",
     "DHCP6_PACKET_DROP_UNICAST", "%1: dropping unicast %2 packet as this packet should be sent to multicast",
-    "DHCP6_PACKET_OPTIONS_SKIPPED", "An error upacking an option, caused subsequent options to be skipped: %1",
+    "DHCP6_PACKET_OPTIONS_SKIPPED", "An error unpacking an option, caused subsequent options to be skipped: %1",
     "DHCP6_PACKET_PROCESS_EXCEPTION", "exception occurred during packet processing",
     "DHCP6_PACKET_PROCESS_FAIL", "processing of %1 message received from %2 failed: %3",
     "DHCP6_PACKET_PROCESS_STD_EXCEPTION", "exception occurred during packet processing: %1",
+    "DHCP6_PACKET_QUEUE_FULL", "multi-threading packet queue is full",
     "DHCP6_PACKET_RECEIVED", "%1: %2 (type %3) received from %4 to %5 on interface %6",
     "DHCP6_PACKET_RECEIVE_FAIL", "error on attempt to receive packet: %1",
     "DHCP6_PACKET_SEND", "%1: trying to send packet %2 (type %3) from [%4]:%5 to [%6]:%7 on interface %8",
@@ -257,6 +278,7 @@ const char* values[] = {
     "DHCP6_PD_LEASE_ALLOC", "%1: lease for prefix %2/%3 and iaid=%4 has been allocated for %5 seconds",
     "DHCP6_PD_LEASE_ALLOC_FAIL", "%1: failed to grant a prefix lease for iaid=%2",
     "DHCP6_PD_LEASE_RENEW", "%1: lease for prefix %2/%3 and iaid=%4 has been allocated",
+    "DHCP6_PD_LEASE_REUSE", "%1: lease for prefix %2/%3 and iaid=%4 has been reused for %5 seconds",
     "DHCP6_PROCESS_IA_NA_EXTEND", "%1: extending lease lifetime for IA_NA option with iaid=%2",
     "DHCP6_PROCESS_IA_NA_RELEASE", "%1: releasing lease for IA_NA option with iaid=%2",
     "DHCP6_PROCESS_IA_NA_REQUEST", "%1: server is processing IA_NA option with iaid=%2 and hint=%3",
@@ -264,6 +286,7 @@ const char* values[] = {
     "DHCP6_PROCESS_IA_PD_REQUEST", "%1: server is processing IA_PD option with iaid=%2 and hint=%3",
     "DHCP6_QUERY_DATA", "%1, packet details: %2",
     "DHCP6_RAPID_COMMIT", "%1: Rapid Commit option received, following 2-way exchange",
+    "DHCP6_RECLAIM_EXPIRED_LEASES_FAIL", "failed to reclaim expired leases: %1",
     "DHCP6_RELEASE_NA", "%1: binding for address %2 and iaid=%3 was released properly",
     "DHCP6_RELEASE_NA_FAIL", "%1: failed to remove address lease for address %2 and iaid=%3",
     "DHCP6_RELEASE_NA_FAIL_WRONG_DUID", "%1: client tried to release address %2, but it belongs to another client using duid=%3",
@@ -280,9 +303,10 @@ const char* values[] = {
     "DHCP6_SOCKET_UNICAST", "server is about to open socket on address %1 on interface %2",
     "DHCP6_SRV_CONSTRUCT_ERROR", "error creating Dhcpv6Srv object, reason: %1",
     "DHCP6_SRV_D2STOP_ERROR", "error stopping IO with DHCP_DDNS during shutdown: %1",
+    "DHCP6_SRV_UNLOAD_LIBRARIES_ERROR", "error unloading hooks libraries during shutdown: %1",
     "DHCP6_STANDALONE", "skipping message queue, running standalone",
     "DHCP6_STARTED", "Kea DHCPv6 server version %1 started",
-    "DHCP6_STARTING", "Kea DHCPv6 server version %1 starting",
+    "DHCP6_STARTING", "Kea DHCPv6 server version %1 (%2) starting",
     "DHCP6_START_INFO", "pid: %1, server port: %2, client port: %3, verbose: %4",
     "DHCP6_SUBNET_DATA", "%1: the selected subnet details: %2",
     "DHCP6_SUBNET_DYNAMICALLY_CHANGED", "%1: changed selected subnet %2 to subnet %3 from shared network %4 for client assignments",

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,9 +9,13 @@
 #include <asiolink/io_address.h>
 #include <dhcp/duid.h>
 #include <dhcp/hwaddr.h>
+#include <dhcpsrv/cfg_db_access.h>
+#include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/dhcpsrv_log.h>
 #include <dhcpsrv/dhcpsrv_exceptions.h>
+#include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/pgsql_lease_mgr.h>
+#include <dhcpsrv/timer_mgr.h>
 #include <util/multi_threading_mgr.h>
 
 #include <boost/make_shared.hpp>
@@ -911,8 +915,9 @@ public:
                                                         subnet_id_, fqdn_fwd_,
                                                         fqdn_rev_, hostname_,
                                                         hwaddr, prefix_len_));
+            // Update cltt_ and current_cltt_ explicitly.
             result->cltt_ = cltt_;
-            result->old_cltt_ = cltt_;
+            result->current_cltt_ = cltt_;
 
             result->state_ = state;
 
@@ -1022,7 +1027,7 @@ public:
     /// @brief Constructor to query for the stats for a range of subnets
     ///
     /// The query created will return statistics for the inclusive range of
-    /// subnets described by first and last sunbet IDs.
+    /// subnets described by first and last subnet IDs.
     ///
     /// @param conn A open connection to the database housing the lease data
     /// @param statement The lease data SQL prepared statement to execute
@@ -1085,6 +1090,9 @@ public:
     /// result set rows. Once the last row has been fetched, subsequent
     /// calls will return false.
     ///
+    /// Checks against negative values for the state count and logs once
+    /// a warning message.
+    ///
     /// @param row Storage for the fetched row
     ///
     /// @return True if the fetch succeeded, false if there are no more
@@ -1122,6 +1130,15 @@ public:
         PgSqlExchange::getColumnValue(*result_set_, next_row_, col,
                                       row.state_count_);
 
+        // Protect against negative state count.a
+        if (row.state_count_ < 0) {
+            row.state_count_ = 0;
+            if (!negative_count_) {
+                negative_count_ = true;
+                LOG_WARN(dhcpsrv_logger, DHCPSRV_PGSQL_NEGATIVE_LEASES_STAT);
+            }
+        }
+
         // Point to the next row.
         ++next_row_;
         return (true);
@@ -1143,12 +1160,20 @@ protected:
 
     /// @brief Indicates if query supplies lease type
     bool fetch_type_;
+
+    /// @brief Received negative state count showing a problem
+    static bool negative_count_;
 };
+
+// Initialize negative state count flag to false.
+bool PgSqlLeaseStatsQuery::negative_count_ = false;
 
 // PgSqlLeaseContext Constructor
 
-PgSqlLeaseContext::PgSqlLeaseContext(const DatabaseConnection::ParameterMap& parameters)
-    : conn_(parameters) {
+PgSqlLeaseContext::PgSqlLeaseContext(const DatabaseConnection::ParameterMap& parameters,
+                                     IOServiceAccessorPtr io_service_accessor,
+                                     DbCallback db_reconnect_callback)
+    : conn_(parameters, io_service_accessor, db_reconnect_callback) {
 }
 
 // PgSqlLeaseContextAlloc Constructor and Destructor
@@ -1190,7 +1215,12 @@ PgSqlLeaseMgr::PgSqlLeaseContextAlloc::~PgSqlLeaseContextAlloc() {
 // PgSqlLeaseMgr Constructor and Destructor
 
 PgSqlLeaseMgr::PgSqlLeaseMgr(const DatabaseConnection::ParameterMap& parameters)
-    : parameters_(parameters) {
+    : parameters_(parameters), timer_name_("") {
+
+    // Create unique timer name per instance.
+    timer_name_ = "PgSqlLeaseMgr[";
+    timer_name_ += boost::lexical_cast<std::string>(reinterpret_cast<uint64_t>(this));
+    timer_name_ += "]DbReconnectTimer";
 
     // Validate schema version first.
     std::pair<uint32_t, uint32_t> code_version(PG_SCHEMA_VERSION_MAJOR,
@@ -1212,11 +1242,81 @@ PgSqlLeaseMgr::PgSqlLeaseMgr(const DatabaseConnection::ParameterMap& parameters)
 PgSqlLeaseMgr::~PgSqlLeaseMgr() {
 }
 
+bool
+PgSqlLeaseMgr::dbReconnect(ReconnectCtlPtr db_reconnect_ctl) {
+    MultiThreadingCriticalSection cs;
+
+    // Invoke application layer connection lost callback.
+    if (!DatabaseConnection::invokeDbLostCallback(db_reconnect_ctl)) {
+        return (false);
+    }
+
+    bool reopened = false;
+
+    const std::string timer_name = db_reconnect_ctl->timerName();
+
+    // At least one connection was lost.
+    try {
+        CfgDbAccessPtr cfg_db = CfgMgr::instance().getCurrentCfg()->getCfgDbAccess();
+        LeaseMgrFactory::destroy();
+        LeaseMgrFactory::create(cfg_db->getLeaseDbAccessString());
+        reopened = true;
+    } catch (const std::exception& ex) {
+        LOG_ERROR(dhcpsrv_logger, DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED)
+                .arg(ex.what());
+    }
+
+    if (reopened) {
+        // Cancel the timer.
+        if (TimerMgr::instance()->isTimerRegistered(timer_name)) {
+            TimerMgr::instance()->unregisterTimer(timer_name);
+        }
+
+        // Invoke application layer connection recovered callback.
+        if (!DatabaseConnection::invokeDbRecoveredCallback(db_reconnect_ctl)) {
+            return (false);
+        }
+    } else {
+        if (!db_reconnect_ctl->checkRetries()) {
+            // We're out of retries, log it and initiate shutdown.
+            LOG_ERROR(dhcpsrv_logger, DHCPSRV_PGSQL_LEASE_DB_RECONNECT_FAILED)
+                    .arg(db_reconnect_ctl->maxRetries());
+
+            // Cancel the timer.
+            if (TimerMgr::instance()->isTimerRegistered(timer_name)) {
+                TimerMgr::instance()->unregisterTimer(timer_name);
+            }
+
+            // Invoke application layer connection failed callback.
+            DatabaseConnection::invokeDbFailedCallback(db_reconnect_ctl);
+            return (false);
+        }
+
+        LOG_INFO(dhcpsrv_logger, DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_SCHEDULE)
+                .arg(db_reconnect_ctl->maxRetries() - db_reconnect_ctl->retriesLeft() + 1)
+                .arg(db_reconnect_ctl->maxRetries())
+                .arg(db_reconnect_ctl->retryInterval());
+
+        // Start the timer.
+        if (!TimerMgr::instance()->isTimerRegistered(timer_name)) {
+            TimerMgr::instance()->registerTimer(timer_name,
+                std::bind(&PgSqlLeaseMgr::dbReconnect, db_reconnect_ctl),
+                          db_reconnect_ctl->retryInterval(),
+                          asiolink::IntervalTimer::ONE_SHOT);
+        }
+        TimerMgr::instance()->setup(timer_name);
+    }
+
+    return (true);
+}
+
 // Create context.
 
 PgSqlLeaseContextPtr
 PgSqlLeaseMgr::createContext() const {
-    PgSqlLeaseContextPtr ctx(new PgSqlLeaseContext(parameters_));
+    PgSqlLeaseContextPtr ctx(new PgSqlLeaseContext(parameters_,
+        IOServiceAccessorPtr(new IOServiceAccessor(&LeaseMgr::getIOService)),
+        &PgSqlLeaseMgr::dbReconnect));
 
     // Open the database.
     ctx->conn_.openDatabase();
@@ -1237,6 +1337,9 @@ PgSqlLeaseMgr::createContext() const {
     // program and the database.
     ctx->exchange4_.reset(new PgSqlLease4Exchange());
     ctx->exchange6_.reset(new PgSqlLease6Exchange());
+
+    // Create ReconnectCtl for this connection.
+    ctx->conn_.makeReconnectCtl(timer_name_);
 
     return (ctx);
 }
@@ -1288,8 +1391,9 @@ PgSqlLeaseMgr::addLease(const Lease4Ptr& lease) {
     ctx->exchange4_->createBindForSend(lease, bind_array);
     auto result = addLeaseCommon(ctx, INSERT_LEASE4, bind_array);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
 
     return (result);
 }
@@ -1309,8 +1413,9 @@ PgSqlLeaseMgr::addLease(const Lease6Ptr& lease) {
 
     auto result = addLeaseCommon(ctx, INSERT_LEASE6, bind_array);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time (allows update between the creation
+    // of the Lease up to the point of insertion in the database).
+    lease->updateCurrentExpirationTime();
 
     return (result);
 }
@@ -1490,16 +1595,6 @@ PgSqlLeaseMgr::getLease4(const ClientId& clientid) const {
     getLeaseCollection(ctx, GET_LEASE4_CLIENTID, bind_array, result);
 
     return (result);
-}
-
-Lease4Ptr
-PgSqlLeaseMgr::getLease4(const ClientId&, const HWAddr&, SubnetID) const {
-    /// This function is currently not implemented because allocation engine
-    /// searches for the lease using HW address or client identifier.
-    /// It never uses both parameters in the same time. We need to
-    /// consider if this function is needed at all.
-    isc_throw(NotImplemented, "The PgSqlLeaseMgr::getLease4 function was"
-              " called, but it is not implemented");
 }
 
 Lease4Ptr
@@ -1964,15 +2059,15 @@ PgSqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
     std::string addr4_str = boost::lexical_cast<std::string>(lease->addr_.toUint32());
     bind_array.add(addr4_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->old_cltt_,
-                                                                       lease->old_valid_lft_);
+    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                                       lease->current_valid_lft_);
     bind_array.add(expire_str);
 
     // Drop to common update code
     updateLeaseCommon(ctx, stindex, bind_array, lease);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 }
 
 void
@@ -1995,15 +2090,15 @@ PgSqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
     std::string addr_str = lease->addr_.toText();
     bind_array.add(addr_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->old_cltt_,
-                                                                       lease->old_valid_lft_);
+    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                                       lease->current_valid_lft_);
     bind_array.add(expire_str);
 
     // Drop to common update code
     updateLeaseCommon(ctx, stindex, bind_array, lease);
 
-    lease->old_cltt_ = lease->cltt_;
-    lease->old_valid_lft_ = lease->valid_lft_;
+    // Update lease current expiration time.
+    lease->updateCurrentExpirationTime();
 }
 
 uint64_t
@@ -2037,8 +2132,8 @@ PgSqlLeaseMgr::deleteLease(const Lease4Ptr& lease) {
     std::string addr4_str = boost::lexical_cast<std::string>(addr.toUint32());
     bind_array.add(addr4_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->old_cltt_,
-                                                                       lease->old_valid_lft_);
+    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                                       lease->current_valid_lft_);
     bind_array.add(expire_str);
 
     auto affected_rows = deleteLeaseCommon(DELETE_LEASE4, bind_array);
@@ -2072,8 +2167,8 @@ PgSqlLeaseMgr::deleteLease(const Lease6Ptr& lease) {
     std::string addr6_str = addr.toText();
     bind_array.add(addr6_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->old_cltt_,
-                                                                       lease->old_valid_lft_);
+    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                                       lease->current_valid_lft_);
     bind_array.add(expire_str);
 
     auto affected_rows = deleteLeaseCommon(DELETE_LEASE6, bind_array);

@@ -1,10 +1,11 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <cc/data.h>
 #include <process/daemon.h>
 #include <process/log_parser.h>
@@ -12,15 +13,17 @@
 #include <log/logger_name.h>
 #include <log/logger_support.h>
 #include <process/config_base.h>
+#include <process/redact_config.h>
 #include <util/filename.h>
 
-#include <boost/bind.hpp>
-
+#include <functional>
 #include <sstream>
 #include <fstream>
+
 #include <errno.h>
 
 using namespace isc::data;
+namespace ph = std::placeholders;
 
 /// @brief provides default implementation for basic daemon operations
 ///
@@ -36,8 +39,9 @@ std::string Daemon::proc_name_("");
 std::string Daemon::default_logger_name_("kea");
 
 Daemon::Daemon()
-    : signal_set_(), signal_handler_(), config_file_(""),
-      pid_file_dir_(DATA_DIR), pid_file_(), am_file_author_(false) {
+    : signal_set_(), config_file_(""),
+      pid_file_dir_(DATA_DIR), pid_file_(), am_file_author_(false),
+      exit_value_(EXIT_SUCCESS) {
 
     // The pid_file_dir can be overridden via environment variable
     // This is primarily intended to simplify testing
@@ -54,42 +58,9 @@ Daemon::~Daemon() {
 }
 
 void Daemon::cleanup() {
-
 }
 
 void Daemon::shutdown() {
-
-}
-
-void Daemon::handleSignal() {
-    if (signal_set_ && signal_handler_) {
-        signal_set_->handleNext(boost::bind(signal_handler_, _1));
-    }
-}
-
-void Daemon::relocateLogging(ConstElementPtr config,
-                             const std::string server_name) {
-    ConstElementPtr logging = config->get("Logging");
-    ConstElementPtr loggers;
-    if (logging) {
-        loggers = logging->get("loggers");
-        ElementPtr mutable_cfg = boost::const_pointer_cast<Element>(config);
-        mutable_cfg->remove("Logging");
-    }
-    if (loggers) {
-        ConstElementPtr server = config->get(server_name);
-        ElementPtr mutable_srv = boost::const_pointer_cast<Element>(server);
-        mutable_srv->set("loggers", loggers);
-    }
-    while (config->size() > 1) {
-        ElementPtr mutable_cfg = boost::const_pointer_cast<Element>(config);
-        for (auto object : config->mapValue()) {
-            if (object.first != server_name) {
-                mutable_cfg->remove(object.first);
-                break;
-            }
-        }
-    }
 }
 
 void Daemon::configureLogger(const ConstElementPtr& log_config,
@@ -276,5 +247,20 @@ Daemon::writeConfigFile(const std::string& config_file,
     return (bytes);
 }
 
-};
-};
+std::list<std::list<std::string>>
+Daemon::jsonPathsToRedact() const {
+    static std::list<std::list<std::string>> const list;
+    return list;
+}
+
+isc::data::ConstElementPtr
+Daemon::redactConfig(isc::data::ConstElementPtr const& config) {
+    isc::data::ConstElementPtr result(config);
+    for (std::list<std::string>& json_path : jsonPathsToRedact()) {
+        result = isc::process::redactConfig(result, json_path);
+    }
+    return result;
+}
+
+}  // namespace process
+}  // namespace isc

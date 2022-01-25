@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2019,2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -57,7 +57,7 @@ public:
 
     /// @brief returns captured DISCOVER from Genexis hardware.
     ///
-    /// This device in uncommon, because it doesn't send VIVSO in Dicover, but
+    /// This device in uncommon, because it doesn't send VIVSO in Discover, but
     /// expects one in Offer.
     /// @return DISCOVER.
     static isc::dhcp::Pkt4Ptr discoverGenexis();

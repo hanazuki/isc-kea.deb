@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -51,6 +51,12 @@ TEST(LoggingDestination, equals) {
 class LoggingInfoTest : public ::testing::Test {
 public:
 
+    /// @brief Constructor
+    LoggingInfoTest() = default;
+
+    /// @brief Destructor
+    virtual ~LoggingInfoTest() = default;
+
     /// @brief Setup the test.
     virtual void SetUp() {
         Daemon::setVerbose(false);
@@ -66,7 +72,7 @@ public:
 TEST_F(LoggingInfoTest, defaults) {
 
     // We now need to set the default logger explicitly.
-    // Otherwise leftovers from pervious tests that use DController
+    // Otherwise leftovers from previous tests that use DController
     // would leave the default logger set to TestBin.
     Daemon::setDefaultLoggerName("kea");
 
@@ -96,11 +102,14 @@ TEST_F(LoggingInfoTest, defaults) {
     // Add a user context
     std::string comment = "\"comment\": \"foo\"";
     std::string user_context = "{ " + comment + " }";
+    std::string user_context_nl = "{\n" + comment + "\n}";
     EXPECT_FALSE(info_non_verbose.getContext());
     info_non_verbose.setContext(Element::fromJSON(user_context));
     ASSERT_TRUE(info_non_verbose.getContext());
     EXPECT_EQ(user_context, info_non_verbose.getContext()->str());
-    expected = header + comment + ",\n" + begin + "INFO" + dbglvl + "0" + trailer;
+    expected = header;
+    expected += "\"user-context\": " + user_context_nl + ",\n";
+    expected += begin + "INFO" + dbglvl + "0" + trailer;
     runToElementTest<LoggingInfo>(expected, info_non_verbose);
 
     Daemon::setVerbose(true);
@@ -123,7 +132,9 @@ TEST_F(LoggingInfoTest, defaults) {
     info_verbose.setContext(Element::fromJSON(user_context));
     ASSERT_TRUE(info_verbose.getContext());
     EXPECT_EQ(user_context, info_verbose.getContext()->str());
-    expected = header + comment + ",\n" + begin + "DEBUG" + dbglvl + "99" + trailer;
+    expected = header;
+    expected += "\"user-context\": " + user_context_nl + ",\n";
+    expected += begin + "DEBUG" + dbglvl + "99" + trailer;
     runToElementTest<LoggingInfo>(expected, info_verbose);
 }
 

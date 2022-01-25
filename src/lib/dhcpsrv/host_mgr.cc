@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -29,6 +29,9 @@ namespace isc {
 namespace dhcp {
 
 using namespace isc::asiolink;
+using namespace isc::db;
+
+IOServicePtr HostMgr::io_service_ = IOServicePtr();
 
 boost::scoped_ptr<HostMgr>&
 HostMgr::getHostMgrPtr() {
@@ -52,7 +55,15 @@ HostMgr::delBackend(const std::string& db_type) {
         getHostMgrPtr()->cache_ptr_->getType() == db_type) {
         getHostMgrPtr()->cache_ptr_.reset();
     }
-    return (HostDataSourceFactory::del(getHostMgrPtr()->alternate_sources_, db_type));
+    return (HostDataSourceFactory::del(getHostMgrPtr()->alternate_sources_,
+                                       db_type));
+}
+
+bool
+HostMgr::delBackend(const std::string& db_type, const std::string& access,
+                    bool if_unusable) {
+    return (HostDataSourceFactory::del(getHostMgrPtr()->alternate_sources_,
+                                       db_type, access, if_unusable));
 }
 
 void
@@ -234,6 +245,66 @@ HostMgr::getPage6(const SubnetID& subnet_id,
 }
 
 ConstHostCollection
+HostMgr::getPage4(size_t& source_index,
+                  uint64_t lower_host_id,
+                  const HostPageSize& page_size) const {
+    // Return empty if (and only if) sources are exhausted.
+    if (source_index > alternate_sources_.size()) {
+        return (ConstHostCollection());
+    }
+
+    ConstHostCollection hosts;
+    // Source index 0 means config file.
+    if (source_index == 0) {
+        hosts = getCfgHosts()->
+            getPage4(source_index, lower_host_id, page_size);
+    } else {
+        hosts = alternate_sources_[source_index - 1]->
+            getPage4(source_index, lower_host_id, page_size);
+    }
+
+    // When got something return it.
+    if (!hosts.empty()) {
+        return (hosts);
+    }
+
+    // Nothing from this source: try the next one.
+    // Note the recursion is limited to the number of sources in all cases.
+    ++source_index;
+    return (getPage4(source_index, 0UL, page_size));
+}
+
+ConstHostCollection
+HostMgr::getPage6(size_t& source_index,
+                  uint64_t lower_host_id,
+                  const HostPageSize& page_size) const {
+    // Return empty if (and only if) sources are exhausted.
+    if (source_index > alternate_sources_.size()) {
+        return (ConstHostCollection());
+    }
+
+    ConstHostCollection hosts;
+    // Source index 0 means config file.
+    if (source_index == 0) {
+        hosts = getCfgHosts()->
+            getPage6(source_index, lower_host_id, page_size);
+    } else {
+        hosts = alternate_sources_[source_index - 1]->
+            getPage6(source_index, lower_host_id, page_size);
+    }
+
+    // When got something return it.
+    if (!hosts.empty()) {
+        return (hosts);
+    }
+
+    // Nothing from this source: try the next one.
+    // Note the recursion is limited to the number of sources in all cases.
+    ++source_index;
+    return (getPage6(source_index, 0UL, page_size));
+}
+
+ConstHostCollection
 HostMgr::getAll4(const IOAddress& address) const {
     ConstHostCollection hosts = getCfgHosts()->getAll4(address);
     for (auto source : alternate_sources_) {
@@ -335,6 +406,22 @@ HostMgr::get4(const SubnetID& subnet_id,
     return (ConstHostPtr());
 }
 
+ConstHostCollection
+HostMgr::getAll4(const SubnetID& subnet_id,
+                 const asiolink::IOAddress& address) const {
+    auto hosts = getCfgHosts()->getAll4(subnet_id, address);
+
+    LOG_DEBUG(hosts_logger, HOSTS_DBG_TRACE,
+              HOSTS_MGR_ALTERNATE_GET_ALL_SUBNET_ID_ADDRESS4)
+        .arg(subnet_id)
+        .arg(address.toText());
+
+    for (auto source : alternate_sources_) {
+        auto hosts_plus = source->getAll4(subnet_id, address);
+        hosts.insert(hosts.end(), hosts_plus.begin(), hosts_plus.end());
+    }
+    return (hosts);
+}
 
 ConstHostPtr
 HostMgr::get6(const IOAddress& prefix, const uint8_t prefix_len) const {
@@ -449,6 +536,23 @@ HostMgr::get6(const SubnetID& subnet_id,
     return (ConstHostPtr());
 }
 
+ConstHostCollection
+HostMgr::getAll6(const SubnetID& subnet_id,
+                 const asiolink::IOAddress& address) const {
+    auto hosts = getCfgHosts()->getAll6(subnet_id, address);
+
+    LOG_DEBUG(hosts_logger, HOSTS_DBG_TRACE,
+              HOSTS_MGR_ALTERNATE_GET_ALL_SUBNET_ID_ADDRESS6)
+        .arg(subnet_id)
+        .arg(address.toText());
+
+    for (auto source : alternate_sources_) {
+        auto hosts_plus = source->getAll6(subnet_id, address);
+        hosts.insert(hosts.end(), hosts_plus.begin(), hosts_plus.end());
+    }
+    return (hosts);
+}
+
 void
 HostMgr::add(const HostPtr& host) {
     if (alternate_sources_.empty()) {
@@ -543,6 +647,32 @@ HostMgr::cacheNegative(const SubnetID& ipv4_subnet_id,
         cache_ptr_->insert(host, false);
     }
 }
+
+bool
+HostMgr::setIPReservationsUnique(const bool unique) {
+    // Iterate over the alternate sources first, because they may include those
+    // for which the new setting is not supported.
+    for (auto source : alternate_sources_) {
+        if (!source->setIPReservationsUnique(unique)) {
+            // One of the sources does not support this new mode of operation.
+            // Let's log a warning and back off the changes to the default
+            // setting which should always be supported.
+            ip_reservations_unique_ = true;
+            LOG_WARN(hosts_logger, HOSTS_MGR_NON_UNIQUE_IP_UNSUPPORTED)
+                .arg(source->getType());
+            for (auto source : alternate_sources_) {
+                source->setIPReservationsUnique(true);
+            }
+            return (false);
+        }
+    }
+    // Successfully configured the HostMgr to use the new setting.
+    // Remember this setting so we can return it via the
+    // getIPReservationsUnique.
+    ip_reservations_unique_ = unique;
+    return (true);
+}
+
 
 } // end of isc::dhcp namespace
 } // end of isc namespace

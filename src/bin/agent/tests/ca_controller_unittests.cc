@@ -1,10 +1,12 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
+#include <asiolink/testutils/timed_signal.h>
 #include <agent/ca_controller.h>
 #include <agent/ca_process.h>
 #include <agent/ca_command_mgr.h>
@@ -15,12 +17,13 @@
 #include <sstream>
 #include <unistd.h>
 
-using namespace std;
+using namespace isc::asiolink::test;
 using namespace isc::agent;
 using namespace isc::data;
 using namespace isc::http;
 using namespace isc::process;
 using namespace boost::posix_time;
+using namespace std;
 
 namespace {
 
@@ -97,7 +100,7 @@ public:
                   sock_info->get("socket-name")->stringValue());
     }
 
-        /// @brief Compares the status in the given parse result to a given value.
+    /// @brief Compares the status in the given parse result to a given value.
     ///
     /// @param answer Element set containing an integer response and string
     /// comment.
@@ -107,13 +110,6 @@ public:
     void checkAnswer(isc::data::ConstElementPtr answer,
                      int exp_status,
                      string exp_txt = "") {
-
-        // Get rid of the outer list.
-        ASSERT_TRUE(answer);
-        ASSERT_EQ(Element::list, answer->getType());
-        ASSERT_LE(1, answer->size());
-        answer = answer->get(0);
-
         int rcode = 0;
         isc::data::ConstElementPtr comment;
         comment = isc::config::parseAnswer(rcode, answer);
@@ -289,6 +285,21 @@ TEST_F(CtrlAgentControllerTest, successfulConfigUpdate) {
         "  }"
         "}";
 
+    // This check callback is called before the shutdown.
+    auto check_callback = [&] {
+        CtrlAgentProcessPtr process = getCtrlAgentProcess();
+        ASSERT_TRUE(process);
+
+        // Check that the HTTP listener still exists after reconfiguration.
+        ConstHttpListenerPtr listener = process->getHttpListener();
+        ASSERT_TRUE(listener);
+        EXPECT_TRUE(process->isListening());
+
+        // The listener should have been reconfigured to use new address and port.
+        EXPECT_EQ("127.0.0.1", listener->getLocalAddress().toText());
+        EXPECT_EQ(8080, listener->getLocalPort());
+    };
+
     // Schedule reconfiguration.
     scheduleTimedWrite(second_config, 100);
     // Schedule SIGHUP signal to trigger reconfiguration.
@@ -296,7 +307,9 @@ TEST_F(CtrlAgentControllerTest, successfulConfigUpdate) {
 
     // Start the server.
     time_duration elapsed_time;
-    runWithConfig(valid_agent_config, 500, elapsed_time);
+    runWithConfig(valid_agent_config, 500,
+                  static_cast<const TestCallback&>(check_callback),
+                  elapsed_time);
 
     CtrlAgentCfgContextPtr ctx = getCtrlAgentCfgContext();
     ASSERT_TRUE(ctx);
@@ -309,17 +322,12 @@ TEST_F(CtrlAgentControllerTest, successfulConfigUpdate) {
     testUnixSocketInfo("dhcp4", "/second/dhcp4/socket");
     testUnixSocketInfo("dhcp6", "/second/dhcp6/socket");
 
+    // After the shutdown the HTTP listener no longer exists.
     CtrlAgentProcessPtr process = getCtrlAgentProcess();
     ASSERT_TRUE(process);
-
-    // Check that the HTTP listener still exists after reconfiguration.
     ConstHttpListenerPtr listener = process->getHttpListener();
-    ASSERT_TRUE(listener);
-    EXPECT_TRUE(process->isListening());
-
-    // The listener should have been reconfigured to use new address and port.
-    EXPECT_EQ("127.0.0.1", listener->getLocalAddress().toText());
-    EXPECT_EQ(8080, listener->getLocalPort());
+    ASSERT_FALSE(listener);
+    EXPECT_FALSE(process->isListening());
 }
 
 // Tests that the server continues to use an old configuration when the listener
@@ -343,6 +351,20 @@ TEST_F(CtrlAgentControllerTest, unsuccessfulConfigUpdate) {
         "  }"
         "}";
 
+    // This check callback is called before the shutdown.
+    auto check_callback = [&] {
+        CtrlAgentProcessPtr process = getCtrlAgentProcess();
+        ASSERT_TRUE(process);
+
+        // We should still be using an original listener.
+        ConstHttpListenerPtr listener = process->getHttpListener();
+        ASSERT_TRUE(listener);
+        EXPECT_TRUE(process->isListening());
+
+        EXPECT_EQ("127.0.0.1", listener->getLocalAddress().toText());
+        EXPECT_EQ(8081, listener->getLocalPort());
+    };
+
     // Schedule reconfiguration.
     scheduleTimedWrite(second_config, 100);
     // Schedule SIGHUP signal to trigger reconfiguration.
@@ -350,7 +372,9 @@ TEST_F(CtrlAgentControllerTest, unsuccessfulConfigUpdate) {
 
     // Start the server.
     time_duration elapsed_time;
-    runWithConfig(valid_agent_config, 500, elapsed_time);
+    runWithConfig(valid_agent_config, 500,
+                  static_cast<const TestCallback&>(check_callback),
+                  elapsed_time);
 
     CtrlAgentCfgContextPtr ctx = getCtrlAgentCfgContext();
     ASSERT_TRUE(ctx);
@@ -364,16 +388,12 @@ TEST_F(CtrlAgentControllerTest, unsuccessfulConfigUpdate) {
     testUnixSocketInfo("dhcp4", "/first/dhcp4/socket");
     testUnixSocketInfo("dhcp6", "/first/dhcp6/socket");
 
+    // After the shutdown the HTTP listener no longer exists.
     CtrlAgentProcessPtr process = getCtrlAgentProcess();
     ASSERT_TRUE(process);
-
-    // We should still be using an original listener.
     ConstHttpListenerPtr listener = process->getHttpListener();
-    ASSERT_TRUE(listener);
-    EXPECT_TRUE(process->isListening());
-
-    EXPECT_EQ("127.0.0.1", listener->getLocalAddress().toText());
-    EXPECT_EQ(8081, listener->getLocalPort());
+    ASSERT_FALSE(listener);
+    EXPECT_FALSE(process->isListening());
 }
 
 // Tests that it is possible to update the configuration in such a way that the
@@ -397,6 +417,20 @@ TEST_F(CtrlAgentControllerTest, noListenerChange) {
         "  }"
         "}";
 
+    // This check callback is called before the shutdown.
+    auto check_callback = [&] {
+        CtrlAgentProcessPtr process = getCtrlAgentProcess();
+        ASSERT_TRUE(process);
+
+        // Check that the HTTP listener still exists after reconfiguration.
+        ConstHttpListenerPtr listener = process->getHttpListener();
+        ASSERT_TRUE(listener);
+        EXPECT_TRUE(process->isListening());
+
+        EXPECT_EQ("127.0.0.1", listener->getLocalAddress().toText());
+        EXPECT_EQ(8081, listener->getLocalPort());
+    };
+
     // Schedule reconfiguration.
     scheduleTimedWrite(second_config, 100);
     // Schedule SIGHUP signal to trigger reconfiguration.
@@ -404,7 +438,9 @@ TEST_F(CtrlAgentControllerTest, noListenerChange) {
 
     // Start the server.
     time_duration elapsed_time;
-    runWithConfig(valid_agent_config, 500, elapsed_time);
+    runWithConfig(valid_agent_config, 500,
+                  static_cast<const TestCallback&>(check_callback),
+                  elapsed_time);
 
     CtrlAgentCfgContextPtr ctx = getCtrlAgentCfgContext();
     ASSERT_TRUE(ctx);
@@ -419,14 +455,9 @@ TEST_F(CtrlAgentControllerTest, noListenerChange) {
 
     CtrlAgentProcessPtr process = getCtrlAgentProcess();
     ASSERT_TRUE(process);
-
-    // The listener should keep listening.
     ConstHttpListenerPtr listener = process->getHttpListener();
-    ASSERT_TRUE(listener);
-    EXPECT_TRUE(process->isListening());
-
-    EXPECT_EQ("127.0.0.1", listener->getLocalAddress().toText());
-    EXPECT_EQ(8081, listener->getLocalPort());
+    ASSERT_FALSE(listener);
+    EXPECT_FALSE(process->isListening());
 }
 
 // Tests that registerCommands actually registers anything.
@@ -497,7 +528,7 @@ TEST_F(CtrlAgentControllerTest, configWrite) {
     ifstream f(file.c_str());
     ASSERT_TRUE(f.good());
 
-    // Now that's some rough check that the the config written really contains
+    // Now that's some rough check that the config written really contains
     // something that looks like Control-agent configuration.
     ConstElementPtr from_file = Element::fromJSONFile(file, true);
     ASSERT_TRUE(from_file);
@@ -547,9 +578,9 @@ TEST_F(CtrlAgentControllerTest, configReloadMissingFile) {
                                                            params, cmd);
 
     // Verify the reload was rejected.
-    string expected = "[ { \"result\": 1, \"text\": "
+    string expected = "{ \"result\": 1, \"text\": "
         "\"Configuration parsing failed: "
-        "Unable to open file does-not-exist.json\" } ]";
+        "Unable to open file does-not-exist.json\" }";
     EXPECT_EQ(expected, answer->str());
 
     // Now clean up after ourselves.
@@ -594,9 +625,9 @@ TEST_F(CtrlAgentControllerTest, configReloadBrokenFile) {
                                                            params, cmd);
 
     // Verify the reload was rejected.
-    string expected = "[ { \"result\": 1, \"text\": "
+    string expected = "{ \"result\": 1, \"text\": "
         "\"Configuration parsing failed: "
-        "testbad.json:1.1: Invalid character: b\" } ]";
+        "testbad.json:1.1: Invalid character: b\" }";
     EXPECT_EQ(expected, answer->str());
 
     // Remove the file.
@@ -646,8 +677,8 @@ TEST_F(CtrlAgentControllerTest, configReloadFileValid) {
 
 
     // Verify the reload was successful.
-    string expected = "[ { \"result\": 0, \"text\": "
-        "\"Configuration applied successfully.\" } ]";
+    string expected = "{ \"result\": 0, \"text\": "
+        "\"Configuration applied successfully.\" }";
     EXPECT_EQ(expected, answer->str());
 
     // Check that the config was indeed applied?
@@ -695,6 +726,111 @@ TEST_F(CtrlAgentControllerTest, statusGet) {
     ASSERT_TRUE(found_reload);
     EXPECT_LE(found_reload->intValue(), 5);
     EXPECT_GE(found_reload->intValue(), 0);
+}
+
+TEST_F(CtrlAgentControllerTest, shutdown) {
+    ASSERT_NO_THROW(initProcess());
+    EXPECT_TRUE(checkProcess());
+
+    // The framework available makes it very difficult to test the actual
+    // code as CtrlAgentController is not initialized the same way it is
+    // in production code. In particular, the way CtrlAgentController
+    // is initialized in tests does not call registerCommands().
+    // This is a crude workaround for this problem. Proper solution should
+    // be developed sooner rather than later.
+    const DControllerBasePtr& base = getController();
+    const CtrlAgentControllerPtr& ctrl
+        = boost::dynamic_pointer_cast<CtrlAgentController>(base);
+    ASSERT_TRUE(ctrl);
+    // Now clean up after ourselves.
+    ctrl->registerCommands();
+
+    // This is normally set to whatever value is passed to -c when the server is
+    // started, but we're not starting it that way, so need to set it by hand.
+    getController()->setConfigFile("testvalid.json");
+
+    // Ok, enough fooling around. Let's create a valid config.
+    ofstream f("testvalid.json", ios::trunc);
+    f << "{ \"Control-agent\": "
+      << string(valid_agent_config)
+      << " }" << endl;
+    f.close();
+
+    // Build and execute the command.
+
+    ConstElementPtr cmd = Element::fromJSON("{ \"command\": \"shutdown\"}");
+    ConstElementPtr params;
+    ConstElementPtr answer;
+    answer = CtrlAgentCommandMgr::instance().handleCommand("shutdown",
+                                                           params, cmd);
+
+    // Verify the reload was successful.
+    string expected = "{ \"result\": 0, \"text\": "
+                      "\"Control Agent is shutting down\" }";
+
+    EXPECT_EQ(expected, answer->str());
+
+    int exit_value = ctrl->getExitValue();
+    EXPECT_EQ(0, exit_value);
+
+    // Remove the file.
+    ::remove("testvalid.json");
+
+    // Now clean up after ourselves.
+    ctrl->deregisterCommands();
+}
+
+
+TEST_F(CtrlAgentControllerTest, shutdownExitValue) {
+    ASSERT_NO_THROW(initProcess());
+    EXPECT_TRUE(checkProcess());
+
+    // The framework available makes it very difficult to test the actual
+    // code as CtrlAgentController is not initialized the same way it is
+    // in production code. In particular, the way CtrlAgentController
+    // is initialized in tests does not call registerCommands().
+    // This is a crude workaround for this problem. Proper solution should
+    // be developed sooner rather than later.
+    const DControllerBasePtr& base = getController();
+    const CtrlAgentControllerPtr& ctrl
+        = boost::dynamic_pointer_cast<CtrlAgentController>(base);
+    ASSERT_TRUE(ctrl);
+    // Now clean up after ourselves.
+    ctrl->registerCommands();
+
+    // This is normally set to whatever value is passed to -c when the server is
+    // started, but we're not starting it that way, so need to set it by hand.
+    getController()->setConfigFile("testvalid.json");
+
+    // Ok, enough fooling around. Let's create a valid config.
+    ofstream f("testvalid.json", ios::trunc);
+    f << "{ \"Control-agent\": "
+      << string(valid_agent_config)
+      << " }" << endl;
+    f.close();
+
+    // Build and execute the command.
+
+    ConstElementPtr cmd = Element::fromJSON("{ \"command\": \"shutdown\"}");
+    ConstElementPtr params = Element::fromJSON("{ \"exit-value\": 77 }");
+    ConstElementPtr answer;
+    answer = CtrlAgentCommandMgr::instance().handleCommand("shutdown",
+                                                           params, cmd);
+
+    // Verify the reload was successful.
+    string expected = "{ \"result\": 0, \"text\": "
+                      "\"Control Agent is shutting down\" }";
+
+    EXPECT_EQ(expected, answer->str());
+
+    int exit_value = ctrl->getExitValue();
+    EXPECT_EQ(77, exit_value);
+
+    // Remove the file.
+    ::remove("testvalid.json");
+
+    // Now clean up after ourselves.
+    ctrl->deregisterCommands();
 }
 
 }

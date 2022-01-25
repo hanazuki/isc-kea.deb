@@ -1,10 +1,10 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-/// \brief Test of TCPSocket
+/// @brief Test of TCPSocket
 ///
 /// Tests the functionality of a TCPSocket by working through an open-send-
 /// receive-close sequence and checking that the asynchronous notifications
@@ -18,7 +18,6 @@
 #include <util/buffer.h>
 #include <util/io_utilities.h>
 
-#include <boost/bind.hpp>
 #include <boost/shared_ptr.hpp>
 #include <gtest/gtest.h>
 
@@ -44,7 +43,7 @@ namespace {
 const char SERVER_ADDRESS[] = "127.0.0.1";
 const unsigned short SERVER_PORT = 5303;
 
-// TODO: Shouldn't we send something that is real message?
+/// @todo Shouldn't we send something that is real message?
 const char OUTBOUND_DATA[] = "Data sent from client to server";
 const char INBOUND_DATA[] = "Returned data from server to client";
 }
@@ -54,7 +53,7 @@ const char INBOUND_DATA[] = "Returned data from server to client";
 /// The arguments to the completion callback are stored for later retrieval.
 class TCPCallback {
 public:
-    /// \brief Operations the server is doing
+    /// @brief Operations the server is doing
     enum Operation {
         ACCEPT = 0,     ///< accept() was issued
         OPEN = 1,       /// Client connected to server
@@ -63,7 +62,7 @@ public:
         NONE = 4        ///< "Not set" state
     };
 
-    /// \brief Minimum size of buffers
+    /// @brief Minimum size of buffers
     enum {
         MIN_SIZE = (64 * 1024 + 2)          ///< 64kB + two bytes for a count
     };
@@ -85,7 +84,7 @@ public:
         std::vector<uint8_t>       data_;          ///< Receive buffer
     };
 
-    /// \brief Constructor
+    /// @brief Constructor
     ///
     /// Constructs the object.  It also creates the data member pointed to by
     /// a shared pointer.  When used as a callback object, this is copied as it
@@ -96,25 +95,25 @@ public:
     /// shared pointer is copied, which leaves both objects pointing to the same
     /// data.
     ///
-    /// \param which Which of the two callback objects this is
+    /// @param which Which of the two callback objects this is
     TCPCallback(std::string which) : ptr_(new PrivateData())
     {
         ptr_->name_ = which;
     }
 
-    /// \brief Destructor
+    /// @brief Destructor
     ///
     /// No code needed, destroying the shared pointer destroys the private data.
     virtual ~TCPCallback()
     {}
 
-    /// \brief Client Callback Function
+    /// @brief Client Callback Function
     ///
     /// Called when an asynchronous operation is completed by the client, this
     /// stores the origin of the operation in the client_called_ data member.
     ///
-    /// \param ec I/O completion error code passed to callback function.
-    /// \param length Number of bytes transferred
+    /// @param ec I/O completion error code passed to callback function.
+    /// @param length Number of bytes transferred
     void operator()(boost::system::error_code ec = boost::system::error_code(),
                             size_t length = 0)
     {
@@ -123,54 +122,54 @@ public:
         ptr_->length_ = length;
     }
 
-    /// \brief Get I/O completion error code
+    /// @brief Get I/O completion error code
     int getCode() {
         return (ptr_->error_code_.value());
     }
 
-    /// \brief Set I/O completion code
+    /// @brief Set I/O completion code
     ///
-    /// \param code New value of completion code
+    /// @param code New value of completion code
     void setCode(int code) {
         ptr_->error_code_ = boost::system::error_code(code, boost::system::error_code().category());
     }
 
-    /// \brief Get number of bytes transferred in I/O
+    /// @brief Get number of bytes transferred in I/O
     size_t& length() {
         return (ptr_->length_);
     }
 
-    /// \brief Get cumulative number of bytes transferred in I/O
+    /// @brief Get cumulative number of bytes transferred in I/O
     size_t& cumulative() {
         return (ptr_->cumulative_);
     }
 
-    /// \brief Get expected amount of data
+    /// @brief Get expected amount of data
     size_t& expected() {
         return (ptr_->expected_);
     }
 
-    /// \brief Get offset into data
+    /// @brief Get offset into data
     size_t& offset() {
         return (ptr_->offset_);
     }
 
-    /// \brief Get data member
+    /// @brief Get data member
     uint8_t* data() {
         return (&ptr_->data_[0]);
     }
 
-    /// \brief Get flag to say what was queued
+    /// @brief Get flag to say what was queued
     Operation& queued() {
         return (ptr_->queued_);
     }
 
-    /// \brief Get flag to say when callback was called
+    /// @brief Get flag to say when callback was called
     Operation& called() {
         return (ptr_->called_);
     }
 
-    /// \brief Return instance of callback name
+    /// @brief Return instance of callback name
     std::string& name() {
         return (ptr_->name_);
     }
@@ -191,8 +190,8 @@ private:
 // from the remote end is equal to the value in the count field plus two bytes
 // for the count field itself.
 //
-// \param socket Socket on which the server is reading data
-// \param server_cb Structure in which server data is held.
+// @param socket Socket on which the server is reading data
+// @param server_cb Structure in which server data is held.
 void
 serverRead(tcp::socket& socket, TCPCallback& server_cb) {
 
@@ -301,7 +300,7 @@ TEST(TCPSocket, processReceivedData) {
     EXPECT_TRUE(equal(inbuff + 2, inbuff + cumulative, dataptr));
 }
 
-// TODO: Need to add a test to check the cancel() method
+/// @todo Need to add a test to check the cancel() method
 
 // Tests the operation of a TCPSocket by opening it, sending an asynchronous
 // message to a server, receiving an asynchronous message from the server and

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,6 +19,18 @@
 namespace isc {
 namespace hooks {
 
+/// @brief Libraries still opened.
+///
+/// Thrown if an attempt is made to load libraries when some are still
+/// in memory likely because they were not unloaded (logic error in Kea)
+/// or they have some visible dangling pointers (logic error in a hook
+/// library).
+class LibrariesStillOpened : public Exception {
+public:
+    LibrariesStillOpened(const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) {}
+};
+
 // Forward declarations
 class CalloutHandle;
 class CalloutManager;
@@ -37,10 +49,6 @@ class LibraryManagerCollection;
 
 class HooksManager : boost::noncopyable {
 public:
-    /// @brief Get singleton hooks manager
-    ///
-    /// @return Reference to the singleton hooks manager.
-    static HooksManager& getHooksManager();
 
     /// @brief Load and reload libraries
     ///
@@ -49,8 +57,8 @@ public:
     /// hook points) are configured and the libraries' "load" function
     /// called.
     ///
-    /// If libraries are already loaded, they are unloaded and the new
-    /// libraries loaded.
+    /// @note this method now requires the libraries are unloaded before
+    ///       being called.
     ///
     /// If any library fails to load, an error message will be logged.  The
     /// remaining libraries will be loaded if possible.
@@ -62,6 +70,7 @@ public:
     /// @return true if all libraries loaded without a problem, false if one or
     ///        more libraries failed to load.  In the latter case, message will
     ///        be logged that give the reason.
+    /// @throw LibrariesStillOpened when some libraries are already loaded.
     static bool loadLibraries(const HookLibsCollection& libraries);
 
     /// @brief Unload libraries
@@ -69,15 +78,37 @@ public:
     /// Unloads the loaded libraries and leaves the hooks subsystem in the
     /// state it was after construction but before loadLibraries() is called.
     ///
-    /// @note: This method should be used with caution - see the notes for
-    ///        the class LibraryManager for pitfalls.  In general, a server
-    ///        should not call this method: library unloading will automatically
-    ///        take place when new libraries are loaded, and when appropriate
-    ///        objects are destroyed.
+    /// @note: This method should be called after @ref prepareUnloadLibraries
+    ///        in order to destroy appropriate objects. See notes for
+    ///        the class LibraryManager for pitfalls.
+    /// @note: if even after @ref prepareUnloadLibraries there are still
+    ///        visible pointers (i.e. callout handles owning the
+    ///        library manager collection) the method will fail to close
+    ///        libraries and returns false. It is a fatal error as there
+    ///        is no possible recovery. It is a logic error in the hook
+    ///        code too so the solution is to fix it and to restart
+    ///        the server with a correct hook library binary.
     ///
-    /// @return true if all libraries unloaded successfully, false on an error.
-    ///         In the latter case, an error message will have been output.
-    static void unloadLibraries();
+    /// @return true if all libraries unloaded successfully, false if they
+    ///         are still in memory.
+    static bool unloadLibraries();
+
+    /// @brief Prepare the unloading of libraries
+    ///
+    /// Calls the unload functions when they exist and removes callouts.
+    ///
+    /// @note: after the call to this method there should be no visible
+    ///        dangling pointers (i.e. callout handles owning the library
+    ///        manager collection) nor invisible dangling pointers.
+    ///        In the first case it will be impossible to close libraries
+    ///        so they will remain in memory, in the second case a crash
+    ///        is possible in particular at exit time during global
+    ///        object finalization. In both cases the hook library code
+    ///        causing the problem is incorrect and must be fixed.
+    /// @note: it is a logic error to not call this method before
+    ///        @ref unloadLibraries even it hurts only with particular
+    ///        hooks libraries.
+    static void prepareUnloadLibraries();
 
     /// @brief Are callouts present?
     ///
@@ -226,14 +257,6 @@ public:
     static const int CONTEXT_CREATE = ServerHooks::CONTEXT_CREATE;
     static const int CONTEXT_DESTROY = ServerHooks::CONTEXT_DESTROY;
 
-    /// @brief Return the shared callout manager
-    ///
-    /// Declared as static as other methods but only one for the
-    /// singleton will be created.
-    ///
-    /// @return A reference to the shared callout manager
-    static boost::shared_ptr<CalloutManager>& getSharedCalloutManager();
-
     /// @brief Park an object (packet).
     ///
     /// The typical use case for parking an object is when the server needs to
@@ -267,7 +290,8 @@ public:
     template<typename T>
     static void park(const std::string& hook_name, T parked_object,
                      std::function<void()> unpark_callback) {
-        getHooksManager().parkInternal(hook_name, parked_object, unpark_callback);
+        ServerHooks::getServerHooks().
+            getParkingLotPtr(hook_name)->park(parked_object, unpark_callback);
     }
 
     /// @brief Forces unparking the object (packet).
@@ -282,7 +306,8 @@ public:
     /// @return true if the specified object has been found, false otherwise.
     template<typename T>
     static bool unpark(const std::string& hook_name, T parked_object) {
-        return (getHooksManager().unparkInternal(hook_name, parked_object));
+        return (ServerHooks::getServerHooks().
+                getParkingLotPtr(hook_name)->unpark(parked_object, true));
     }
 
     /// @brief Removes parked object without calling a callback.
@@ -293,7 +318,8 @@ public:
     /// @return true if the specified object has been found false otherwise.
     template<typename T>
     static bool drop(const std::string& hook_name, T parked_object) {
-        return (getHooksManager().dropInternal(hook_name, parked_object));
+        return (ServerHooks::getServerHooks().
+                getParkingLotPtr(hook_name)->drop(parked_object));
     }
 
     /// @brief Increases reference counter for the parked object.
@@ -307,7 +333,8 @@ public:
     /// be increased.
     template<typename T>
     static void reference(const std::string& hook_name, T parked_object) {
-        getHooksManager().referenceInternal(hook_name, parked_object);
+        ServerHooks::getServerHooks().
+            getParkingLotPtr(hook_name)->reference(parked_object);
     }
 
     /// @brief Clears any parking packets.
@@ -316,8 +343,23 @@ public:
     /// are no dangling pointers that could possibly prevent the library
     /// from being unloaded.
     static void clearParkingLots() {
-        getHooksManager().clearParkingLotsInternal();
+        ServerHooks::getServerHooks().getParkingLotsPtr()->clear();
     }
+
+    /// @brief Set test mode
+    ///
+    /// If enabled by unit tests will permit to register callouts before calling
+    /// @ref loadLibraries which will return immediately without changing
+    /// current internal state.
+    ///
+    /// @param mode the test mode flag which enables or disabled the
+    /// functionality.
+    static void setTestMode(bool mode);
+
+    /// @brief Get test mode
+    ///
+    /// @return the test mode flag.
+    static bool getTestMode();
 
 private:
 
@@ -327,61 +369,10 @@ private:
     /// through the getHooksManager() static method.
     HooksManager();
 
-    /// @brief Park an object (packet).
+    /// @brief Get singleton hooks manager
     ///
-    /// @tparam Type of the parked object.
-    /// @param hook_name Name of the hook point for which the packet is parked.
-    /// @param parked_object packet to be parked.
-    /// @param unpark_callback callback invoked when the packet is unparked.
-    template<typename T>
-    void parkInternal(const std::string& hook_name, T parked_object,
-                      std::function<void()> unpark_callback) {
-        ServerHooks::getServerHooks().
-            getParkingLotPtr(hook_name)->park(parked_object, unpark_callback);
-    }
-
-    /// @brief Signals that the object (packet) should be unparked.
-    ///
-    /// @tparam Type of the parked object.
-    /// @param hook_name name of the hook point for which the packet is parked.
-    /// @param parked_object parked object to be unparked.
-    /// @return true if the specified object has been found, false otherwise.
-    template<typename T>
-    bool unparkInternal(const std::string& hook_name, T parked_object) {
-        return (ServerHooks::getServerHooks().
-                getParkingLotPtr(hook_name)->unpark(parked_object, true));
-    }
-
-    /// @brief Removes parked object without calling a callback.
-    ///
-    /// @tparam T type of the parked object.
-    /// @param hook_name name of the hook point for which the packet is parked.
-    /// @param parked_object parked object to be removed.
-    /// @return true if the specified object has been found false otherwise.
-    template<typename T>
-    static bool dropInternal(const std::string& hook_name, T parked_object) {
-        return (ServerHooks::getServerHooks().
-                getParkingLotPtr(hook_name)->drop(parked_object));
-    }
-
-    /// @brief Increases reference counter for the parked object.
-    ///
-    /// @tparam Type of the parked object.
-    /// @param hook_name name of the hook point for which the packet is parked.
-    /// @param parked_object parked object for which reference counter should
-    /// be increased.
-    template<typename T>
-    void referenceInternal(const std::string& hook_name, T parked_object) {
-        ServerHooks::getServerHooks().
-            getParkingLotPtr(hook_name)->reference(parked_object);
-    }
-
-    /// @brief Clears all pointers stored in parking lots.
-    ///
-    /// See @ref clearParkingLots for explanation.
-    void clearParkingLotsInternal() {
-        ServerHooks::getServerHooks().getParkingLotsPtr()->clear();
-    }
+    /// @return Reference to the singleton hooks manager.
+    static HooksManager& getHooksManager();
 
     //@{
     /// The following methods correspond to similarly-named static methods,
@@ -411,7 +402,13 @@ private:
     bool loadLibrariesInternal(const HookLibsCollection& libraries);
 
     /// @brief Unload libraries
-    void unloadLibrariesInternal();
+    ///
+    /// @return true if all libraries unloaded successfully, false on an error.
+    ///         In the latter case, an error message will have been output.
+    bool unloadLibrariesInternal();
+
+    /// @brief Prepare the unloading of libraries
+    void prepareUnloadLibrariesInternal();
 
     /// @brief Are callouts present?
     ///
@@ -477,43 +474,23 @@ private:
 
     //@}
 
-    /// @brief Initialization to No Libraries
-    ///
-    /// Initializes the hooks manager with an "empty set" of libraries.  This
-    /// method is called if conditionallyInitialize() determines that such
-    /// initialization is needed.
-    void performConditionalInitialization();
-
-    /// @brief Conditional initialization of the  hooks manager
-    ///
-    /// loadLibraries() performs the initialization of the HooksManager,
-    /// setting up the internal structures and loading libraries.  However,
-    /// in some cases, server authors may not do that.  This method is called
-    /// whenever any hooks execution function is invoked (checking callouts,
-    /// calling callouts or returning a callout handle).  If the HooksManager
-    /// is uninitialized, it will initialize it with an "empty set"
-    /// of libraries.
-    ///
-    /// For speed, the test of whether initialization is required is done
-    /// in-line here.  The actual initialization is performed in
-    /// performConditionalInitialization().
-    void conditionallyInitialize() {
-        if (!lm_collection_) {
-            performConditionalInitialization();
-        }
-    }
-
     // Members
 
     /// Set of library managers.
+    ///
+    /// @note: This should never be null.
     boost::shared_ptr<LibraryManagerCollection> lm_collection_;
 
     /// Callout manager for the set of library managers.
+    ///
+    /// @note: This should never be null.
     boost::shared_ptr<CalloutManager> callout_manager_;
 
-    /// Shared callout manager to survive library reloads.
-    boost::shared_ptr<CalloutManager> shared_callout_manager_;
-
+    /// Test flag to keep @ref callout_manager_ when calling @ref loadLibraries
+    /// from unit tests (called by @ref configureDhcp[46]Server).
+    ///
+    /// @note: This will effectively make @ref loadLibraries return immediately.
+    bool test_mode_;
 };
 
 } // namespace util

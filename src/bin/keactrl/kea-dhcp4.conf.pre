@@ -15,7 +15,7 @@
 // do. Comments in this configuration file sometimes refer to sections for more
 // details. These are section numbers in Kea User's Guide. The version matching
 // your software should come with your Kea package, but it is also available
-// in ISC's Knowledgebase (https://kb.isc.org/docs/kea-administrator-reference-manual; the direct link for
+// in ISC's Knowledgebase (https://kea.readthedocs.io; the direct link for
 // the stable version is https://kea.readthedocs.io/).
 //
 // This configuration file contains only DHCPv4 server's configuration.
@@ -41,7 +41,7 @@
         // "dhcp-socket-type": "udp"
     },
 
-    // Kea support control channel, which is a way to receive management
+    // Kea supports control channel, which is a way to receive management
     // commands while the server is running. This is a Unix domain socket that
     // receives commands formatted in JSON, e.g. config-set (which sets new
     // configuration), config-reload (which tells Kea to reload its
@@ -59,7 +59,7 @@
     // There are dedicated examples for each backend. See Section 7.2.2 "Lease
     // Storage" for details.
     "lease-database": {
-        // Memfile is the simplest and easiest backend to use. It's a in-memory
+        // Memfile is the simplest and easiest backend to use. It's an in-memory
         // C++ database that stores its state in CSV file.
         "type": "memfile",
         "lfc-interval": 3600
@@ -246,35 +246,35 @@
     // additional forensic logging capabilities, ability to reserve hosts in
     // more flexible ways, and even add extra commands. For a list of available
     // hook libraries, see https://gitlab.isc.org/isc-projects/kea/wikis/Hooks-available.
-    //"hooks-libraries": [
-    //  {
-    //      // Forensic Logging library generates forensic type of audit trail
-    //      // of all devices serviced by Kea, including their identifiers
-    //      // (like MAC address), their location in the network, times
-    //      // when they were active etc.
-    //      "library": "@libdir@/kea/hooks/libdhcp_legal_log.so"
-    //      "parameters": {
-    //          "path": "/var/lib/kea",
-    //          "base-name": "kea-forensic4"
-    //      }
-    //  },
-    //  {
-    //      // Flexible identifier (flex-id). Kea software provides a way to
-    //      // handle host reservations that include addresses, prefixes,
-    //      // options, client classes and other features. The reservation can
-    //      // be based on hardware address, DUID, circuit-id or client-id in
-    //      // DHCPv4 and using hardware address or DUID in DHCPv6. However,
-    //      // there are sometimes scenario where the reservation is more
-    //      // complex, e.g. uses other options that mentioned above, uses part
-    //      // of specific options or perhaps even a combination of several
-    //      // options and fields to uniquely identify a client. Those scenarios
-    //      // are addressed by the Flexible Identifiers hook application.
-    //      "library": "@libdir@/kea/hooks/libdhcp_flex_id.so",
-    //      "parameters": {
-    //          "identifier-expression": "substring(relay6[0].option[18],0,8)"
-    //      }
-    //  }
-    //],
+    // "hooks-libraries": [
+    //   {
+    //       // Forensic Logging library generates forensic type of audit trail
+    //       // of all devices serviced by Kea, including their identifiers
+    //       // (like MAC address), their location in the network, times
+    //       // when they were active etc.
+    //       "library": "@libdir@/kea/hooks/libdhcp_legal_log.so",
+    //       "parameters": {
+    //           "path": "/var/lib/kea",
+    //           "base-name": "kea-forensic4"
+    //       }
+    //   },
+    //   {
+    //       // Flexible identifier (flex-id). Kea software provides a way to
+    //       // handle host reservations that include addresses, prefixes,
+    //       // options, client classes and other features. The reservation can
+    //       // be based on hardware address, DUID, circuit-id or client-id in
+    //       // DHCPv4 and using hardware address or DUID in DHCPv6. However,
+    //       // there are sometimes scenario where the reservation is more
+    //       // complex, e.g. uses other options that mentioned above, uses part
+    //       // of specific options or perhaps even a combination of several
+    //       // options and fields to uniquely identify a client. Those scenarios
+    //       // are addressed by the Flexible Identifiers hook application.
+    //       "library": "@libdir@/kea/hooks/libdhcp_flex_id.so",
+    //       "parameters": {
+    //           "identifier-expression": "relay4[2].hex"
+    //       }
+    //   }
+    // ],
 
     // Below an example of a simple IPv4 subnet declaration. Uncomment to enable
     // it. This is a list, denoted with [ ], of structures, each denoted with
@@ -360,8 +360,9 @@
                 // specific options.
                 //
                 // When using reservations, it is useful to configure
-                // reservation-mode (subnet specific parameter) and
-                // host-reservation-identifiers (global parameter).
+                // reservations-global, reservations-in-subnet,
+                // reservations-out-of-pool (subnet specific parameters)
+                // and host-reservation-identifiers (global parameter).
                 {
                     "client-id": "01:12:23:34:45:56:67",
                     "ip-address": "192.0.2.204",
@@ -411,8 +412,8 @@
     // They were not added here to not overwhelm people with too much
     // information at once.
 
-// Logging configuration starts here. Kea uses different loggers to log various
-// activities. For details (e.g. names of loggers), see Chapter 18.
+    // Logging configuration starts here. Kea uses different loggers to log various
+    // activities. For details (e.g. names of loggers), see Chapter 18.
     "loggers": [
     {
         // This section affects kea-dhcp4, which is the base logger for DHCPv4
@@ -427,7 +428,7 @@
                 // - stderr (prints on standard error)
                 // - syslog (logs to syslog)
                 // - syslog:name (logs to syslog using specified name)
-                // Any other value is considered a name of a time
+                // Any other value is considered a name of the file
                 "output": "@localstatedir@/log/kea-dhcp4.log"
 
                 // Shorter log pattern suitable for use with systemd,

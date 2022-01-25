@@ -1,8 +1,10 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#include <config.h>
 
 #include <perfdhcp/avalanche_scen.h>
 
@@ -95,13 +97,13 @@ AvalancheScen::run() {
     // First indicated number of DISCOVER packets eg. 4000 are sent.
     // Then in a loop responses to received packets (this is
     // consumeReceivedPackets()) are sent and then for every 200ms it is checked
-    // if reponses to sent packets were received. If not packets are resent.
+    // if responses to sent packets were received. If not packets are resent.
     // This happens in resendPackets() method. For each packet it is checked
     // how many times it was already resent and then back off time is calculated:
     // 1, 2, 4, 8, 16, 64 (max) seconds. If estimated time has elapsed
     // from previous sending then the packet is resent. Some stats are collected
-    // and printed during runtime. The whole procedure is stopeed when
-    // all packets got reponses.
+    // and printed during runtime. The whole procedure is stopped when
+    // all packets got responses.
 
     uint32_t clients_num = options_.getClientsNum() == 0 ?
         1 : options_.getClientsNum();
@@ -169,6 +171,11 @@ AvalancheScen::run() {
         std::cout << "Interrupted" << std::endl;
     }
 
+    // Print any received leases.
+    if (options_.testDiags('l')) {
+        stats_mgr.printLeases();
+    }
+
     // Calculate total stats.
     int total_sent_pkts = total_resent_; // This holds sent + resent packets counts.
     int total_rcvd_pkts = 0;  // This holds received packets count.
@@ -191,5 +198,5 @@ AvalancheScen::run() {
     return (0);
 }
 
-}
-}
+}  // namespace perfdhcp
+}  // namespace isc

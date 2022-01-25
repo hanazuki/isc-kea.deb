@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/dhcpsrv/hosts_messages.mes on Sun Sep 29 2019 01:57
+// File created from ../../../src/lib/dhcpsrv/hosts_messages.mes
 
 #ifndef HOSTS_MESSAGES_H
 #define HOSTS_MESSAGES_H
@@ -16,12 +16,15 @@ extern const isc::log::MessageID HOSTS_CFG_CACHE_HOST_DATA_SOURCE;
 extern const isc::log::MessageID HOSTS_CFG_CLOSE_HOST_DATA_SOURCE;
 extern const isc::log::MessageID HOSTS_CFG_DEL_ALL_SUBNET4;
 extern const isc::log::MessageID HOSTS_CFG_DEL_ALL_SUBNET6;
+extern const isc::log::MessageID HOSTS_CFG_GET_ALL;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_ADDRESS4;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_ADDRESS4_COUNT;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_ADDRESS4_HOST;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_ADDRESS6;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_ADDRESS6_COUNT;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_ADDRESS6_HOST;
+extern const isc::log::MessageID HOSTS_CFG_GET_ALL_COUNT;
+extern const isc::log::MessageID HOSTS_CFG_GET_ALL_HOST;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_HOSTNAME;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_HOSTNAME_COUNT;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_HOSTNAME_HOST;
@@ -40,6 +43,9 @@ extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID4_HOST;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID6;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID6_COUNT;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID6_HOST;
+extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4;
+extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4_COUNT;
+extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS4_HOST;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS6;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS6_COUNT;
 extern const isc::log::MessageID HOSTS_CFG_GET_ALL_SUBNET_ID_ADDRESS6_HOST;
@@ -64,6 +70,9 @@ extern const isc::log::MessageID HOSTS_MGR_ALTERNATE_GET6_SUBNET_ID_ADDRESS6;
 extern const isc::log::MessageID HOSTS_MGR_ALTERNATE_GET6_SUBNET_ID_IDENTIFIER;
 extern const isc::log::MessageID HOSTS_MGR_ALTERNATE_GET6_SUBNET_ID_IDENTIFIER_HOST;
 extern const isc::log::MessageID HOSTS_MGR_ALTERNATE_GET6_SUBNET_ID_IDENTIFIER_NULL;
+extern const isc::log::MessageID HOSTS_MGR_ALTERNATE_GET_ALL_SUBNET_ID_ADDRESS4;
+extern const isc::log::MessageID HOSTS_MGR_ALTERNATE_GET_ALL_SUBNET_ID_ADDRESS6;
+extern const isc::log::MessageID HOSTS_MGR_NON_UNIQUE_IP_UNSUPPORTED;
 
 } // namespace dhcp
 } // namespace isc

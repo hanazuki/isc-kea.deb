@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,10 +19,12 @@ using namespace isc::perfdhcp;
 
 int
 main(int argc, char* argv[]) {
-    CommandOptions command_options;
-    std::string diags(command_options.getDiags());
     int ret_code = 0;
+    std::string diags;
+    bool parser_error = true;
     try {
+        CommandOptions command_options;
+        diags = command_options.getDiags();
         // If parser returns true it means that user specified
         // 'h' or 'v' command line option. Program shows the
         // help or version message and exits here.
@@ -33,17 +35,7 @@ main(int argc, char* argv[]) {
         if (command_options.parse(argc, argv, true)) {
             return (ret_code);
         }
-    } catch(isc::Exception& e) {
-        ret_code = 1;
-        command_options.usage();
-        std::cerr << "\nERROR: parsing command line options: "
-                  << e.what() << std::endl;
-        if (diags.find('e') != std::string::npos) {
-            std::cerr << "Fatal error" << std::endl;
-        }
-        return (ret_code);
-    }
-    try{
+        parser_error = false;
         auto scenario = command_options.getScenario();
         PerfSocket socket(command_options);
         if (scenario == Scenario::BASIC) {
@@ -53,9 +45,29 @@ main(int argc, char* argv[]) {
             AvalancheScen scen(command_options, socket);
             ret_code = scen.run();
         }
-    } catch (std::exception& e) {
+    } catch (const std::exception& e) {
         ret_code = 1;
-        std::cerr << "\nERROR: running perfdhcp: " << e.what() << std::endl;
+        if (!parser_error) {
+            std::cerr << std::endl << "ERROR: running perfdhcp: "
+                      << e.what() << std::endl;
+        } else {
+            CommandOptions::usage();
+            std::cerr << std::endl << "ERROR: parsing command line options: "
+                      << e.what() << std::endl;
+        }
+        if (diags.find('e') != std::string::npos) {
+            std::cerr << "Fatal error" << std::endl;
+        }
+    } catch (...) {
+        ret_code = 1;
+        if (!parser_error) {
+            std::cerr << std::endl << "ERROR: running perfdhcp"
+                      << std::endl;
+        } else {
+            CommandOptions::usage();
+            std::cerr << std::endl << "ERROR: parsing command line options"
+                      << std::endl;
+        }
         if (diags.find('e') != std::string::npos) {
             std::cerr << "Fatal error" << std::endl;
         }

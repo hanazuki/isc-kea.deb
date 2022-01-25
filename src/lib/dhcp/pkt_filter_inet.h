@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,11 +19,6 @@ namespace dhcp {
 /// AF_INET family and SOCK_DGRAM type.
 class PktFilterInet : public PktFilter {
 public:
-
-    /// @brief Constructor
-    ///
-    /// Allocates control buffers.
-    PktFilterInet();
 
     /// @brief Check if packet can be sent to the host without address directly.
     ///
@@ -81,20 +76,11 @@ public:
     /// @return result of sending a packet. It is 0 if successful.
     /// @throw isc::dhcp::SocketWriteError if an error occurs during sending
     /// a DHCP message through the socket.
-    virtual int send(const Iface& iface, uint16_t sockfd,
-                     const Pkt4Ptr& pkt);
+    virtual int send(const Iface& iface, uint16_t sockfd, const Pkt4Ptr& pkt);
 
 private:
-    /// There are separate control buffers for sending and receiving to be able
-    /// to send and receive packets in parallel in two threads.
-    /// Length of the recv_control_buf_ array.
-    size_t recv_control_buf_len_;
-    /// Length of the send_control_buf_ array.
-    size_t send_control_buf_len_;
-    /// Control buffer, used in reception.
-    boost::scoped_array<char> recv_control_buf_;
-    /// Control buffer, used in transmission.
-    boost::scoped_array<char> send_control_buf_;
+    /// Length of the socket control buffer.
+    static const size_t CONTROL_BUF_LEN;
 };
 
 } // namespace isc::dhcp

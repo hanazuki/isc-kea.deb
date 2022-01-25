@@ -1,13 +1,13 @@
-/* Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
    file, You can obtain one at http://mozilla.org/MPL/2.0/. */
 
 %skeleton "lalr1.cc" /* -*- C++ -*- */
-%require "3.0.0"
+%require "3.3.0"
 %defines
-%define parser_class_name {AgentParser}
+%define api.parser.class {AgentParser}
 %define api.prefix {agent_}
 %define api.token.constructor
 %define api.value.type variant
@@ -36,7 +36,7 @@ using namespace std;
 
 
 %define api.token.prefix {TOKEN_}
-// Tokens in an order which makes sense and related to the intented use.
+// Tokens in an order which makes sense and related to the intended use.
 // Actual regexps for tokens are defined in agent_lexer.ll.
 %token
   END  0  "end of file"
@@ -55,6 +55,19 @@ using namespace std;
   USER_CONTEXT "user-context"
   COMMENT "comment"
 
+  AUTHENTICATION "authentication"
+  TYPE "type"
+  BASIC "basic"
+  REALM "realm"
+  CLIENTS "clients"
+  USER "user"
+  PASSWORD "password"
+
+  TRUST_ANCHOR "trust-anchor"
+  CERT_FILE "cert-file"
+  KEY_FILE "key-file"
+  CERT_REQUIRED "cert-required"
+
   CONTROL_SOCKETS "control-sockets"
   DHCP4_SERVER "dhcp4"
   DHCP6_SERVER "dhcp6"
@@ -67,7 +80,6 @@ using namespace std;
   LIBRARY "library"
   PARAMETERS "parameters"
 
-  LOGGING "Logging"
   LOGGERS "loggers"
   NAME "name"
   OUTPUT_OPTIONS "output_options"
@@ -78,10 +90,6 @@ using namespace std;
   MAXSIZE "maxsize"
   MAXVER "maxver"
   PATTERN "pattern"
-
-  DHCP4 "Dhcp4"
-  DHCP6 "Dhcp6"
-  DHCPDDNS "DhcpDdns"
 
   // Not real tokens, just a way to signal what the parser is expected to
   // parse. This define the starting point. It either can be full grammar
@@ -100,13 +108,14 @@ using namespace std;
 %type <ElementPtr> value
 %type <ElementPtr> map_value
 %type <ElementPtr> socket_type_value
+%type <ElementPtr> auth_type_value
 
 %printer { yyoutput << $$; } <*>;
 
 %%
 
 // The whole grammar starts with a map, because the config file
-// consists of Control-Agent, DhcpX, Logger and DhcpDdns entries in one big { }.
+// consists of only Control-Agent entry in one big { }.
 %start start;
 
 // The starting token can be one of those listed below. Note these are
@@ -176,11 +185,13 @@ map_content: %empty // empty map
 // covers all longer lists recursively.
 not_empty_map: STRING COLON value {
                   // map containing a single entry
+                  ctx.unique($1, ctx.loc2pos(@1));
                   ctx.stack_.back()->set($1, $3);
                   }
              | not_empty_map COMMA STRING COLON value {
                   // map consisting of a shorter map followed by
                   // comma and string:value
+                  ctx.unique($3, ctx.loc2pos(@3));
                   ctx.stack_.back()->set($3, $5);
                   }
              ;
@@ -219,40 +230,26 @@ unknown_map_entry: STRING COLON {
           "got unexpected keyword \"" + keyword + "\" in " + where + " map.");
 };
 
-// This defines the top-level { } that holds Control-agent, Dhcp6, Dhcp4,
-// DhcpDdns or Logging objects.
+// This defines the top-level { } that holds only Control-agent object.
 agent_syntax_map: LCURLY_BRACKET {
     // This code is executed when we're about to start parsing
     // the content of the map
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.push_back(m);
-} global_objects RCURLY_BRACKET {
+} global_object RCURLY_BRACKET {
     // map parsing completed. If we ever want to do any wrap up
     // (maybe some sanity checking), this would be the best place
     // for it.
 };
 
-// This represents top-level entries: Control-agent, Logging, possibly others
-global_objects: global_object
-              | global_objects COMMA global_object
-              ;
-
-// This represents a single top level entry, e.g. Control-agent, Dhcp6 or DhcpDdns.
-global_object: agent_object
-             | logging_object
-             | dhcp4_json_object
-             | dhcp6_json_object
-             | dhcpddns_json_object
-             | unknown_map_entry
-             ;
-
-// This define the Control-agent object.
-agent_object: CONTROL_AGENT {
+// This represents the single top level entry, e.g. Control-agent.
+global_object: CONTROL_AGENT {
 
     // Let's create a MapElement that will represent it, add it to the
     // top level map (that's already on the stack) and put the new map
     // on the stack as well, so child elements will be able to add
     // themselves to it.
+    ctx.unique("Control-agent", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("Control-agent", m);
     ctx.stack_.push_back(m);
@@ -272,6 +269,11 @@ global_params: global_param
 // Dhcp6.
 global_param: http_host
             | http_port
+            | trust_anchor
+            | cert_file
+            | key_file
+            | cert_required
+            | authentication
             | control_sockets
             | hooks_libraries
             | loggers
@@ -281,6 +283,7 @@ global_param: http_host
             ;
 
 http_host: HTTP_HOST {
+    ctx.unique("http-host", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr host(new StringElement($4, ctx.loc2pos(@4)));
@@ -289,8 +292,42 @@ http_host: HTTP_HOST {
 };
 
 http_port: HTTP_PORT COLON INTEGER {
+    ctx.unique("http-port", ctx.loc2pos(@1));
     ElementPtr prf(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("http-port", prf);
+};
+
+trust_anchor: TRUST_ANCHOR {
+    ctx.unique("trust-anchor", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr ca(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("trust-anchor", ca);
+    ctx.leave();
+};
+
+cert_file: CERT_FILE {
+    ctx.unique("cert-file", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr cert(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("cert-file", cert);
+    ctx.leave();
+};
+
+key_file: KEY_FILE {
+    ctx.unique("key-file", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr key(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("key-file", key);
+    ctx.leave();
+};
+
+cert_required: CERT_REQUIRED COLON BOOLEAN {
+    ctx.unique("cert-required", ctx.loc2pos(@1));
+    ElementPtr req(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("cert-required", req);
 };
 
 user_context: USER_CONTEXT {
@@ -347,6 +384,7 @@ comment: COMMENT {
 
 // --- hooks-libraries ---------------------------------------------------------
 hooks_libraries: HOOKS_LIBRARIES {
+    ctx.unique("hooks-libraries", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("hooks-libraries", l);
     ctx.stack_.push_back(l);
@@ -382,6 +420,7 @@ hooks_param: library
            ;
 
 library: LIBRARY {
+    ctx.unique("library", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr lib(new StringElement($4, ctx.loc2pos(@4)));
@@ -390,8 +429,9 @@ library: LIBRARY {
 };
 
 parameters: PARAMETERS {
+    ctx.unique("parameters", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
-} COLON value {
+} COLON map_value {
     ctx.stack_.back()->set("parameters", $4);
     ctx.leave();
 };
@@ -400,6 +440,7 @@ parameters: PARAMETERS {
 
 // --- control-sockets starts here ---------------------------------------------
 control_sockets: CONTROL_SOCKETS COLON LCURLY_BRACKET {
+    ctx.unique("control-sockets", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("control-sockets", m);
     ctx.stack_.push_back(m);
@@ -426,6 +467,7 @@ control_socket: dhcp4_server_socket
 
 // That's an entry for dhcp4 socket.
 dhcp4_server_socket: DHCP4_SERVER {
+    ctx.unique("dhcp4", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("dhcp4", m);
     ctx.stack_.push_back(m);
@@ -437,6 +479,7 @@ dhcp4_server_socket: DHCP4_SERVER {
 
 // That's an entry for dhcp6 socket.
 dhcp6_server_socket: DHCP6_SERVER {
+    ctx.unique("dhcp6", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("dhcp6", m);
     ctx.stack_.push_back(m);
@@ -448,6 +491,7 @@ dhcp6_server_socket: DHCP6_SERVER {
 
 // That's an entry for d2 socket.
 d2_server_socket: D2_SERVER {
+    ctx.unique("d2", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("d2", m);
     ctx.stack_.push_back(m);
@@ -472,6 +516,7 @@ control_socket_param: socket_name
 
 // This rule defines socket-name parameter.
 socket_name: SOCKET_NAME {
+    ctx.unique("socket-name", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr name(new StringElement($4, ctx.loc2pos(@4)));
@@ -481,6 +526,7 @@ socket_name: SOCKET_NAME {
 
 // This rule specifies socket type.
 socket_type: SOCKET_TYPE {
+    ctx.unique("socket-type", ctx.loc2pos(@1));
     ctx.enter(ctx.SOCKET_TYPE);
 } COLON socket_type_value {
     ctx.stack_.back()->set("socket-type", $4);
@@ -493,56 +539,115 @@ socket_type_value : UNIX { $$ = ElementPtr(new StringElement("unix", ctx.loc2pos
 
 // --- control-sockets end here ------------------------------------------------
 
-// JSON entries for other global objects (Dhcp4,Dhcp6 and DhcpDdns)
-dhcp4_json_object: DHCP4 {
-    ctx.enter(ctx.NO_KEYWORDS);
-} COLON value {
-    ctx.stack_.back()->set("Dhcp4", $4);
-    ctx.leave();
-};
+// --- authentication starts here -----------------------------------------------------
 
-dhcp6_json_object: DHCP6 {
-    ctx.enter(ctx.NO_KEYWORDS);
-} COLON value {
-    ctx.stack_.back()->set("Dhcp6", $4);
-    ctx.leave();
-};
-
-dhcpddns_json_object: DHCPDDNS {
-    ctx.enter(ctx.NO_KEYWORDS);
-} COLON value {
-    ctx.stack_.back()->set("DhcpDdns", $4);
-    ctx.leave();
-};
-
-// --- Logging starts here -----------------------------------------------------
-
-// This defines the top level "Logging" object. It parses
-// the following "Logging": { ... }. The ... is defined
-// by logging_params
-logging_object: LOGGING {
+authentication: AUTHENTICATION {
+    ctx.unique("authentication", ctx.loc2pos(@1));
     ElementPtr m(new MapElement(ctx.loc2pos(@1)));
-    ctx.stack_.back()->set("Logging", m);
+    ctx.stack_.back()->set("authentication", m);
     ctx.stack_.push_back(m);
-    ctx.enter(ctx.LOGGING);
-} COLON LCURLY_BRACKET logging_params RCURLY_BRACKET {
+    ctx.enter(ctx.AUTHENTICATION);
+} COLON LCURLY_BRACKET auth_params RCURLY_BRACKET {
+    // The type parameter is required
+    ctx.require("type", ctx.loc2pos(@4), ctx.loc2pos(@6));
     ctx.stack_.pop_back();
     ctx.leave();
 };
 
-// This defines the list of allowed parameters that may appear
-// in the top-level Logging object. It can either be a single
-// parameter or several parameters separated by commas.
-logging_params: logging_param
-              | logging_params COMMA logging_param
+auth_params: auth_param
+           | auth_params COMMA auth_param
+           ;
+
+auth_param: auth_type
+          | realm
+          | clients
+          | comment
+          | user_context
+          | unknown_map_entry
+          ;
+
+auth_type: TYPE {
+    ctx.unique("type", ctx.loc2pos(@1));
+    ctx.enter(ctx.AUTH_TYPE);
+} COLON auth_type_value {
+    ctx.stack_.back()->set("type", $4);
+    ctx.leave();
+};
+
+auth_type_value: BASIC { $$ = ElementPtr(new StringElement("basic", ctx.loc2pos(@1))); }
+         ;
+
+realm: REALM {
+    ctx.unique("realm", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr realm(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("realm", realm);
+    ctx.leave();
+};
+
+clients: CLIENTS {
+    ctx.unique("clients", ctx.loc2pos(@1));
+    ElementPtr l(new ListElement(ctx.loc2pos(@1)));
+    ctx.stack_.back()->set("clients", l);
+    ctx.stack_.push_back(l);
+    ctx.enter(ctx.CLIENTS);
+} COLON LSQUARE_BRACKET clients_list RSQUARE_BRACKET {
+    ctx.stack_.pop_back();
+    ctx.leave();
+};
+
+clients_list: %empty
+            | not_empty_clients_list
+            ;
+
+not_empty_clients_list: basic_auth
+                      | not_empty_clients_list COMMA basic_auth
+                      ;
+
+basic_auth: LCURLY_BRACKET {
+    ElementPtr m(new MapElement(ctx.loc2pos(@1)));
+    ctx.stack_.back()->add(m);
+    ctx.stack_.push_back(m);
+} clients_params RCURLY_BRACKET {
+    ctx.stack_.pop_back();
+};
+
+clients_params: clients_param
+              | clients_params COMMA clients_param
               ;
 
-// There's currently only one parameter defined, which is "loggers".
-logging_param: loggers;
+clients_param: user
+             | password
+             | user_context
+             | comment
+             | unknown_map_entry
+             ;
 
-// "loggers", the only parameter currently defined in "Logging" object,
-// is "Loggers": [ ... ].
+user: USER {
+    ctx.unique("user", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr user(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("user", user);
+    ctx.leave();
+};
+
+password: PASSWORD {
+    ctx.unique("password", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr password(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("password", password);
+    ctx.leave();
+};
+
+// --- authentication end here -----------------------------------------------------
+
+// --- Loggers starts here -----------------------------------------------------
+
 loggers: LOGGERS {
+    ctx.unique("loggers", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("loggers", l);
     ctx.stack_.push_back(l);
@@ -558,7 +663,7 @@ loggers_entries: logger_entry
                | loggers_entries COMMA logger_entry
                ;
 
-// This defines a single entry defined in loggers in Logging.
+// This defines a single entry defined in loggers.
 logger_entry: LCURLY_BRACKET {
     ElementPtr l(new MapElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->add(l);
@@ -581,6 +686,7 @@ logger_param: name
             ;
 
 name: NAME {
+    ctx.unique("name", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr name(new StringElement($4, ctx.loc2pos(@4)));
@@ -589,11 +695,13 @@ name: NAME {
 };
 
 debuglevel: DEBUGLEVEL COLON INTEGER {
+    ctx.unique("debuglevel", ctx.loc2pos(@1));
     ElementPtr dl(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("debuglevel", dl);
 };
 
 severity: SEVERITY {
+    ctx.unique("severity", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
@@ -602,6 +710,7 @@ severity: SEVERITY {
 };
 
 output_options_list: OUTPUT_OPTIONS {
+    ctx.unique("output_options", ctx.loc2pos(@1));
     ElementPtr l(new ListElement(ctx.loc2pos(@1)));
     ctx.stack_.back()->set("output_options", l);
     ctx.stack_.push_back(l);
@@ -635,6 +744,7 @@ output_params: output
              ;
 
 output: OUTPUT {
+    ctx.unique("output", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));
@@ -643,21 +753,25 @@ output: OUTPUT {
 };
 
 flush: FLUSH COLON BOOLEAN {
+    ctx.unique("flush", ctx.loc2pos(@1));
     ElementPtr flush(new BoolElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("flush", flush);
 }
 
 maxsize: MAXSIZE COLON INTEGER {
+    ctx.unique("maxsize", ctx.loc2pos(@1));
     ElementPtr maxsize(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxsize", maxsize);
 }
 
 maxver: MAXVER COLON INTEGER {
+    ctx.unique("maxver", ctx.loc2pos(@1));
     ElementPtr maxver(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("maxver", maxver);
 }
 
 pattern: PATTERN {
+    ctx.unique("pattern", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr sev(new StringElement($4, ctx.loc2pos(@4)));

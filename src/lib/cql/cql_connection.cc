@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2018 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -55,7 +55,7 @@ CqlConnection::~CqlConnection() {
         CassFuture* close_future = cass_session_close(session_);
         cass_future_wait(close_future);
         error = checkFutureError(
-            "CqlConnection::~CqlConnection(): cass_sesssion_close() != CASS_OK",
+            "CqlConnection::~CqlConnection(): cass_session_close() != CASS_OK",
             close_future);
         rc = cass_future_error_code(close_future);
         cass_future_free(close_future);
@@ -277,8 +277,15 @@ CqlConnection::openDatabase() {
                       "castable to int, instead got \""
                           << reconnect_wait_time << "\", " << ex.what());
         }
+#if (CASS_VERSION_MAJOR > 2) || \
+    ((CASS_VERSION_MAJOR == 2) && (CASS_VERSION_MINOR >= 13))
+        cass_uint64_t delay_ms =
+            static_cast<cass_uint64_t>(reconnect_wait_time_number);
+        cass_cluster_set_constant_reconnect(cluster_, delay_ms);
+#else
         cass_cluster_set_reconnect_wait_time(cluster_,
                                              reconnect_wait_time_number);
+#endif
     }
 
     if (connect_timeout) {
@@ -450,7 +457,7 @@ CqlConnection::checkFutureError(const std::string& what,
         stream << "Session action ";
     }
     if (cass_error == CASS_OK) {
-        stream << " executed succesfully.";
+        stream << " executed successfully.";
     } else {
         stream << " failed, Kea error: " << what
                << ", Cassandra error code: " << cass_error_desc(cass_error)

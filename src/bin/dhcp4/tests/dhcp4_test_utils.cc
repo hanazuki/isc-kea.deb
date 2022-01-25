@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,6 +20,7 @@
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcp/tests/pkt_captures.h>
 #include <dhcpsrv/cfg_db_access.h>
+#include <dhcpsrv/cfg_multi_threading.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/lease_mgr.h>
@@ -31,6 +32,7 @@
 using namespace std;
 using namespace isc::asiolink;
 using namespace isc::data;
+using namespace isc::util;
 
 namespace isc {
 namespace dhcp {
@@ -44,7 +46,7 @@ BaseServerTest::BaseServerTest()
 BaseServerTest::~BaseServerTest() {
     // Remove default lease file.
     std::ostringstream s2;
-    s2 << CfgMgr::instance().getDataDir() << "/" << "kea-leases4.csv";
+    s2 << CfgMgr::instance().getDataDir() << "/kea-leases4.csv";
     static_cast<void>(::remove(s2.str().c_str()));
 
     // Revert to original data directory.
@@ -55,7 +57,7 @@ BaseServerTest::~BaseServerTest() {
 }
 
 Dhcpv4SrvTest::Dhcpv4SrvTest()
-:rcode_(-1), srv_(0) {
+    : rcode_(-1), srv_(0), multi_threading_(false) {
 
     // Wipe any existing statistics
     isc::stats::StatsMgr::instance().removeAll();
@@ -79,6 +81,9 @@ Dhcpv4SrvTest::Dhcpv4SrvTest()
 
     // Let's wipe all existing statistics.
     isc::stats::StatsMgr::instance().removeAll();
+
+    // Reset the thread pool.
+    MultiThreadingMgr::instance().apply(false, 0, 0);
 }
 
 Dhcpv4SrvTest::~Dhcpv4SrvTest() {
@@ -90,6 +95,9 @@ Dhcpv4SrvTest::~Dhcpv4SrvTest() {
 
     // Let's wipe all existing statistics.
     isc::stats::StatsMgr::instance().removeAll();
+
+    // Reset the thread pool.
+    MultiThreadingMgr::instance().apply(false, 0, 0);
 }
 
 void Dhcpv4SrvTest::addPrlOption(Pkt4Ptr& pkt) {
@@ -110,7 +118,8 @@ void Dhcpv4SrvTest::addPrlOption(Pkt4Ptr& pkt) {
     pkt->addOption(option_prl);
 }
 
-void Dhcpv4SrvTest::configureRequestedOptions() {
+void
+Dhcpv4SrvTest::configureRequestedOptions() {
     // dns-servers
     Option4AddrLstPtr
         option_dns_servers(new Option4AddrLst(DHO_DOMAIN_NAME_SERVERS));
@@ -119,7 +128,8 @@ void Dhcpv4SrvTest::configureRequestedOptions() {
     ASSERT_NO_THROW(subnet_->getCfgOption()->add(option_dns_servers, false, DHCP4_OPTION_SPACE));
 
     // domain-name
-    OptionDefinition def("domain-name", DHO_DOMAIN_NAME, OPT_FQDN_TYPE);
+    OptionDefinition def("domain-name", DHO_DOMAIN_NAME, DHCP4_OPTION_SPACE,
+                         OPT_FQDN_TYPE);
     OptionCustomPtr option_domain_name(new OptionCustom(def, Option::V4));
     option_domain_name->writeFqdn("example.com");
     subnet_->getCfgOption()->add(option_domain_name, false, DHCP4_OPTION_SPACE);
@@ -136,7 +146,115 @@ void Dhcpv4SrvTest::configureRequestedOptions() {
     ASSERT_NO_THROW(subnet_->getCfgOption()->add(option_cookie_servers, false, DHCP4_OPTION_SPACE));
 }
 
-void Dhcpv4SrvTest::messageCheck(const Pkt4Ptr& q, const Pkt4Ptr& a) {
+void
+Dhcpv4SrvTest::configureServerIdentifier() {
+    CfgMgr& cfg_mgr = CfgMgr::instance();
+    CfgSubnets4Ptr subnets = cfg_mgr.getStagingCfg()->getCfgSubnets4();
+
+    // Build and add subnet2.
+    Subnet4Ptr subnet2(new Subnet4(IOAddress("192.0.2.0"), 24, 1200, 2400, 3600, 2));
+    Pool4Ptr pool(new Pool4(IOAddress("192.0.2.100"), IOAddress("192.0.2.200")));
+    // Add server identifier to the pool.
+    OptionCustomPtr server_id = makeServerIdOption(IOAddress("192.0.2.254"));
+    CfgOptionPtr cfg_option = pool->getCfgOption();
+    cfg_option->add(server_id, false, DHCP4_OPTION_SPACE);
+    subnet2->addPool(pool);
+
+    // Add a second pool.
+    pool.reset(new Pool4(IOAddress("192.0.2.201"), IOAddress("192.0.2.220")));
+    subnet2->addPool(pool);
+
+    subnets->add(subnet2);
+
+    // Build and add subnet3.
+    Triplet<uint32_t> unspec;
+    Subnet4Ptr subnet3(new Subnet4(IOAddress("192.0.3.0"), 24, unspec, unspec, 3600, 3));
+    pool.reset(new Pool4(IOAddress("192.0.3.100"), IOAddress("192.0.3.200")));
+    subnet3->addPool(pool);
+    subnet3->setT1Percent(0.5);
+    subnet3->setT2Percent(0.75);
+    subnet3->setCalculateTeeTimes(true);
+
+    // Add server identifier.
+    server_id = makeServerIdOption(IOAddress("192.0.3.254"));
+    cfg_option = subnet3->getCfgOption();
+    cfg_option->add(server_id, false, DHCP4_OPTION_SPACE);
+
+    subnets->add(subnet3);
+
+    // Build and add subnet4.
+    Subnet4Ptr subnet4(new Subnet4(IOAddress("192.0.4.0"), 24, unspec, unspec, 3600, 4));
+    pool.reset(new Pool4(IOAddress("192.0.4.100"), IOAddress("192.0.4.200")));
+    subnet4->addPool(pool);
+    subnet4->setCalculateTeeTimes(false);
+
+    subnets->add(subnet4);
+
+    // Build and add subnet5.
+    Subnet4Ptr subnet5(new Subnet4(IOAddress("192.0.5.0"), 24, unspec, unspec, 3600, 5));
+    pool.reset(new Pool4(IOAddress("192.0.5.100"), IOAddress("192.0.5.200")));
+    subnet5->addPool(pool);
+    subnet5->setCalculateTeeTimes(false);
+
+    subnets->add(subnet5);
+
+    CfgOptionPtr options(new CfgOption());
+    OptionDescriptor desc(false);
+    desc.option_ = makeServerIdOption(IOAddress("192.0.5.254"));
+    options->add(desc, DHCP4_OPTION_SPACE);
+    CfgMgr::instance().getStagingCfg()->getClientClassDictionary()->addClass("foo", ExpressionPtr(), "", true, false, options);
+    subnet5->requireClientClass("foo");
+
+    // Build and add subnet6.
+    Subnet4Ptr subnet6(new Subnet4(IOAddress("192.0.6.0"), 24, unspec, unspec, 3600, 6));
+    pool.reset(new Pool4(IOAddress("192.0.6.100"), IOAddress("192.0.6.200")));
+    subnet6->addPool(pool);
+    subnet6->setCalculateTeeTimes(false);
+
+    subnets->add(subnet6);
+
+    options.reset(new CfgOption());
+    OptionDescriptor desc_other(false);
+    desc_other.option_ = makeFqdnListOption();
+    options->add(desc_other, DHCP4_OPTION_SPACE);
+    CfgMgr::instance().getStagingCfg()->getClientClassDictionary()->addClass("bar", ExpressionPtr(), "", true, false, options);
+    subnet6->requireClientClass("bar");
+
+    // Build and add subnet7.
+    Subnet4Ptr subnet7(new Subnet4(IOAddress("192.0.7.0"), 24, unspec, unspec, 3600, 7));
+    pool.reset(new Pool4(IOAddress("192.0.7.100"), IOAddress("192.0.7.200")));
+    subnet7->addPool(pool);
+    subnet7->setCalculateTeeTimes(false);
+
+    subnets->add(subnet7);
+
+    options.reset();
+    CfgMgr::instance().getStagingCfg()->getClientClassDictionary()->addClass("xyz", ExpressionPtr(), "", true, false, options);
+    subnet7->requireClientClass("xyz");
+
+    // Build and add a shared-network.
+    CfgSharedNetworks4Ptr networks = cfg_mgr.getStagingCfg()->getCfgSharedNetworks4();
+    SharedNetwork4Ptr network1(new SharedNetwork4("one"));
+    network1->add(subnet4);
+
+    // Add server identifier.
+    server_id = makeServerIdOption(IOAddress("192.0.4.254"));
+    cfg_option = network1->getCfgOption();
+    cfg_option->add(server_id, false, DHCP4_OPTION_SPACE);
+
+    networks->add(network1);
+
+    // Add a global server identifier.
+    cfg_option = cfg_mgr.getStagingCfg()->getCfgOption();
+    server_id = makeServerIdOption(IOAddress("10.0.0.254"));
+    cfg_option->add(server_id, false, DHCP4_OPTION_SPACE);
+
+    // Commit the config.
+    cfg_mgr.commit();
+}
+
+void
+Dhcpv4SrvTest::messageCheck(const Pkt4Ptr& q, const Pkt4Ptr& a) {
     ASSERT_TRUE(q);
     ASSERT_TRUE(a);
 
@@ -247,7 +365,8 @@ Dhcpv4SrvTest::noRequestedOptions(const Pkt4Ptr& pkt) {
     return (::testing::AssertionSuccess());
 }
 
-OptionPtr Dhcpv4SrvTest::generateClientId(size_t size /*= 4*/) {
+OptionPtr
+Dhcpv4SrvTest::generateClientId(size_t size /*= 4*/) {
 
     OptionBuffer clnt_id(size);
     for (size_t i = 0; i < size; i++) {
@@ -261,7 +380,8 @@ OptionPtr Dhcpv4SrvTest::generateClientId(size_t size /*= 4*/) {
                                  clnt_id.begin() + size)));
 }
 
-HWAddrPtr Dhcpv4SrvTest::generateHWAddr(size_t size /*= 6*/) {
+HWAddrPtr
+Dhcpv4SrvTest::generateHWAddr(size_t size /*= 6*/) {
     const uint8_t hw_type = 123; // Just a fake number (typically 6=HTYPE_ETHER, see dhcp4.h)
     OptionBuffer mac(size);
     for (size_t i = 0; i < size; ++i) {
@@ -270,11 +390,43 @@ HWAddrPtr Dhcpv4SrvTest::generateHWAddr(size_t size /*= 6*/) {
     return (HWAddrPtr(new HWAddr(mac, hw_type)));
 }
 
-void Dhcpv4SrvTest::checkAddressParams(const Pkt4Ptr& rsp,
-                                       const Subnet4Ptr subnet,
-                                       bool t1_present,
-                                       bool t2_present,
-                                       uint32_t expected_valid) {
+OptionCustomPtr
+Dhcpv4SrvTest::makeServerIdOption(const IOAddress& address) {
+    OptionDefinitionPtr option_def = LibDHCP::getOptionDef(DHCP4_OPTION_SPACE,
+                                                           DHO_DHCP_SERVER_IDENTIFIER);
+    OptionCustomPtr server_id(new OptionCustom(*option_def, Option::V4));
+    server_id->writeAddress(address);
+    return (server_id);
+}
+
+OptionPtr
+Dhcpv4SrvTest::makeFqdnListOption() {
+    OptionDefinitionPtr def = LibDHCP::getOptionDef(DHCP4_OPTION_SPACE,
+                                                    DHO_DOMAIN_SEARCH);
+
+    // Prepare buffer holding an array of FQDNs.
+    const uint8_t fqdn[] = {
+        8, 109, 121, 100, 111, 109, 97, 105, 110, // "mydomain"
+        7, 101, 120, 97, 109, 112, 108, 101,      // "example"
+        3, 99, 111, 109,                          // "com"
+        0
+    };
+
+    // Initialize a vector with the FQDN data.
+    std::vector<uint8_t> fqdn_buf(fqdn, fqdn + sizeof(fqdn));
+
+    OptionPtr option = def->optionFactory(Option::V4, DHO_DOMAIN_SEARCH,
+                                          fqdn_buf.begin(), fqdn_buf.end());
+
+    return (option);
+}
+
+void
+Dhcpv4SrvTest::checkAddressParams(const Pkt4Ptr& rsp,
+                                  const Subnet4Ptr subnet,
+                                  bool t1_present,
+                                  bool t2_present,
+                                  uint32_t expected_valid) {
 
     // Technically inPool implies inRange, but let's be on the safe
     // side and check both.
@@ -322,18 +474,18 @@ void Dhcpv4SrvTest::checkAddressParams(const Pkt4Ptr& rsp,
     }
 }
 
-void Dhcpv4SrvTest::checkResponse(const Pkt4Ptr& rsp, int expected_message_type,
-                                  uint32_t expected_transid) {
+void
+Dhcpv4SrvTest::checkResponse(const Pkt4Ptr& rsp, int expected_message_type,
+                             uint32_t expected_transid) {
     ASSERT_TRUE(rsp);
     EXPECT_EQ(expected_message_type,
               static_cast<int>(rsp->getType()));
     EXPECT_EQ(expected_transid, rsp->getTransid());
 }
 
-Lease4Ptr Dhcpv4SrvTest::checkLease(const Pkt4Ptr& rsp,
-                                    const OptionPtr& client_id,
-                                    const HWAddrPtr&,
-                                    const IOAddress& expected_addr) {
+Lease4Ptr
+Dhcpv4SrvTest::checkLease(const Pkt4Ptr& rsp, const OptionPtr& client_id,
+                          const HWAddrPtr&, const IOAddress& expected_addr) {
 
     ClientIdPtr id;
     if (client_id) {
@@ -359,7 +511,8 @@ Lease4Ptr Dhcpv4SrvTest::checkLease(const Pkt4Ptr& rsp,
     return (lease);
 }
 
-void Dhcpv4SrvTest::checkServerId(const Pkt4Ptr& rsp, const OptionPtr& expected_srvid) {
+void
+Dhcpv4SrvTest::checkServerId(const Pkt4Ptr& rsp, const OptionPtr& expected_srvid) {
     // Check that server included its server-id
     OptionPtr opt = rsp->getOption(DHO_DHCP_SERVER_IDENTIFIER);
     ASSERT_TRUE(opt);
@@ -368,7 +521,8 @@ void Dhcpv4SrvTest::checkServerId(const Pkt4Ptr& rsp, const OptionPtr& expected_
     EXPECT_TRUE(opt->getData() == expected_srvid->getData());
 }
 
-void Dhcpv4SrvTest::checkClientId(const Pkt4Ptr& rsp, const OptionPtr& expected_clientid) {
+void
+Dhcpv4SrvTest::checkClientId(const Pkt4Ptr& rsp, const OptionPtr& expected_clientid) {
 
     bool include_clientid =
         CfgMgr::instance().getCurrentCfg()->getEchoClientId();
@@ -385,6 +539,17 @@ void Dhcpv4SrvTest::checkClientId(const Pkt4Ptr& rsp, const OptionPtr& expected_
         // Backward compatibility mode for pre-RFC6842 devices
         ASSERT_FALSE(opt);
     }
+}
+
+void
+Dhcpv4SrvTest::checkServerIdOption(const Pkt4Ptr& packet, const IOAddress& expected_address) {
+    OptionPtr opt = packet->getOption(DHO_DHCP_SERVER_IDENTIFIER);
+    ASSERT_TRUE(opt) << "no server-id option";
+
+    OptionCustomPtr server_id_opt = boost::dynamic_pointer_cast<OptionCustom>(opt);
+    ASSERT_TRUE(server_id_opt) << "server-id option is not an instance of OptionCustom";
+
+    EXPECT_EQ(expected_address, server_id_opt->readAddress());
 }
 
 ::testing::AssertionResult
@@ -454,7 +619,6 @@ Dhcpv4SrvTest::TearDown() {
                << " class after the test. Exception has been caught: "
                << ex.what();
     }
-
 }
 
 void
@@ -483,9 +647,8 @@ Dhcpv4SrvTest::testDiscoverRequest(const uint8_t msg_type) {
     boost::shared_ptr<Pkt4> rsp;
     // Set the name of the interface on which packet is received.
     req->setIface("eth0");
-    // Set the interface index. It is just a dummy value and will
-    // not be interpreted.
-    req->setIndex(17);
+    // Set the interface index.
+    req->setIndex(ETH0_INDEX);
     // Set the target HW address. This value is normally used to
     // construct the data link layer header.
     req->setRemoteHWAddr(1, 6, dst_mac);
@@ -513,10 +676,9 @@ Dhcpv4SrvTest::testDiscoverRequest(const uint8_t msg_type) {
     ASSERT_TRUE(createPacketFromBuffer(req, received));
     // Set interface. It is required for the server to generate server id.
     received->setIface("eth0");
+    received->setIndex(ETH0_INDEX);
     if (msg_type == DHCPDISCOVER) {
-        ASSERT_NO_THROW(
-            rsp = srv->processDiscover(received);
-        );
+        ASSERT_NO_THROW(rsp = srv->processDiscover(received));
 
         // Should return OFFER
         ASSERT_TRUE(rsp);
@@ -548,6 +710,7 @@ Dhcpv4SrvTest::testDiscoverRequest(const uint8_t msg_type) {
 
     // Set interface. It is required for the server to generate server id.
     received->setIface("eth0");
+    received->setIndex(ETH0_INDEX);
 
     if (msg_type == DHCPDISCOVER) {
         ASSERT_NO_THROW(rsp = srv->processDiscover(received));
@@ -584,6 +747,7 @@ Dhcpv4SrvTest::testDiscoverRequest(const uint8_t msg_type) {
 
     // Set interface. It is required for the server to generate server id.
     received->setIface("eth0");
+    received->setIndex(ETH0_INDEX);
 
     if (msg_type == DHCPDISCOVER) {
         ASSERT_NO_THROW(rsp = srv->processDiscover(received));
@@ -607,18 +771,57 @@ Dhcpv4SrvTest::testDiscoverRequest(const uint8_t msg_type) {
 }
 
 void
-Dhcpv4SrvTest::configure(const std::string& config, const bool commit) {
-    configure(config, srv_, commit);
+Dhcpv4SrvTest::buildCfgOptionTest(IOAddress expected_server_id,
+                                  Pkt4Ptr& query,
+                                  IOAddress requested,
+                                  IOAddress server_id) {
+    OptionDefinitionPtr req_addr_def = LibDHCP::getOptionDef(DHCP4_OPTION_SPACE,
+                                                             DHO_DHCP_REQUESTED_ADDRESS);
+    ASSERT_TRUE(req_addr_def);
+
+    OptionDefinitionPtr sbnsel_def = LibDHCP::getOptionDef(DHCP4_OPTION_SPACE,
+                                                           DHO_SUBNET_SELECTION);
+    ASSERT_TRUE(sbnsel_def);
+
+    OptionCustomPtr req_addr(new OptionCustom(*req_addr_def, Option::V4));
+    req_addr->writeAddress(requested);
+
+    OptionCustomPtr sbnsel(new OptionCustom(*sbnsel_def, Option::V4));
+    sbnsel->writeAddress(requested);
+
+    query->addOption(req_addr);
+    query->addOption(sbnsel);
+    query->addOption(makeServerIdOption(server_id));
+
+    Pkt4Ptr response;
+    ASSERT_NO_THROW(response = srv_.processRequest(query));
+
+    checkServerIdOption(response, expected_server_id);
+
+    ASSERT_NO_THROW(query->delOption(DHO_DHCP_REQUESTED_ADDRESS));
+    ASSERT_NO_THROW(query->delOption(DHO_SUBNET_SELECTION));
+    ASSERT_NO_THROW(query->delOption(DHO_DHCP_SERVER_IDENTIFIER));
 }
 
 void
-Dhcpv4SrvTest::configure(const std::string& config, NakedDhcpv4Srv& srv,
-                         const bool commit) {
+Dhcpv4SrvTest::configure(const std::string& config,
+                         const bool commit,
+                         const bool open_sockets) {
+    configure(config, srv_, commit, open_sockets);
+}
+
+void
+Dhcpv4SrvTest::configure(const std::string& config,
+                         NakedDhcpv4Srv& srv,
+                         const bool commit,
+                         const bool open_sockets) {
+    setenv("KEA_LFC_EXECUTABLE", KEA_LFC_EXECUTABLE, 1);
+    MultiThreadingCriticalSection cs;
     ConstElementPtr json;
     try {
         json = parseJSON(config);
     } catch (const std::exception& ex){
-        // Fatal falure on parsing error
+        // Fatal failure on parsing error
         FAIL() << "parsing failure:"
                 << "config:" << config << std::endl
                 << "error: " << ex.what();
@@ -628,6 +831,9 @@ Dhcpv4SrvTest::configure(const std::string& config, NakedDhcpv4Srv& srv,
 
     // Disable the re-detect flag
     disableIfacesReDetect(json);
+
+    // Set up multi-threading
+    configureMultiThreading(multi_threading_, json);
 
     // Configure the server and make sure the config is accepted
     EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
@@ -643,10 +849,22 @@ Dhcpv4SrvTest::configure(const std::string& config, NakedDhcpv4Srv& srv,
         cfg_db->createManagers();
     } );
 
+    try {
+        CfgMultiThreading::apply(CfgMgr::instance().getStagingCfg()->getDHCPMultiThreading());
+    } catch (const std::exception& ex) {
+        ADD_FAILURE() << "Error applying multi threading settings: "
+            << ex.what();
+    }
+
     if (commit) {
         CfgMgr::instance().commit();
     }
- }
+
+    // Opening sockets.
+    if (open_sockets) {
+        IfaceMgr::instance().openSockets4();
+    }
+}
 
 std::pair<int, std::string>
 Dhcpv4SrvTest::configureWithStatus(const std::string& config, NakedDhcpv4Srv& srv,
@@ -655,7 +873,7 @@ Dhcpv4SrvTest::configureWithStatus(const std::string& config, NakedDhcpv4Srv& sr
     try {
         json = parseJSON(config);
     } catch (const std::exception& ex){
-        // Fatal falure on parsing error
+        // Fatal failure on parsing error
 
         std::stringstream tmp;
         tmp << "parsing failure:"
@@ -674,7 +892,7 @@ Dhcpv4SrvTest::configureWithStatus(const std::string& config, NakedDhcpv4Srv& sr
     EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
     EXPECT_TRUE(status);
     if (!status) {
-        return (make_pair(-1, "configureDhcp4Server didn't return anythin"));
+        return (make_pair(-1, "configureDhcp4Server didn't return anything"));
     }
 
     int rcode;
@@ -694,13 +912,14 @@ Dhcpv4SrvTest::configureWithStatus(const std::string& config, NakedDhcpv4Srv& sr
     }
 
     return (std::make_pair(rcode, comment->stringValue()));
- }
+}
 
 Dhcpv4Exchange
 Dhcpv4SrvTest::createExchange(const Pkt4Ptr& query) {
     bool drop = false;
-    Dhcpv4Exchange ex(srv_.alloc_engine_, query,
-                      srv_.selectSubnet(query, drop));
+    Subnet4Ptr subnet = srv_.selectSubnet(query, drop);
+    EXPECT_FALSE(drop);
+    Dhcpv4Exchange ex(srv_.alloc_engine_, query, subnet, drop);
     EXPECT_FALSE(drop);
     return (ex);
 }
@@ -718,7 +937,7 @@ Dhcpv4SrvTest::pretendReceivingPkt(NakedDhcpv4Srv& srv, const std::string& confi
     // Let's just use one of the actual captured packets that we have.
     Pkt4Ptr pkt = PktCaptures::captureRelayedDiscover();
 
-    // We just need to tweak it a it, to pretend that it's type is as desired.
+    // We just need to tweak it a it, to pretend that its type is as desired.
     // Note that when receiving a packet, its on-wire form is stored in data_
     // field. Most methods (including setType()) operates on option objects
     // (objects stored in options_ after unpack() is called). Finally, outgoing
@@ -750,6 +969,6 @@ Dhcpv4SrvTest::pretendReceivingPkt(NakedDhcpv4Srv& srv, const std::string& confi
     EXPECT_EQ(1, tested_stat->getInteger().first);
 }
 
-}; // end of isc::dhcp::test namespace
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp::test namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace

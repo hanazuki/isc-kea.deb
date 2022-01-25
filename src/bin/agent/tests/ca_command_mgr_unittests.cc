@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,11 +16,11 @@
 #include <cc/command_interpreter.h>
 #include <cc/data.h>
 #include <process/testutils/d_test_stubs.h>
-#include <boost/bind.hpp>
 #include <boost/pointer_cast.hpp>
 #include <gtest/gtest.h>
 #include <testutils/sandbox.h>
 #include <cstdlib>
+#include <functional>
 #include <vector>
 #include <thread>
 
@@ -228,17 +228,16 @@ public:
         // to this we need to run the server side socket at the same time as the
         // client. Running IO service in a thread guarantees that the server
         //responds as soon as it receives the control command.
-        std::thread th(boost::bind(&IOService::run, getIOService().get()));
+        std::thread th(std::bind(&IOService::run, getIOService().get()));
 
 
         // Wait for the IO service in thread to actually run.
         server_socket_->waitForRunning();
 
         ConstElementPtr command = createCommand("foo", service);
-        ConstElementPtr answer = mgr_.handleCommand("foo", ConstElementPtr(),
-                                                    command);
+        ConstElementPtr answer = mgr_.processCommand(command);
 
-        // Stop IO service immediatelly and let the thread die.
+        // Stop IO service immediately and let the thread die.
         getIOService()->stop();
 
         // Wait for the thread to finish.
@@ -267,18 +266,28 @@ public:
 /// properly.
 TEST_F(CtrlAgentCommandMgrTest, bogus) {
     ConstElementPtr answer;
-    EXPECT_NO_THROW(answer = mgr_.handleCommand("fish-and-chips-please",
-                                                ConstElementPtr(),
-                                                ConstElementPtr()));
+    EXPECT_NO_THROW(answer = mgr_.processCommand(createCommand("fish-and-chips-please", "")));
     checkAnswer(answer, isc::config::CONTROL_RESULT_COMMAND_UNSUPPORTED);
 };
+
+// Test verifying that parameter other than command, arguments and service is
+// rejected and that the correct error is returned.
+TEST_F(CtrlAgentCommandMgrTest, extraParameter) {
+    ElementPtr command = Element::createMap();
+    command->set("command", Element::create("list-commands"));
+    command->set("arguments", Element::createMap());
+    command->set("extra-arg", Element::createMap());
+
+    ConstElementPtr answer;
+    EXPECT_NO_THROW(answer = mgr_.processCommand(command));
+    checkAnswer(answer, isc::config::CONTROL_RESULT_ERROR);
+}
 
 /// Just a basic test checking that 'list-commands' is supported.
 TEST_F(CtrlAgentCommandMgrTest, listCommands) {
     ConstElementPtr answer;
-    EXPECT_NO_THROW(answer = mgr_.handleCommand("list-commands",
-                                                ConstElementPtr(),
-                                                ConstElementPtr()));
+    EXPECT_NO_THROW(answer = mgr_.processCommand(createCommand("list-commands", "")));
+
     checkAnswer(answer, isc::config::CONTROL_RESULT_SUCCESS);
 };
 
@@ -384,7 +393,7 @@ TEST_F(CtrlAgentCommandMgrTest, forwardListCommands) {
     // to this we need to run the server side socket at the same time.
     // Running IO service in a thread guarantees that the server responds
     // as soon as it receives the control command.
-    std::thread th(boost::bind(&IOService::run, getIOService().get()));
+    std::thread th(std::bind(&IOService::run, getIOService().get()));
 
     // Wait for the IO service in thread to actually run.
     server_socket_->waitForRunning();
@@ -393,7 +402,7 @@ TEST_F(CtrlAgentCommandMgrTest, forwardListCommands) {
     ConstElementPtr answer = mgr_.handleCommand("list-commands", ConstElementPtr(),
                                                 command);
 
-    // Stop IO service immediatelly and let the thread die.
+    // Stop IO service immediately and let the thread die.
     getIOService()->stop();
 
     // Wait for the thread to finish.

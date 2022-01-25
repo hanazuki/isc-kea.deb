@@ -1,4 +1,4 @@
-// File created from ../../../src/lib/hooks/hooks_messages.mes on Wed Oct 23 2019 00:13
+// File created from ../../../src/lib/hooks/hooks_messages.mes
 
 #ifndef HOOKS_MESSAGES_H
 #define HOOKS_MESSAGES_H
@@ -20,6 +20,7 @@ extern const isc::log::MessageID HOOKS_CALLOUT_REGISTRATION;
 extern const isc::log::MessageID HOOKS_CLOSE_ERROR;
 extern const isc::log::MessageID HOOKS_HOOK_LIST_RESET;
 extern const isc::log::MessageID HOOKS_INCORRECT_VERSION;
+extern const isc::log::MessageID HOOKS_LIBRARY_CLOSED;
 extern const isc::log::MessageID HOOKS_LIBRARY_LOADED;
 extern const isc::log::MessageID HOOKS_LIBRARY_LOADING;
 extern const isc::log::MessageID HOOKS_LIBRARY_MULTI_THREADING_COMPATIBLE;

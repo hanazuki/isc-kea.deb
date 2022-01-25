@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-# Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -69,7 +69,8 @@ def read_input_files(files):
 
 
 def generate_rst(messages):
-    rst = '''
+    rst = '''.. _kea-messages:
+
 ###################
 Kea Messages Manual
 ###################
@@ -80,8 +81,11 @@ Consortium (ISC).
 
 This is the reference guide for Kea version |release|.
 Links to the most up-to-date version of this document (in PDF, HTML,
-and plain text formats), along with other documents for
-Kea, can be found in ISC's `Knowledgebase <https://kb.isc.org/docs/kea-administrator-reference-manual>`_.
+and plain text formats), along with other useful information about
+Kea, can be found in ISC's `Knowledgebase <https://kea.readthedocs.io>`_.
+
+Please note that in the messages below, the percent sign ("%") followed by a number is
+used to indicate a placeholder for data that is provided by the Kea code during its operation.
 
 
 .. toctree::

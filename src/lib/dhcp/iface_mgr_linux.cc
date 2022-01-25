@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -402,7 +402,7 @@ void Netlink::release_list(NetlinkMessages& messages) {
         delete[] (*msg);
     }
 
-    // ang get rid of the message pointers as well
+    // and get rid of the message pointers as well
     messages.clear();
 }
 
@@ -471,6 +471,11 @@ void IfaceMgr::detectIfaces() {
         // into three separate steps for easier debugging.
         const char* tmp = static_cast<const char*>(RTA_DATA(attribs_table[IFLA_IFNAME]));
         string iface_name(tmp); // <--- bogus valgrind warning here
+        // This is guaranteed both by the if_nametoindex() implementation
+        // and by kernel dev_new_index() code. In fact 0 is impossible too...
+        if (interface_info->ifi_index < 0) {
+            isc_throw(OutOfRange, "negative interface index");
+        }
         IfacePtr iface(new Iface(iface_name, interface_info->ifi_index));
 
         iface->setHWType(interface_info->ifi_type);
@@ -487,7 +492,15 @@ void IfaceMgr::detectIfaces() {
         }
 
         nl.ipaddrs_get(*iface, addr_info);
-        addInterface(iface);
+
+        // addInterface can now throw so protect against memory leaks.
+        try {
+            addInterface(iface);
+        } catch (...) {
+            nl.release_list(link_info);
+            nl.release_list(addr_info);
+            throw;
+        }
     }
 
     nl.release_list(link_info);
@@ -559,7 +572,7 @@ IfaceMgr::openMulticastSocket(Iface& iface,
                        IOAddress(ALL_DHCP_RELAY_AGENTS_AND_SERVERS),
                        port);
         } catch (const Exception& ex) {
-            // An attempt to open and bind a socket to multicast addres
+            // An attempt to open and bind a socket to multicast address
             // has failed. We have to close the socket we previously
             // bound to link-local address - this is everything or
             // nothing strategy.

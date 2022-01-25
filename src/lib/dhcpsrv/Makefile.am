@@ -7,7 +7,8 @@ SUBDIRS = . testutils tests benchmarks
 dhcp_data_dir = @localstatedir@/lib/@PACKAGE@
 kea_lfc_location = @prefix@/sbin/kea-lfc
 
-AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib -DDHCP_DATA_DIR="\"$(dhcp_data_dir)\""
+AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib
+AM_CPPFLAGS += -DDHCP_DATA_DIR="\"$(dhcp_data_dir)\""
 AM_CPPFLAGS += -DTOP_BUILDDIR="\"$(top_builddir)\""
 # Set location of the kea-lfc binary.
 AM_CPPFLAGS += -DKEA_LFC_EXECUTABLE="\"$(kea_lfc_location)\""
@@ -42,6 +43,8 @@ EXTRA_DIST += parsers/host_reservation_parser.h
 EXTRA_DIST += parsers/host_reservations_list_parser.h
 EXTRA_DIST += parsers/ifaces_config_parser.cc
 EXTRA_DIST += parsers/ifaces_config_parser.h
+EXTRA_DIST += parsers/multi_threading_config_parser.cc
+EXTRA_DIST += parsers/multi_threading_config_parser.h
 EXTRA_DIST += parsers/option_data_parser.h
 EXTRA_DIST += parsers/sanity_checks_parser.cc
 EXTRA_DIST += parsers/sanity_checks_parser.h
@@ -86,6 +89,7 @@ libkea_dhcpsrv_la_SOURCES += cfg_shared_networks.cc cfg_shared_networks.h
 libkea_dhcpsrv_la_SOURCES += cfg_subnets4.cc cfg_subnets4.h
 libkea_dhcpsrv_la_SOURCES += cfg_subnets6.cc cfg_subnets6.h
 libkea_dhcpsrv_la_SOURCES += cfg_mac_source.cc cfg_mac_source.h
+libkea_dhcpsrv_la_SOURCES += cfg_multi_threading.cc cfg_multi_threading.h
 libkea_dhcpsrv_la_SOURCES += cfgmgr.cc cfgmgr.h
 libkea_dhcpsrv_la_SOURCES += client_class_def.cc client_class_def.h
 libkea_dhcpsrv_la_SOURCES += config_backend_dhcp4.h
@@ -103,12 +107,15 @@ libkea_dhcpsrv_la_SOURCES += dhcp4o6_ipc.cc dhcp4o6_ipc.h
 libkea_dhcpsrv_la_SOURCES += dhcpsrv_exceptions.h
 libkea_dhcpsrv_la_SOURCES += dhcpsrv_log.cc dhcpsrv_log.h
 libkea_dhcpsrv_la_SOURCES += dhcpsrv_messages.h dhcpsrv_messages.cc
+libkea_dhcpsrv_la_SOURCES += free_lease_queue.h free_lease_queue.cc
 libkea_dhcpsrv_la_SOURCES += host.cc host.h
 libkea_dhcpsrv_la_SOURCES += host_container.h
 libkea_dhcpsrv_la_SOURCES += host_data_source_factory.cc host_data_source_factory.h
 libkea_dhcpsrv_la_SOURCES += host_mgr.cc host_mgr.h
 libkea_dhcpsrv_la_SOURCES += hosts_log.cc hosts_log.h
 libkea_dhcpsrv_la_SOURCES += hosts_messages.h hosts_messages.cc
+libkea_dhcpsrv_la_SOURCES += ip_range.h ip_range.cc
+libkea_dhcpsrv_la_SOURCES += ip_range_permutation.h ip_range_permutation.cc
 libkea_dhcpsrv_la_SOURCES += key_from_key.h
 libkea_dhcpsrv_la_SOURCES += lease.cc lease.h
 libkea_dhcpsrv_la_SOURCES += lease_file_loader.h
@@ -117,7 +124,6 @@ libkea_dhcpsrv_la_SOURCES += lease_mgr.cc lease_mgr.h
 libkea_dhcpsrv_la_SOURCES += lease_mgr_factory.cc lease_mgr_factory.h
 libkea_dhcpsrv_la_SOURCES += memfile_lease_mgr.cc memfile_lease_mgr.h
 libkea_dhcpsrv_la_SOURCES += memfile_lease_storage.h
-libkea_dhcpsrv_la_SOURCES += multi_threading_utils.h multi_threading_utils.cc
 
 if HAVE_MYSQL
 libkea_dhcpsrv_la_SOURCES += mysql_lease_mgr.cc mysql_lease_mgr.h
@@ -139,6 +145,7 @@ libkea_dhcpsrv_la_SOURCES += cql_lease_mgr.cc cql_lease_mgr.h
 endif
 
 libkea_dhcpsrv_la_SOURCES += pool.cc pool.h
+libkea_dhcpsrv_la_SOURCES += resource_handler.cc resource_handler.h
 libkea_dhcpsrv_la_SOURCES += sanity_checker.cc sanity_checker.h
 libkea_dhcpsrv_la_SOURCES += shared_network.cc shared_network.h
 libkea_dhcpsrv_la_SOURCES += srv_config.cc srv_config.h
@@ -166,6 +173,8 @@ libkea_dhcpsrv_la_SOURCES += parsers/host_reservation_parser.h
 libkea_dhcpsrv_la_SOURCES += parsers/host_reservations_list_parser.h
 libkea_dhcpsrv_la_SOURCES += parsers/ifaces_config_parser.cc
 libkea_dhcpsrv_la_SOURCES += parsers/ifaces_config_parser.h
+libkea_dhcpsrv_la_SOURCES += parsers/multi_threading_config_parser.cc
+libkea_dhcpsrv_la_SOURCES += parsers/multi_threading_config_parser.h
 libkea_dhcpsrv_la_SOURCES += parsers/option_data_parser.cc
 libkea_dhcpsrv_la_SOURCES += parsers/option_data_parser.h
 libkea_dhcpsrv_la_SOURCES += parsers/dhcp_queue_control_parser.cc
@@ -193,6 +202,7 @@ libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/process/libkea-process.la
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/stats/libkea-stats.la
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/http/libkea-http.la
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 
 if HAVE_MYSQL
@@ -216,7 +226,7 @@ libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_dhcpsrv_la_LIBADD  += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 
-libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 21:0:0
+libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 50:0:0
 libkea_dhcpsrv_la_LDFLAGS += $(CRYPTO_LDFLAGS)
 if HAVE_MYSQL
 libkea_dhcpsrv_la_LDFLAGS += $(MYSQL_LIBS)
@@ -260,7 +270,7 @@ if GENERATE_MESSAGES
 messages: alloc_engine_messages.h alloc_engine_messages.cc \
 	  dhcpsrv_messages.h dhcpsrv_messages.cc \
 	  hosts_messages.h hosts_messages.cc \
-	  fuzz_messages.h fuzz_messages.cc 
+	  fuzz_messages.h fuzz_messages.cc
 	@echo Message files regenerated
 
 alloc_engine_messages.h alloc_engine_messages.cc: alloc_engine_messages.mes
@@ -311,6 +321,7 @@ libkea_dhcpsrv_include_HEADERS = \
 	cfg_hosts_util.h \
 	cfg_iface.h \
 	cfg_mac_source.h \
+	cfg_multi_threading.h \
 	cfg_option.h \
 	cfg_option_def.h \
 	cfg_rsoo.h \
@@ -334,12 +345,15 @@ libkea_dhcpsrv_include_HEADERS = \
 	db_type.h \
 	dhcp4o6_ipc.h \
 	dhcpsrv_log.h \
+	free_lease_queue.h \
 	host.h \
 	host_container.h \
 	host_data_source_factory.h \
 	hosts_messages.h \
 	host_mgr.h \
 	hosts_log.h \
+	ip_range.h \
+	ip_range_permutation.h \
 	key_from_key.h \
 	lease.h \
 	lease_file_loader.h \
@@ -352,6 +366,7 @@ libkea_dhcpsrv_include_HEADERS = \
 	network.h \
 	network_state.h \
 	pool.h \
+	resource_handler.h \
 	sanity_checker.h \
 	shared_network.h \
 	srv_config.h \
@@ -392,6 +407,7 @@ libkea_dhcpsrv_parsers_include_HEADERS = \
 	parsers/host_reservation_parser.h \
 	parsers/host_reservations_list_parser.h \
 	parsers/ifaces_config_parser.h \
+	parsers/multi_threading_config_parser.h \
 	parsers/option_data_parser.h \
 	parsers/dhcp_queue_control_parser.h \
 	parsers/sanity_checks_parser.h \
