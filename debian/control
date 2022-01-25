@@ -8,7 +8,7 @@ Uploaders: Adam Majer <adamm@zombino.com>,
            Paride Legovini <paride@debian.org>
 Build-Depends: bison,
                debhelper-compat (= 13),
-               default-libmysqlclient-dev | libmysqlclient-dev,
+               default-libmysqlclient-dev,
                dh-python,
                docbook,
                docbook-xsl,
