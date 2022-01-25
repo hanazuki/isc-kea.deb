@@ -31,10 +31,6 @@ override_dh_auto_configure:
 		--disable-dependency-tracking \
 		--without-werror
 
-override_dh_auto_make:
-	$(MAKE) -C tools system_messages
-	dh_auto_make
-
 override_dh_installdocs:
 	dh_installdocs -A AUTHORS README
 
