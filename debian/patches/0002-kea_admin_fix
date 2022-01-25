@@ -7,16 +7,14 @@ Removed the fallback to the build version of kea-admin since it will not exist o
  src/bin/admin/kea-admin.in | 2 --
  1 file changed, 2 deletions(-)
 
-diff --git a/src/bin/admin/kea-admin.in b/src/bin/admin/kea-admin.in
-index 0bd828a..58b5a2b 100644
 --- a/src/bin/admin/kea-admin.in
 +++ b/src/bin/admin/kea-admin.in
-@@ -39,8 +39,6 @@ dump_qry=""
- # shellcheck disable=SC1091
+@@ -41,8 +41,6 @@
+ # use build version if it isn't.
  if [ -e @datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh ]; then
-     . @datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh
+     . "@datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh"
 -else
--    . @abs_top_srcdir@/src/bin/admin/admin-utils.sh
+-    . "@abs_top_srcdir@/src/bin/admin/admin-utils.sh"
  fi
  
  # Prints out usage version.
