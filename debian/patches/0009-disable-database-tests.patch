@@ -1,0 +1,26 @@
+Description: Skip the database tests
+ The MySQL and PostgreSQL tests require a server with username,
+ password and tables setup for the test, see doc/devel/unit-tests.dox.
+ There's no way to instruct the build system to skip specific tests,
+ so let's disable them with a patch.
+Forwarded: not-needed
+Author: Paride Legovini <paride.legovini@canonical.com>
+Last-Update: 2020-12-03
+--- a/src/bin/admin/tests/mysql_tests.sh.in
++++ b/src/bin/admin/tests/mysql_tests.sh.in
+@@ -1,4 +1,6 @@
+ #!/bin/sh
++echo "SKIPPING MYSQL TEST"
++exit 0
+ 
+ # Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+ #
+--- a/src/bin/admin/tests/pgsql_tests.sh.in
++++ b/src/bin/admin/tests/pgsql_tests.sh.in
+@@ -1,4 +1,6 @@
+ #!/bin/sh
++echo "SKIPPING POSTGRESQL TEST"
++exit 0
+ 
+ # Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+ #
