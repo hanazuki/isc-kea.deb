@@ -1,1 +1,2 @@
 kea-common: package-name-doesnt-match-sonames *
+kea-common: script-not-executable etc/kea/keactrl.conf
