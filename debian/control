@@ -136,7 +136,6 @@ Description: Development headers for Kea DHCP server
 
 Package: kea-common
 Architecture: any
-Section: libs
 Depends: adduser,
          ${misc:Depends},
          ${shlibs:Depends}
