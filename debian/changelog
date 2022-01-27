@@ -1,3 +1,63 @@
+isc-kea (2.0.1-1) experimental; urgency=medium
+
+  * New upstream version 2.0.1 (Closes: #954768, #973641)
+  * d/watch: fix search path and only match stable versions (Closes: #974611)
+  * d/u/signing-key.asc: replace with new key for 2021-2022.
+  * d/control:
+    - Update Standards-Version to 4.6.0 (no changes needed)
+    - Switch to dh compat level 13
+    - Set Rules-Requires-Root: no
+    - Drop ORed dependency on obsolete libmysqlclient-dev
+    - Add python3-kea-connector dependency to kea-ctrl-agent
+    - Build-Depend on procps (test dependency)
+    - Drop Section: libs for kea-common (fallback to Section: net)
+    - Minor cosmetic changes to the descriptions
+  * d/rules:
+    - Don't pass --as-needed to ld (it's now the default)
+    - Drop explicit `dh_missing --fail-missing` (default in dh 13)
+    - Drop useless override_dh_auto_make target
+    - Drop override_dh_clean (not needed)
+    - Use execute_after_* targets where appropriate
+    - Do not ignore the test results
+    - Drop unnecessary $@ in override_dh_auto_configure
+    - Disable out-of-source building (dh -B)
+    - Set localstatedir to /var
+    - Delete __pycache__ recursively
+    - Don't delete keactrl.8
+    - Drop `dh_installdocs -A`: it prevents using a main doc package
+    - Build perfdhcp (configure flag: --enable-perfdhcp)
+  * d/patches:
+    - 0001-support_kfreebsd: refresh patch
+    - 0002-kea_admin_fix: refresh patch
+    - 0003-Use-runstatedir-for-pid-file-location.patch: drop, fixed upstream
+    - d/p/0004-Put-KEA_LOCKFILE_DIR-to-runstatedir.patch: drop patch.
+      Replaced by setting the KEA_LOCKFILE_DIR environment variable.
+    - 0007-keyctrl-colored-ddns-status.patch: add patch
+    - 0009-disable-database-tests.patch: add patch.
+      Skip the database tests (problematic to run in automation).
+    - 0010-build-libco-when-gtest-is-not-enabled.patch: add patch.
+      Fix test suite fails if Kea is built without gtest.
+    - Always use the .patch extension for uniformity
+  * d/docs: drop file, replaced by kea-doc.docs
+  * d/kea-doc.install: drop file, replaced by d/kea-doc.docs
+  * d/kea-admin.install: install perfdhcp
+  * d/*.install: move manpages to d/*.manpages
+  * d/kea-common.manpages: install keactrl.8
+  * d/kea-doc.docs:
+    - Add CONTRIBUTING.md
+    - Install the API reference
+  * d/not-installed: refresh list of not-installed files
+  * d/s/lintian-overrides: override very-long-line-length-in-source-file
+  * d/kea-common.l-o: override script-not-executable etc/kea/keactrl.conf.
+    Has a shebang but it's meant to be sourced, not executed.
+  * d/u/metadata: add upstream metadata file
+  * d/copyright:
+    - Add Canonical Ltd. for debian/*
+    - Drop references to nonexisting files
+  * d/control: add Paride Legovini to Uploaders
+
+ -- Paride Legovini <paride@debian.org>  Thu, 27 Jan 2022 12:27:23 +0100
+
 isc-kea (1.7.5-1) unstable; urgency=medium
 
   * Bump dh compat to 12, bump debian standard to 4.5.0
