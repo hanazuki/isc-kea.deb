@@ -21,7 +21,7 @@ isc-kea (2.0.1-1) experimental; urgency=medium
     - Do not ignore the test results
     - Drop unnecessary $@ in override_dh_auto_configure
     - Disable out-of-source building (dh -B)
-    - Set localstatedir to /var
+    - Set localstatedir to /var (Closes: #959149)
     - Delete __pycache__ recursively
     - Don't delete keactrl.8
     - Drop `dh_installdocs -A`: it prevents using a main doc package
