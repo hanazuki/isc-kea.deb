@@ -1,3 +1,10 @@
+isc-kea (2.0.1-2) unstable; urgency=medium
+
+  * Upload to Debian unstable
+  * wrap-and-sort -bast (cosmetic)
+
+ -- Paride Legovini <paride@debian.org>  Sun, 30 Jan 2022 19:39:09 +0100
+
 isc-kea (2.0.1-1) experimental; urgency=medium
 
   * New upstream version 2.0.1 (Closes: #954768, #973641)
