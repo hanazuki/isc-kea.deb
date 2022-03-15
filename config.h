@@ -124,6 +124,9 @@
 /* PostgreSQL is present */
 /* #undef HAVE_PGSQL */
 
+/* PostgreSQL was built with OpenSSL support */
+/* #undef HAVE_PGSQL_SSL */
+
 /* Define to 1 if you have the `pselect' function. */
 #define HAVE_PSELECT 1
 
@@ -222,7 +225,7 @@
 #define PACKAGE_NAME "kea"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kea 2.0.2"
+#define PACKAGE_STRING "kea 2.1.3"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kea"
@@ -231,7 +234,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.0.2"
+#define PACKAGE_VERSION "2.1.3"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -243,7 +246,7 @@
 /* #undef USE_STATIC_LINK */
 
 /* Version number of package */
-#define VERSION "2.0.2"
+#define VERSION "2.1.3"
 
 /* Compile with Botan crypto */
 /* #undef WITH_BOTAN */

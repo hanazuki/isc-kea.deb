@@ -1,4 +1,4 @@
-/* Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -59,9 +59,12 @@ using namespace std;
   TYPE "type"
   BASIC "basic"
   REALM "realm"
+  DIRECTORY "directory"
   CLIENTS "clients"
   USER "user"
+  USER_FILE "user-file"
   PASSWORD "password"
+  PASSWORD_FILE "password-file"
 
   TRUST_ANCHOR "trust-anchor"
   CERT_FILE "cert-file"
@@ -194,6 +197,9 @@ not_empty_map: STRING COLON value {
                   ctx.unique($3, ctx.loc2pos(@3));
                   ctx.stack_.back()->set($3, $5);
                   }
+             | not_empty_map COMMA {
+                 ctx.warnAboutExtraCommas(@2);
+                 }
              ;
 
 list_generic: LSQUARE_BRACKET {
@@ -213,6 +219,9 @@ not_empty_list: value {
               | not_empty_list COMMA value {
                   // List ending with , and a value.
                   ctx.stack_.back()->add($3);
+                  }
+              | not_empty_list COMMA {
+                  ctx.warnAboutExtraCommas(@2);
                   }
               ;
 
@@ -244,7 +253,6 @@ agent_syntax_map: LCURLY_BRACKET {
 
 // This represents the single top level entry, e.g. Control-agent.
 global_object: CONTROL_AGENT {
-
     // Let's create a MapElement that will represent it, add it to the
     // top level map (that's already on the stack) and put the new map
     // on the stack as well, so child elements will be able to add
@@ -259,10 +267,19 @@ global_object: CONTROL_AGENT {
     // off the stack.
     ctx.stack_.pop_back();
     ctx.leave();
+}
+             | global_object_comma
+             ;
+
+global_object_comma: global_object COMMA {
+    ctx.warnAboutExtraCommas(@2);
 };
 
 global_params: global_param
              | global_params COMMA global_param
+             | global_params COMMA {
+                 ctx.warnAboutExtraCommas(@2);
+                 }
              ;
 
 // These are the parameters that are allowed in the top-level for
@@ -400,6 +417,9 @@ hooks_libraries_list: %empty
 
 not_empty_hooks_libraries_list: hooks_library
     | not_empty_hooks_libraries_list COMMA hooks_library
+    | not_empty_hooks_libraries_list COMMA {
+        ctx.warnAboutExtraCommas(@2);
+        }
     ;
 
 hooks_library: LCURLY_BRACKET {
@@ -412,6 +432,9 @@ hooks_library: LCURLY_BRACKET {
 
 hooks_params: hooks_param
             | hooks_params COMMA hooks_param
+            | hooks_params COMMA {
+                ctx.warnAboutExtraCommas(@2);
+                }
             | unknown_map_entry
             ;
 
@@ -455,6 +478,9 @@ control_sockets: CONTROL_SOCKETS COLON LCURLY_BRACKET {
 // is required.
 control_sockets_params: control_socket
                       | control_sockets_params COMMA control_socket
+                      | control_sockets_params COMMA {
+                          ctx.warnAboutExtraCommas(@2);
+                          }
                       ;
 
 // We currently support three types of sockets: DHCPv4, DHCPv6 and D2
@@ -504,6 +530,9 @@ d2_server_socket: D2_SERVER {
 // Socket parameters consist of one or more parameters.
 control_socket_params: control_socket_param
                      | control_socket_params COMMA control_socket_param
+                     | control_socket_params COMMA {
+                         ctx.warnAboutExtraCommas(@2);
+                         }
                      ;
 
 // We currently support two socket parameters: type and name.
@@ -556,10 +585,14 @@ authentication: AUTHENTICATION {
 
 auth_params: auth_param
            | auth_params COMMA auth_param
+           | auth_params COMMA {
+               ctx.warnAboutExtraCommas(@2);
+               }
            ;
 
 auth_param: auth_type
           | realm
+          | directory
           | clients
           | comment
           | user_context
@@ -575,7 +608,7 @@ auth_type: TYPE {
 };
 
 auth_type_value: BASIC { $$ = ElementPtr(new StringElement("basic", ctx.loc2pos(@1))); }
-         ;
+               ;
 
 realm: REALM {
     ctx.unique("realm", ctx.loc2pos(@1));
@@ -583,6 +616,15 @@ realm: REALM {
 } COLON STRING {
     ElementPtr realm(new StringElement($4, ctx.loc2pos(@4)));
     ctx.stack_.back()->set("realm", realm);
+    ctx.leave();
+};
+
+directory: DIRECTORY {
+    ctx.unique("directory", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr directory(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("directory", directory);
     ctx.leave();
 };
 
@@ -603,6 +645,9 @@ clients_list: %empty
 
 not_empty_clients_list: basic_auth
                       | not_empty_clients_list COMMA basic_auth
+                      | not_empty_clients_list COMMA {
+                          ctx.warnAboutExtraCommas(@2);
+                          }
                       ;
 
 basic_auth: LCURLY_BRACKET {
@@ -615,10 +660,15 @@ basic_auth: LCURLY_BRACKET {
 
 clients_params: clients_param
               | clients_params COMMA clients_param
+              | clients_params COMMA {
+                  ctx.warnAboutExtraCommas(@2);
+                  }
               ;
 
 clients_param: user
+             | user_file
              | password
+             | password_file
              | user_context
              | comment
              | unknown_map_entry
@@ -633,12 +683,30 @@ user: USER {
     ctx.leave();
 };
 
+user_file: USER_FILE {
+    ctx.unique("user-file", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr user(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("user-file", user);
+    ctx.leave();
+};
+
 password: PASSWORD {
     ctx.unique("password", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORDS);
 } COLON STRING {
     ElementPtr password(new StringElement($4, ctx.loc2pos(@4)));
     ctx.stack_.back()->set("password", password);
+    ctx.leave();
+};
+
+password_file: PASSWORD_FILE {
+    ctx.unique("password-file", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORDS);
+} COLON STRING {
+    ElementPtr password(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("password-file", password);
     ctx.leave();
 };
 
@@ -661,6 +729,9 @@ loggers: LOGGERS {
 // entry or multiple entries separate by commas.
 loggers_entries: logger_entry
                | loggers_entries COMMA logger_entry
+               | loggers_entries COMMA {
+                   ctx.warnAboutExtraCommas(@2);
+                   }
                ;
 
 // This defines a single entry defined in loggers.
@@ -674,6 +745,9 @@ logger_entry: LCURLY_BRACKET {
 
 logger_params: logger_param
              | logger_params COMMA logger_param
+             | logger_params COMMA {
+                 ctx.warnAboutExtraCommas(@2);
+                 }
              ;
 
 logger_param: name
@@ -722,6 +796,9 @@ output_options_list: OUTPUT_OPTIONS {
 
 output_options_list_content: output_entry
                            | output_options_list_content COMMA output_entry
+                           | output_options_list_content COMMA {
+                               ctx.warnAboutExtraCommas(@2);
+                               }
                            ;
 
 output_entry: LCURLY_BRACKET {
@@ -734,6 +811,9 @@ output_entry: LCURLY_BRACKET {
 
 output_params_list: output_params
              | output_params_list COMMA output_params
+             | output_params_list COMMA {
+                 ctx.warnAboutExtraCommas(@2);
+                 }
              ;
 
 output_params: output

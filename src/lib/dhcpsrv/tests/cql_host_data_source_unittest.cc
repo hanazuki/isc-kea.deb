@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2017 Deutsche Telekom AG.
 //
 // Author: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -257,6 +257,27 @@ TEST(CqlHostDataSource, OpenDatabase) {
     // Check that CQL allows the hostname to not be specified.
     EXPECT_NO_THROW(HostMgr::addBackend(connectionString(CQL_VALID_TYPE,
                     NULL, VALID_HOST, INVALID_USER, VALID_PASSWORD)));
+
+    // Check that CQL does not support SSL/TLS.
+    EXPECT_THROW(HostMgr::addBackend(connectionString(CQL_VALID_TYPE,
+                 VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+                 0, 0, VALID_CERT)),
+                 DbOpenError);
+
+    EXPECT_THROW(HostMgr::addBackend(connectionString(CQL_VALID_TYPE,
+                 VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+                 0, 0, 0, VALID_KEY)),
+                 DbOpenError);
+
+    EXPECT_THROW(HostMgr::addBackend(connectionString(CQL_VALID_TYPE,
+                 VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+                 0, 0, 0, 0, VALID_CA)),
+                 DbOpenError);
+
+    EXPECT_THROW(HostMgr::addBackend(connectionString(CQL_VALID_TYPE,
+                 VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+                 0, 0, 0, 0, 0, VALID_CIPHER)),
+                 DbOpenError);
 
     // Tidy up after the test
     destroyCqlSchema();

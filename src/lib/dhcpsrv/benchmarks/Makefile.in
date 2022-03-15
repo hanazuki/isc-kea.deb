@@ -101,7 +101,8 @@ host_triplet = @host@
 @HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__append_8 = $(MYSQL_LIBS)
 @HAVE_BENCHMARK_TRUE@@HAVE_PGSQL_TRUE@am__append_9 = $(PGSQL_LIBS)
 @HAVE_BENCHMARK_TRUE@@HAVE_CQL_TRUE@am__append_10 = $(CQL_LIBS)
-@HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__append_11 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la
+@HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__append_11 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la \
+@HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@	$(top_builddir)/src/lib/mysql/libkea-mysql.la
 @HAVE_BENCHMARK_TRUE@@HAVE_PGSQL_TRUE@am__append_12 = $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la
 @HAVE_BENCHMARK_TRUE@@HAVE_CQL_TRUE@am__append_13 = $(top_builddir)/src/lib/cql/testutils/libcqltest.la
 @HAVE_BENCHMARK_TRUE@@HAVE_MYSQL_TRUE@am__append_14 = $(MYSQL_LIBS)

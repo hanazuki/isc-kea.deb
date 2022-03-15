@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,10 +14,11 @@
 #include <cc/user_context.h>
 #include <dhcp/classify.h>
 #include <dhcp/option.h>
+#include <dhcpsrv/cfg_globals.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/cfg_4o6.h>
 #include <dhcpsrv/d2_client_cfg.h>
-#include <dhcpsrv/triplet.h>
+#include <util/triplet.h>
 #include <util/optional.h>
 #include <boost/shared_ptr.hpp>
 #include <boost/weak_ptr.hpp>
@@ -47,7 +48,7 @@ typedef boost::weak_ptr<Network> WeakNetworkPtr;
 
 /// @brief Callback function for @c Network that retrieves globally
 /// configured parameters.
-typedef std::function<data::ConstElementPtr()> FetchNetworkGlobalsFn;
+typedef std::function<ConstCfgGlobalsPtr()> FetchNetworkGlobalsFn;
 
 /// @brief Common interface representing a network to which the DHCP clients
 /// are connected.
@@ -219,17 +220,22 @@ public:
     /// If the interface is specified, the server will use the network
     /// associated with this local interface to allocate IP addresses and
     /// other resources to a client.
+    /// Empty values are translated into unspecified.
     ///
     /// @param iface_name Interface name.
     void setIface(const util::Optional<std::string>& iface_name) {
-        iface_name_ = iface_name;
+        if (iface_name.empty()) {
+            iface_name_ = util::Optional<std::string>("", true);
+        } else {
+            iface_name_ = iface_name;
+        }
     }
 
     /// @brief Returns name of the local interface for which this network is
     /// selected.
     ///
     /// @param inheritance inheritance mode to be used.
-    /// @return Interface name as text.
+    /// @return Interface name as optional text.
     util::Optional<std::string>
     getIface(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getIface, iface_name_,
@@ -337,44 +343,47 @@ public:
     /// @brief Return valid-lifetime for addresses in that prefix
     ///
     /// @param inheritance inheritance mode to be used.
-    Triplet<uint32_t> getValid(const Inheritance& inheritance = Inheritance::ALL) const {
+    isc::util::Triplet<uint32_t> getValid(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getValid, valid_, inheritance,
-                                     "valid-lifetime", "min-valid-lifetime",
-                                     "max-valid-lifetime"));
+                                     CfgGlobals::VALID_LIFETIME,
+                                     CfgGlobals::MIN_VALID_LIFETIME,
+                                     CfgGlobals::MAX_VALID_LIFETIME));
     }
 
     /// @brief Sets new valid lifetime for a network.
     ///
     /// @param valid New valid lifetime in seconds.
-    void setValid(const Triplet<uint32_t>& valid) {
+    void setValid(const isc::util::Triplet<uint32_t>& valid) {
         valid_ = valid;
     }
 
     /// @brief Returns T1 (renew timer), expressed in seconds
     ///
     /// @param inheritance inheritance mode to be used.
-    Triplet<uint32_t> getT1(const Inheritance& inheritance = Inheritance::ALL) const {
-        return (getProperty<Network>(&Network::getT1, t1_, inheritance, "renew-timer"));
+    isc::util::Triplet<uint32_t> getT1(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getT1, t1_, inheritance,
+                                     CfgGlobals::RENEW_TIMER));
     }
 
     /// @brief Sets new renew timer for a network.
     ///
     /// @param t1 New renew timer value in seconds.
-    void setT1(const Triplet<uint32_t>& t1) {
+    void setT1(const isc::util::Triplet<uint32_t>& t1) {
         t1_ = t1;
     }
 
     /// @brief Returns T2 (rebind timer), expressed in seconds
     ///
     /// @param inheritance inheritance mode to be used.
-    Triplet<uint32_t> getT2(const Inheritance& inheritance = Inheritance::ALL) const {
-        return (getProperty<Network>(&Network::getT2, t2_, inheritance, "rebind-timer"));
+    isc::util::Triplet<uint32_t> getT2(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getT2, t2_, inheritance,
+                                     CfgGlobals::REBIND_TIMER));
     }
 
     /// @brief Sets new rebind timer for a network.
     ///
     /// @param t2 New rebind timer value in seconds.
-    void setT2(const Triplet<uint32_t>& t2) {
+    void setT2(const isc::util::Triplet<uint32_t>& t2) {
         t2_ = t2;
     }
 
@@ -386,7 +395,7 @@ public:
         return (getProperty<Network>(&Network::getReservationsGlobal,
                                      reservations_global_,
                                      inheritance,
-                                     "reservations-global"));
+                                     CfgGlobals::RESERVATIONS_GLOBAL));
     }
 
     /// @brief Sets whether global reservations should be fetched.
@@ -404,7 +413,7 @@ public:
         return (getProperty<Network>(&Network::getReservationsInSubnet,
                                      reservations_in_subnet_,
                                      inheritance,
-                                     "reservations-in-subnet"));
+                                     CfgGlobals::RESERVATIONS_IN_SUBNET));
     }
 
     /// @brief Sets whether subnet reservations should be fetched.
@@ -422,7 +431,7 @@ public:
         return (getProperty<Network>(&Network::getReservationsOutOfPool,
                                      reservations_out_of_pool_,
                                      inheritance,
-                                     "reservations-out-of-pool"));
+                                     CfgGlobals::RESERVATIONS_OUT_OF_POOL));
     }
 
     /// @brief Sets whether only out-of-pool reservations are allowed.
@@ -451,7 +460,7 @@ public:
         return (getProperty<Network>(&Network::getCalculateTeeTimes,
                                      calculate_tee_times_,
                                      inheritance,
-                                     "calculate-tee-times"));
+                                     CfgGlobals::CALCULATE_TEE_TIMES));
     }
 
     /// @brief Sets whether or not T1/T2 calculation is enabled.
@@ -467,7 +476,7 @@ public:
     util::Optional<double>
     getT1Percent(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getT1Percent, t1_percent_,
-                                     inheritance, "t1-percent"));
+                                     inheritance, CfgGlobals::T1_PERCENT));
     }
 
     /// @brief Sets new percentage for calculating T1 (renew timer).
@@ -483,7 +492,7 @@ public:
     util::Optional<double>
     getT2Percent(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getT2Percent, t2_percent_,
-                                     inheritance, "t2-percent"));
+                                     inheritance, CfgGlobals::T2_PERCENT));
     }
 
     /// @brief Sets new percentage for calculating T2 (rebind timer).
@@ -498,8 +507,9 @@ public:
     /// @param inheritance inheritance mode to be used.
     util::Optional<bool>
     getDdnsSendUpdates(const Inheritance& inheritance = Inheritance::ALL) const {
-        return (getProperty<Network>(&Network::getDdnsSendUpdates, ddns_send_updates_,
-                                     inheritance, "ddns-send-updates"));
+        return (getProperty<Network>(&Network::getDdnsSendUpdates,
+                                     ddns_send_updates_, inheritance,
+                                     CfgGlobals::DDNS_SEND_UPDATES));
     }
 
     /// @brief Sets new ddns-send-updates
@@ -515,8 +525,8 @@ public:
     util::Optional<bool>
     getDdnsOverrideNoUpdate(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getDdnsOverrideNoUpdate,
-                                     ddns_override_no_update_,
-                                     inheritance, "ddns-override-no-update"));
+                                     ddns_override_no_update_, inheritance,
+                                     CfgGlobals::DDNS_OVERRIDE_NO_UPDATE));
     }
 
     /// @brief Sets new ddns-override-no-update
@@ -532,8 +542,8 @@ public:
     util::Optional<bool>
     getDdnsOverrideClientUpdate(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getDdnsOverrideClientUpdate,
-                                     ddns_override_client_update_,
-                                     inheritance, "ddns-override-client-update"));
+                                     ddns_override_client_update_, inheritance,
+                                     CfgGlobals::DDNS_OVERRIDE_CLIENT_UPDATE));
     }
 
     /// @brief Sets new ddns-override-client-update
@@ -563,7 +573,8 @@ public:
             (inheritance != Inheritance::PARENT_NETWORK)) {
             // Get global mode.
             util::Optional<std::string> mode_label;
-            mode_label = getGlobalProperty(mode_label, "ddns-replace-client-name");
+            mode_label = getGlobalProperty(mode_label,
+                                           CfgGlobals::DDNS_REPLACE_CLIENT_NAME);
             if (!mode_label.unspecified()) {
                 try {
                     // If the mode is globally configured, convert it to an enum.
@@ -595,8 +606,8 @@ public:
     util::Optional<std::string>
     getDdnsGeneratedPrefix(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getDdnsGeneratedPrefix,
-                                     ddns_generated_prefix_,
-                                     inheritance, "ddns-generated-prefix"));
+                                     ddns_generated_prefix_, inheritance,
+                                     CfgGlobals::DDNS_GENERATED_PREFIX));
     }
 
     /// @brief Sets new ddns-generated-prefix
@@ -612,8 +623,8 @@ public:
     util::Optional<std::string>
     getDdnsQualifyingSuffix(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getDdnsQualifyingSuffix,
-                                     ddns_qualifying_suffix_,
-                                     inheritance, "ddns-qualifying-suffix"));
+                                     ddns_qualifying_suffix_, inheritance,
+                                     CfgGlobals::DDNS_QUALIFYING_SUFFIX));
     }
 
     /// @brief Sets new ddns-qualifying-suffix
@@ -626,8 +637,9 @@ public:
     /// @brief Return the char set regexp used to sanitize client hostnames.
     util::Optional<std::string>
     getHostnameCharSet(const Inheritance& inheritance = Inheritance::ALL) const {
-        return (getProperty<Network>(&Network::getHostnameCharSet, hostname_char_set_,
-                                     inheritance, "hostname-char-set"));
+        return (getProperty<Network>(&Network::getHostnameCharSet,
+                                     hostname_char_set_, inheritance,
+                                     CfgGlobals::HOSTNAME_CHAR_SET));
     }
 
     /// @brief Sets new hostname-char-set
@@ -641,8 +653,8 @@ public:
     util::Optional<std::string>
     getHostnameCharReplacement(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getHostnameCharReplacement,
-                                     hostname_char_replacement_,
-                                     inheritance, "hostname-char-replacement"));
+                                     hostname_char_replacement_, inheritance,
+                                     CfgGlobals::HOSTNAME_CHAR_REPLACEMENT));
     }
 
     /// @brief Sets new hostname-char-replacement
@@ -659,8 +671,8 @@ public:
     util::Optional<bool>
     getStoreExtendedInfo(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getStoreExtendedInfo,
-                                     store_extended_info_,
-                                     inheritance, "store-extended-info"));
+                                     store_extended_info_, inheritance,
+                                     CfgGlobals::STORE_EXTENDED_INFO));
     }
 
     /// @brief Sets new store-extended-info
@@ -676,8 +688,8 @@ public:
     util::Optional<double>
     getCacheThreshold(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getCacheThreshold,
-                                     cache_threshold_,
-                                     inheritance, "cache-threshold"));
+                                     cache_threshold_, inheritance,
+                                     CfgGlobals::CACHE_THRESHOLD));
     }
 
     /// @brief Sets cache threshold for a network.
@@ -693,7 +705,7 @@ public:
     util::Optional<uint32_t>
     getCacheMaxAge(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getCacheMaxAge, cache_max_age_,
-                                     inheritance, "cache-max-age"));
+                                     inheritance, CfgGlobals::CACHE_MAX_AGE));
     }
 
     /// @brief Sets cache max for a network.
@@ -709,8 +721,8 @@ public:
     util::Optional<bool>
     getDdnsUpdateOnRenew(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getDdnsUpdateOnRenew,
-                                     ddns_update_on_renew_,
-                                     inheritance, "ddns-update-on-renew"));
+                                     ddns_update_on_renew_, inheritance,
+                                     CfgGlobals::DDNS_UPDATE_ON_RENEW));
     }
 
     /// @brief Sets new ddns-update-on-renew
@@ -727,7 +739,8 @@ public:
     getDdnsUseConflictResolution(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network>(&Network::getDdnsUseConflictResolution,
                                      ddns_use_conflict_resolution_,
-                                     inheritance, "ddns-use-conflict-resolution"));
+                                     inheritance,
+                                     CfgGlobals::DDNS_USE_CONFLICT_RESOLUTION));
     }
 
     /// @brief Sets new ddns-use-conflict-resolution
@@ -753,11 +766,11 @@ protected:
     }
 
     /// @brief Returns a value of global configuration parameter with
-    /// a given name.
+    /// a given index.
     ///
     /// If the @c ferch_globals_fn_ function is non-null, this method will
     /// invoke this function to retrieve a global value having the given
-    /// name. Typically, this method is invoked by @c getProperty when
+    /// index. Typically, this method is invoked by @c getProperty when
     /// network specific value of the parameter is not found. In some cases
     /// it may be called by other methods. One such example is the
     /// @c getDdnsReplaceClientNameMode which needs to call @c getGlobalProperty
@@ -769,25 +782,25 @@ protected:
     ///
     /// @param property Value to be returned when it is specified or when
     /// no global value is found.
-    /// @param global_name Name of the global parameter which value should
+    /// @param global_index Index of the global parameter which value should
     /// be returned
-    /// @param min_name Name of the min global parameter which value should
+    /// @param min_index Index of the min global parameter which value should
     /// be returned for triplets
-    /// @param max_name Name of the max global parameter which value should
+    /// @param max_index Index of the max global parameter which value should
     /// be returned for triplets
     ///
     /// @return Optional value fetched from the global level or the value
     /// of @c property.
     template<typename ReturnType>
     ReturnType getGlobalProperty(ReturnType property,
-                                 const std::string& global_name,
-                                 const std::string& min_name = "",
-                                 const std::string& max_name = "") const {
-        unused(min_name, max_name);
-        if (!global_name.empty() && fetch_globals_fn_) {
-            data::ConstElementPtr globals = fetch_globals_fn_();
-            if (globals && (globals->getType() == data::Element::map)) {
-                data::ConstElementPtr global_param = globals->get(global_name);
+                                 const int global_index,
+                                 const int min_index = -1,
+                                 const int max_index = -1) const {
+        unused(min_index, max_index);
+        if ((global_index >= 0) && fetch_globals_fn_) {
+            ConstCfgGlobalsPtr globals = fetch_globals_fn_();
+            if (globals) {
+                data::ConstElementPtr global_param = globals->get(global_index);
                 if (global_param) {
                     // If there is a global parameter, convert it to the
                     // optional value of the given type and return.
@@ -798,7 +811,7 @@ protected:
         return (property);
     }
 
-    /// @brief The @c getGlobalProperty specialization for Triplet<T>.
+    /// @brief The @c getGlobalProperty specialization for isc::util::Triplet<T>.
     ///
     /// @note: use overloading vs specialization because full specialization
     /// is not allowed in this scope.
@@ -807,41 +820,41 @@ protected:
     ///
     /// @param property Value to be returned when it is specified or when
     /// no global value is found.
-    /// @param global_name Name of the global parameter which value should
+    /// @param global_index Index of the global parameter which value should
     /// be returned
-    /// @param min_name Name of the min global parameter which value should
+    /// @param min_index Index of the min global parameter which value should
     /// be returned for triplets
-    /// @param max_name Name of the max global parameter which value should
+    /// @param max_index Index of the max global parameter which value should
     /// be returned for triplets
     ///
     /// @return Optional value fetched from the global level or the value
     /// of @c property.
     template<typename NumType>
-    Triplet<NumType> getGlobalProperty(Triplet<NumType> property,
-                                       const std::string& global_name,
-                                       const std::string& min_name = "",
-                                       const std::string& max_name = "") const {
+    isc::util::Triplet<NumType> getGlobalProperty(isc::util::Triplet<NumType> property,
+                                                  const int global_index,
+                                                  const int min_index = -1,
+                                                  const int max_index = -1) const {
 
-        if (!global_name.empty() && fetch_globals_fn_) {
-            data::ConstElementPtr globals = fetch_globals_fn_();
-            if (globals && (globals->getType() == data::Element::map)) {
-                data::ConstElementPtr param = globals->get(global_name);
+        if ((global_index >= 0) && fetch_globals_fn_) {
+            ConstCfgGlobalsPtr globals = fetch_globals_fn_();
+            if (globals) {
+                data::ConstElementPtr param = globals->get(global_index);
                 if (param) {
                     NumType def_value = static_cast<NumType>(param->intValue());
-                    if (min_name.empty() || max_name.empty()) {
+                    if ((min_index < 0) || (max_index < 0)) {
                         return (def_value);
                     } else {
                         NumType min_value = def_value;
                         NumType max_value = def_value;
-                        data::ConstElementPtr min_param = globals->get(min_name);
+                        data::ConstElementPtr min_param = globals->get(min_index);
                         if (min_param) {
                             min_value = static_cast<NumType>(min_param->intValue());
                         }
-                        data::ConstElementPtr max_param = globals->get(max_name);
+                        data::ConstElementPtr max_param = globals->get(max_index);
                         if (max_param) {
                             max_value = static_cast<NumType>(max_param->intValue());
                         }
-                        return (Triplet<NumType>(min_value, def_value, max_value));
+                        return (isc::util::Triplet<NumType>(min_value, def_value, max_value));
                     }
                 }
             }
@@ -860,26 +873,26 @@ protected:
     ///
     /// @param property Value to be returned when it is specified or when
     /// no global value is found.
-    /// @param global_name Name of the global parameter which value should
+    /// @param global_index Index of the global parameter which value should
     /// be returned
-    /// @param min_name Name of the min global parameter which value should
+    /// @param min_index Index of the min global parameter which value should
     /// be returned for triplets
-    /// @param max_name Name of the max global parameter which value should
+    /// @param max_index Index of the max global parameter which value should
     /// be returned for triplets
     ///
     /// @return Optional value fetched from the global level or the value
     /// of @c property.
     util::Optional<asiolink::IOAddress>
     getGlobalProperty(util::Optional<asiolink::IOAddress> property,
-                      const std::string& global_name,
-                      const std::string& min_name = "",
-                      const std::string& max_name = "") const;
+                      const int global_index,
+                      const int min_index = -1,
+                      const int max_index = -1) const;
 
     /// @brief Returns a value associated with a network using inheritance.
     ///
     /// This template method provides a generic mechanism to retrieve a
     /// network parameter using inheritance. It is called from public
-    /// accessor methods which return an @c OptionalValue or @c Triplet.
+    /// accessor methods which return an @c OptionalValue or @c isc::util::Triplet.
     ///
     /// @tparam BaseType Type of this instance, e.g. @c Network, @c Network4
     /// etc, which exposes a method to be called.
@@ -893,14 +906,14 @@ protected:
     /// @param property Value to be returned when it is specified or when
     /// no explicit value is specified on upper inheritance levels.
     /// @param inheritance inheritance mode to be used.
-    /// @param global_name Optional name of the global parameter which value
+    /// @param global_index Optional index of the global parameter which value
     /// should be returned if the given parameter is not specified on network
     /// level. This value is empty by default, which indicates that the
     /// global value for the given parameter is not supported and shouldn't
     /// be fetched.
-    /// @param min_name Name of the min global parameter which value should
+    /// @param min_index Index of the min global parameter which value should
     /// be returned for triplets
-    /// @param max_name Name of the max global parameter which value should
+    /// @param max_index Index of the max global parameter which value should
     /// be returned for triplets
     ///
     /// @return Optional value fetched from this instance level, parent
@@ -909,9 +922,9 @@ protected:
     ReturnType getProperty(ReturnType(BaseType::*MethodPointer)(const Inheritance&) const,
                            ReturnType property,
                            const Inheritance& inheritance,
-                           const std::string& global_name = "",
-                           const std::string& min_name = "",
-                           const std::string& max_name = "") const {
+                           const int global_index = -1,
+                           const int min_index = -1,
+                           const int max_index = -1) const {
 
         // If no inheritance is to be used, return the value for this
         // network regardless if it is specified or not.
@@ -930,7 +943,7 @@ protected:
 
         // If global value requested, return it.
         } else if (inheritance == Inheritance::GLOBAL) {
-            return (getGlobalProperty(ReturnType(), global_name, min_name, max_name));
+            return (getGlobalProperty(ReturnType(), global_index, min_index, max_index));
         }
 
         // We use inheritance and the value is not specified on the network level.
@@ -953,7 +966,7 @@ protected:
             // can be specified on global level and there is a callback
             // that returns the global values, try to find this parameter
             // at the global scope.
-            return (getGlobalProperty(property, global_name, min_name, max_name));
+            return (getGlobalProperty(property, global_index, min_index, max_index));
         }
 
         // We haven't found the value at any level, so return the unspecified.
@@ -1043,14 +1056,14 @@ protected:
     /// incoming packet and their evaluation will be required.
     ClientClasses required_classes_;
 
-    /// @brief a Triplet (min/default/max) holding allowed renew timer values
-    Triplet<uint32_t> t1_;
+    /// @brief a isc::util::Triplet (min/default/max) holding allowed renew timer values
+    isc::util::Triplet<uint32_t> t1_;
 
-    /// @brief a Triplet (min/default/max) holding allowed rebind timer values
-    Triplet<uint32_t> t2_;
+    /// @brief a isc::util::Triplet (min/default/max) holding allowed rebind timer values
+    isc::util::Triplet<uint32_t> t2_;
 
-    /// @brief a Triplet (min/default/max) holding allowed valid lifetime values
-    Triplet<uint32_t> valid_;
+    /// @brief a isc::util::Triplet (min/default/max) holding allowed valid lifetime values
+    isc::util::Triplet<uint32_t> valid_;
 
     /// @brief Enables global reservations.
     util::Optional<bool> reservations_global_;
@@ -1154,7 +1167,7 @@ public:
         return (getProperty<Network4>(&Network4::getMatchClientId,
                                       match_client_id_,
                                       inheritance,
-                                      "match-client-id"));
+                                      CfgGlobals::MATCH_CLIENT_ID));
     }
 
     /// @brief Sets the flag indicating if the client identifier should be
@@ -1174,8 +1187,9 @@ public:
     /// false otherwise.
     util::Optional<bool>
     getAuthoritative(const Inheritance& inheritance = Inheritance::ALL) const {
-        return (getProperty<Network4>(&Network4::getAuthoritative, authoritative_,
-                                      inheritance, "authoritative"));
+        return (getProperty<Network4>(&Network4::getAuthoritative,
+                                      authoritative_, inheritance,
+                                      CfgGlobals::AUTHORITATIVE));
     }
 
     /// @brief Sets the flag indicating if requests for unknown IP addresses
@@ -1200,7 +1214,7 @@ public:
     util::Optional<asiolink::IOAddress>
     getSiaddr(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network4>(&Network4::getSiaddr, siaddr_,
-                                      inheritance, "next-server"));
+                                      inheritance, CfgGlobals::NEXT_SERVER));
     }
 
     /// @brief Sets server hostname for the network.
@@ -1215,7 +1229,8 @@ public:
     util::Optional<std::string>
     getSname(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network4>(&Network4::getSname, sname_,
-                                      inheritance, "server-hostname"));
+                                      inheritance,
+                                      CfgGlobals::SERVER_HOSTNAME));
     }
 
     /// @brief Sets boot file name for the network.
@@ -1230,7 +1245,8 @@ public:
     util::Optional<std::string>
     getFilename(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network4>(&Network4::getFilename, filename_,
-                                      inheritance, "boot-file-name"));
+                                      inheritance,
+                                      CfgGlobals::BOOT_FILE_NAME));
     }
 
     /// @brief Unparses network object.
@@ -1276,18 +1292,19 @@ public:
     ///
     /// @param inheritance inheritance mode to be used.
     /// @return a triplet with preferred lifetime
-    Triplet<uint32_t>
+    isc::util::Triplet<uint32_t>
     getPreferred(const Inheritance& inheritance = Inheritance::ALL) const {
         return (getProperty<Network6>(&Network6::getPreferred, preferred_,
-                                      inheritance, "preferred-lifetime",
-                                      "min-preferred-lifetime",
-                                      "max-preferred-lifetime"));
+                                      inheritance,
+                                      CfgGlobals::PREFERRED_LIFETIME,
+                                      CfgGlobals::MIN_PREFERRED_LIFETIME,
+                                      CfgGlobals::MAX_PREFERRED_LIFETIME));
     }
 
     /// @brief Sets new preferred lifetime for a network.
     ///
     /// @param preferred New preferred lifetime in seconds.
-    void setPreferred(const Triplet<uint32_t>& preferred) {
+    void setPreferred(const isc::util::Triplet<uint32_t>& preferred) {
         preferred_ = preferred;
     }
 
@@ -1310,13 +1327,15 @@ public:
     /// @brief Returns boolean value indicating that the Rapid Commit option
     /// is supported or unsupported for the subnet.
     ///
+    /// @note This parameter does not exist at the global level.
+    ///
     /// @param inheritance inheritance mode to be used.
     /// @return true if the Rapid Commit option is supported, false otherwise.
     util::Optional<bool>
     getRapidCommit(const Inheritance& inheritance = Inheritance::ALL) const {
 
         return (getProperty<Network6>(&Network6::getRapidCommit, rapid_commit_,
-                                      inheritance, "rapid-commit"));
+                                      inheritance));
     }
 
     /// @brief Enables or disables Rapid Commit option support for the subnet.
@@ -1335,7 +1354,7 @@ public:
 private:
 
     /// @brief a triplet with preferred lifetime (in seconds)
-    Triplet<uint32_t> preferred_;
+    isc::util::Triplet<uint32_t> preferred_;
 
     /// @brief specifies optional interface-id
     OptionPtr interface_id_;

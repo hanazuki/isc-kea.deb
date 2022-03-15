@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2015-2018 Deutsche Telekom AG.
 //
 // Authors: Razvan Becheriu <razvan.becheriu@qualitance.com>
@@ -2112,6 +2112,38 @@ CqlLeaseMgr::CqlLeaseMgr(const DatabaseConnection::ParameterMap &parameters)
 
     // Cassandra support is now deprecated.
     LOG_WARN(dhcpsrv_logger, DHCPSRV_DEPRECATED).arg("Cassandra lease backend");
+
+    // Check TLS support.
+    bool tls(false);
+    try {
+        dbconn_.getParameter("trust-anchor");
+        tls = true;
+    } catch (...) {
+        // No trust anchor.
+    }
+    try {
+        dbconn_.getParameter("cert-file");
+        tls = true;
+    } catch (...) {
+        // No certificate file.
+    }
+    try {
+        dbconn_.getParameter("key-file");
+        tls = true;
+    } catch (...) {
+        // No private key file.
+    }
+    try {
+        dbconn_.getParameter("cipher-list");
+        tls = true;
+    } catch (...) {
+        // No cipher list.
+    }
+    if (tls) {
+        LOG_ERROR(dhcpsrv_logger, DHCPSRV_CQL_NO_TLS_SUPPORT)
+            .arg(DatabaseConnection::redactedAccessString(parameters));
+        isc_throw(DbOpenError, "Attempt to configure TLS for CQL");
+    }
 
     // Open the database.
     dbconn_.openDatabase();

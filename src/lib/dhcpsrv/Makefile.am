@@ -77,6 +77,7 @@ libkea_dhcpsrv_la_SOURCES += cfg_4o6.cc cfg_4o6.h
 libkea_dhcpsrv_la_SOURCES += cfg_consistency.cc cfg_consistency.h
 libkea_dhcpsrv_la_SOURCES += cfg_db_access.cc cfg_db_access.h
 libkea_dhcpsrv_la_SOURCES += cfg_duid.cc cfg_duid.h
+libkea_dhcpsrv_la_SOURCES += cfg_globals.cc cfg_globals.h
 libkea_dhcpsrv_la_SOURCES += cfg_hosts.cc cfg_hosts.h
 libkea_dhcpsrv_la_SOURCES += cfg_hosts_util.cc cfg_hosts_util.h
 libkea_dhcpsrv_la_SOURCES += cfg_iface.cc cfg_iface.h
@@ -153,7 +154,6 @@ libkea_dhcpsrv_la_SOURCES += subnet.cc subnet.h
 libkea_dhcpsrv_la_SOURCES += subnet_id.h
 libkea_dhcpsrv_la_SOURCES += subnet_selector.h
 libkea_dhcpsrv_la_SOURCES += timer_mgr.cc timer_mgr.h
-libkea_dhcpsrv_la_SOURCES += triplet.h
 libkea_dhcpsrv_la_SOURCES += utils.h
 libkea_dhcpsrv_la_SOURCES += writable_host_data_source.h
 
@@ -226,7 +226,7 @@ libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_dhcpsrv_la_LIBADD  += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 
-libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 51:0:0
+libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 64:0:0
 libkea_dhcpsrv_la_LDFLAGS += $(CRYPTO_LDFLAGS)
 if HAVE_MYSQL
 libkea_dhcpsrv_la_LDFLAGS += $(MYSQL_LIBS)
@@ -374,7 +374,6 @@ libkea_dhcpsrv_include_HEADERS = \
 	subnet_id.h \
 	subnet_selector.h \
 	timer_mgr.h \
-	triplet.h \
 	utils.h \
 	writable_host_data_source.h
 

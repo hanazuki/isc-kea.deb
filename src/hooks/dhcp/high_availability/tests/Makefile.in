@@ -522,8 +522,10 @@ AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 	$(BOOST_INCLUDES) $(CRYPTO_CFLAGS) $(CRYPTO_INCLUDES) \
 	-DLIBDHCP_HA_SO=\"$(abs_top_builddir)/src/hooks/dhcp/high_availability/.libs/libdhcp_ha.so\" \
 	-DINSTALL_PROG=\"$(abs_top_srcdir)/install-sh\" \
-	-DTEST_CA_DIR=\"$(TEST_CA_DIR)\"
+	-DTEST_CA_DIR=\"$(TEST_CA_DIR)\" \
+	-DTEST_HTTP_DIR=\"$(TEST_HTTP_DIR)\"
 TEST_CA_DIR = $(abs_top_srcdir)/src/lib/asiolink/testutils/ca
+TEST_HTTP_DIR = $(abs_top_srcdir)/src/lib/http/tests/testdata
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 @USE_STATIC_LINK_TRUE@AM_LDFLAGS = -static
 

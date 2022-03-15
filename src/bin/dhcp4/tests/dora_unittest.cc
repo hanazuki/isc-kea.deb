@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1099,7 +1099,18 @@ DORATest::authoritative() {
     // Configure DHCP server.
     configure(DORA_CONFIGS[15], *client.getServer());
     client.includeClientId("11:22");
+
+    // Try to renew an address that is outside the pool.
+    client.setState(Dhcp4Client::RENEWING);
+    client.ciaddr_ = IOAddress("10.0.0.9");
+    ASSERT_NO_THROW_LOG(client.doRequest());
+    // Even though we're authoritative server should not respond
+    // since it does not know this address.
+    ASSERT_FALSE(client.getContext().response_);
+
     // Obtain a lease from the server using the 4-way exchange.
+    client.ciaddr_ = IOAddress("0.0.0.0");
+    client.setState(Dhcp4Client::SELECTING);
     ASSERT_NO_THROW(client.doDORA(boost::shared_ptr<
                                   IOAddress>(new IOAddress("10.0.0.50"))));
     // Make sure that the server responded.
@@ -1202,7 +1213,18 @@ DORATest::notAuthoritative() {
     // Configure DHCP server.
     configure(DORA_CONFIGS[16], *client.getServer());
     client.includeClientId("11:22");
+
+    // Try to renew an address that is outside the pool.
+    client.setState(Dhcp4Client::RENEWING);
+    client.ciaddr_ = IOAddress("10.0.0.9");
+    ASSERT_NO_THROW_LOG(client.doRequest());
+    // We are not authoritative sure that the server does
+    // not respond at all.
+    ASSERT_FALSE(client.getContext().response_);
+
     // Obtain a lease from the server using the 4-way exchange.
+    client.ciaddr_ = IOAddress("0.0.0.0");
+    client.setState(Dhcp4Client::SELECTING);
     ASSERT_NO_THROW(client.doDORA(boost::shared_ptr<
                                   IOAddress>(new IOAddress("10.0.0.50"))));
     // Make sure that the server responded.
@@ -1977,11 +1999,12 @@ DORATest::reservationsWithConflicts() {
 
     // Try to renew the existing lease again.
     ASSERT_NO_THROW(client.doRequest());
-    // The reservation has been removed, so the server should respond with
-    // a DHCPNAK because the address that the client is using doesn't belong
-    // to a dynamic pool.
+
+    // The reservation has been removed. Since address that the client is
+    // using doesn't belong to a dynamic pool and the server is not
+    // authoritative it should not send a DHCPNAK.
     resp = client.getContext().response_;
-    ASSERT_EQ(DHCPNAK, static_cast<int>(resp->getType()));
+    ASSERT_FALSE(resp);
 
     // A conforming client would go back to the server discovery.
     client.setState(Dhcp4Client::SELECTING);
@@ -2550,7 +2573,7 @@ DORATest::changingCircuitId() {
     Pkt4Ptr resp = client.getContext().response_;
     // Make sure that the server has responded with DHCPOFFER
     ASSERT_EQ(DHCPOFFER, static_cast<int>(resp->getType()));
-    // Make sure that the client has been offerred a different address
+    // Make sure that the client has been offered a different address
     // given that circuit-id is not used.
     EXPECT_NE("10.0.0.9", resp->getYiaddr().toText());
 
@@ -2564,14 +2587,14 @@ DORATest::changingCircuitId() {
     resp = client.getContext().response_;
     // Make sure that the server has responded with DHCPOFFER
     ASSERT_EQ(DHCPOFFER, static_cast<int>(resp->getType()));
-    // Make sure that the client has been offerred reserved address given that
+    // Make sure that the client has been offered reserved address given that
     // matching circuit-id has been specified.
     EXPECT_EQ("10.0.0.9", resp->getYiaddr().toText());
 
     // Let's now change the circuit-id.
     client.setCircuitId("gdansk");
 
-    // The client requests offerred address but should be refused this address
+    // The client requests offered address but should be refused this address
     // given that the circuit-id is not matching.
     ASSERT_NO_THROW(client.doRequest());
     // Make sure that the server responded.

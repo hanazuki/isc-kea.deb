@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,6 +18,7 @@ using namespace isc::hooks;
 using namespace isc::asiolink;
 using namespace isc::stats;
 using namespace isc::data;
+using namespace isc::util;
 
 namespace isc {
 namespace dhcp {
@@ -263,14 +264,37 @@ TEST_F(AllocEngine6Test, allocateAddress6Nulls) {
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx1)));
     ASSERT_FALSE(lease);
 
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 1));
+
     // Allocations without DUID are not allowed either
     AllocEngine::ClientContext6 ctx2(subnet_, DuidPtr(), false, false, "", false,
                                      Pkt6Ptr(new Pkt6(DHCPV6_REQUEST, 1234)));
     ctx2.currentIA().iaid_ = iaid_;
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx2)));
     ASSERT_FALSE(lease);
-}
 
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 1));
+}
 
 // This test verifies that the allocator picks addresses that belong to the
 // pool
@@ -889,10 +913,20 @@ TEST_F(AllocEngine6Test, outOfAddresses6) {
 
     Lease6Ptr lease2;
     EXPECT_NO_THROW(lease2 = expectOneLease(engine->allocateLeases6(ctx)));
-    EXPECT_FALSE(lease2);
+    ASSERT_FALSE(lease2);
 
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network"));
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail-subnet"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail", 2));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network", 2));
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail-subnet", 2));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 2));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 2));
 }
-
 
 // This test checks if an expired lease can be reused in SOLICIT (fake allocation)
 TEST_F(AllocEngine6Test, solicitReuseExpiredLease6) {
@@ -937,6 +971,7 @@ TEST_F(AllocEngine6Test, solicitReuseExpiredLease6) {
     ctx1.currentIA().iaid_ = iaid_;
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx1)));
+
     // Check that we got that single lease
     ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
@@ -1205,6 +1240,8 @@ TEST_F(AllocEngine6Test, requestReuseExpiredLease6) {
 
     // Check that the old lease has been returned.
     Lease6Ptr old_lease = expectOneLease(ctx.currentIA().old_leases_);
+    ASSERT_TRUE(old_lease);
+
     // It should at least have the same IPv6 address.
     EXPECT_EQ(lease->addr_, old_lease->addr_);
     // Check that it carries not updated FQDN data.
@@ -2124,7 +2161,7 @@ TEST_F(AllocEngine6Test, reservedAddress) {
 
     // The default pool is 2001:db8:1::10 to 2001:db8:1::20. There's 17
     // addresses in it. One of them is reserved, so this means that we should
-    // get 16 successes and 14 (20-16) failures.
+    // get 16 successes and 14 (30-16) failures.
     int success = 0;
     int failure = 0;
     for (int i = 0; i < 30; i++) {
@@ -2138,6 +2175,17 @@ TEST_F(AllocEngine6Test, reservedAddress) {
         if (leases.empty()) {
             failure++;
             std::cout << "Alloc for client " << (int)i << " failed." << std::endl;
+            EXPECT_EQ(failure, getStatistics("v6-allocation-fail"));
+            EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network"));
+            EXPECT_EQ(failure, getStatistics("v6-allocation-fail-subnet"));
+            EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+            EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+            EXPECT_EQ(failure, getStatistics("v6-allocation-fail", 1));
+            EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network", 1));
+            EXPECT_EQ(failure, getStatistics("v6-allocation-fail-subnet", 1));
+            EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 1));
+            EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 1));
         } else {
             success++;
             std::cout << "Alloc for client " << (int)i << " succeeded:"
@@ -2180,7 +2228,19 @@ TEST_F(AllocEngine6Test, allocateLeasesInvalidData) {
 
     // Subnet is required for allocation, so we should get no leases.
     EXPECT_NO_THROW(leases = engine.allocateLeases6(ctx));
-    EXPECT_TRUE(leases.empty());
+    ASSERT_TRUE(leases.empty());
+
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 1));
 
     // Let's fix this and break it in a different way.
     ctx.subnet_ = subnet_;
@@ -2188,8 +2248,19 @@ TEST_F(AllocEngine6Test, allocateLeasesInvalidData) {
 
     // We must know who we're allocating for. No duid = no service.
     EXPECT_NO_THROW(leases = engine.allocateLeases6(ctx));
-    EXPECT_TRUE(leases.empty());
+    ASSERT_TRUE(leases.empty());
 
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 1));
 }
 
 // Checks whether an address can be renewed (simple case, no reservation tricks)
@@ -2518,7 +2589,6 @@ TEST_F(AllocEngine6Test, reservedAddressByMacInPoolRequestNoHint) {
     EXPECT_EQ("2001:db8:1::1c", lease->addr_.toText());
 }
 
-
 // Checks that a client gets the address reserved (in-pool case)
 // This test checks the behavior of the allocation engine in the following
 // scenario:
@@ -2654,7 +2724,19 @@ TEST_F(AllocEngine6Test, largeAllocationAttemptsOverride) {
     AllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 3);
     Lease6Collection leases = allocateTest(engine, pool_, IOAddress("::"),
                                            false, true);
-    ASSERT_EQ(0, leases.size());
+    ASSERT_TRUE(leases.empty());
+
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network"));
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail-subnet"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-shared-network", 1));
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail-subnet", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 1));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 1));
 
     // This time, lets allow more attempts, and expect that the allocation will
     // be successful.
@@ -2827,7 +2909,6 @@ TEST_F(AllocEngine6Test, requestReuseDeclinedLease6Stats) {
     EXPECT_TRUE(testStatistics("reclaimed-declined-addresses", 1));
     EXPECT_TRUE(testStatistics("declined-addresses", -1, subnet_->getID()));
     EXPECT_TRUE(testStatistics("reclaimed-declined-addresses", 1, subnet_->getID()));
-
 }
 
 // This test checks if an expired-reclaimed lease can be reused by
@@ -2978,7 +3059,6 @@ TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkSimple) {
     ASSERT_TRUE(subnet1_->inRange(lease->addr_));
 }
 
-
 // This test verifies that the server can pick a subnet from shared subnets
 // based on hints.
 TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkHint) {
@@ -3001,7 +3081,7 @@ TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkHint) {
     ASSERT_TRUE(subnet2_->inRange(lease->addr_));
 }
 
-// This test verifies that the client is offerred an address from an
+// This test verifies that the client is offered an address from an
 // alternative subnet within shared network when the address pool is
 // exhausted in the first address pool.
 TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkOutOfAddresses) {
@@ -3031,7 +3111,7 @@ TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkOutOfAddresses) {
     ASSERT_TRUE(lease2);
     ASSERT_TRUE(subnet2_->inRange(lease2->addr_));
 
-    // The client having a lease should be offerred this lease, even if
+    // The client having a lease should be offered this lease, even if
     // the client starts allocation from the second subnet. The code should
     // determine that the client has a lease in subnet1 and use this subnet
     // instead.
@@ -3059,7 +3139,7 @@ TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkOutOfAddresses) {
 // the first subnet is exhausted.
 TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkClassification) {
     // Try to offer address from subnet1. There is an address available so
-    // it should be offerred.
+    // it should be offered.
     Pkt6Ptr query(new Pkt6(DHCPV6_SOLICIT, 1234));
     AllocEngine::ClientContext6 ctx(subnet1_, duid_, false, false, "", true,
                                     query);
@@ -3121,7 +3201,7 @@ TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkClassification) {
 // the first subnet requires another class.
 TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkPoolClassification) {
     // Try to offer address from subnet1. There is an address available so
-    // it should be offerred.
+    // it should be offered.
     Pkt6Ptr query(new Pkt6(DHCPV6_SOLICIT, 1234));
     AllocEngine::ClientContext6 ctx(subnet1_, duid_, false, false, "", true,
                                     query);
@@ -3172,7 +3252,7 @@ TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkPoolClassification) {
     EXPECT_EQ("2001:db8:1::1", lease->addr_.toText());
 }
 
-// This test verifies that the client is offerred a reserved address
+// This test verifies that the client is offered a reserved address
 // even if this address belongs to another subnet within the same
 // shared network.
 TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkReservations) {
@@ -3199,7 +3279,7 @@ TEST_F(SharedNetworkAlloc6Test, solicitSharedNetworkReservations) {
     ASSERT_EQ("2001:db8:2::15", lease->addr_.toText());
 }
 
-// This test verifies that the client is offerred a reserved address
+// This test verifies that the client is offered a reserved address
 // even if this address belongs to another subnet within the same
 // shared network. Host lookups returning a collection are disabled.
 // As it is only an optimization the behavior (so the test) must stay
@@ -3386,7 +3466,19 @@ TEST_F(SharedNetworkAlloc6Test, requestRunningOut) {
     Lease6Collection leases = engine_.allocateLeases6(ctx2);
 
     // Bugger off, we're full!
-    EXPECT_TRUE(leases.empty());
+    ASSERT_TRUE(leases.empty());
+
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail"));
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail-shared-network"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools"));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes"));
+
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail", 3));
+    EXPECT_EQ(1, getStatistics("v6-allocation-fail-shared-network", 3));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-subnet", 3));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-no-pools", 3));
+    EXPECT_EQ(0, getStatistics("v6-allocation-fail-classes", 3));
 }
 
 // Verifies that client with a hostname reservation can
@@ -3970,7 +4062,7 @@ public:
         relay1_.peeraddr_ = IOAddress("2001:db8::2");
         relay1_.relay_msg_len_ = 0;
 
-        uint8_t relay_opt_data[] = { 1, 2, 3, 4, 5, 6, 7, 8};
+        uint8_t relay_opt_data[] = { 1, 2, 3, 4, 5, 6, 7, 8 };
         vector<uint8_t> relay_data(relay_opt_data,
                                    relay_opt_data + sizeof(relay_opt_data));
         OptionPtr optRelay1(new Option(Option::V6, 200, relay_data));
@@ -3990,9 +4082,6 @@ public:
         NakedAllocEngine engine(AllocEngine::ALLOC_ITERATIVE, 100, true);
     }
 
-    /// @brief Destructor
-    virtual ~AllocEngine6ExtendedInfoTest(){};
-
     /// Configuration elements. These are initialized in the constructor
     /// and are used throughout the tests.
     NakedAllocEngine engine_;
@@ -4003,7 +4092,6 @@ public:
     IOAddress duid1_addr_;
     IOAddress duid2_addr_;
 };
-
 
 // Exercises AllocEnginer6Test::updateExtendedInfo6() through various
 // permutations of client packet content.
@@ -4118,8 +4206,7 @@ TEST_F(AllocEngine6ExtendedInfoTest, updateExtendedInfo6) {
         lease->setContext(orig_context);
         if (!orig_context) {
             ASSERT_FALSE(lease->getContext());
-        }
-        else {
+        } else {
             ASSERT_TRUE(lease->getContext());
             ASSERT_TRUE(orig_context->equals(*(lease->getContext())));
         }
@@ -4135,8 +4222,7 @@ TEST_F(AllocEngine6ExtendedInfoTest, updateExtendedInfo6) {
         // Verify the lease has the expected user context content.
         if (!exp_context) {
             ASSERT_FALSE(lease->getContext());
-        }
-        else {
+        } else {
             ASSERT_TRUE(lease->getContext());
             ASSERT_TRUE(exp_context->equals(*(lease->getContext())))
                 << "expected: " << *(exp_context) << std::endl
@@ -4232,8 +4318,7 @@ TEST_F(AllocEngine6ExtendedInfoTest, storeExtendedInfoEnabled6) {
         // Verify the lease has the expected user context content.
         if (!exp_context) {
             ASSERT_FALSE(lease->getContext());
-        }
-        else {
+        } else {
             ASSERT_TRUE(lease->getContext());
             ASSERT_TRUE(exp_context->equals(*(lease->getContext())))
                 << "expected: " << *(exp_context) << std::endl
@@ -4397,6 +4482,7 @@ TEST_F(AllocEngine6Test, solicitNoCache) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -4438,6 +4524,7 @@ TEST_F(AllocEngine6Test, requestCacheThreshold6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -4490,6 +4577,7 @@ TEST_F(AllocEngine6Test, renewCacheThreshold6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -4539,6 +4627,7 @@ TEST_F(AllocEngine6Test, requestCacheMaxAge6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -4591,6 +4680,7 @@ TEST_F(AllocEngine6Test, renewCacheMaxAge6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -4644,6 +4734,7 @@ TEST_F(AllocEngine6Test, requestCacheBoth6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -4700,6 +4791,7 @@ TEST_F(AllocEngine6Test, renewCacheBoth6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -4751,6 +4843,7 @@ TEST_F(AllocEngine6Test, requestCacheBadThreshold6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -4797,6 +4890,7 @@ TEST_F(AllocEngine6Test, renewCacheBadThreshold6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -4840,6 +4934,7 @@ TEST_F(AllocEngine6Test, requestCacheBadMaxAge6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -4886,6 +4981,7 @@ TEST_F(AllocEngine6Test, renewCacheBadMaxAge6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -4930,6 +5026,7 @@ TEST_F(AllocEngine6Test, renewCacheReducedValid6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -4977,6 +5074,7 @@ TEST_F(AllocEngine6Test, renewCacheReducedPreferred6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -5016,6 +5114,7 @@ TEST_F(AllocEngine6Test, requestCacheFwdDDNS6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -5058,6 +5157,7 @@ TEST_F(AllocEngine6Test, renewCacheFwdDDNS6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -5097,6 +5197,7 @@ TEST_F(AllocEngine6Test, requestCacheRevDDNS6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -5139,6 +5240,7 @@ TEST_F(AllocEngine6Test, renewCacheRevDDNS6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 
@@ -5179,6 +5281,7 @@ TEST_F(AllocEngine6Test, requestCacheHostname6) {
     ctx.currentIA().addHint(addr);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->allocateLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(addr, lease->addr_);
     EXPECT_EQ(128, lease->prefixlen_);
 
@@ -5223,6 +5326,7 @@ TEST_F(AllocEngine6Test, renewCacheHostname6) {
     ctx.currentIA().addHint(prefix, prefixlen);
 
     EXPECT_NO_THROW(lease = expectOneLease(engine->renewLeases6(ctx)));
+    ASSERT_TRUE(lease);
     EXPECT_EQ(prefix, lease->addr_);
     EXPECT_EQ(prefixlen, lease->prefixlen_);
 

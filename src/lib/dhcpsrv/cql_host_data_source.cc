@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 // Copyright (C) 2016-2017 Deutsche Telekom AG.
 //
 // Author: Andrei Pavel <andrei.pavel@qualitance.com>
@@ -2520,6 +2520,38 @@ CqlHostDataSourceImpl::CqlHostDataSourceImpl(const DatabaseConnection::Parameter
                   << code_version.first << "." << code_version.second
                   << " found version: " << db_version.first << "."
                   << db_version.second);
+    }
+
+    // Check TLS support.
+    bool tls(false);
+    try {
+        dbconn_.getParameter("trust-anchor");
+        tls = true;
+    } catch (...) {
+        // No trust anchor.
+    }
+    try {
+        dbconn_.getParameter("cert-file");
+        tls = true;
+    } catch (...) {
+        // No certificate file.
+    }
+    try {
+        dbconn_.getParameter("key-file");
+        tls = true;
+    } catch (...) {
+        // No private key file.
+    }
+    try {
+        dbconn_.getParameter("cipher-list");
+        tls = true;
+    } catch (...) {
+        // No cipher list.
+    }
+    if (tls) {
+        LOG_ERROR(dhcpsrv_logger, DHCPSRV_CQL_NO_TLS_SUPPORT)
+            .arg(DatabaseConnection::redactedAccessString(parameters));
+        isc_throw(DbOpenError, "Attempt to configure TLS for CQL backend");
     }
 
     // Open the database.

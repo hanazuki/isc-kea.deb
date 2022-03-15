@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 #include <gtest/gtest.h>
 
 using namespace isc::db;
+using namespace isc::util;
 using namespace isc::dhcp;
 
 namespace {
@@ -56,6 +57,4 @@ TEST(MySqlConfigBackendImplTest, createTripletFromBinding) {
                  isc::Unexpected);
 }
 
-
 }
-

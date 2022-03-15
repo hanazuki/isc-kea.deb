@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -139,7 +139,7 @@ LFCController::launch(int argc, char* argv[], const bool test_mode) {
     try {
         pid_file.deleteFile();
     } catch (const PIDFileError& pid_ex) {
-          LOG_FATAL(lfc_logger, LFC_FAIL_PID_DEL).arg(pid_ex.what());
+        LOG_FATAL(lfc_logger, LFC_FAIL_PID_DEL).arg(pid_ex.what());
     }
 
     LOG_INFO(lfc_logger, LFC_TERMINATE);
@@ -325,8 +325,18 @@ LFCController::getVersion(const bool extended) const{
 
     version_stream << VERSION;
     if (extended) {
-        version_stream << std::endl << EXTENDED_VERSION << std::endl
-        << "database: " << isc::dhcp::Memfile_LeaseMgr::getDBVersion();
+        std::string db_version;
+        if (protocol_version_ == 4) {
+            db_version = Memfile_LeaseMgr::getDBVersion(Memfile_LeaseMgr::V4);
+        } else if (protocol_version_ == 6) {
+            db_version = Memfile_LeaseMgr::getDBVersion(Memfile_LeaseMgr::V6);
+        }
+        if (!db_version.empty()) {
+            db_version = "database: " + db_version;
+        }
+        version_stream << std::endl
+                       << EXTENDED_VERSION << std::endl
+                       << db_version;
     }
 
     return (version_stream.str());
@@ -404,8 +414,7 @@ LFCController::startLogger(const bool test_mode) const {
     // else use our defaults
     if (test_mode) {
         initLogger();
-    }
-    else {
+    } else {
         OutputOption option;
         LoggerManager manager;
 

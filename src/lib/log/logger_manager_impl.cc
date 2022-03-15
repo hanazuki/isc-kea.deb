@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <array>
 
 #include <log4cplus/logger.h>
 #include <log4cplus/configurator.h>
@@ -140,8 +141,27 @@ LoggerManagerImpl::createFileAppender(log4cplus::Logger& logger,
     } else {
         log4cplus::helpers::Properties properties;
         properties.setProperty("File", opt.filename);
-        properties.setProperty("MaxFileSize",
-                               lexical_cast<string>(opt.maxsize));
+
+        // log4cplus supports file sizes past INT_MAX only in suffixed format.
+        // Convert from integer.
+        uint64_t maxsize(opt.maxsize);
+        size_t i(0);
+        while (std::numeric_limits<int32_t>::max() < maxsize && i < 2) {
+            maxsize /= 1000;
+            ++i;
+        }
+        std::array<std::string, 3> const suffixes({"", "KB", "MB"});
+        std::string const max_file_size(to_string(maxsize) + suffixes[i]);
+
+        // If maxsize is still past INT_MAX, it will overflow in log4cplus,
+        // so stop here instead.
+        if (std::numeric_limits<int32_t>::max() < maxsize) {
+            isc_throw(BadValue, "expected maxsize < "
+                                << std::numeric_limits<int32_t>::max()
+                                << "MB, but instead got " << max_file_size);
+        }
+
+        properties.setProperty("MaxFileSize", max_file_size);
         properties.setProperty("MaxBackupIndex",
                                lexical_cast<string>(opt.maxver));
         properties.setProperty("ImmediateFlush", opt.flush ? "true" : "false");

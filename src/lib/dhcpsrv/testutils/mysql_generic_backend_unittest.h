@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -35,7 +35,7 @@ public:
     /// @param conn MySql connection to be used for the query.
     /// @param table Table name.
     /// @return Number of rows in the specified table.
-    size_t countRows(db::MySqlConnection& conn, const std::string& table) const;
+    static size_t countRows(db::MySqlConnection& conn, const std::string& table);
 };
 
 }

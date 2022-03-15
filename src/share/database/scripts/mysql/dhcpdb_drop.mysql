@@ -1,4 +1,4 @@
-# Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -123,3 +123,5 @@ DROP TRIGGER IF EXISTS dhcp6_client_class_AUPD;
 DROP TRIGGER IF EXISTS dhcp6_client_class_ADEL;
 DROP TRIGGER IF EXISTS dhcp6_client_class_dependency_BINS;
 DROP TRIGGER IF EXISTS dhcp6_client_class_dependency_AINS;
+DROP PROCEDURE IF EXISTS lease4Upload;
+DROP PROCEDURE IF EXISTS lease6Upload;

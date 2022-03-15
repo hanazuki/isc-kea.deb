@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -233,6 +233,17 @@ TEST(PgSqlHostDataSource, OpenDatabase) {
     EXPECT_THROW(HostMgr::addBackend(connectionString(
         PGSQL_VALID_TYPE, NULL, VALID_HOST, INVALID_USER, VALID_PASSWORD)),
         NoDatabaseName);
+
+    // Check for SSL/TLS support.
+#ifdef HAVE_PGSQL_SSL
+    EXPECT_NO_THROW(HostMgr::addBackend(connectionString(
+        PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+        0, 0, 0, 0, VALID_CA)));
+#else
+    EXPECT_THROW(HostMgr::addBackend(connectionString(
+        PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+        0, 0, 0, 0, VALID_CA)), DbOpenError);
+#endif
 
     // Tidy up after the test
     destroyPgSQLSchema();
@@ -1458,7 +1469,12 @@ PgSQLHostMgrTest::SetUp() {
 
 void
 PgSQLHostMgrTest::TearDown() {
-    HostMgr::instance().getHostDataSource()->rollback();
+    try {
+        HostMgr::instance().getHostDataSource()->rollback();
+    } catch(...) {
+        // we don't care if we aren't in a transaction.
+    }
+
     HostMgr::delBackend("postgresql");
     // If data wipe enabled, delete transient data otherwise destroy the schema
     db::test::destroyPgSQLSchema();

@@ -1,4 +1,4 @@
-// Copyright (C) 2006-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2006-2021 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -263,7 +263,7 @@ static const uint16_t HWTYPE_INFINIBAND = 0x0020;
 #define SHA_512                 2
 #define RSASSA_PKCS1v1_5        1
 
-// Taken from http://www.iana.org/assignments/enterprise-numbers
+// Taken from https://www.iana.org/assignments/enterprise-numbers/enterprise-numbers
 static const uint32_t ENTERPRISE_ID_ISC = 2495;
 
 /* DHCPv4-over-DHCPv6 (RFC 7341) inter-process communication. These are option

@@ -49,8 +49,6 @@
                 "output_options": [
                     {
                         "flush": true,
-                        "maxsize": 204800,
-                        "maxver": 4,
                         "output": "stdout",
                         "pattern": "%d [%c/%i] %m\n"
                     }

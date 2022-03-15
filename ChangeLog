@@ -1,31 +1,311 @@
-Kea 2.0.2 (stable) released on March 2, 2022
+Kea 2.1.3 (development) released on Feb 23, 2022
 
-1957.	[build]		razvan
-	Library version numbers bumped for Kea 2.0.2 stable version.
-	(Gitlab #2327)
+1996.	[build]		razvan
+	Library version numbers bumped for Kea 2.1.3 development
+	version.
+	(Gitlab #2317)
 
-1956.	[bug]		tmark
+1995.	[func]		tmark
+	kea-dhcp4 now supports using PostgreSQL for config
+	back end for everything except client classes. The
+	new hook library is libdhcp_pgsql_cb.so. This should
+	be considered an experimental feature.
+	(Gitlab #95)
+
+1994.	[func]		razvan
+	Added support for Server Identifier Override RAI sub-option
+	(RFC 5107). The implementation is not complete according to the
+	RFC, because the server does not store the RAI, but the
+	functionality handles expected use cases.
+	(Gitlab #1695)
+
+1993.	[func]		razvan
+	Added global and per subnet counters for allocation failures:
+	``v4-allocation-fail``, ``v4-allocation-fail-shared-network``,
+	``v4-allocation-fail-subnet``, ``v4-allocation-fail-no-pools``,
+	``v4-allocation-fail-classes``, ``subnet[X].v4-allocation-fail``,
+	``subnet[X].v4-allocation-fail-shared-network``,
+	``subnet[X].v4-allocation-fail-subnet``,
+	``subnet[X].v4-allocation-fail-no-pools``,
+	``subnet[X].v4-allocation-fail-classes``,
+	``v6-allocation-fail``, ``v6-allocation-fail-shared-network``,
+	``v6-allocation-fail-subnet``, ``v6-allocation-fail-no-pools``,
+	``v6-allocation-fail-classes``, ``subnet[X].v6-allocation-fail``,
+	``subnet[X].v6-allocation-fail-shared-network``,
+	``subnet[X].v6-allocation-fail-subnet``,
+	``subnet[X].v6-allocation-fail-no-pools``,
+	``subnet[X].v6-allocation-fail-classes``.
+	There is a warning log message emitted in the logs each time one
+	of the allocation failure counters is incremented.
+	(Gitlab #2054)
+
+1992.	[bug]		razvan
+	The ``maxver`` and ``maxsize`` logger parameters are excluded
+	from ``config-get`` command response if the logger output is
+	``stdout``, ``stderr`` or ``syslog``.
+	(Gitlab #2288)
+
+1991.	[bug]		jinmei, razvan
+	Fixed keactrl exit code when netconf is not build.
+	(Gitlab #2262)
+
+1990.	[func]		razvan
+	Adden the ``reservations-lookup-first`` configuration parameter
+	which controls whether host reservations lookup should be
+	performed before lease lookup. This parameter has effect only
+	when multi-threading is disabled. When multi-threading is
+	enabled, host reservations lookup is always performed first. The
+	``reservations-lookup-first`` parameter defaults to ``false``
+	when multi-threading is disabled.
+	(Gitlab #2036)
+
+Kea 2.1.2 (development) released on Jan 26, 2022
+
+1989.	[build]		razvan
+	Library version numbers bumped for Kea 2.1.2 development
+	version.
+	(Gitlab #2281)
+
+1988.	[bug]		tmark
 	Kea core logic now ensures options belonging
 	to client classes are properly created when
 	classes are read from configuration backends.
-	(Gitlab #2301)
+	(Gitlab #2246)
 
-1955.	[bug]		andrei
+1987.	[bug]		tmark
+	Fixed an issue in PostgreSQL support code that caused
+	asserts when compiled with: -Wp,-D_GLIBCXX_ASSERTIONS.
+	(Gitlab #2284)
+
+1986.	[func]		fdupont
+	The kea-admin command now accepts extra arguments which
+	are passed to the database command tool, e.g. '--ssl' to
+	'mysql' with `kea-admin ... -x --ssl'. Quotes are not
+	preserved but multiple arguments can be given.
+	(Gitlab #2225)
+
+1985.	[func]		fdupont
+	Added support for using files to configure basic HTTP
+	credentials. Instead of configuring a value, it is taken from
+	the content of a file. The new parameters of the Control Agent
+	configuration are:
+	- 'user-file' pointing to a file vs 'user'
+	- 'password-file' pointing to a file vs 'password'
+	- 'password-file' pointing to a file with the secret
+	(which is <user>:<password>) vs 'user' and 'password'.
+	For the High Availability hook library the new parameter
+	is 'basic-auth-password-file' which can be used as an
+	alternative to 'basic-auth-password'.
+	(Gitlab #2006)
+
+1984.	[func]		andrei
+	Introduced the lease-upload command to kea-admin which can upload
+	leases from a memfile CSV file to a database backend.
+	(Gitlab #2039)
+
+1983.	[bug]		fdupont
+	Minimum and maximum values of lifetimes are no longer
+	skipped when the configuration is retrieved even when
+	they are the same as the default value.
+	(Gitlab #2222)
+
+1982.	[bug]		andrei
 	The config for an HA peer now accepts an IPv6 address as a valid
 	value for the "url" entry.
-	(Gitlab #2302)
+	(Gitlab #2264)
 
-Kea 2.0.1 (stable) released on December 15, 2021
+1981.	[func]		tomek
+	The default-url DHCPv4 option has been replaced with
+	v4-captive-portal, as defined in RFC8910.
+	(Gitlab #1684)
 
-1954.	[build]		razvan
-	Library version numbers bumped for Kea 2.0.1 stable version.
-	(Gitlab #2234)
+1980.	[func]*		andrei
+	The kea-admin lease-dump command now outputs a CSV file that is
+	compatible with the memfile backend. This is useful when
+	migrating from database to memfile. The generated output is
+	backwards incompatible. Any tools that depend on it would need
+	to adapt.
+	(Gitlab #2038)
 
-1953.	[func]		razvan, fdupont
-	Finish the GSS-TSIG hook library implementation.
-	(Gitlab #2228, #2122, #2173, #2175, #2177, #2138, #2174, #2121,
-	#2127, #2170, #2128, #2082, #2088, #2125, #2124, #2129, #2113,
-	#2089, #2056, #2120, #2095, #2092, #2109, #2114, #2115)
+1979.	[bug]		fdupont
+	Update and delete operations on leases no longer raise
+	an error with infinite valid lifetime (used by BOOTP)
+	and MySQL or PostgreSQL backends where timestamps can
+	be limited to 32 bits.
+	(Gitlab 897)
+
+1978.	[doc]		tomek
+	The Kea Administrator Reference Manual now correctly states that
+	DHCPv6 authentication option has code 11, not 10.
+	(Gitlab #2207)
+
+1977.	[bug]		razvan
+	Use only MAX_HWADDR_LEN (20) bytes from remote-id when extracting
+	the MAC from relay options.
+	(Gitlab #2201)
+
+1976.	[func]		andrei
+	Added hwtype and hwaddr_source columns to v6 memfile.
+	(Gitlab #2236)
+
+1975.	[func]		tmark
+	Additional changes and corrections relating to Config Backend
+	were made to the PostgreSQL database schema.  In addition, the
+	upgrade scripts were renamed to ensure proper file name ordering.
+	Note that PostgreSQL CB is not yet functional.
+	(Gitlab #2183, #2244, #2245)
+
+1974.	[func]		fdupont
+	The global parameter lookup has been refactored to provide better
+	performance. Proper return error code (CONTROL_RESULT_ERROR) has
+	been fixed in some cases when trying to apply the new
+	configuration. Old code was using wrong hardcoded '2' value
+	(CONTROL_RESULT_COMMAND_UNSUPPORTED).
+	(Gitlab #1082)
+
+1973.	[func]		fdupont
+	MySQL backends now can be configured to use the SSL/TLS
+	support to protect connections to the server. New
+	database parameters are "cert-file", "key-file",
+	"trust-anchor" and "cipher-list". The negotiated cipher
+	name is logged so the MySQL service configuration can
+	be checked. PostgreSQL accepts the same parameters
+	but they only trigger the call to the OpenSSL generic
+	initialization in the Pq C-API.
+	(Gitlab #34)
+
+1972.	[func]		andrei
+	Kea servers now can accept trailing commas in file
+	configurations. While parsing, a warning is printed with the
+	location of the comma to give the user the ability to correct
+	a mistake.
+	(Gitlab #2084)
+
+1971.	[func]		tmark, jad
+	Added support for embedded DHCPv6 DUIDs within DHCPv4
+	Client Identifier options per RFC 4361.  This allows
+	Kea to support DDNS in dual stack environments per
+	RFC 4703(Sec 5.2). Thanks to John Dickinson for
+	contributing the patch!
+	(Gitlab #1934)
+
+Kea 2.1.1 (development) released on Nov 24, 2021
+
+1970.	[build]		razvan
+	Library version numbers bumped for Kea 2.1.1 development
+	version.
+	(Gitlab #2195)
+
+1969.	[build]		andrei
+	Fixed "make check -j N" running tests in parallel in src/lib/log.
+	(Gitlab #2172)
+
+1968.	[build]		andrei
+	Fixed make check failing when googletest support was disabled.
+	(Gitlab #2167)
+
+1967.	[bug]		andrei
+	Fixed a bug where keactrl did not color the active status code
+	for kea-dhcp-ddns as it did for the other servers.
+	(Gitlab #2117)
+
+1966.	[func]		djt
+	Allow Kea to pack opaque data tuples within options with zero
+	length to accommodate some DHCP clients who have been observed
+	to send DHCPv4 option 124 with zero length tuples.
+	(Gitlab #2021)
+
+1965.	[func]		andrei
+	Increase the value that "maxsize" can take from 2GB to 2PB.
+	(Gitlab #2130)
+
+1964.	[func]		wlodek
+	Added support for Debian 11 in hammer.py.
+	(Gitlab #2042, #2193)
+
+1963.	[func]		andrei
+	hammer.py has had several improvements.
+	NETCONF and PostgreSQL will be properly configured when running
+	prepare-system on Fedora and FreeBSD.
+	vagrant will be automatically upgraded if it is too outdated.
+	Error messages are more clear when running on unsupported
+	systems.
+	hammer.py is now able to detect Arch Linux distributions and
+	offers limited support for it, being able to prepare-system with
+	freeradius and netconf support.
+	(Gitlab #2111, #2112)
+
+1962.	[func]		andrei
+	kea-netconf updates: fixed store-extended-info, it was an
+	operational node instead of a config node. Added several
+	containers and leaves: compatibility, lenient-option-parsing,
+	multi-threading, enable-multi-threading, packet-queue-size,
+	thread-pool-size, valid-lifetime, min-valid-lifetime,
+	max-valid-lifetime, preferred-lifetime, min-preferred-lifetime,
+	max-preferred-lifetime, cache-max-age, cache-threshold,
+	ddns-generated-prefix, ddns-override-client-update,
+	ddns-override-no-update, ddns-qualifying-suffix,
+	ddns-replace-client-name, ddns-send-updates,
+	ddns-update-on-renew, ddns-use-conflict-resolution,
+	ip-reservations-unique, parked-packet-limit, reservations-global,
+	reservations-in-subnet, reservations-out-of-pool,
+	statistic-default-sample-age, statistic-default-sample-count,
+	store-extended-info, on-fail.
+	(Gitlab #2136)
+
+1961.	[func]		tomek, tmark
+	The initial, stubbed version of the PostgreSQL CB hook
+	library has been created.  The library is not yet functional
+	and does not installed.
+	(Gitlab #1848)
+
+1960.	[build]		andrei
+	Froze sphinx dependency versions used to build documentation.
+	Added the update-python-dependencies Makefile rule to bump the
+	versions.
+	(Gitlab #2161)
+
+1959.	[doc]		djt
+	Move documentation for acceptable format strings into the Kea
+	ARM. The relevant section of the ARM was previously referring
+	to a dead link in the Log4cpp documentation.
+	(Gitlab #2134)
+
+1958.	[func]		tomek, tmark
+	PostgreSQL database schema has been extended with tables for
+	Config Backend (CB). This is the first step towards PostgreSQL
+	CB. However, as there is no code yet to use those new tables,
+	they're not not functional yet.
+	(Gitlab #90, #2166)
+
+Kea 2.1.0 (development) released on Oct 27, 2021
+
+1957.	[build]		razvan
+	Library version numbers bumped for Kea 2.1.0 development
+	version.
+	(Gitlab #2141)
+
+1956.	[bug]		tmark
+	Modified stat_cmds hook library to omit statistics
+	for non-existent subnets from results returned by
+	stat-lease4-get and stat-lease6-get commands.
+	(Gitlab #2033)
+
+1955.	[bug]		tmark
+	kea-dhcp4 no longer sends DHCPNAKs in response to
+	DHCPREQUESTs for addresses for which it has no knowledge.
+	(Gitlab #1584)
+
+1954.	[doc]		fdupont
+	Updated the Developer's Guide to explain what to do when
+	GSS-TSIG hook unit tests fail from a system Kerberos
+	incompatible configuration.
+	(Gitlab #2056)
+
+1953.	[build]		fdupont
+	Changed the name of the GSS-TSIG hook library object to
+	libddns_gss_tsig.so.
+	(Gitlab #2115)
 
 Kea 2.0.0 (stable) released on September 29, 2021
 

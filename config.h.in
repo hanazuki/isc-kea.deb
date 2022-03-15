@@ -123,6 +123,9 @@
 /* PostgreSQL is present */
 #undef HAVE_PGSQL
 
+/* PostgreSQL was built with OpenSSL support */
+#undef HAVE_PGSQL_SSL
+
 /* Define to 1 if you have the `pselect' function. */
 #undef HAVE_PSELECT
 

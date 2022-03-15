@@ -53,14 +53,14 @@ The following is the directory layout of the complete Kea installation.
 Build Requirements
 ==================
 
-In addition to the run-time requirements (listed in
+In addition to the runtime requirements (listed in
 :ref:`required-software`), building Kea from source code requires
 various development include headers and program development tools.
 
 .. note::
 
    Some operating systems have split their distribution packages into a
-   run-time and a development package. The
+   runtime and a development package. The
    development package versions, which include header files and
    libraries, must be installed to build Kea from the source code.
 
@@ -374,8 +374,6 @@ relevant linker cache configuration file for the OS):
 
    $ ldconfig
 
-..
-
 .. note::
 
    If ``ldconfig`` is not run where required, users may see
@@ -631,15 +629,14 @@ and 1548). Be sure to replace ``ens4`` with the specific interface name.
 Deprecated Features
 ===================
 
-This section lists significant features that have been or will be removed. We try to 
+This section lists significant features that have been or will be removed. We try to
 deprecate features before removing them to signal
 to current users to plan a migration. New users should not rely on deprecated features.
 
 Cassandra (CQL) Support
 -----------------------
 
-Cassandra is a non-relational NoSQL database. Kea added support for the CQL lease backend in
-Kea 1.1.0-beta1 and the CQL host backend in 1.4.0-beta1. This feature never gained much
+Cassandra is a non-relational NoSQL database. This feature never gained much
 traction with users, particularly compared to the level of interest in and deployments of
 the alternatives, MySQL and PostgreSQL.
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -160,8 +160,7 @@ SimpleRemoveTransaction::selectingFwdServerHandler() {
     if (selectNextServer()) {
         // We have a server to try.
         transition(REMOVING_FWD_RRS_ST, SERVER_SELECTED_EVT);
-    }
-    else {
+    } else {
         // Server list is exhausted, so fail the transaction.
         transition(PROCESS_TRANS_FAILED_ST, NO_MORE_SERVERS_EVT);
     }
@@ -305,8 +304,7 @@ SimpleRemoveTransaction::selectingRevServerHandler() {
     if (selectNextServer()) {
         // We have a server to try.
         transition(REMOVING_REV_PTRS_ST, SERVER_SELECTED_EVT);
-    }
-    else {
+    } else {
         // Server list is exhausted, so fail the transaction.
         transition(PROCESS_TRANS_FAILED_ST, NO_MORE_SERVERS_EVT);
     }

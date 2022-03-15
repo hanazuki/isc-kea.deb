@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "KEA-SHELL" "8" "Feb 27, 2022" "2.0.2" "Kea"
+.TH "KEA-SHELL" "8" "Feb 21, 2022" "2.1.3" "Kea"
 .SH NAME
 kea-shell \- Text client for Control Agent process
 .
@@ -36,11 +36,11 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .SH DESCRIPTION
 .sp
 The \fBkea\-shell\fP provides a REST client for the Kea Control Agent (CA).
-It takes command as a command\-line parameter that is being sent to CA
+It takes commands as a command\-line parameter that is sent to the CA
 with proper JSON encapsulation. Optional arguments may be specified on
 the standard input. The request is sent via HTTP and a response is
 retrieved, displayed on the standard output. Basic HTTP authentication
-and HTTPS i.e. TLS transport are supported.
+and HTTPS, i.e. TLS transport, are supported.
 .SH ARGUMENTS
 .sp
 The arguments are as follows:
@@ -53,7 +53,7 @@ Displays help regarding command\-line parameters.
 Displays the version.
 .TP
 .B \fB\-\-host\fP
-Specifies the host to connect to. Control Agent must be running at the
+Specifies the host to connect to. The Control Agent must be running at the
 specified host. If not specified, 127.0.0.1 is used.
 .TP
 .B \fB\-\-port\fP
@@ -67,37 +67,36 @@ parameter is useful only with a reverse proxy.
 .TP
 .B \fB\-\-ca\fP
 Specifies the file or directory name of the Certification Authority.
-If not specified HTTPS is not used.
+If not specified, HTTPS is not used.
 .TP
 .B \fB\-\-cert\fP
 Specifies the file name of the user end\-entity public key certificate.
-If specified the file name of the user key must be specified too.
+If specified, the file name of the user key must also be specified.
 .TP
 .B \fB\-\-key\fP
-Specifies the file name of the user key file. If specified the file
-name of the user certificate must be specified too. Note that
-encrypted key files are not supported.
+Specifies the file name of the user key file. If specified, the file
+name of the user certificate must also be specified.
+Encrypted key files are not supported.
 .TP
 .B \fB\-\-auth\-user\fP
-Specifies the user id for basic HTTP authentication. If not specified
-or specified as the empty string authentication is not used.
+Specifies the user ID for basic HTTP authentication. If not specified,
+or specified as the empty string, authentication is not used.
 .TP
 .B \fB\-\-auth\-password\fP
 Specifies the password for basic HTTP authentication. If not specified
-but the user id is specified an empty password is used.
+but the user ID is specified, an empty password is used.
 .TP
 .B \fB\-\-timeout\fP
-Specifies the connection timeout in seconds. If not specified, 10
-(seconds) is used.
+Specifies the connection timeout, in seconds. The default is 10.
 .TP
 .B \fB\-\-service\fP
 Specifies the service that is the target of a command. If not
-specified, Control Agent will be targeted. May be used more than once
+specified, the Control Agent itself is targeted. May be used more than once
 to specify multiple targets.
 .TP
 .B \fBcommand\fP
-Specifies the command to be sent to CA. If not specified,
-"list\-commands" is used.
+Specifies the command to be sent to the CA. If not specified,
+\fBlist\-commands\fP is used.
 .UNINDENT
 .SH DOCUMENTATION
 .sp
@@ -110,8 +109,8 @@ available in various formats (.txt, .html, .pdf) with the Kea
 distribution. The Kea documentation is available at
 \fI\%https://kea.readthedocs.io\fP\&.
 .sp
-Kea source code is documented in the Kea Developer\(aqs Guide. Its online
-version is available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
+Kea source code is documented in the Kea Developer\(aqs Guide,
+available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
 .sp
 The Kea project website is available at \fI\%https://kea.isc.org\fP\&.
 .SH MAILING LISTS AND SUPPORT

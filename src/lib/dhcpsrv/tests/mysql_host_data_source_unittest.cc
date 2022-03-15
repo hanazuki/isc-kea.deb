@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1501,7 +1501,12 @@ MySQLHostMgrTest::SetUp() {
 
 void
 MySQLHostMgrTest::TearDown() {
-    HostMgr::instance().getHostDataSource()->rollback();
+    try {
+        HostMgr::instance().getHostDataSource()->rollback();
+    } catch(...) {
+        // we don't care if we aren't in a transaction.
+    }
+
     HostMgr::delBackend("mysql");
     // If data wipe enabled, delete transient data otherwise destroy the schema
     db::test::destroyMySQLSchema();

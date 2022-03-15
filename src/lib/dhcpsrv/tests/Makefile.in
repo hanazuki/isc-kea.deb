@@ -209,9 +209,8 @@ am__libdhcpsrv_unittests_SOURCES_DIST = run_unittests.cc \
 	shared_network_unittest.cc \
 	shared_networks_list_parser_unittest.cc srv_config_unittest.cc \
 	subnet_unittest.cc test_get_callout_handle.cc \
-	test_get_callout_handle.h triplet_unittest.cc \
-	timer_mgr_unittest.cc network_state_unittest.cc \
-	network_unittest.cc
+	test_get_callout_handle.h timer_mgr_unittest.cc \
+	network_state_unittest.cc network_unittest.cc
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__objects_1 = libdhcpsrv_unittests-mysql_lease_mgr_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@	libdhcpsrv_unittests-mysql_host_data_source_unittest.$(OBJEXT)
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__objects_2 = libdhcpsrv_unittests-pgsql_lease_mgr_unittest.$(OBJEXT) \
@@ -283,7 +282,6 @@ am__libdhcpsrv_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-srv_config_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-subnet_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-test_get_callout_handle.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	libdhcpsrv_unittests-triplet_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-timer_mgr_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-network_state_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libdhcpsrv_unittests-network_unittest.$(OBJEXT)
@@ -406,8 +404,7 @@ am__depfiles_remade = ./$(DEPDIR)/libco1_la-callout_library.Plo \
 	./$(DEPDIR)/libdhcpsrv_unittests-srv_config_unittest.Po \
 	./$(DEPDIR)/libdhcpsrv_unittests-subnet_unittest.Po \
 	./$(DEPDIR)/libdhcpsrv_unittests-test_get_callout_handle.Po \
-	./$(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Po \
-	./$(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Po
+	./$(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Po
 am__mv = mv -f
 CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
@@ -840,7 +837,7 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	shared_networks_list_parser_unittest.cc \
 @HAVE_GTEST_TRUE@	srv_config_unittest.cc subnet_unittest.cc \
 @HAVE_GTEST_TRUE@	test_get_callout_handle.cc \
-@HAVE_GTEST_TRUE@	test_get_callout_handle.h triplet_unittest.cc \
+@HAVE_GTEST_TRUE@	test_get_callout_handle.h \
 @HAVE_GTEST_TRUE@	timer_mgr_unittest.cc \
 @HAVE_GTEST_TRUE@	network_state_unittest.cc network_unittest.cc
 @HAVE_GTEST_TRUE@libdhcpsrv_unittests_CPPFLAGS = $(AM_CPPFLAGS) \
@@ -1025,7 +1022,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-subnet_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-test_get_callout_handle.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Po@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -2027,20 +2023,6 @@ libdhcpsrv_unittests-test_get_callout_handle.obj: test_get_callout_handle.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-test_get_callout_handle.obj `if test -f 'test_get_callout_handle.cc'; then $(CYGPATH_W) 'test_get_callout_handle.cc'; else $(CYGPATH_W) '$(srcdir)/test_get_callout_handle.cc'; fi`
 
-libdhcpsrv_unittests-triplet_unittest.o: triplet_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-triplet_unittest.o -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Tpo -c -o libdhcpsrv_unittests-triplet_unittest.o `test -f 'triplet_unittest.cc' || echo '$(srcdir)/'`triplet_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Tpo $(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='triplet_unittest.cc' object='libdhcpsrv_unittests-triplet_unittest.o' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-triplet_unittest.o `test -f 'triplet_unittest.cc' || echo '$(srcdir)/'`triplet_unittest.cc
-
-libdhcpsrv_unittests-triplet_unittest.obj: triplet_unittest.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-triplet_unittest.obj -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Tpo -c -o libdhcpsrv_unittests-triplet_unittest.obj `if test -f 'triplet_unittest.cc'; then $(CYGPATH_W) 'triplet_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/triplet_unittest.cc'; fi`
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Tpo $(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Po
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='triplet_unittest.cc' object='libdhcpsrv_unittests-triplet_unittest.obj' libtool=no @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrv_unittests-triplet_unittest.obj `if test -f 'triplet_unittest.cc'; then $(CYGPATH_W) 'triplet_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/triplet_unittest.cc'; fi`
-
 libdhcpsrv_unittests-timer_mgr_unittest.o: timer_mgr_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrv_unittests_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrv_unittests_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrv_unittests-timer_mgr_unittest.o -MD -MP -MF $(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Tpo -c -o libdhcpsrv_unittests-timer_mgr_unittest.o `test -f 'timer_mgr_unittest.cc' || echo '$(srcdir)/'`timer_mgr_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Tpo $(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Po
@@ -2457,7 +2439,6 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-subnet_unittest.Po
 	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-test_get_callout_handle.Po
 	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Po
-	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -2577,7 +2558,6 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-subnet_unittest.Po
 	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-test_get_callout_handle.Po
 	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-timer_mgr_unittest.Po
-	-rm -f ./$(DEPDIR)/libdhcpsrv_unittests-triplet_unittest.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 

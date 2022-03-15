@@ -110,12 +110,14 @@ am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 DIST_COMMON = $(srcdir)/Makefile.am $(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
-CONFIG_CLEAN_FILES = upgrade_1.0_to_2.0.sh upgrade_2.0_to_3.0.sh \
-	upgrade_3.0_to_3.1.sh upgrade_3.1_to_3.2.sh \
-	upgrade_3.2_to_3.3.sh upgrade_3.3_to_4.0.sh \
-	upgrade_4.0_to_5.0.sh upgrade_5.0_to_5.1.sh \
-	upgrade_5.1_to_6.0.sh upgrade_6.0_to_6.1.sh \
-	upgrade_6.1_to_6.2.sh wipe_data.sh
+CONFIG_CLEAN_FILES = upgrade_001.0_to_002.0.sh \
+	upgrade_002.0_to_003.0.sh upgrade_003.0_to_003.1.sh \
+	upgrade_003.1_to_003.2.sh upgrade_003.2_to_003.3.sh \
+	upgrade_003.3_to_004.0.sh upgrade_004.0_to_005.0.sh \
+	upgrade_005.0_to_005.1.sh upgrade_005.1_to_006.0.sh \
+	upgrade_006.0_to_006.1.sh upgrade_006.1_to_006.2.sh \
+	upgrade_006.2_to_007.0.sh upgrade_007_to_008.sh \
+	upgrade_008_to_009.sh wipe_data.sh
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
@@ -203,17 +205,20 @@ ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = $(SUBDIRS)
 am__DIST_COMMON = $(srcdir)/Makefile.in \
-	$(srcdir)/upgrade_1.0_to_2.0.sh.in \
-	$(srcdir)/upgrade_2.0_to_3.0.sh.in \
-	$(srcdir)/upgrade_3.0_to_3.1.sh.in \
-	$(srcdir)/upgrade_3.1_to_3.2.sh.in \
-	$(srcdir)/upgrade_3.2_to_3.3.sh.in \
-	$(srcdir)/upgrade_3.3_to_4.0.sh.in \
-	$(srcdir)/upgrade_4.0_to_5.0.sh.in \
-	$(srcdir)/upgrade_5.0_to_5.1.sh.in \
-	$(srcdir)/upgrade_5.1_to_6.0.sh.in \
-	$(srcdir)/upgrade_6.0_to_6.1.sh.in \
-	$(srcdir)/upgrade_6.1_to_6.2.sh.in $(srcdir)/wipe_data.sh.in
+	$(srcdir)/upgrade_001.0_to_002.0.sh.in \
+	$(srcdir)/upgrade_002.0_to_003.0.sh.in \
+	$(srcdir)/upgrade_003.0_to_003.1.sh.in \
+	$(srcdir)/upgrade_003.1_to_003.2.sh.in \
+	$(srcdir)/upgrade_003.2_to_003.3.sh.in \
+	$(srcdir)/upgrade_003.3_to_004.0.sh.in \
+	$(srcdir)/upgrade_004.0_to_005.0.sh.in \
+	$(srcdir)/upgrade_005.0_to_005.1.sh.in \
+	$(srcdir)/upgrade_005.1_to_006.0.sh.in \
+	$(srcdir)/upgrade_006.0_to_006.1.sh.in \
+	$(srcdir)/upgrade_006.1_to_006.2.sh.in \
+	$(srcdir)/upgrade_006.2_to_007.0.sh.in \
+	$(srcdir)/upgrade_007_to_008.sh.in \
+	$(srcdir)/upgrade_008_to_009.sh.in $(srcdir)/wipe_data.sh.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -446,12 +451,13 @@ pgsqldir = ${datarootdir}/${PACKAGE_NAME}/scripts/pgsql
 pgsql_DATA = dhcpdb_create.pgsql dhcpdb_drop.pgsql
 
 # executable
-pgsql_SCRIPTS = upgrade_1.0_to_2.0.sh upgrade_2.0_to_3.0.sh \
-	upgrade_3.0_to_3.1.sh upgrade_3.1_to_3.2.sh \
-	upgrade_3.2_to_3.3.sh upgrade_3.3_to_4.0.sh \
-	upgrade_4.0_to_5.0.sh upgrade_5.0_to_5.1.sh \
-	upgrade_5.1_to_6.0.sh upgrade_6.0_to_6.1.sh \
-	upgrade_6.1_to_6.2.sh wipe_data.sh
+pgsql_SCRIPTS = upgrade_001.0_to_002.0.sh upgrade_002.0_to_003.0.sh \
+	upgrade_003.0_to_003.1.sh upgrade_003.1_to_003.2.sh \
+	upgrade_003.2_to_003.3.sh upgrade_003.3_to_004.0.sh \
+	upgrade_004.0_to_005.0.sh upgrade_005.0_to_005.1.sh \
+	upgrade_005.1_to_006.0.sh upgrade_006.0_to_006.1.sh \
+	upgrade_006.1_to_006.2.sh upgrade_006.2_to_007.0.sh \
+	upgrade_007_to_008.sh upgrade_008_to_009.sh wipe_data.sh
 DISTCLEANFILES = ${pgsql_SCRIPTS}
 EXTRA_DIST = ${pgsql_DATA}
 all: all-recursive
@@ -486,27 +492,33 @@ $(top_srcdir)/configure:  $(am__configure_deps)
 $(ACLOCAL_M4):  $(am__aclocal_m4_deps)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
 $(am__aclocal_m4_deps):
-upgrade_1.0_to_2.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_1.0_to_2.0.sh.in
+upgrade_001.0_to_002.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_001.0_to_002.0.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_2.0_to_3.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_2.0_to_3.0.sh.in
+upgrade_002.0_to_003.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_002.0_to_003.0.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_3.0_to_3.1.sh: $(top_builddir)/config.status $(srcdir)/upgrade_3.0_to_3.1.sh.in
+upgrade_003.0_to_003.1.sh: $(top_builddir)/config.status $(srcdir)/upgrade_003.0_to_003.1.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_3.1_to_3.2.sh: $(top_builddir)/config.status $(srcdir)/upgrade_3.1_to_3.2.sh.in
+upgrade_003.1_to_003.2.sh: $(top_builddir)/config.status $(srcdir)/upgrade_003.1_to_003.2.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_3.2_to_3.3.sh: $(top_builddir)/config.status $(srcdir)/upgrade_3.2_to_3.3.sh.in
+upgrade_003.2_to_003.3.sh: $(top_builddir)/config.status $(srcdir)/upgrade_003.2_to_003.3.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_3.3_to_4.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_3.3_to_4.0.sh.in
+upgrade_003.3_to_004.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_003.3_to_004.0.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_4.0_to_5.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_4.0_to_5.0.sh.in
+upgrade_004.0_to_005.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_004.0_to_005.0.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_5.0_to_5.1.sh: $(top_builddir)/config.status $(srcdir)/upgrade_5.0_to_5.1.sh.in
+upgrade_005.0_to_005.1.sh: $(top_builddir)/config.status $(srcdir)/upgrade_005.0_to_005.1.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_5.1_to_6.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_5.1_to_6.0.sh.in
+upgrade_005.1_to_006.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_005.1_to_006.0.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_6.0_to_6.1.sh: $(top_builddir)/config.status $(srcdir)/upgrade_6.0_to_6.1.sh.in
+upgrade_006.0_to_006.1.sh: $(top_builddir)/config.status $(srcdir)/upgrade_006.0_to_006.1.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
-upgrade_6.1_to_6.2.sh: $(top_builddir)/config.status $(srcdir)/upgrade_6.1_to_6.2.sh.in
+upgrade_006.1_to_006.2.sh: $(top_builddir)/config.status $(srcdir)/upgrade_006.1_to_006.2.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+upgrade_006.2_to_007.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_006.2_to_007.0.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+upgrade_007_to_008.sh: $(top_builddir)/config.status $(srcdir)/upgrade_007_to_008.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+upgrade_008_to_009.sh: $(top_builddir)/config.status $(srcdir)/upgrade_008_to_009.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 wipe_data.sh: $(top_builddir)/config.status $(srcdir)/wipe_data.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@

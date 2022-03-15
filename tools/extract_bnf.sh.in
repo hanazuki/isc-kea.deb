@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -31,9 +31,8 @@ fi
 # Get the output file
 base=$1
 output=
-now=$(date +"%Y-%m-%-d %H:%m")
 
-header="Grammar generated on $now. See Chapter $md_name for an explanation."
+header="This grammar is generated from \`\`$(basename "${base}").yy\`\`. See ${md_name} for more details."
 
 if [ -f "${base}.yy" ]; then
     # We want to explicitly set the language to English. Otherwise
@@ -78,7 +77,6 @@ cat -s > $output.2
 
 if [ "$markdown" -eq 1 ]; then
     cat > $output.3 << EOF
-
 $header
 
 .. code-block:: BNF

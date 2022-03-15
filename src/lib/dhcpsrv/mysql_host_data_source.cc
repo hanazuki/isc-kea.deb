@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -2801,6 +2801,18 @@ MySqlHostDataSourceImpl::createContext() const {
 
     // Open the database.
     ctx->conn_.openDatabase();
+
+    // Check if we have TLS when we required it.
+    if (ctx->conn_.getTls()) {
+        std::string cipher = ctx->conn_.getTlsCipher();
+        if (cipher.empty()) {
+            LOG_ERROR(dhcpsrv_logger, DHCPSRV_MYSQL_NO_TLS);
+        } else {
+            LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE,
+                      DHCPSRV_MYSQL_TLS_CIPHER)
+                .arg(cipher);
+        }
+    }
 
     // Prepare query statements. Those are will be only used to retrieve
     // information from the database, so they can be used even if the

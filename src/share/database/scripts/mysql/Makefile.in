@@ -121,7 +121,7 @@ CONFIG_CLEAN_FILES = upgrade_001.0_to_002.0.sh \
 	upgrade_009.2_to_009.3.sh upgrade_009.3_to_009.4.sh \
 	upgrade_009.4_to_009.5.sh upgrade_009.5_to_009.6.sh \
 	upgrade_009.6_to_010.0.sh upgrade_010_to_011.sh \
-	upgrade_011_to_012.sh wipe_data.sh
+	upgrade_011_to_012.sh upgrade_012_to_013.sh wipe_data.sh
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
@@ -230,7 +230,8 @@ am__DIST_COMMON = $(srcdir)/Makefile.in \
 	$(srcdir)/upgrade_009.5_to_009.6.sh.in \
 	$(srcdir)/upgrade_009.6_to_010.0.sh.in \
 	$(srcdir)/upgrade_010_to_011.sh.in \
-	$(srcdir)/upgrade_011_to_012.sh.in $(srcdir)/wipe_data.sh.in
+	$(srcdir)/upgrade_011_to_012.sh.in \
+	$(srcdir)/upgrade_012_to_013.sh.in $(srcdir)/wipe_data.sh.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -473,7 +474,8 @@ mysql_SCRIPTS = upgrade_001.0_to_002.0.sh upgrade_002.0_to_003.0.sh \
 	upgrade_009.1_to_009.2.sh upgrade_009.2_to_009.3.sh \
 	upgrade_009.3_to_009.4.sh upgrade_009.4_to_009.5.sh \
 	upgrade_009.5_to_009.6.sh upgrade_009.6_to_010.0.sh \
-	upgrade_010_to_011.sh upgrade_011_to_012.sh wipe_data.sh
+	upgrade_010_to_011.sh upgrade_011_to_012.sh \
+	upgrade_012_to_013.sh wipe_data.sh
 DISTCLEANFILES = ${mysql_SCRIPTS}
 EXTRA_DIST = ${mysql_DATA}
 all: all-recursive
@@ -551,6 +553,8 @@ upgrade_009.6_to_010.0.sh: $(top_builddir)/config.status $(srcdir)/upgrade_009.6
 upgrade_010_to_011.sh: $(top_builddir)/config.status $(srcdir)/upgrade_010_to_011.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 upgrade_011_to_012.sh: $(top_builddir)/config.status $(srcdir)/upgrade_011_to_012.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+upgrade_012_to_013.sh: $(top_builddir)/config.status $(srcdir)/upgrade_012_to_013.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 wipe_data.sh: $(top_builddir)/config.status $(srcdir)/wipe_data.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@

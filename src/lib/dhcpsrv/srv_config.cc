@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -46,9 +46,8 @@ SrvConfig::SrvConfig()
       class_dictionary_(new ClientClassDictionary()),
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
       d2_client_config_(new D2ClientConfig()),
-      configured_globals_(Element::createMap()),
-      cfg_consist_(new CfgConsistency()),
-      lenient_option_parsing_(false) {
+      configured_globals_(new CfgGlobals()), cfg_consist_(new CfgConsistency()),
+      lenient_option_parsing_(false), reservations_lookup_first_(false) {
 }
 
 SrvConfig::SrvConfig(const uint32_t sequence)
@@ -65,9 +64,8 @@ SrvConfig::SrvConfig(const uint32_t sequence)
       class_dictionary_(new ClientClassDictionary()),
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
       d2_client_config_(new D2ClientConfig()),
-      configured_globals_(Element::createMap()),
-      cfg_consist_(new CfgConsistency()),
-      lenient_option_parsing_(false) {
+      configured_globals_(new CfgGlobals()), cfg_consist_(new CfgConsistency()),
+      lenient_option_parsing_(false), reservations_lookup_first_(false) {
 }
 
 std::string
@@ -132,8 +130,7 @@ SrvConfig::copy(SrvConfig& new_config) const {
     // Replace configured hooks libraries.
     new_config.hooks_config_.clear();
     using namespace isc::hooks;
-    for (HookLibsCollection::const_iterator it =
-           hooks_config_.get().begin();
+    for (HookLibsCollection::const_iterator it = hooks_config_.get().begin();
          it != hooks_config_.get().end(); ++it) {
         new_config.hooks_config_.add(it->first, it->second);
     }
@@ -233,26 +230,25 @@ SrvConfig::merge6(SrvConfig& other) {
 void
 SrvConfig::mergeGlobals(SrvConfig& other) {
     auto config_set = getConfiguredGlobals();
-    ElementPtr mutable_cfg = boost::const_pointer_cast<Element>(config_set);
     // If the deprecated reservation-mode is found in database, overwrite other
     // reservation flags so there is no conflict when merging to new flags.
-    if (other.getConfiguredGlobals()->find("reservation-mode")) {
-        mutable_cfg->remove("reservations-global");
-        mutable_cfg->remove("reservations-in-subnet");
-        mutable_cfg->remove("reservations-out-of-pool");
+    if (other.getConfiguredGlobal(CfgGlobals::RESERVATION_MODE)) {
+        config_set->set(CfgGlobals::RESERVATIONS_GLOBAL, ConstElementPtr());
+        config_set->set(CfgGlobals::RESERVATIONS_IN_SUBNET, ConstElementPtr());
+        config_set->set(CfgGlobals::RESERVATIONS_OUT_OF_POOL, ConstElementPtr());
     }
     // Iterate over the "other" globals, adding/overwriting them into
     // this config's list of globals.
-    for (auto other_global : other.getConfiguredGlobals()->mapValue()) {
+    for (auto other_global : other.getConfiguredGlobals()->valuesMap()) {
         addConfiguredGlobal(other_global.first, other_global.second);
     }
 
     // Merge the reservation-mode to new reservation flags.
-    BaseNetworkParser::moveReservationMode(mutable_cfg);
+    BaseNetworkParser::moveReservationMode(config_set);
 
     // A handful of values are stored as members in SrvConfig. So we'll
     // iterate over the merged globals, setting appropriate members.
-    for (auto merged_global : config_set->mapValue()) {
+    for (auto merged_global : getConfiguredGlobals()->valuesMap()) {
         std::string name = merged_global.first;
         ConstElementPtr element = merged_global.second;
         try {
@@ -268,6 +264,8 @@ SrvConfig::mergeGlobals(SrvConfig& other) {
                 setServerTag(element->stringValue());
             } else if (name == "ip-reservations-unique") {
                 setIPReservationsUnique(element->boolValue());
+            } else if (name == "reservations-lookup-first") {
+                setReservationsLookupFirst(element->boolValue());
             }
         } catch(const std::exception& ex) {
             isc_throw (BadValue, "Invalid value:" << element->str()
@@ -322,21 +320,6 @@ SrvConfig::updateStatistics() {
     }
 }
 
-isc::data::ConstElementPtr
-SrvConfig::getConfiguredGlobal(std::string name) const {
-    isc::data::ConstElementPtr global;
-    if (configured_globals_->contains(name)) {
-        global = configured_globals_->get(name);
-    }
-
-    return (global);
-}
-
-void
-SrvConfig::clearConfiguredGlobals() {
-    configured_globals_ = isc::data::Element::createMap();
-}
-
 void
 SrvConfig::applyDefaultsConfiguredGlobals(const SimpleDefaults& defaults) {
     // Code from SimpleParser::setDefaults
@@ -344,14 +327,13 @@ SrvConfig::applyDefaultsConfiguredGlobals(const SimpleDefaults& defaults) {
     // we're inserting here are not present in whatever the config file
     // came from, we need to make sure it's clearly labeled as default.
     const Element::Position pos("<default-value>", 0, 0);
-    ConstElementPtr globals = getConfiguredGlobals();
 
     // Let's go over all parameters we have defaults for.
     for (auto def_value : defaults) {
 
         // Try if such a parameter is there. If it is, let's
         // skip it, because user knows best *cough*.
-        ConstElementPtr x = globals->get(def_value.name_);
+        ConstElementPtr x = getConfiguredGlobal(def_value.name_);
         if (x) {
             // There is such a value already, skip it.
             continue;
@@ -614,16 +596,27 @@ SrvConfig::sanityChecksLifetime(const SrvConfig& target_config,
 
 ElementPtr
 SrvConfig::toElement() const {
-    // Toplevel map
+    // Top level map
     ElementPtr result = Element::createMap();
 
     // Get family for the configuration manager
     uint16_t family = CfgMgr::instance().getFamily();
-    // DhcpX global map
-    ElementPtr dhcp = ConfigBase::toElement();
 
-    // Add in explicitly configured globals.
-    dhcp->setValue(configured_globals_->mapValue());
+    // DhcpX global map initialized from configured globals
+    ElementPtr dhcp = configured_globals_->toElement();
+
+    auto loggers_info = getLoggingInfo();
+    // Was in the Logging global map.
+    if (!loggers_info.empty()) {
+        // Set loggers list
+        ElementPtr loggers = Element::createList();
+        for (LoggingInfoStorage::const_iterator logger =
+                loggers_info.cbegin();
+             logger != loggers_info.cend(); ++logger) {
+            loggers->add(logger->toElement());
+        }
+        dhcp->set("loggers", loggers);
+    }
 
     // Set user-context
     contextToElement(dhcp);

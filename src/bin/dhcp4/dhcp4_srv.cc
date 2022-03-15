@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -130,7 +130,12 @@ std::set<std::string> dhcp4_statistics = {
     "pkt4-ack-sent",
     "pkt4-nak-sent",
     "pkt4-parse-failed",
-    "pkt4-receive-drop"
+    "pkt4-receive-drop",
+    "v4-allocation-fail",
+    "v4-allocation-fail-shared-network",
+    "v4-allocation-fail-subnet",
+    "v4-allocation-fail-no-pools",
+    "v4-allocation-fail-classes"
 };
 
 } // end of anonymous namespace
@@ -2105,7 +2110,7 @@ Dhcpv4Srv::processHostnameOption(Dhcpv4Exchange& ex) {
     // i.e. DDNS configuration.  If we have a reserved hostname we should
     // use it and send it back.
     if (ctx->currentHost() && !ctx->currentHost()->getHostname().empty()) {
-        // Qualify if there is an a suffix configured.
+        // Qualify if there is a suffix configured.
         std::string hostname = d2_mgr.qualifyName(ctx->currentHost()->getHostname(),
                                                   *(ex.getContext()->getDdnsParams()), false);
         // Convert it to lower case.
@@ -2314,6 +2319,7 @@ Dhcpv4Srv::assignLease(Dhcpv4Exchange& ex) {
     // it should include this hint. That will help us during the actual lease
     // allocation.
     bool fake_allocation = (query->getType() == DHCPDISCOVER);
+    Subnet4Ptr original_subnet = subnet;
 
     // Get client-id. It is not mandatory in DHCPv4.
     ClientIdPtr client_id = ex.getContext()->clientid_;
@@ -2329,7 +2335,6 @@ Dhcpv4Srv::assignLease(Dhcpv4Exchange& ex) {
             .arg(hint.toText());
 
         Lease4Ptr lease;
-        Subnet4Ptr original_subnet = subnet;
 
         // We used to issue a separate query (two actually: one for client-id
         // and another one for hw-addr for) each subnet in the shared network.
@@ -2573,6 +2578,35 @@ Dhcpv4Srv::assignLease(Dhcpv4Exchange& ex) {
     } else {
         // Allocation engine did not allocate a lease. The engine logged
         // cause of that failure.
+        if (ctx->unknown_requested_addr_) {
+            Subnet4Ptr s = original_subnet;
+            // Address might have been rejected via class guard (i.e. not
+            // allowed for this client). We need to determine if we truly
+            // do not know about the address or whether this client just
+            // isn't allowed to have that address. We should only DHCPNAK
+            // For the latter.
+            while (s) {
+                if (s->inPool(Lease::TYPE_V4, hint)) {
+                    break;
+                }
+
+                s = s->getNextSubnet(original_subnet);
+            }
+
+            // If we didn't find a subnet, it's not an address we know about
+            // so we drop the DHCPNAK.
+            if (!s) {
+                LOG_DEBUG(bad_packet4_logger, DBG_DHCP4_DETAIL,
+                          DHCP4_UNKNOWN_ADDRESS_REQUESTED)
+                          .arg(query->getLabel())
+                          .arg(query->getCiaddr().toText())
+                          .arg(opt_requested_address ?
+                          opt_requested_address->readAddress().toText() : "(no address)");
+                ex.deleteResponse();
+                return;
+            }
+        }
+
         LOG_DEBUG(bad_packet4_logger, DBG_DHCP4_DETAIL, fake_allocation ?
                   DHCP4_PACKET_NAK_0003 : DHCP4_PACKET_NAK_0004)
             .arg(query->getLabel())
@@ -2857,9 +2891,9 @@ Dhcpv4Srv::adjustRemoteAddr(Dhcpv4Exchange& ex) {
     } else if (!query->getCiaddr().isV4Zero()) {
         response->setRemoteAddr(query->getCiaddr());
 
-    // We can't unicast the response to the client when sending NAK,
+    // We can't unicast the response to the client when sending DHCPNAK,
     // because we haven't allocated address for him. Therefore,
-    // NAK is broadcast.
+    // DHCPNAK is broadcast.
     } else if (response->getType() == DHCPNAK) {
         response->setRemoteAddr(IOAddress::IPV4_BCAST_ADDRESS());
 
@@ -3661,6 +3695,16 @@ Dhcpv4Srv::acceptServerId(const Pkt4Ptr& query) const {
         return (false);
     }
 
+    // According to RFC5107, the RAI_OPTION_SERVER_ID_OVERRIDE option if
+    // present, should match DHO_DHCP_SERVER_IDENTIFIER option.
+    OptionPtr rai_option = query->getOption(DHO_DHCP_AGENT_OPTIONS);
+    if (rai_option) {
+        OptionPtr rai_suboption = rai_option->getOption(RAI_OPTION_SERVER_ID_OVERRIDE);
+        if (rai_suboption && (server_id.toBytes() == rai_suboption->toBinary())) {
+            return (true);
+        }
+    }
+
     // This function iterates over all interfaces on which the
     // server is listening to find the one which has a socket bound
     // to the address carried in the server identifier option.
@@ -4004,7 +4048,7 @@ Dhcpv4Srv::getVersion(bool extended) {
 #ifdef HAVE_CQL
         tmp << CqlLeaseMgr::getDBVersion() << endl;
 #endif
-        tmp << Memfile_LeaseMgr::getDBVersion();
+        tmp << Memfile_LeaseMgr::getDBVersion(Memfile_LeaseMgr::V4);
 
         // @todo: more details about database runtime
     }

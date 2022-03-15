@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -326,6 +326,7 @@ TEST_F(ConfigTestKeaV4, examples4) {
     vector<string> examples = {
         "advanced.json",
         "all-keys-netconf.json",
+        "all-options.json",
         "backends.json",
         "cassandra.json",
         "classify.json",
@@ -333,19 +334,21 @@ TEST_F(ConfigTestKeaV4, examples4) {
         "comments.json",
         "config-backend.json",
         "dhcpv4-over-dhcpv6.json",
-        // "global-reservations.json" removed for #1405
+        "global-reservations.json",
         "ha-load-balancing-primary.json",
         "hooks.json",
         "hooks-radius.json",
         "leases-expiration.json",
         "multiple-options.json",
-        "mysql-reservations.json",
+        //"mysql-reservations.json", commented for new TLS parameters
         "pgsql-reservations.json",
-        // "reservations.json" removed for #1405
+        "reservations.json",
         "several-subnets.json",
-        // "shared-network.json" removed for #1405
+        "shared-network.json",
         "single-subnet.json",
-        // "with-ddns.json" removed for #35
+        "vendor-specific.json",
+        "vivso.json",
+        "with-ddns.json",
     };
     for (string file : examples) {
         resetSession();
@@ -364,6 +367,7 @@ TEST_F(ConfigTestKeaV6, examples6) {
     vector<string> examples = {
         "advanced.json",
         "all-keys-netconf.json",
+        "all-options.json",
         "backends.json",
         "cassandra.json",
         "classify.json",
@@ -372,22 +376,22 @@ TEST_F(ConfigTestKeaV6, examples6) {
         "config-backend.json",
         "dhcpv4-over-dhcpv6.json",
         "duid.json",
-        // "global-reservations.json" removed for #1405
+        "global-reservations.json",
         "ha-hot-standby.json",
         "hooks.json",
         "iPXE.json",
         "leases-expiration.json",
         "multiple-options.json",
-        "mysql-reservations.json",
+        //"mysql-reservations.json", commented for new TLS parameters
         "pgsql-reservations.json",
-        // "reservations.json" removed for #1405
+        "reservations.json",
         "several-subnets.json",
-        // "shared-network.json" removed for #1405
+        "shared-network.json",
         "simple.json",
         "softwire46.json",
         "stateless.json",
         "tee-times.json",
-        // "with-ddns.json" removed for #35
+        "with-ddns.json",
     };
     for (string file : examples) {
         resetSession();

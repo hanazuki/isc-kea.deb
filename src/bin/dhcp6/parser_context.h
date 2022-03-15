@@ -155,7 +155,7 @@ public:
     /// @note The optional position for an error in a string begins by 1
     /// so the caller should add 1 to the position of the C++ string.
     ///
-    /// @param loc location within the parsed file when experienced a problem.
+    /// @param loc location within the parsed file where the problem was experienced.
     /// @param what string explaining the nature of the error.
     /// @param pos optional position for in string errors.
     /// @throw Dhcp6ParseError
@@ -213,6 +213,21 @@ public:
     /// @throw Dhcp6ParseError
     void unique(const std::string& name,
                 isc::data::Element::Position loc);
+
+    /// @brief Warning handler
+    ///
+    /// @param loc location within the parsed file where the problem was experienced
+    /// @param what string explaining the nature of the error
+    ///
+    /// @throw ParseError
+    void warning(const isc::dhcp::location& loc, const std::string& what);
+
+    /// @brief Warning for extra commas
+    ///
+    /// @param loc location within the parsed file of the extra comma
+    ///
+    /// @throw ParseError
+    void warnAboutExtraCommas(const isc::dhcp::location& loc);
 
     /// @brief Defines syntactic contexts for lexical tie-ins
     typedef enum {

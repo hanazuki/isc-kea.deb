@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,10 +6,12 @@
 
 #include <config.h>
 #include <mysql_cb_impl.h>
+#include <mysql_cb_log.h>
 #include <asiolink/io_address.h>
 #include <config_backend/constants.h>
 #include <dhcp/option_space.h>
 #include <util/buffer.h>
+
 #include <mysql.h>
 #include <mysqld_error.h>
 #include <cstdint>
@@ -19,6 +21,7 @@ using namespace isc::asiolink;
 using namespace isc::cb;
 using namespace isc::data;
 using namespace isc::db;
+using namespace isc::log;
 using namespace isc::util;
 
 namespace isc {
@@ -59,12 +62,24 @@ MySqlConfigBackendImpl(const DatabaseConnection::ParameterMap& parameters,
     if (code_version != db_version) {
         isc_throw(DbOpenError, "MySQL schema version mismatch: need version: "
                   << code_version.first << "." << code_version.second
-                  << " found version:  " << db_version.first << "."
+                  << " found version: " << db_version.first << "."
                   << db_version.second);
     }
 
     // Open the database.
     conn_.openDatabase();
+
+    // Check if we have TLS when we required it.
+    if (conn_.getTls()) {
+        std::string cipher = conn_.getTlsCipher();
+        if (cipher.empty()) {
+            LOG_ERROR(mysql_cb_logger, MYSQL_CB_NO_TLS);
+        } else {
+            LOG_DEBUG(mysql_cb_logger, DBGLVL_TRACE_BASIC,
+                      MYSQL_CB_TLS_CIPHER)
+                .arg(cipher);
+        }
+    }
 }
 
 MySqlConfigBackendImpl::~MySqlConfigBackendImpl() {
@@ -163,7 +178,7 @@ MySqlConfigBackendImpl::createAuditRevision(const int index,
     /// audit entry is when there is a single server tag, i.e. "all" or explicit
     /// server name. In fact, these are the most common two cases.
     std::string tag = ServerTag::ALL;
-    auto tags = server_selector.getTags();
+    auto const& tags = server_selector.getTags();
     if (tags.size() == 1) {
         tag = tags.begin()->get();
     }
@@ -202,9 +217,8 @@ MySqlConfigBackendImpl::getRecentAuditEntries(const int index,
         MySqlBinding::createString(AUDIT_ENTRY_LOG_MESSAGE_BUF_LENGTH) // log_message
     };
 
-    auto tags = server_selector.getTags();
-
-    for (auto tag : tags) {
+    auto const& tags = server_selector.getTags();
+    for (auto const& tag : tags) {
 
         // There are only a few input bindings
         MySqlBindingCollection in_bindings = {
@@ -241,7 +255,7 @@ MySqlConfigBackendImpl::deleteFromTable(const int index,
     // When deleting multiple objects we must not use ANY server.
     if (server_selector.amAny()) {
         isc_throw(InvalidOperation, "deleting multiple objects for ANY server is not"
-                  " supported");
+                                    " supported");
     }
 
     MySqlBindingCollection in_bindings;
@@ -298,6 +312,7 @@ MySqlConfigBackendImpl::getGlobalParameters(const int index,
                 // server_tag
                 ServerTag last_param_server_tag(out_bindings[5]->getString());
                 last_param->setServerTag(last_param_server_tag.get());
+
                 // If we're fetching parameters for a given server (explicit server
                 // tag is provided), it takes precedence over the same parameter
                 // specified for all servers. Therefore, we check if the given
@@ -356,10 +371,10 @@ MySqlConfigBackendImpl::getOptionDef(const int index,
 
 void
 MySqlConfigBackendImpl::getAllOptionDefs(const int index,
-                     const ServerSelector& server_selector,
-                     OptionDefContainer& option_defs) {
-    auto tags = server_selector.getTags();
-    for (auto tag : tags) {
+                                         const ServerSelector& server_selector,
+                                         OptionDefContainer& option_defs) {
+    auto const& tags = server_selector.getTags();
+    for (auto const& tag : tags) {
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(tag.get())
         };
@@ -372,8 +387,8 @@ MySqlConfigBackendImpl::getModifiedOptionDefs(const int index,
                                               const ServerSelector& server_selector,
                                               const boost::posix_time::ptime& modification_time,
                                               OptionDefContainer& option_defs) {
-    auto tags = server_selector.getTags();
-    for (auto tag : tags) {
+    auto const& tags = server_selector.getTags();
+    for (auto const& tag : tags) {
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(tag.get()),
             MySqlBinding::createTimestamp(modification_time)
@@ -483,7 +498,7 @@ MySqlConfigBackendImpl::createUpdateOptionDef(const db::ServerSelector& server_s
 
     if (server_selector.amUnassigned()) {
         isc_throw(NotImplemented, "managing configuration for no particular server"
-                  " (unassigned) is unsupported at the moment");
+                                  " (unassigned) is unsupported at the moment");
     }
 
     auto tag = getServerTag(server_selector, "creating or updating option definition");
@@ -552,7 +567,7 @@ MySqlConfigBackendImpl::getOption(const int index,
 
     if (server_selector.amUnassigned()) {
         isc_throw(NotImplemented, "managing configuration for no particular server"
-                  " (unassigned) is unsupported at the moment");
+                                  " (unassigned) is unsupported at the moment");
     }
 
     auto tag = getServerTag(server_selector, "fetching global option");
@@ -577,8 +592,8 @@ MySqlConfigBackendImpl::getAllOptions(const int index,
                                       const ServerSelector& server_selector) {
     OptionContainer options;
 
-    auto tags = server_selector.getTags();
-    for (auto tag : tags) {
+    auto const& tags = server_selector.getTags();
+    for (auto const& tag : tags) {
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(tag.get())
         };
@@ -595,8 +610,8 @@ MySqlConfigBackendImpl::getModifiedOptions(const int index,
                                            const boost::posix_time::ptime& modification_time) {
     OptionContainer options;
 
-    auto tags = server_selector.getTags();
-    for (auto tag : tags) {
+    auto const& tags = server_selector.getTags();
+    for (auto const& tag : tags) {
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(tag.get()),
             MySqlBinding::createTimestamp(modification_time)
@@ -617,7 +632,7 @@ MySqlConfigBackendImpl::getOption(const int index,
 
     if (server_selector.amUnassigned()) {
         isc_throw(NotImplemented, "managing configuration for no particular server"
-                  " (unassigned) is unsupported at the moment");
+                                  " (unassigned) is unsupported at the moment");
     }
 
     auto tag = getServerTag(server_selector, "fetching subnet level option");
@@ -648,7 +663,7 @@ MySqlConfigBackendImpl::getOption(const int index,
 
     if (server_selector.amUnassigned()) {
         isc_throw(NotImplemented, "managing configuration for no particular server"
-                  " (unassigned) is unsupported at the moment");
+                                  " (unassigned) is unsupported at the moment");
     }
 
     std::string msg = "fetching ";
@@ -687,7 +702,7 @@ MySqlConfigBackendImpl::getOption(const int index,
 
     if (server_selector.amUnassigned()) {
         isc_throw(NotImplemented, "managing configuration for no particular server"
-                  " (unassigned) is unsupported at the moment");
+                                  " (unassigned) is unsupported at the moment");
     }
 
     auto tag = getServerTag(server_selector, "fetching shared network level option");
@@ -893,6 +908,7 @@ MySqlConfigBackendImpl::processOptionDefRow(MySqlBindingCollection::iterator fir
             isc_throw(BadValue, "invalid record_types value "
                       << (*(first_binding + 8))->getString());
         }
+
         // This element must contain a list of integers specifying
         // types of the record fields.
         for (auto i = 0; i < record_types_element->size(); ++i) {
@@ -900,6 +916,7 @@ MySqlConfigBackendImpl::processOptionDefRow(MySqlBindingCollection::iterator fir
             if (type_element->getType() != Element::integer) {
                 isc_throw(BadValue, "record type values must be integers");
             }
+
             def->addRecordField(static_cast<OptionDataType>(type_element->intValue()));
         }
     }
@@ -914,10 +931,10 @@ void
 MySqlConfigBackendImpl::attachElementToServers(const int index,
                                                const ServerSelector& server_selector,
                                                const MySqlBindingPtr& first_binding,
-                                               const MySqlBindingPtr& in_bindings...) {
+                                               const MySqlBindingPtr& in_bindings) {
     // Create the vector from the parameter pack.
     MySqlBindingCollection in_server_bindings = { first_binding, in_bindings };
-    for (auto tag : server_selector.getTags()) {
+    for (auto const& tag : server_selector.getTags()) {
         in_server_bindings.push_back(MySqlBinding::createString(tag.get()));
         // Handles the case where the server does not exists.
         try {
@@ -1020,7 +1037,8 @@ MySqlConfigBackendImpl::createUpdateServer(const int& create_audit_revision,
                                            const ServerPtr& server) {
     // The server tag 'all' is reserved.
     if (server->getServerTag().amAll()) {
-        isc_throw(InvalidOperation, "'all' is a name reserved for the server tag which"
+        isc_throw(InvalidOperation,
+                  "'all' is a name reserved for the server tag which"
                   " associates the configuration elements with all servers connecting"
                   " to the database and a server with this name may not be created");
     }

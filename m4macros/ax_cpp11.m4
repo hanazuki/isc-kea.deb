@@ -225,18 +225,17 @@ for retry in "none" "--std=c++11" "--std=c++0x" "--std=c++1x" "fail"; do
                 [AC_MSG_RESULT([no])
                  continue])
 
-         AC_MSG_CHECKING(chrono support)
-         feature="chrono"
-         AC_COMPILE_IFELSE(
+        AC_MSG_CHECKING(chrono support)
+        feature="chrono"
+        AC_COMPILE_IFELSE(
                 [AC_LANG_PROGRAM(
                         [#include <chrono>
                          using namespace std::chrono;],
                         [auto now = high_resolution_clock::now();])],
-                [AC_MSG_RESULT([yes])
-                 break],
+                [AC_MSG_RESULT([yes])],
                 [AC_MSG_RESULT([no])
                  continue])
-
+        break
 done
 
 ])dnl AX_ISC_CPP11

@@ -51,8 +51,9 @@ public:
             ADD_FAILURE() << "expected ConfigError exception, thrown no exception";
 
         } catch (const ConfigError& ex) {
-            EXPECT_EQ(expected_error, std::string(ex.what()));
-
+            // Expect the error to be contained in the exception message.
+            std::string const exception(ex.what());
+            EXPECT_NE(exception.find(expected_error), std::string::npos);
         } catch (...) {
             ADD_FAILURE() << "expected ConfigError exception, thrown different"
                 " exception type";
@@ -373,8 +374,9 @@ TEST_F(HAConfigTest, configurePassiveBackup) {
         "            {"
         "                \"name\": \"server3\","
         "                \"url\": \"http://127.0.0.1:8082/\","
-        "                \"basic-auth-user\": \"test\","
-        "                \"basic-auth-password\": \"123\\u00a3\","
+        "                \"basic-auth-user\": \"keatest\","
+        "                \"basic-auth-password-file\": \""
+                             TEST_HTTP_DIR "/hiddenp\","
         "                \"role\": \"backup\""
         "            }"
         "        ]"
@@ -408,7 +410,7 @@ TEST_F(HAConfigTest, configurePassiveBackup) {
     EXPECT_EQ("http://127.0.0.1:8082/", cfg->getUrl().toText());
     EXPECT_EQ(HAConfig::PeerConfig::BACKUP, cfg->getRole());
     ASSERT_TRUE(cfg->getBasicAuth());
-    EXPECT_EQ("dGVzdDoxMjPCow==", cfg->getBasicAuth()->getCredential());
+    EXPECT_EQ("a2VhdGVzdDpLZWFUZXN0", cfg->getBasicAuth()->getCredential());
 
     // Verify multi-threading default values.
     EXPECT_FALSE(impl->getConfig()->getEnableMultiThreading());
@@ -1717,7 +1719,6 @@ TEST_F(HAConfigTest, pausingToString) {
               HAConfig::StateConfig::pausingToString(STATE_PAUSE_NEVER));
     EXPECT_EQ("once",
               HAConfig::StateConfig::pausingToString(STATE_PAUSE_ONCE));
-
 }
 
 // Verifies permutations of HA+MT configuration.
@@ -1883,6 +1884,6 @@ TEST_F(HAConfigTest, ipv6Url) {
 
     // Check the URL.
     EXPECT_EQ(impl->getConfig()->getThisServerConfig()->getUrl().toText(), "http://[2001:db8::1]:8080/");
-};
+}
 
 } // end of anonymous namespace

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/pgsql_lease_mgr.h>
 #include <dhcpsrv/testutils/test_utils.h>
+#include <dhcpsrv/testutils/pgsql_generic_backend_unittest.h>
 #include <dhcpsrv/tests/generic_lease_mgr_unittest.h>
 #include <exceptions/exceptions.h>
 #include <pgsql/pgsql_connection.h>
@@ -196,6 +197,17 @@ TEST(PgSqlOpenTest, OpenDatabase) {
         PGSQL_VALID_TYPE, NULL, VALID_HOST, INVALID_USER, VALID_PASSWORD)),
         NoDatabaseName);
 
+    // Check for SSL/TLS support.
+#ifdef HAVE_PGSQL_SSL
+    EXPECT_NO_THROW(LeaseMgrFactory::create(connectionString(
+        PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+        0, 0, 0, 0, VALID_CA)));
+#else
+    EXPECT_THROW(LeaseMgrFactory::create(connectionString(
+        PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
+        0, 0, 0, 0, VALID_CA)), DbOpenError);
+#endif
+
     // Tidy up after the test
     destroyPgSQLSchema();
     LeaseMgrFactory::destroy();
@@ -245,8 +257,8 @@ TEST_F(PgSqlLeaseMgrTest, checkVersion) {
     // Check version
     pair<uint32_t, uint32_t> version;
     ASSERT_NO_THROW(version = lmptr_->getVersion());
-    EXPECT_EQ(PG_SCHEMA_VERSION_MAJOR, version.first);
-    EXPECT_EQ(PG_SCHEMA_VERSION_MINOR, version.second);
+    EXPECT_EQ(PGSQL_SCHEMA_VERSION_MAJOR, version.first);
+    EXPECT_EQ(PGSQL_SCHEMA_VERSION_MINOR, version.second);
 }
 
 ////////////////////////////////////////////////////////////////////////////////
@@ -1026,6 +1038,25 @@ TEST_F(PgSqlLeaseMgrTest, leaseStatsQueryAttribution6) {
 TEST_F(PgSqlLeaseMgrTest, leaseStatsQueryAttribution6MultiThreading) {
     MultiThreadingTest mt(true);
     testLeaseStatsQueryAttribution6();
+}
+
+/// @brief This test is a basic check for the generic backend test class,
+///        rather than any production code check.
+TEST_F(PgSqlGenericBackendTest, leaseCount) {
+
+    // Create database connection parameter list
+    DatabaseConnection::ParameterMap params;
+    params["name"] = "keatest";
+    params["user"] = "keatest";
+    params["password"] = "keatest";
+
+    // Create and open the database connection
+    PgSqlConnection conn(params);
+    conn.openDatabase();
+
+    // Check that the countRows is working. It's used extensively in other
+    // tests, so basic check is enough here.
+    EXPECT_EQ(0, countRows(conn, "lease4"));
 }
 
 }  // namespace

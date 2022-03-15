@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -485,8 +485,7 @@ void IfaceMgr::detectIfaces() {
         if (attribs_table[IFLA_ADDRESS]) {
             iface->setMac(static_cast<const uint8_t*>(RTA_DATA(attribs_table[IFLA_ADDRESS])),
                           RTA_PAYLOAD(attribs_table[IFLA_ADDRESS]));
-        }
-        else {
+        } else {
             // Tunnels can have no LL_ADDR. RTA_PAYLOAD doesn't check it and
             // try to dereference it in this manner
         }

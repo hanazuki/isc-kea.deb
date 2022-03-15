@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -63,6 +63,11 @@ The following environment variable can affect the unit tests:
   set, unit tests using the log utils to verify that logs are generated as
   expected are by default silent. If set, these unit tests display real
   and expected logs.
+
+- KEA_MYSQL_HAVE_SSL - Specifies the SSL/TLS support status of MySQL.
+  When not set the corresponding MySQL global variable is read and
+  the environment of the unit test process is updated so usually this
+  variable is manually set only in order to enforce a particular status.
 
 - KEA_PIDFILE_DIR - Specifies the directory which should be used for PID files
   as used by dhcp::Daemon or its derivatives. If not specified, the
@@ -169,12 +174,15 @@ anything e.g. `DEBUG=true`. `unset DEBUG` to remove this behavior.
   @verbatim
   mysql> CREATE USER 'keatest'@'localhost' IDENTIFIED BY 'keatest';
   mysql> CREATE USER 'keatest_readonly'@'localhost' IDENTIFIED BY 'keatest';
+  mysql> CREATE USER 'keatest_secure'@'localhost' IDENTIFIED BY 'keatest';
+  mysql> ALTER USER 'keatest_secure'@'localhost' REQUIRE X509;
   mysql>@endverbatim\n
   -# Grant the created users permissions to access the <i>keatest</i> database
   (again, the apostrophes around the user names and <i>localhost</i>
   are required):
   @verbatim
   mysql> GRANT ALL ON keatest.* TO 'keatest'@'localhost';
+  mysql> GRANT ALL ON keatest.* TO 'keatest_secure'@'localhost';
   mysql> GRANT SELECT ON keatest.* TO 'keatest_readonly'@'localhost';
   mysql>@endverbatim\n
   -# If you get <i>You do not have the SUPER privilege and binary logging is
@@ -192,6 +200,56 @@ anything e.g. `DEBUG=true`. `unset DEBUG` to remove this behavior.
   that Kea has been build with the \c --with-mysql switch (see the installation
   section in the <a href="https://kea.readthedocs.io/">Kea Administrator
   Reference Manual</a>).
+
+ @subsection mysqlUnitTestsTLS MySQL Database with SSL/TLS
+
+  Usually MySQL is compiled with SSL/TLS support using OpenSSL.
+  This is easy to verify using the:
+
+@verbatim
+mysql> SHOW GLOBAL VARIABLES LIKE 'have_ssl';
+@endverbatim
+
+  The variable is documented to have three possible values:
+
+- DISABLED: compiled with TLS support but it was not configured
+
+- YES: compiled with configured TLS support
+
+- NO: not compiled with TLS support
+
+The value of this MySQL global variable is reflected by the
+KEA_MYSQL_HAVE_SSL environment variable.
+
+The keatest_secure user requires X509 so a client certificate. Of course
+in production a stricter requirement should be used, in particular when
+a client certificate should be bound to a particular user.
+
+MySQL unit tests reuse the asiolink library setup. This .my.cnf
+configuration file works with MariaDB 10.6.4:
+
+@verbatim
+[mysqld]
+ssl_cert=<kea-sources>/src/lib/asiolink/testutils/ca/kea-server.crt
+ssl_key=<kea-sources>/src/lib/asiolink/testutils/ca/kea-server.key
+ssl_ca=<kea-sources>/src/lib/asiolink/testutils/ca/kea-ca.crt
+
+[client-mariadb]
+ssl_cert=<kea-sources>/src/lib/asiolink/testutils/ca/kea-client.crt
+ssl_key=<kea-sources>/src/lib/asiolink/testutils/ca/kea-client.key
+ssl_ca=<kea-sources>/src/lib/asiolink/testutils/ca/kea-ca.crt
+ssl-verify-server-cert
+@endverbatim
+
+The last statement requires mutual authentication named two way in the
+MariaDB documentation. For MySQL versions greater than 5.7.11 this
+statement should be replaced by:
+
+@verbatim
+[client]
+...
+ssl-mode=VERIFY_IDENTITY
+@endverbatim
 
  @subsection pgsqlUnitTestsPrerequisites PostgreSQL Database
 
@@ -357,12 +415,12 @@ local   all             postgres                                trust
 @section unitTestsKerberos Kerberos Configuration for Unit Tests
 
 The GSS-TSIG hook library uses the GSS-API with Kerberos. While there are
-no doubts that the hook can be safely used with a valid Kerberos configuration
+no doubts that the hook can be safely used with a valid Kerberos configuration 
 in production, unit tests reported problems on some systems.
 
 GSS-TSIG hook unit tests use a setup inherited from bind9 with old crypto
 settings which are not allowed by default Kerberos system configuration.
-A simple workaround is to set the KRB5_CONFIG environment variable to
+A simple workaround is to set the KRB5_CONFIG environment variable to 
 a random value that doesn't match a file (e.g. KRB5_CONFIG=).
 
 @section writingShellScriptsAndTests Writing shell scripts and tests

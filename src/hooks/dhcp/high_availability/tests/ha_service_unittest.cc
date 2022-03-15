@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -340,7 +340,7 @@ public:
     /// @param password The password.
     void addBasicAuth(const std::string& user, const std::string& password) {
         std::lock_guard<std::mutex> lk(mutex_);
-        basic_auth_.add(user, password);
+        basic_auth_.add(user, "", password, "");
     }
 
 private:
@@ -5527,7 +5527,7 @@ TEST_F(HAServiceStateMachineTest, waitingParterDownLoadBalancingPartnerDown) {
     // It may happen when the partner did not crash but there was a temporary
     // communication error with it. It is possible that this server was not
     // configured to monitor unacked clients and that's why it transitioned
-    // to the partner-down state. The partner may be configured differiently.
+    // to the partner-down state. The partner may be configured differently.
     // The partner was not receiving lease updates from us, so we need to
     // force it to transition to the waiting state and synchronize. We stay
     // in the partner-down state as long as necessary to force the partner

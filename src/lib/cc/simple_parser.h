@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,7 +10,7 @@
 #include <asiolink/io_address.h>
 #include <cc/data.h>
 #include <cc/dhcp_config_error.h>
-#include <dhcpsrv/triplet.h>
+#include <util/triplet.h>
 #include <map>
 #include <vector>
 #include <string>
@@ -66,7 +66,7 @@ typedef std::vector<std::string> ParamsList;
 ///   they're defined in a single place (the DhcpConfigParser had the defaults
 ///   spread out in multiple files in multiple directories).
 class SimpleParser {
- public:
+public:
 
     /// @brief Checks that all required keywords are present.
     ///
@@ -329,11 +329,11 @@ public:
     /// to be parsed.
     /// @param name Base name of the parameter.
     /// @return A triplet with the parsed value.
-    const dhcp::Triplet<uint32_t> parseIntTriplet(const data::ConstElementPtr& scope,
-                                                  const std::string& name);
+    const isc::util::Triplet<uint32_t> parseIntTriplet(const data::ConstElementPtr& scope,
+                                                       const std::string& name);
 };
 
-};
-};
+}
+}
 
 #endif

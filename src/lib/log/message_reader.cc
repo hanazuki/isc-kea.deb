@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -267,8 +267,7 @@ MessageReader::parseMessage(const std::string& text, MessageReader::Mode mode) {
     bool added;
     if (mode == ADD) {
         added = dictionary_->add(ident, message_line.substr(first_text));
-    }
-    else {
+    } else {
         added = dictionary_->replace(ident, message_line.substr(first_text));
     }
     if (!added) {

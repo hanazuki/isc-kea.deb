@@ -6,8 +6,8 @@ Kea Database Administration
 
 .. _kea-database-version:
 
-Databases and Database Version Numbers
-======================================
+Databases and Schema Versions
+=============================
 
 Kea may be configured to use a database as storage for leases or as a
 source of servers' configurations and host reservations (i.e. static
@@ -15,32 +15,30 @@ assignments of addresses, prefixes, options, etc.). As Kea is
 updated, new database schemas are introduced to facilitate new
 features and correct discovered issues with the existing schemas.
 
-Each version of Kea expects a particular structure in the backend and
-checks for this by examining the version of the database it is using.
-Separate version numbers are maintained for the backends, independent of the
-version of Kea itself. It is possible that the backend version will stay
-the same through several Kea revisions; similarly, it is possible that
-the version of the backend may go up several revisions during a single Kea
-version upgrade. Versions for each backend are also independent, so an increment in
-the MySQL backend version does not imply an increment in that of
-PostgreSQL.
+Each version of Kea expects a particular schema structure and checks for this by
+examining the version of the database it is using. Separate version numbers are
+maintained for the schemas, independent of the version of Kea itself. It is
+possible that the schema version will stay the same through several Kea
+revisions; similarly, it is possible that the version of the schema may go up
+several revisions during a single Kea version upgrade. Versions for each backend
+type are also independent, so an increment in the MySQL backend version does not
+imply an increment in that of PostgreSQL.
 
-Backend versions are specified in a major.minor format. The minor number
-is increased when there are backward-compatible changes introduced: for
-example, when a new index is added. It is desirable but not mandatory
-to apply such a change; running an older backend version is possible.
-(Although, in the example given, running without the new index may
-introduce a performance penalty.) On the other hand, the
-major number is increased when an incompatible change is introduced: for
-example, an extra column is added to a table. If Kea attempts to run on a
-backend that is too old (as indicated by a mismatched backend major
-version number), it will fail; administrative action is
-required to upgrade the backend.
+Schema versions are specified in a major.minor format. For the most recent
+versions, the minor version is always zero and only the major version is
+incremented.
+
+Historically, the minor version used to be incremented when backward-compatible
+changes were introduced to the schema: for example - when a new index is added.
+This was opposed to incrementing the major version which implied an incompatible
+schema change: for example - changing the type of an existing column. If Kea
+attempts to run on a schema that is too old, as indicated by a mismatched schema
+version, it will fail; administrative action is required to upgrade the schema.
 
 .. _kea-admin:
 
-The kea-admin Tool
-==================
+The ``kea-admin`` Tool
+======================
 
 To manage the databases, Kea provides the ``kea-admin`` tool. It can
 initialize a new backend, check its version number, perform a backend
@@ -50,41 +48,41 @@ upgrade, and dump lease data to a text file.
 ``backend``. Additional, non-mandatory options may be specified. The
 currently supported commands are:
 
--  ``db-init`` — Initializes a new database schema. This is useful
+-  ``db-init`` — initializes a new database schema. This is useful
    during a new Kea installation. The database is initialized to the
    latest version supported by the version of the software being
    installed.
 
--  ``db-version`` — Reports the database backend version number. This
+-  ``db-version`` — reports the database backend version number. This
    is not necessarily equal to the Kea version number, as each backend
    has its own versioning scheme.
 
--  ``db-upgrade`` — Conducts a database schema upgrade. This is
+-  ``db-upgrade`` — conducts a database schema upgrade. This is
    useful when upgrading Kea.
 
--  ``lease-dump`` — Dumps the contents of the lease database (for MySQL,
-   PostgreSQL, or CQL backends) to a CSV (comma-separated values) text
-   file. The first line of the file contains the column names. This is
-   meant to be used as a diagnostic tool, so it provides a portable,
-   human-readable form of the lease data.
+-  ``lease-dump`` — dumps the contents of the lease database (for MySQL or
+   PostgreSQL backends) to a CSV (comma-separated values) text file. (Support
+   for the Cassandra backend has been deprecated.)
+   The first line of the file contains the column names. This can be used
+   as a way to switch from a database backend to a memfile backend.
+   Alternatively, it can be used as a diagnostic tool, so it provides a portable
+   form of the lease data.
 
-.. note::
-
-  In versions of Kea earlier than 1.6.0, the `db-init`, `db-version`, and
-  `db-upgrade` commands were named `lease-init`, `lease-version`, and
-  `lease-upgrade`, respectively.
+-  ``lease-upload`` — uploads leases from a CSV (comma-separated values) text
+   file to a MySQL or a PostgreSQL lease database. The CSV file needs to be in
+   memfile format.
 
 ``backend`` specifies the type of backend database. The currently
 supported types are:
 
--  ``memfile`` — Lease information is stored on disk in a text file.
+-  ``memfile`` — lease information is stored on disk in a text file.
 
--  ``mysql`` — Information is stored in a MySQL relational database.
+-  ``mysql`` — information is stored in a MySQL relational database.
 
--  ``pgsql`` — Information is stored in a PostgreSQL relational
+-  ``pgsql`` — information is stored in a PostgreSQL relational
    database.
 
--  ``cql`` — Information is stored in an Apache Cassandra database.
+-  ``cql`` — information is stored in an Apache Cassandra database.
    This backend is deprecated.
 
 Additional parameters may be needed, depending on the setup and
@@ -197,9 +195,9 @@ To check the MySQL timezone:
 To configure the MySQL timezone for a specific server, please refer to the
 installed version documentation.
 
-Usually the setting is configured in the [mysqld] section in /etc/mysql/my.cnf,
-/etc/mysql/mysql.cnf, /etc/mysql/mysqld.cnf, or
-/etc/mysql/mysql.conf.d/mysqld.cnf.
+Usually the setting is configured in the [mysqld] section in ``/etc/mysql/my.cnf``,
+``/etc/mysql/mysql.cnf``, ``/etc/mysql/mysqld.cnf``, or
+``/etc/mysql/mysql.conf.d/mysqld.cnf``.
 
    .. code-block:: ini
 
@@ -292,7 +290,7 @@ To create the database:
       mysql> CONNECT database-name;
       mysql> SOURCE path-to-kea/share/kea/scripts/mysql/dhcpdb_create.mysql
 
-   (where "path-to-kea" is the location where Kea is installed.)
+   (where ``path-to-kea`` is the location where Kea is installed.)
 
     The database may also be dropped manually as follows:
 
@@ -301,9 +299,10 @@ To create the database:
       mysql> CONNECT database-name;
       mysql> SOURCE path-to-kea/share/kea/scripts/mysql/dhcpdb_drop.mysql
 
-   (where "path-to-kea" is the location where Kea is installed.)
+   (where ``path-to-kea`` is the location where Kea is installed.)
 
 .. warning::
+
     Dropping the database results in the unrecoverable loss of any data it contains.
 
 
@@ -382,7 +381,7 @@ Improved Performance With MySQL
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 Changing the MySQL internal value ``innodb_flush_log_at_trx_commit`` from the default value
-of ``1`` to ``2`` can result in a huge gain in Kea performance. In some deployments, the
+of 1 to 2 can result in a huge gain in Kea performance. In some deployments, the
 gain was over 1000% (10 times faster when set to 2, compared to the default value of 1).
 It can be set per-session for testing:
 
@@ -519,7 +518,7 @@ which the servers will access it. A number of steps are required:
       COMMIT
       $
 
-   ("path-to-kea" is the location where Kea is installed.)
+   (``path-to-kea`` is the location where Kea is installed.)
 
    If instead an error is encountered, such as:
 
@@ -590,6 +589,19 @@ Use the following command to perform an upgrade:
 
    $ kea-admin db-upgrade pgsql -u database-user -p database-password -n database-name
 
+.. _pgsl-ssl:
+
+PostgreSQL without OpenSSL support
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+Usually the PostgreSQL database client library is built with the OpenSSL
+support but Kea can be configured to handle the case where it is not
+supported:
+
+.. code-block:: console
+
+   $ ./configure [other-options] --disable-pgsql-ssl
+
 .. _cql-database:
 
 Cassandra
@@ -645,7 +657,7 @@ To create the database:
 
       cqlsh -k keyspace-name -f path-to-kea/share/kea/scripts/cql/dhcpdb_create.cql
 
-   (path-to-kea is the location where Kea is installed.)
+   (``path-to-kea`` is the location where Kea is installed.)
 
 It is also possible to exit Cassandra and create the tables using
 the ``kea-admin`` tool. If the tables were not created in Step 4, do so now by

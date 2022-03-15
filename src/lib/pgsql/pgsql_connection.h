@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,9 +7,8 @@
 #define PGSQL_CONNECTION_H
 
 #include <asiolink/io_service.h>
-#include <database/database_connection.h>
+#include <pgsql/pgsql_exchange.h>
 
-#include <libpq-fe.h>
 #include <boost/scoped_ptr.hpp>
 
 #include <vector>
@@ -18,15 +17,15 @@
 namespace isc {
 namespace db {
 
-/// @brief Define PostgreSQL backend version: 6.2
-const uint32_t PG_SCHEMA_VERSION_MAJOR = 6;
-const uint32_t PG_SCHEMA_VERSION_MINOR = 2;
+/// @brief Define PostgreSQL backend version: 9.0
+const uint32_t PGSQL_SCHEMA_VERSION_MAJOR = 9;
+const uint32_t PGSQL_SCHEMA_VERSION_MINOR = 0;
 
 // Maximum number of parameters that can be used a statement
 // @todo This allows us to use an initializer list (since we can't
 // require C++11).  It's unlikely we'd go past this many a single
 // statement.
-const size_t PGSQL_MAX_PARAMETERS_IN_QUERY = 32;
+const size_t PGSQL_MAX_PARAMETERS_IN_QUERY = 128;
 
 /// @brief Define a PostgreSQL statement.
 ///
@@ -65,107 +64,6 @@ const size_t OID_TEXT = 25;
 const size_t OID_VARCHAR = 1043;
 const size_t OID_TIMESTAMP = 1114;
 /// @}
-
-/// @brief RAII wrapper for PostgreSQL Result sets
-///
-/// When a Postgresql statement is executed, the results are returned
-/// in pointer allocated structure, PGresult*. Data and status information
-/// are accessed via calls to functions such as PQgetvalue() which require
-/// the results pointer.  In order to ensure this structure is freed, any
-/// invocation of Psql function which returns a PGresult* (e.g. PQexec and
-
-/// class. Examples:
-/// {{{
-///       PgSqlResult r(PQexec(conn_, "ROLLBACK"));
-/// }}}
-///
-/// This eliminates the need for an explicit release via, PQclear() and
-/// guarantees that the resources are released even if the an exception is
-/// thrown.
-
-class PgSqlResult : public boost::noncopyable {
-public:
-    /// @brief Constructor
-    ///
-    /// Store the pointer to the result set to being fetched.  Set row
-    /// and column counts for convenience.
-    ///
-    /// @param result - pointer to the Postgresql client layer result
-    /// If the value of is NULL, row and col values will be set to -1.
-    /// This allows PgSqlResult to be passed into statement error
-    /// checking.
-    PgSqlResult(PGresult *result);
-
-    /// @brief Destructor
-    ///
-    /// Frees the result set
-    ~PgSqlResult();
-
-    /// @brief Returns the number of rows in the result set.
-    int getRows() const {
-        return (rows_);
-    }
-
-    /// @brief Returns the number of columns in the result set.
-    int getCols() const {
-        return (cols_);
-    }
-
-    /// @brief Determines if a row index is valid
-    ///
-    /// @param row index to range check
-    ///
-    /// @throw DbOperationError if the row index is out of range
-    void rowCheck(int row) const;
-
-    /// @brief Determines if a column index is valid
-    ///
-    /// @param col index to range check
-    ///
-    /// @throw DbOperationError if the column index is out of range
-    void colCheck(int col) const;
-
-    /// @brief Determines if both a row and column index are valid
-    ///
-    /// @param row index to range check
-    /// @param col index to range check
-    ///
-    /// @throw DbOperationError if either the row or column index
-    /// is out of range
-    void rowColCheck(int row, int col) const;
-
-    /// @brief Fetches the name of the column in a result set
-    ///
-    /// Returns the column name of the column from the result set.
-    /// If the column index is out of range it will return the
-    /// string "Unknown column:<index>"
-    ///
-    /// @param col index of the column name to fetch
-    /// @return string containing the name of the column
-    /// This method is exception safe.
-    std::string getColumnLabel(const int col) const;
-
-    /// @brief Conversion Operator
-    ///
-    /// Allows the PgSqlResult object to be passed as the result set argument to
-    /// PQxxxx functions.
-    operator PGresult*() const {
-        return (result_);
-    }
-
-    /// @brief Boolean Operator
-    ///
-    /// Allows testing the PgSqlResult object for emptiness: "if (result)"
-    operator bool() const {
-        return (result_);
-    }
-
-private:
-    PGresult*     result_;     ///< Result set to be freed
-    int rows_;   ///< Number of rows in the result set
-    int cols_;   ///< Number of columns in the result set
-};
-
 
 /// @brief Postgresql connection handle Holder
 ///
@@ -301,6 +199,14 @@ class PgSqlConnection : public db::DatabaseConnection {
 public:
     /// @brief Define the PgSql error state for a duplicate key error.
     static const char DUPLICATE_KEY[];
+    /// @brief Define the PgSql error state for a null foreign key error.
+    static const char NULL_KEY[];
+
+    /// @brief Function invoked to process fetched row.
+    typedef std::function<void(PgSqlResult&, int)> ConsumeResultRowFun;
+
+    /// @brief Emit the TLS support warning only once.
+    static bool warned_about_tls;
 
     /// @brief Constructor
     ///
@@ -313,7 +219,8 @@ public:
                     IOServiceAccessorPtr io_accessor = IOServiceAccessorPtr(),
                     DbCallback callback = DbCallback())
         : DatabaseConnection(parameters, callback),
-          io_service_accessor_(io_accessor), io_service_() {
+          io_service_accessor_(io_accessor), io_service_(),
+          transaction_ref_count_(0) {
     }
 
     /// @brief Destructor
@@ -367,26 +274,88 @@ public:
     /// @throw DbOpenError Error opening the database
     void openDatabase();
 
-    /// @brief Start a transaction
+    /// @brief Starts new transaction
     ///
-    /// Starts a transaction.
+    /// This function begins a new transaction by sending the START TRANSACTION
+    /// statement to the database. The transaction should be explicitly committed
+    /// by calling @c commit() or rolled back by calling @c rollback().
     ///
-    /// @throw DbOperationError If the transaction start failed.
+    /// PostgreSQL does not support nested transactions directly. Issuing a
+    /// START TRANSACTION while already in a transaction will cause a warning to
+    /// be emitted but otherwise does not alter the state of the current transaction.
+    /// In other words, the transaction will still end upon the next COMMIT or
+    /// ROLLBACK statement.
+    ///
+    /// Therefore, this function checks if a transaction has already started and
+    /// does not start a new transaction. However, it increments a transaction
+    /// reference counter which is later decremented when @c commit() or @c
+    /// rollback() is called. When this mechanism is used properly, it
+    /// guarantees that nested transactions are not attempted, thus avoiding
+    /// unexpected commits or rollbacks of the pending transaction.
     void startTransaction();
 
-    /// @brief Commit Transactions
+    /// @brief Checks if there is a transaction in progress.
     ///
-    /// Commits all pending database operations.
+    /// @return true if a transaction has been started, false otherwise.
+    bool isTransactionStarted() const;
+
+    /// @brief Commits current transaction
+    ///
+    /// Commits all pending database operations. On databases that don't
+    /// support transactions, this is a no-op.
+    ///
+    /// When this method is called for a nested transaction it decrements the
+    /// transaction reference counter incremented during the call to
+    /// @c startTransaction.
     ///
     /// @throw DbOperationError If the commit failed.
     void commit();
 
-    /// @brief Rollback Transactions
+    /// @brief Rollbacks current transaction
     ///
-    /// Rolls back all pending database operations.
+    /// Rolls back all pending database operations. On databases that don't
+    /// support transactions, this is a no-op.
+    ///
+    /// When this method is called for a nested transaction it decrements the
+    /// transaction reference counter incremented during the call to
+    /// @c startTransaction.
     ///
     /// @throw DbOperationError If the rollback failed.
     void rollback();
+
+    /// @brief Creates a savepoint within the current transaction
+    ///
+    /// Creates a named savepoint within the current transaction.
+    ///
+    /// @param name name of the savepoint to create.
+    ///
+    /// @throw InvalidOperation if called outside a transaction.
+    /// @throw DbOperationError If the savepoint cannot be created.
+    void createSavepoint(const std::string& name);
+
+    /// @brief Rollbacks to the given savepoint
+    ///
+    /// Rolls back all pending database operations made after the
+    /// named savepoint.
+    ///
+    /// @param name name of the savepoint to which to rollback.
+    ///
+    /// @throw InvalidOperation if called outside a transaction.
+    /// @throw DbOperationError if the rollback failed.
+    void rollbackToSavepoint(const std::string& name);
+
+    /// @brief Executes the an SQL statement.
+    ///
+    /// It executes the given SQL text after first checking the
+    /// connection for usability. After the statement is executed
+    /// @c checkStatementError() is invoked to ensure we detect
+    /// connectivity issues properly.
+    /// It is intended to be used to execute utility statements such
+    /// as commit, rollback et al, which have no parameters, return no
+    /// results, and are not pre-compiled.
+    ///
+    /// @param sql SQL statement to execute.
+    void executeSQL(const std::string& sql);
 
     /// @brief Checks a result set's SQL state against an error state.
     ///
@@ -437,6 +406,79 @@ public:
         }
     }
 
+    /// @brief Executes a prepared SQL statement.
+    ///
+    /// It executes the given prepared SQL statement, after checking
+    /// for usability and input parameter sanity.  After the statement
+    /// is executed @c checkStatementError() is invoked to ensure we detect
+    /// connectivity issues properly. Upon successful execution, the
+    /// the result set is returned.  It may be used for any form of
+    /// prepared SQL statement (e.g query, insert, update, delete...),
+    /// with or without input parameters.
+    ///
+    /// @param statement PgSqlTaggedStatement describing the prepared
+    /// statement to execute.
+    /// @param in_bindings array of input parameter bindings. If the SQL
+    /// statement requires no input arguments, this parameter should either
+    /// be omitted or an empty PsqlBindArray should be supplied.
+    /// @throw InvalidOperation if the number of parameters expected
+    /// by the statement does not match the size of the input bind array.
+    PgSqlResultPtr executePreparedStatement(PgSqlTaggedStatement& statement,
+                                            const PsqlBindArray& in_bindings
+                                            = PsqlBindArray());
+
+    /// @brief Executes SELECT query using prepared statement.
+    ///
+    /// The statement parameter refers to an existing prepared statement
+    /// associated with the connection. The @c in_bindings size must match
+    /// the number of placeholders in the prepared statement.
+    ///
+    /// This method executes prepared statement using provided input bindings and
+    /// calls @c process_result_row function for each returned row. The
+    /// @c process_result_row function is implemented by the caller and should
+    /// gather and store each returned row in an external data structure prior.
+    ///
+    /// @param statement reference to the precompiled tagged statement to execute
+    /// @param in_bindings input bindings holding values to substitue placeholders
+    /// in the query.
+    /// @param process_result_row Pointer to the function to be invoked for each
+    /// retrieved row. This function consumes the retrieved data from the
+    /// result set.
+    void selectQuery(PgSqlTaggedStatement& statement,
+                     const PsqlBindArray& in_bindings,
+                     ConsumeResultRowFun process_result_row);
+
+    /// @brief Executes INSERT prepared statement.
+    ///
+    /// The @c statement must refer to an existing prepared statement
+    /// associated with the connection. The @c in_bindings size must match
+    /// the number of placeholders in the prepared statement.
+    ///
+    /// This method executes prepared statement using provided bindings to
+    /// insert data into the database.
+    ///
+    /// @param statement reference to the precompiled tagged statement to execute
+    /// @param in_bindings input bindings holding values to substitue placeholders
+    /// in the query.
+    void insertQuery(PgSqlTaggedStatement& statement,
+                     const PsqlBindArray& in_bindings);
+
+
+    /// @brief Executes UPDATE or DELETE prepared statement and returns
+    /// the number of affected rows.
+    ///
+    /// The @c statement must refer to an existing prepared statement
+    /// associated with the connection. The @c in_bindings size must match
+    /// the number of placeholders in the prepared statement.
+    ///
+    /// @param statement reference to the precompiled tagged statement to execute
+    /// @param in_bindings Input bindings holding values to substitute placeholders
+    /// in the query.
+    ///
+    /// @return Number of affected rows.
+    uint64_t updateDeleteQuery(PgSqlTaggedStatement& statement,
+                               const PsqlBindArray& in_bindings);
+
     /// @brief PgSql connection handle
     ///
     /// This field is public, because it is used heavily from PgSqlLeaseMgr
@@ -469,7 +511,18 @@ public:
 
     /// @brief IOService object, used for all ASIO operations.
     isc::asiolink::IOServicePtr io_service_;
+
+    /// @brief Reference counter for transactions.
+    ///
+    /// It precludes starting and committing nested transactions. PostgreSQL
+    /// logs but ignores START TRANSACTIONs (or BEGINs) issued from within an
+    /// ongoing transaction. We do not want to start new transactions when one
+    /// is already in progress.
+    int transaction_ref_count_;
 };
+
+/// @brief Defines a pointer to a PgSqlConnection
+typedef boost::shared_ptr<PgSqlConnection> PgSqlConnectionPtr;
 
 } // end of isc::db namespace
 } // end of isc namespace

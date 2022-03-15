@@ -117,9 +117,13 @@ CONFIG_CLEAN_VPATH_FILES =
 @HAVE_GTEST_TRUE@am__EXEEXT_1 = libpgsql_unittests$(EXEEXT)
 am__EXEEXT_2 = $(am__EXEEXT_1)
 PROGRAMS = $(noinst_PROGRAMS)
-am__libpgsql_unittests_SOURCES_DIST = pgsql_exchange_unittest.cc \
+am__libpgsql_unittests_SOURCES_DIST = pgsql_basics.cc pgsql_basics.h \
+	pgsql_connection_unittest.cc pgsql_exchange_unittest.cc \
 	run_unittests.cc
-@HAVE_GTEST_TRUE@am_libpgsql_unittests_OBJECTS = libpgsql_unittests-pgsql_exchange_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@am_libpgsql_unittests_OBJECTS =  \
+@HAVE_GTEST_TRUE@	libpgsql_unittests-pgsql_basics.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	libpgsql_unittests-pgsql_connection_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	libpgsql_unittests-pgsql_exchange_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	libpgsql_unittests-run_unittests.$(OBJEXT)
 libpgsql_unittests_OBJECTS = $(am_libpgsql_unittests_OBJECTS)
 am__DEPENDENCIES_1 =
@@ -130,6 +134,7 @@ am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1)
 AM_V_lt = $(am__v_lt_@AM_V@)
@@ -155,7 +160,8 @@ am__v_at_1 =
 DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
-am__depfiles_remade =  \
+am__depfiles_remade = ./$(DEPDIR)/libpgsql_unittests-pgsql_basics.Po \
+	./$(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Po \
 	./$(DEPDIR)/libpgsql_unittests-pgsql_exchange_unittest.Po \
 	./$(DEPDIR)/libpgsql_unittests-run_unittests.Po
 am__mv = mv -f
@@ -177,6 +183,24 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
+COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
+	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+LTCOMPILE = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) \
+	$(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) \
+	$(AM_CFLAGS) $(CFLAGS)
+AM_V_CC = $(am__v_CC_@AM_V@)
+am__v_CC_ = $(am__v_CC_@AM_DEFAULT_V@)
+am__v_CC_0 = @echo "  CC      " $@;
+am__v_CC_1 = 
+CCLD = $(CC)
+LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+AM_V_CCLD = $(am__v_CCLD_@AM_V@)
+am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
+am__v_CCLD_0 = @echo "  CCLD    " $@;
+am__v_CCLD_1 = 
 SOURCES = $(libpgsql_unittests_SOURCES)
 DIST_SOURCES = $(am__libpgsql_unittests_SOURCES_DIST)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
@@ -477,7 +501,8 @@ CLEANFILES = *.gcno *.gcda
 TESTS_ENVIRONMENT = \
 	$(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 
-@HAVE_GTEST_TRUE@libpgsql_unittests_SOURCES =  \
+@HAVE_GTEST_TRUE@libpgsql_unittests_SOURCES = pgsql_basics.cc \
+@HAVE_GTEST_TRUE@	pgsql_basics.h pgsql_connection_unittest.cc \
 @HAVE_GTEST_TRUE@	pgsql_exchange_unittest.cc run_unittests.cc
 @HAVE_GTEST_TRUE@libpgsql_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@libpgsql_unittests_LDFLAGS = $(AM_LDFLAGS) $(GTEST_LDFLAGS) $(PGSQL_LIBS)
@@ -488,6 +513,7 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la \
 @HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(BOOST_LIBS) \
 @HAVE_GTEST_TRUE@	$(GTEST_LDADD)
 all: all-recursive
@@ -543,6 +569,8 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsql_unittests-pgsql_basics.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsql_unittests-pgsql_exchange_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsql_unittests-run_unittests.Po@am__quote@ # am--include-marker
 
@@ -572,6 +600,34 @@ am--depfiles: $(am__depfiles_remade)
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
+
+libpgsql_unittests-pgsql_basics.o: pgsql_basics.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libpgsql_unittests-pgsql_basics.o -MD -MP -MF $(DEPDIR)/libpgsql_unittests-pgsql_basics.Tpo -c -o libpgsql_unittests-pgsql_basics.o `test -f 'pgsql_basics.cc' || echo '$(srcdir)/'`pgsql_basics.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libpgsql_unittests-pgsql_basics.Tpo $(DEPDIR)/libpgsql_unittests-pgsql_basics.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_basics.cc' object='libpgsql_unittests-pgsql_basics.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libpgsql_unittests-pgsql_basics.o `test -f 'pgsql_basics.cc' || echo '$(srcdir)/'`pgsql_basics.cc
+
+libpgsql_unittests-pgsql_basics.obj: pgsql_basics.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libpgsql_unittests-pgsql_basics.obj -MD -MP -MF $(DEPDIR)/libpgsql_unittests-pgsql_basics.Tpo -c -o libpgsql_unittests-pgsql_basics.obj `if test -f 'pgsql_basics.cc'; then $(CYGPATH_W) 'pgsql_basics.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_basics.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libpgsql_unittests-pgsql_basics.Tpo $(DEPDIR)/libpgsql_unittests-pgsql_basics.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_basics.cc' object='libpgsql_unittests-pgsql_basics.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libpgsql_unittests-pgsql_basics.obj `if test -f 'pgsql_basics.cc'; then $(CYGPATH_W) 'pgsql_basics.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_basics.cc'; fi`
+
+libpgsql_unittests-pgsql_connection_unittest.o: pgsql_connection_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libpgsql_unittests-pgsql_connection_unittest.o -MD -MP -MF $(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Tpo -c -o libpgsql_unittests-pgsql_connection_unittest.o `test -f 'pgsql_connection_unittest.cc' || echo '$(srcdir)/'`pgsql_connection_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Tpo $(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_connection_unittest.cc' object='libpgsql_unittests-pgsql_connection_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libpgsql_unittests-pgsql_connection_unittest.o `test -f 'pgsql_connection_unittest.cc' || echo '$(srcdir)/'`pgsql_connection_unittest.cc
+
+libpgsql_unittests-pgsql_connection_unittest.obj: pgsql_connection_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libpgsql_unittests-pgsql_connection_unittest.obj -MD -MP -MF $(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Tpo -c -o libpgsql_unittests-pgsql_connection_unittest.obj `if test -f 'pgsql_connection_unittest.cc'; then $(CYGPATH_W) 'pgsql_connection_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_connection_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Tpo $(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_connection_unittest.cc' object='libpgsql_unittests-pgsql_connection_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o libpgsql_unittests-pgsql_connection_unittest.obj `if test -f 'pgsql_connection_unittest.cc'; then $(CYGPATH_W) 'pgsql_connection_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_connection_unittest.cc'; fi`
 
 libpgsql_unittests-pgsql_exchange_unittest.o: pgsql_exchange_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsql_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT libpgsql_unittests-pgsql_exchange_unittest.o -MD -MP -MF $(DEPDIR)/libpgsql_unittests-pgsql_exchange_unittest.Tpo -c -o libpgsql_unittests-pgsql_exchange_unittest.o `test -f 'pgsql_exchange_unittest.cc' || echo '$(srcdir)/'`pgsql_exchange_unittest.cc
@@ -900,7 +956,9 @@ clean-am: clean-generic clean-libtool clean-noinstPROGRAMS \
 	mostlyclean-am
 
 distclean: distclean-recursive
-		-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_exchange_unittest.Po
+		-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_basics.Po
+	-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Po
+	-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_exchange_unittest.Po
 	-rm -f ./$(DEPDIR)/libpgsql_unittests-run_unittests.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
@@ -947,7 +1005,9 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-recursive
-		-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_exchange_unittest.Po
+		-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_basics.Po
+	-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_connection_unittest.Po
+	-rm -f ./$(DEPDIR)/libpgsql_unittests-pgsql_exchange_unittest.Po
 	-rm -f ./$(DEPDIR)/libpgsql_unittests-run_unittests.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic

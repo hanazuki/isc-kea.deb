@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "KEACTRL" "8" "Feb 27, 2022" "2.0.2" "Kea"
+.TH "KEACTRL" "8" "Feb 21, 2022" "2.1.3" "Kea"
 .SH NAME
 keactrl \- Shell script for managing Kea
 .
@@ -38,8 +38,8 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 \fBkeactrl\fP is a shell script which controls the startup, shutdown, and
 reconfiguration of the Kea servers (\fBkea\-dhcp4\fP, \fBkea\-dhcp6\fP,
 \fBkea\-dhcp\-ddns\fP, \fBkea\-ctrl\-agent\fP, and \fBkea\-netconf\fP). It also
-provides the means for checking the current status of the servers and
-determining the configuration files in use.
+provides a way to check the current status of the servers and
+determine the configuration files in use.
 .SH CONFIGURATION FILE
 .sp
 Depending on the user\(aqs requirements, not all of the available servers need be run.
@@ -56,48 +56,48 @@ parameters in the \fBkeactrl\fP configuration file.
 Specifies the command to be issued to the servers. It can be one of the following:
 .INDENT 7.0
 .TP
-\fBstart\fP
+.B \fBstart\fP
 Starts the servers.
 .TP
-\fBstop\fP
+.B \fBstop\fP
 Stops the servers.
 .TP
-\fBreload\fP
+.B \fBreload\fP
 Instructs the servers to re\-read the Kea configuration file. This
-command is not supported by the Netconf agent.
+command is not supported by the NETCONF agent.
 .TP
-\fBstatus\fP
+.B \fBstatus\fP
 Prints the status of the servers.
 .UNINDENT
 .TP
 .B \fB\-c|\-\-ctrl\-config keactrl\-config\-file\fP
 Specifies the \fBkeactrl\fP configuration file. Without this switch,
-\fBkeactrl\fP attempts to use the file
+\fBkeactrl\fP uses the file
 \fB[kea\-install\-dir]/etc/kea/keactrl.conf\fP\&.
 .TP
 .B \fB\-s|\-\-server server[,server,...]\fP
 Specifies a subset of the enabled servers to which the command should
-be issued. The list of servers should be separated by commas with no
+be issued. The list of servers should be separated by commas, with no
 intervening spaces. Acceptable values are:
 .INDENT 7.0
 .TP
-\fBdhcp4\fP
+.B \fBdhcp4\fP
 DHCPv4 server (\fBkea\-dhcp4\fP).
 .TP
-\fBdhcp6\fP
+.B \fBdhcp6\fP
 DHCPv6 server (\fBkea\-dhcp6\fP).
 .TP
-\fBdhcp_ddns\fP
+.B \fBdhcp_ddns\fP
 DHCP DDNS server (\fBkea\-dhcp\-ddns\fP).
 .TP
-\fBctrl_agent\fP
+.B \fBctrl_agent\fP
 Control Agent (\fBkea\-ctrl\-agent\fP).
 .TP
-\fBnetconf\fP
-Netconf agent (\fBkea\-netconf\fP).
+.B \fBnetconf\fP
+NETCONF agent (\fBkea\-netconf\fP).
 .TP
-\fBall\fP
-All servers, including Netconf if it was configured to be
+.B \fBall\fP
+All servers, including NETCONF if it was configured to be
 built. This is the default.
 .UNINDENT
 .TP
@@ -115,8 +115,8 @@ available in various formats (.txt, .html, .pdf) with the Kea
 distribution. The Kea documentation is available at
 \fI\%https://kea.readthedocs.io\fP\&.
 .sp
-Kea source code is documented in the Kea Developer\(aqs Guide. Its online
-version is available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
+Kea source code is documented in the Kea Developer\(aqs Guide,
+available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
 .sp
 The Kea project website is available at \fI\%https://kea.isc.org\fP\&.
 .SH MAILING LISTS AND SUPPORT

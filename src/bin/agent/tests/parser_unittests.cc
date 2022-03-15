@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,14 +6,19 @@
 
 #include <config.h>
 
-#include <cc/data.h>
 #include <agent/parser_context.h>
+#include <cc/data.h>
 #include <cc/dhcp_config_error.h>
 #include <testutils/io_utils.h>
+#include <testutils/log_utils.h>
 #include <testutils/user_context_utils.h>
+
 #include <gtest/gtest.h>
+
 #include <fstream>
 #include <set>
+
+#include <boost/algorithm/string.hpp>
 
 using namespace isc::data;
 using namespace isc::test;
@@ -48,8 +53,9 @@ void compareJSON(ConstElementPtr a, ConstElementPtr b) {
 /// @param compare whether to compare the output with legacy JSON parser
 void testParser(const std::string& txt, ParserContext::ParserType parser_type,
     bool compare = true) {
-    ConstElementPtr test_json;
+    SCOPED_TRACE("\n=== tested config ===\n" + txt + "=====================");
 
+    ConstElementPtr test_json;
     ASSERT_NO_THROW({
             try {
                 ParserContext ctx;
@@ -335,8 +341,9 @@ TEST(ParserTest, file) {
 /// @param msg expected content of the exception
 void testError(const std::string& txt,
                ParserContext::ParserType parser_type,
-               const std::string& msg)
-{
+               const std::string& msg) {
+    SCOPED_TRACE("\n=== tested config ===\n" + txt + "=====================");
+
     try {
         ParserContext ctx;
         ConstElementPtr parsed = ctx.parseString(txt, parser_type);
@@ -583,10 +590,6 @@ TEST(ParserTest, errors) {
               ParserContext::PARSER_JSON,
               "<string>:1.3: syntax error, unexpected \",\", "
               "expecting }");
-    testError("{ \"foo\":true, }\n",
-              ParserContext::PARSER_JSON,
-              "<string>:1.15: syntax error, unexpected }, "
-              "expecting constant string");
 
     // bad type
     testError("{ \"Control-agent\":{\n"
@@ -647,7 +650,7 @@ TEST(ParserTest, errors) {
               "  \"Control-agent\":{\n"
               "  \"comment\": \"second\" }}\n",
               ParserContext::PARSER_AGENT,
-              "<string>:2.23: syntax error, unexpected \",\", expecting }");
+              "<string>:3.3-17: syntax error, unexpected Control-agent, expecting \",\" or }");
 
     // duplicate of not string entries
     testError("{ \"Control-agent\":{\n"
@@ -855,6 +858,74 @@ TEST(ParserTest, duplicateMapEntries) {
     cout << "checked " << cnt << " duplicated map entries\n";
 }
 
+/// @brief Test fixture for trailing commas.
+class TrailingCommasTest : public isc::dhcp::test::LogContentTest {
+public:
+    /// @brief Add a log entry.
+    ///
+    /// @param loc Location of the trailing comma.
+    void addLog(const string& loc) {
+        string log = "CTRL_AGENT_CONFIG_SYNTAX_WARNING Control Agent ";
+        log += "configuration syntax warning: " + loc;
+        log += ": Extraneous comma. ";
+        log += "A piece of configuration may have been omitted.";
+        addString(log);
+    }
+};
+
+// Test that trailing commas are allowed.
+TEST_F(TrailingCommasTest, tests) {
+    string txt(R"({
+  "Control-agent": {
+    "control-sockets": {
+      "d2": {
+        "socket-name": "/tmp/kea-dhcp-ddns-ctrl.sock",
+        "socket-type": "unix",
+      },
+      "dhcp4": {
+        "socket-name": "/tmp/kea-dhcp4-ctrl.sock",
+        "socket-type": "unix",
+      },
+      "dhcp6": {
+        "socket-name": "/tmp/kea-dhcp6-ctrl.sock",
+        "socket-type": "unix",
+      },
+    },
+    "http-host": "10.1.0.2",
+    "http-port": 8080,
+    "loggers": [
+      {
+        "debuglevel": 99,
+        "name": "kea-ctrl-agent",
+        "output_options": [
+          {
+            "output": "stdout",
+          },
+        ],
+        "severity": "DEBUG",
+      },
+    ],
+  },
+})");
+    testParser(txt, ParserContext::PARSER_AGENT, false);
+
+    addLog("<string>:6.30");
+    addLog("<string>:10.30");
+    addLog("<string>:14.30");
+    addLog("<string>:15.8");
+    addLog("<string>:25.31");
+    addLog("<string>:26.12");
+    addLog("<string>:28.28");
+    addLog("<string>:29.8");
+    addLog("<string>:30.6");
+    addLog("<string>:31.4");
+    EXPECT_TRUE(checkFile());
+
+    // Test with many consecutive commas.
+    boost::replace_all(txt, ",", ",,,,");
+    testParser(txt, ParserContext::PARSER_AGENT, false);
 }
-}
-}
+
+}  // namespace test
+}  // namespace agent
+}  // namespace isc

@@ -1,4 +1,4 @@
-# Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,8 +11,8 @@ This debug message is logged when the allocation engine successfully
 reclaims a lease. The lease is now available for assignment.
 
 % ALLOC_ENGINE_REMOVAL_NCR_FAILED sending removal name change request failed for lease %1: %2
-This error message is logged when sending a removal name change request
-to DHCP DDNS failed. This name change request is usually generated when
+This error message is logged when sending a removal NameChangeRequest
+to DHCP DDNS failed. This NameChangeRequest is usually generated when
 the lease reclamation routine acts upon expired leases. If a lease being
 reclaimed has a corresponding DNS entry it needs to be removed.
 This message indicates that removal of the DNS entry has failed.
@@ -297,6 +297,16 @@ that the number of concurrently active clients is less than the leases you have
 available, you may want to consider reducing the lease lifetime. This way, leases
 allocated to clients that are no longer active on the network will become available
 sooner.
+
+% ALLOC_ENGINE_V6_ALLOC_FAIL_CLASSES %1: Failed to allocate an IPv6 address for client with classes: %2
+This warning message is printed when Kea failed to allocate an address
+and the client's packet belongs to one or more classes. There may be several
+reasons why a lease was not assigned. One of them may be a case when all
+pools require packet to belong to certain classes and the incoming packet
+didn't belong to any of them. Another case where this information may be
+useful is to point out that the pool reserved to a given class has ran
+out of addresses. When you see this message, you may consider checking your
+pool size and your classification definitions.
 
 % ALLOC_ENGINE_V6_ALLOC_FAIL_NO_POOLS %1: no pools were available for the lease allocation
 This warning message is issued when the allocation engine fails to

@@ -308,13 +308,13 @@ public:
         auto& mgr = ConfigBackendDHCPv4Mgr::instance();
 
         // Insert global parameters into a database.
-        StampedValuePtr global_parameter = StampedValue::create("foo", "bar");
+        StampedValuePtr global_parameter = StampedValue::create("comment", "bar");
         global_parameter->setModificationTime(getTimestamp("dhcp4_global_parameter"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter4(BackendSelector::UNSPEC(),
                                                                     ServerSelector::ALL(),
                                                                     global_parameter));
 
-        global_parameter = StampedValue::create("bar", "teta");
+        global_parameter = StampedValue::create("next-server", "teta");
         global_parameter->setModificationTime(getTimestamp("dhcp4_global_parameter"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter4(BackendSelector::UNSPEC(),
                                                                     ServerSelector::ALL(),
@@ -550,11 +550,11 @@ public:
         // be merged.
         if (hasConfigElement("dhcp4_global_parameter") &&
             (getTimestamp("dhcp4_global_parameter") > lb_modification_time)) {
-            checkConfiguredGlobal(srv_cfg, "foo", Element::create("bar"));
+            checkConfiguredGlobal(srv_cfg, "comment", Element::create("bar"));
 
         } else {
             // Otherwise it shouldn't exist.
-            EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("foo"));
+            EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("comment"));
         }
 
         // If there is an audit entry for option definition and the definition
@@ -602,7 +602,7 @@ public:
         // If there is an audit entry for a subnet and the subnet modification
         // time is later than last audit revision time it should be merged.
         auto subnets = srv_cfg->getCfgSubnets4();
-        auto found_subnet = subnets->getSubnet(1);
+        auto found_subnet = subnets->getBySubnetId(1);
         if (hasConfigElement("dhcp4_subnet") &&
             (getTimestamp("dhcp4_subnet") > lb_modification_time)) {
             ASSERT_TRUE(found_subnet);
@@ -694,12 +694,12 @@ public:
         {
             SCOPED_TRACE("global parameters");
             // One of the global parameters should still be there.
-            EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("bar"));
+            EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("next-server"));
             if (deleteConfigElement("dhcp4_global_parameter", 1)) {
-                EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("foo"));
+                EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("comment"));
 
             } else {
-                EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("foo"));
+                EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("next-server"));
             }
         }
 
@@ -747,8 +747,8 @@ public:
         {
             SCOPED_TRACE("subnets");
             // One of the subnets should still be there.
-            EXPECT_TRUE(srv_cfg->getCfgSubnets4()->getSubnet(2));
-            auto found_subnet = srv_cfg->getCfgSubnets4()->getSubnet(1);
+            EXPECT_TRUE(srv_cfg->getCfgSubnets4()->getBySubnetId(2));
+            auto found_subnet = srv_cfg->getCfgSubnets4()->getBySubnetId(1);
             if (deleteConfigElement("dhcp4_subnet", 1)) {
                 EXPECT_FALSE(found_subnet);
 
@@ -809,7 +809,7 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyAll) {
 // deleted from the database.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteAll) {
     testDatabaseConfigApplyDelete(getTimestamp(-5), [this]() {
-        remoteDeleteGlobalParameter("foo", 1);
+        remoteDeleteGlobalParameter("comment", 1);
         remoteDeleteOptionDef(101, "isc");
         remoteDeleteOption(DHO_HOST_NAME, DHCP4_OPTION_SPACE);
         remoteDeleteSharedNetwork("one");
@@ -848,7 +848,7 @@ TEST_F(CBControlDHCPv4Test, databaseConfigApplyGlobal) {
 // database.
 TEST_F(CBControlDHCPv4Test, databaseConfigApplyDeleteGlobal) {
     testDatabaseConfigApplyDelete(getTimestamp(-5), [this]() {
-        remoteDeleteGlobalParameter("foo", 1);
+        remoteDeleteGlobalParameter("comment", 1);
     });
 }
 
@@ -1144,13 +1144,13 @@ public:
         auto& mgr = ConfigBackendDHCPv6Mgr::instance();
 
         // Insert global parameters into a database.
-        StampedValuePtr global_parameter = StampedValue::create("foo", "bar");
+        StampedValuePtr global_parameter = StampedValue::create("comment", "bar");
         global_parameter->setModificationTime(getTimestamp("dhcp6_global_parameter"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter6(BackendSelector::UNSPEC(),
                                                                     ServerSelector::ALL(),
                                                                     global_parameter));
 
-        global_parameter = StampedValue::create("bar", "teta");
+        global_parameter = StampedValue::create("data-directory", "teta");
         global_parameter->setModificationTime(getTimestamp("dhcp6_global_parameter"));
         ASSERT_NO_THROW(mgr.getPool()->createUpdateGlobalParameter6(BackendSelector::UNSPEC(),
                                                                     ServerSelector::ALL(),
@@ -1371,11 +1371,11 @@ public:
         // be merged.
         if (hasConfigElement("dhcp6_global_parameter") &&
             (getTimestamp("dhcp6_global_parameter") > lb_modification_time)) {
-            checkConfiguredGlobal(srv_cfg, "foo", Element::create("bar"));
+            checkConfiguredGlobal(srv_cfg, "comment", Element::create("bar"));
 
         } else {
             // Otherwise it shouldn't exist.
-            EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("foo"));
+            EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("comment"));
         }
 
         // If there is an audit entry for option definition and the definition
@@ -1423,7 +1423,7 @@ public:
         // If there is an audit entry for a subnet and the subnet modification
         // time is later than last audit revision time it should be merged.
         auto subnets = srv_cfg->getCfgSubnets6();
-        auto found_subnet = subnets->getSubnet(1);
+        auto found_subnet = subnets->getBySubnetId(1);
         if (hasConfigElement("dhcp6_subnet") &&
             (getTimestamp("dhcp6_subnet") > lb_modification_time)) {
             ASSERT_TRUE(found_subnet);
@@ -1507,12 +1507,12 @@ public:
         {
             SCOPED_TRACE("global parameters");
             // One of the global parameters should still be there.
-            EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("bar"));
+            EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("data-directory"));
             if (deleteConfigElement("dhcp6_global_parameter", 1)) {
-                EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("foo"));
+                EXPECT_FALSE(srv_cfg->getConfiguredGlobals()->get("comment"));
 
             } else {
-                EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("foo"));
+                EXPECT_TRUE(srv_cfg->getConfiguredGlobals()->get("comment"));
             }
         }
 
@@ -1560,8 +1560,8 @@ public:
         {
             SCOPED_TRACE("subnets");
             // One of the subnets should still be there.
-            EXPECT_TRUE(srv_cfg->getCfgSubnets6()->getSubnet(2));
-            auto found_subnet = srv_cfg->getCfgSubnets6()->getSubnet(1);
+            EXPECT_TRUE(srv_cfg->getCfgSubnets6()->getBySubnetId(2));
+            auto found_subnet = srv_cfg->getCfgSubnets6()->getBySubnetId(1);
             if (deleteConfigElement("dhcp6_subnet", 1)) {
                 EXPECT_FALSE(found_subnet);
                 // If the subnet has been deleted, make sure that
@@ -1608,7 +1608,7 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyAll) {
 // deleted from the database.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteAll) {
     testDatabaseConfigApplyDelete(getTimestamp(-5), [this]() {
-        remoteDeleteGlobalParameter("foo", 1);
+        remoteDeleteGlobalParameter("comment", 1);
         remoteDeleteOptionDef(101, "isc");
         remoteDeleteOption(D6O_BOOTFILE_URL, DHCP6_OPTION_SPACE);
         remoteDeleteSharedNetwork("one");
@@ -1645,7 +1645,7 @@ TEST_F(CBControlDHCPv6Test, databaseConfigApplyGlobal) {
 // database.
 TEST_F(CBControlDHCPv6Test, databaseConfigApplyDeleteGlobal) {
     testDatabaseConfigApplyDelete(getTimestamp(-5), [this]() {
-        remoteDeleteGlobalParameter("foo", 1);
+        remoteDeleteGlobalParameter("comment", 1);
     });
 }
 

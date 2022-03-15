@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "KEA-DHCP-DDNS" "8" "Feb 27, 2022" "2.0.2" "Kea"
+.TH "KEA-DHCP-DDNS" "8" "Feb 21, 2022" "2.1.3" "Kea"
 .SH NAME
 kea-dhcp-ddns \- DHCP-DDNS process in Kea
 .
@@ -36,7 +36,7 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 .SH DESCRIPTION
 .sp
 The \fBkea\-dhcp\-ddns\fP service process requests an update of DNS mapping
-based on DHCP lease change events. It runs as a separate process that
+based on DHCP lease\-change events. It runs as a separate process that
 expects to receive Name Change Requests from Kea DHCP servers.
 .SH ARGUMENTS
 .sp
@@ -61,9 +61,9 @@ Specifies the configuration file with the configuration for the DHCP\-DDNS serve
 may also contain configuration entries for other Kea services.
 .TP
 .B \fB\-t config\-file\fP
-Checks the syntax of the configuration file and reports the first error
-if any. Note that not all parameters are completely checked, in
-particular, service socket is not opened.
+Checks the syntax of the configuration file and reports the first error,
+if any. Note that not all parameters are completely checked; in
+particular, a service socket is not opened.
 .UNINDENT
 .SH DOCUMENTATION
 .sp
@@ -76,8 +76,8 @@ available in various formats (.txt, .html, .pdf) with the Kea
 distribution. The Kea documentation is available at
 \fI\%https://kea.readthedocs.io\fP\&.
 .sp
-Kea source code is documented in the Kea Developer\(aqs Guide. Its online
-version is available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
+Kea source code is documented in the Kea Developer\(aqs Guide,
+available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
 .sp
 The Kea project website is available at \fI\%https://kea.isc.org\fP\&.
 .SH MAILING LISTS AND SUPPORT

@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -13,6 +13,7 @@
 # - database version check
 # - database version upgrade
 # - lease database dump
+# - lease upload to the database
 # - lease database recount
 
 # shellcheck disable=SC1091
@@ -20,6 +21,11 @@
 
 # shellcheck disable=SC2039
 # SC2039: In POSIX sh, 'local' is undefined.
+
+# shellcheck disable=SC2086
+# SC2086: Double quote to prevent globbing and word splitting.
+# Reason for disable: explicitly don't quote extra_arguments so it is
+# considered multiple arguments instead of one.
 
 # Exit with error if commands exit with non-zero and if undefined variables are
 # used.
@@ -33,7 +39,7 @@ scripts_dir="${SCRIPTS_DIR_DEFAULT}"
 VERSION="@PACKAGE_VERSION@"
 
 # lease dump parameters
-dump_type=0
+dhcp_version=0
 dump_file=""
 dump_qry=""
 
@@ -62,7 +68,8 @@ COMMAND: Currently supported operations are:
  - db-version: Checks version of the existing database schema. Useful
  -             for checking database version when preparing for an upgrade.
  - db-upgrade: Upgrades your database schema.
- - lease-dump: Dumps current leases to a CSV file.
+ - lease-dump: Dumps current leases to a memfile-ready CSV file.
+ - lease-upload: Uploads leases from a CSV file to the database.
  - stats-recount: Recounts lease statistics.
 
 BACKEND - one of the supported backends: memfile|mysql|pgsql|cql
@@ -78,14 +85,15 @@ PARAMETERS: Parameters are optional in general, but may be required
  -n or --name database - specifies a database name to connect to
  -d or --directory - path to upgrade scripts (default: %s)
  -v or --version - print kea-admin version and quit.
+ -x or --extra - specifies extra argument(s) to pass to the database command
 
- Parameters specific to lease-dump:
+ Parameters specific to lease-dump, lease-upload:
      -4 to dump IPv4 leases to file
      -6 to dump IPv6 leases to file
-     -o or --output - name of file to which leases will be dumped
+     -i or --input to specify the name of file from which leases will be uploaded
+     -o or --output to specify the  name of file to which leases will be dumped
 ' "${VERSION}" "${0}" "${SCRIPTS_DIR_DEFAULT}"
 }
-
 
 ### Logging functions ###
 
@@ -130,7 +138,6 @@ is_in_list() {
     done
 }
 
-
 ### Functions that implement database initialization commands
 
 memfile_init() {
@@ -153,6 +160,9 @@ mysql_can_create() {
         exit 1
     fi
 
+    # shellcheck disable=SC2153
+    # SC2153: Possible misspelling: ... may not be assigned, but ... is.
+    # Reason for disable: OUTPUT is assigned in run_command.
     printf "MySQL Version is: %s\n" "${OUTPUT}"
 
     # SQL to drop our test table and trigger
@@ -247,7 +257,9 @@ mysql_init() {
     mysql_can_create
 
     printf "Initializing database using script %s\n" $scripts_dir/mysql/dhcpdb_create.mysql
-    mysql -B --host="${db_host}" --user="${db_user}" --password="${db_password}" "${db_name}" < "${scripts_dir}/mysql/dhcpdb_create.mysql"
+    mysql -B --host="${db_host}" --user="${db_user}" \
+    --password="${db_password}" \
+    "${db_name}" ${extra_arguments} < "${scripts_dir}/mysql/dhcpdb_create.mysql"
 
     printf "mysql returned status code %s\n" "${EXIT_CODE}"
 
@@ -367,7 +379,8 @@ mysql_upgrade() {
     for script in "${scripts_dir}"/mysql/upgrade*.sh
     do
         echo "Processing $script file..."
-        "${script}" --host="${db_host}" --user="${db_user}" --password="${db_password}" "${db_name}"
+        "${script}" --host="${db_host}" --user="${db_user}" \
+        --password="${db_password}" "${db_name}" ${extra_arguments}
     done
 
     printf "Database version reported after upgrade: "
@@ -399,7 +412,8 @@ pgsql_upgrade() {
     for script in "${scripts_dir}"/pgsql/upgrade*.sh
     do
         echo "Processing $script file..."
-        "${script}" -U "${db_user}" -h "${db_host}" -d "${db_name}"
+        "${script}" -U "${db_user}" -h "${db_host}" \
+        -d "${db_name}" ${extra_arguments}
     done
 
     version=$(checked_pgsql_version)
@@ -430,7 +444,8 @@ cql_upgrade() {
         for script in "${scripts_dir}"/cql/upgrade*.sh
         do
             echo "Processing $script file..."
-            "${script}" -u "${db_user}" -p "${db_password}" -k "${db_name}"
+            "${script}" -u "${db_user}" -p "${db_password}" \
+            -k "${db_name}" ${extra_arguments}
         done
     else
         echo "No upgrade script available."
@@ -481,7 +496,7 @@ get_dump_query() {
         ;;
     esac
 
-    dump_qry="${invoke} lease${dump_type}DumpHeader();${invoke} lease${dump_type}DumpData();";
+    dump_qry="${invoke} lease${dhcp_version}DumpHeader();${invoke} lease${dhcp_version}DumpData();";
 }
 
 memfile_dump() {
@@ -492,7 +507,7 @@ memfile_dump() {
 mysql_dump() {
 
     # Check the lease type was given
-    if [ $dump_type -eq 0 ]; then
+    if [ ${dhcp_version} -eq 0 ]; then
         log_error "lease-dump: lease type ( -4 or -6 ) needs to be specified"
         usage
         exit 1
@@ -545,14 +560,14 @@ mysql_dump() {
 
     # delete the tmp file on success
     rm $tmp_file
-    echo lease$dump_type successfully dumped to "$dump_file"
+    echo lease${dhcp_version} successfully dumped to "${dump_file}"
     exit 0
 }
 
 ### Functions used for dump
 pgsql_dump() {
     # Check the lease type was given
-    if [ $dump_type -eq 0 ]; then
+    if [ ${dhcp_version} -eq 0 ]; then
         log_error "lease-dump: lease type ( -4 or -6 ) needs to be specified"
         usage
         exit 1
@@ -580,22 +595,23 @@ pgsql_dump() {
     if ! (
         echo "${dump_qry}" | \
             psql --set ON_ERROR_STOP=1 -t -h "${db_host}" -q --user="${db_user}" \
-            --dbname="${db_name}" -w --no-align --field-separator=',' > "${dump_file}"
+            --dbname="${db_name}" -w --no-align --field-separator=',' \
+            ${extra_arguments} > "${dump_file}"
     ); then
-        log_error "lease-dump: psql call failed, exit code: ${EXIT_CODE}"
+        log_error "lease-dump: psql call failed, exit code: ${?}"
         exit 1
     fi
 
-    echo lease$dump_type successfully dumped to "$dump_file"
+    echo lease${dhcp_version} successfully dumped to "${dump_file}"
     exit 0
 }
 
 cql_dump() {
     # Get the query appropriate to lease version. Explicitly specify all columns
     # so that they are returned in expected order.
-    if [ $dump_type -eq 4 ]; then
+    if [ ${dhcp_version} -eq 4 ]; then
         dump_query="SELECT address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context FROM lease4"
-    elif [ $dump_type -eq 6 ]; then
+    elif [ ${dhcp_version} -eq 6 ]; then
         dump_query="SELECT address,duid,valid_lifetime,expire,subnet_id,pref_lifetime,lease_type,iaid,prefix_len,fqdn_fwd,fqdn_rev,hostname,hwaddr,hwtype,hwaddr_source,state,user_context FROM lease6"
     else
         log_error "lease-dump: lease type ( -4 or -6 ) needs to be specified"
@@ -628,8 +644,151 @@ cql_dump() {
     # by address. awk script replaces head -n -2 which is not portable.
     echo "${OUTPUT}" | tail -n +4 | awk 'n>=2 { print a[n%2] } { a[n%2]=$0; n=n+1 }' | sed -e 's/[[:space:]]*//g' | sed -e 's/|/,/g' | sort -r >> "$dump_file"
 
-    echo "lease$dump_type successfully dumped to $dump_file"
+    echo "lease${dhcp_version} successfully dumped to ${dump_file}"
     exit 0
+}
+
+######################## functions used in lease-upload ########################
+
+# Finds the position of a column by name, starting with 1.
+get_column_position() {
+    local column_name="${1}"; shift
+
+    # Look only in the header, count the number of commas up to the column.
+    position=$(head -n 1 "${input_file}" | grep -Eo ",|${column_name}" | uniq -c | \
+        head -n 1 | grep ',' | tr -s ' ' | cut -d ' ' -f 2)
+
+    if test -z "${position}"; then
+        # If no commas, that means position 1.
+        printf '1'
+    else
+        # Else increment, so that it starts at 1.
+        printf '%s' "$((position + 1))"
+    fi
+}
+
+# Adds quotes around values at given positions starting with 1 in a CSV line.
+stringify_positions_in_line() {
+    local positions="${1}"; shift
+    local line="${1}"; shift
+
+    i=1
+    output=
+    for p in ${positions}; do
+        # Get everything up to position p.
+        if test "${i}" -lt "${p}"; then
+            up_until_p=$(printf '%s' "${line}" | cut -d ',' -f "${i}-$((p - 1))")
+        else
+            up_until_p=''
+        fi
+
+        # Get value at position p.
+        p_word=$(printf '%s' "${line}" | cut -d ',' -f "${p}")
+
+        # Add comma unless we're doing the first append.
+        if test "${i}" != 1; then
+            output="${output},"
+        fi
+
+        # Append everything up to position p.
+        output="${output}${up_until_p}"
+
+        # Add comma if we're not stringifying position 1 and if there is
+        # anything up to position p. In the second case, the comma was already
+        # added at a previous step.
+        if test "${p}" != 1 && test -n "${up_until_p}"; then
+            output="${output},"
+        fi
+
+        # Add value at position p.
+        output="${output}'${p_word}'"
+
+        # Skip position p when getting the values between positions next time.
+        i=$((p + 1))
+    done
+
+    # The last position might be somewhere in the middle, so add everything
+    # until the end.
+    the_rest=$(printf '%s' "${line}" | cut -d ',' -f ${i}-)
+
+    # Add comma unless we're adding the whole line or nothing.
+    if test "${i}" != 1 && test -n "${the_rest}"; then
+        output="${output},"
+    fi
+
+    # Append.
+    output="${output}${the_rest}"
+
+    # Print back to the caller.
+    printf '%s' "${output}"
+}
+
+# Entry point for the lease-upload command.
+lease_upload() {
+    # Check that an input file was specified.
+    if test -z "${input_file-}"; then
+        log_error 'you must specify an input file with -i or --input for lease-upload'
+        usage
+        exit 1
+    fi
+
+    # Check that the input file has at least one row of values.
+    if test "$(wc -l < "${input_file}")" -le 1; then
+        log_error 'CSV file has no leases'
+        exit 1
+    fi
+
+    # Determine the columns whose values need to be stringified to avoid syntax
+    # errors in the MySQL client. These are columns which are VARCHARs or need
+    # to be further processed by a procedure.
+    if test "${dhcp_version}" = '4'; then
+        string_columns='address hwaddr client_id hostname user_context'
+    elif test "${dhcp_version}" = '6'; then
+        string_columns='address duid hostname hwaddr user_context'
+    else
+        log_error "lease-upload: lease type -4 or -6 needs to be specified"
+        usage
+        exit 1
+    fi
+
+    # Get positions of string columns.
+    string_positions=
+    for i in ${string_columns}; do
+        string_positions="${string_positions} $(get_column_position "${i}")"
+    done
+
+    # Construct the SQL insert statements.
+    header_parsed=false
+    sql_statement='START TRANSACTION;'
+    while read -r line; do
+        if "${header_parsed}"; then
+            line=$(stringify_positions_in_line "${string_positions}" "${line}")
+            if test "${backend}" = 'mysql'; then
+                sql_statement="${sql_statement} CALL lease${dhcp_version}Upload(${line}); "
+            elif test "${backend}" = 'pgsql'; then
+                sql_statement="${sql_statement} SELECT lease${dhcp_version}Upload(${line}); "
+            else
+                log_error "lease-upload not implemented for ${backend}"
+                exit 1
+            fi
+        else
+            header_parsed=true
+        fi
+    done < "${input_file}"
+    sql_statement="${sql_statement} COMMIT;"
+
+    # Execute the SQL insert statements.
+    if test "${backend}" = 'mysql'; then
+        output="$(mysql_execute "${sql_statement}")"
+    elif test "${backend}" = 'pgsql'; then
+        output="$(pgsql_execute "${sql_statement}")"
+    else
+        log_error "lease-upload not implemented for ${backend}"
+        exit 1
+    fi
+
+    # Print a confirmation message.
+    printf 'lease%s successfully updated.\n' "${dhcp_version}"
 }
 
 ### Functions used for recounting statistics
@@ -689,7 +848,7 @@ if test "${command}" = "-v" || test "${command}" = "--version" ; then
     exit 0
 fi
 
-is_in_list "${command}" "db-init db-version db-upgrade lease-dump stats-recount"
+is_in_list "${command}" "db-init db-version db-upgrade lease-dump lease-upload stats-recount"
 if [ "${_inlist}" -eq 0 ]; then
     log_error "invalid command: ${command}"
     usage
@@ -786,21 +945,31 @@ do
             ;;
         # specify DHCPv4 lease type
         -4)
-            if [ $dump_type -eq 6 ]; then
+            if [ ${dhcp_version} -eq 6 ]; then
                 log_error "you may not specify both -4 and -6"
                 usage
                 exit 1
             fi
-            dump_type=4
+            dhcp_version=4
             ;;
         # specify DHCPv6 lease type
         -6)
-            if [ $dump_type -eq 4 ]; then
+            if [ ${dhcp_version} -eq 4 ]; then
                 log_error "you may not specify both -4 and -6"
                 usage
                 exit 1
             fi
-            dump_type=6
+            dhcp_version=6
+            ;;
+        # specify input file, used by lease-upload
+        -i|--input)
+            shift
+            input_file=${1-}
+            if [ -z "${input_file}" ]; then
+                log_error '-i or --input requires a parameter'
+                usage
+                exit 1
+            fi
             ;;
         # specify output file, currently only used by lease dump
         -o|--output)
@@ -810,6 +979,20 @@ do
                 log_error "-o or --output requires a parameter"
                 usage
                 exit 1
+            fi
+            ;;
+        # specify extra arguments to pass to the database command
+        -x|--extra)
+            shift
+            if [ -z "${1-}" ]; then
+                log_error "-x or --extra requires a parameter"
+                usage
+                exit 1
+            fi
+            if [ -z "${extra_arguments}" ]; then
+                extra_arguments=${1}
+            else
+                extra_arguments="${extra_arguments} ${1}"
             fi
             ;;
         *)
@@ -892,6 +1075,24 @@ case ${command} in
                 ;;
             cql)
                 cql_dump
+                ;;
+            esac
+        ;;
+    lease-upload)
+        case ${backend} in
+            memfile)
+                log_error 'lease-upload is not supported for memfile'
+                exit 1
+                ;;
+            mysql)
+                lease_upload
+                ;;
+            pgsql)
+                lease_upload
+                ;;
+            cql)
+                log_error 'lease-export cql is deprecated'
+                exit 1
                 ;;
             esac
         ;;

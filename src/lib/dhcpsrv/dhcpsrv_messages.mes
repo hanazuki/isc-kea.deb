@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -405,6 +405,11 @@ host from a CQL database by IPv6 criteria.
 An informational message logged when multiple hosts from a CQL database are retrieved.
 
 % DHCPSRV_CQL_LEASE_EXCEPTION_THROWN Exception thrown during Cassandra operation: %1
+
+% DHCPSRV_CQL_NO_TLS_SUPPORT Attempt to configure TLS (unsupported for CQL): %1
+This error message is printed when TLS support was required in the Kea
+configuration: this feature is not supported for Cassandra/CQL. The
+parameters of the connection are logged.
 
 % DHCPSRV_CQL_ROLLBACK rolling back Cassandra database.
 The code has issued a rollback call. For Cassandra, this is a no-op.
@@ -979,6 +984,10 @@ in the MySQL database returned a negative value. This shows a problem
 which can be fixed only by an offline direct recount on the database.
 This message is issued only once.
 
+% DHCPSRV_MYSQL_NO_TLS TLS was required but is not used
+This error message is issued when TLS for the connection was required but
+TLS is not used.
+
 % DHCPSRV_MYSQL_ROLLBACK rolling back MySQL database
 The code has issued a rollback call.  All outstanding transaction will
 be rolled back and not committed to the database.
@@ -991,6 +1000,10 @@ transactions in this case. This message is issued when data is
 inserted into multiple tables with multiple INSERT statements
 and there may be a need to rollback the whole transaction if
 any of these INSERT statements fail.
+
+% DHCPSRV_MYSQL_TLS_CIPHER TLS cipher: %1
+A debug message issued when a new MySQL connected is created with TLS.
+The TLS cipher name is logged.
 
 % DHCPSRV_MYSQL_UPDATE_ADDR4 updating IPv4 lease for address %1
 A debug message issued when the server is attempting to update IPv4
@@ -1203,6 +1216,11 @@ in the PostgreSQL database returned a negative value. This shows a problem
 which can be fixed only by an offline direct recount on the database.
 This message is issued only once.
 
+% DHCPSRV_PGSQL_NO_TLS_SUPPORT Attempt to configure TLS (unsupported for PostgreSQL): %1
+This error message is printed when TLS support was required in the Kea
+configuration: Kea was built with this feature disabled for PostgreSQL.
+The parameters of the connection are logged.
+
 % DHCPSRV_PGSQL_ROLLBACK rolling back PostgreSQL database
 The code has issued a rollback call.  All outstanding transaction will
 be rolled back and not committed to the database.
@@ -1216,6 +1234,12 @@ inserted into multiple tables with multiple INSERT statements
 and there may be a need to rollback the whole transaction if
 any of these INSERT statements fail.
 
+% DHCPSRV_PGSQL_TLS_SUPPORT Attempt to configure TLS: %1
+This informational message is printed when TLS support was required in
+the Kea configuration: The TLS support in PostgreSQL will be initialized but
+its configuration is fully managed outside the C API.
+The parameters of the connection are logged.
+
 % DHCPSRV_PGSQL_UPDATE_ADDR4 updating IPv4 lease for address %1
 A debug message issued when the server is attempting to update IPv4
 lease from the PostgreSQL database for the specified address.
@@ -1224,7 +1248,7 @@ lease from the PostgreSQL database for the specified address.
 A debug message issued when the server is attempting to update IPv6
 lease from the PostgreSQL database for the specified address.
 
-% DHCPSRV_QUEUE_NCR %1: name change request to %2 DNS entry queued: %3
+% DHCPSRV_QUEUE_NCR %1: Name change request to %2 DNS entry queued: %3
 A debug message which is logged when the NameChangeRequest to add or remove
 a DNS entries for a particular lease has been queued. The first argument
 includes the client identification information. The second argument
@@ -1232,7 +1256,7 @@ indicates whether the DNS entry is to be added or removed. The third
 argument carries the details of the NameChangeRequest.
 
 % DHCPSRV_QUEUE_NCR_FAILED %1: queuing %2 name change request failed for lease %3: %4
-This error message is logged when sending a name change request
+This error message is logged when sending a NameChangeRequest
 to DHCP DDNS failed. The first argument includes the client identification
 information. The second argument indicates whether the DNS entry is to be
 added or removed. The third argument specifies the leased address. The

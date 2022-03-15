@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -57,8 +57,7 @@ class NetworkTest : public ::testing::Test {
 public:
 
     /// @brief Constructor.
-    NetworkTest()
-        : globals_(Element::createMap()) {
+    NetworkTest() : globals_(new CfgGlobals()) {
     }
 
     /// @brief Returns pointer to the function which returns configured
@@ -68,7 +67,7 @@ public:
     }
 
     /// @brief Returns configured global parameters.
-    ConstElementPtr fetchGlobalsFn() {
+    ConstCfgGlobalsPtr fetchGlobalsFn() {
         return (globals_);
     }
 
@@ -146,13 +145,14 @@ public:
     }
 
     /// @brief Holds the collection of configured globals.
-    ElementPtr globals_;
+    CfgGlobalsPtr globals_;
 };
 
 // This test verifies that the inheritance is supported for certain
 // network parameters.
 TEST_F(NetworkTest, inheritanceSupport4) {
     // Set global values for each parameter.
+    // One day move to indexes...
     globals_->set("valid-lifetime", Element::create(80));
     globals_->set("renew-timer", Element::create(80));
     globals_->set("rebind-timer", Element::create(80));
@@ -359,7 +359,7 @@ TEST_F(NetworkTest, inheritanceSupport4) {
 TEST_F(NetworkTest, inheritanceSupport6) {
     // Set global values for each parameter.
     globals_->set("preferred-lifetime", Element::create(80));
-    globals_->set("rapid-commit", Element::create(false));
+    // Note that currently rapid commit is not a global parameter.
     globals_->set("ddns-send-updates", Element::create(true));
     globals_->set("ddns-override-no-update", Element::create(true));
     globals_->set("ddns-override-client-update", Element::create(true));
@@ -380,12 +380,6 @@ TEST_F(NetworkTest, inheritanceSupport6) {
         testNetworkInheritance<TestNetwork6>(&Network6::getPreferred,
                                              &Network6::setPreferred,
                                              60, 80);
-    }
-    {
-        SCOPED_TRACE("rapid-commit");
-        testNetworkInheritance<TestNetwork6>(&Network6::getRapidCommit,
-                                             &Network6::setRapidCommit,
-                                             true, false);
     }
     {
         SCOPED_TRACE("ddns-send-updates");

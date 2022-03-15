@@ -53,6 +53,16 @@ Kea components use extended JSON with additional features allowed:
 -  File inclusion: JSON files can include other JSON files by using a
    statement of the form \<?include "file.json"?\>.
 
+-  Extra commas: to remove the inconvenience of errors caused by leftover commas
+   after making changes to configuration. While parsing, a warning is printed
+   with the location of the comma to give the user the ability to correct a
+   potential mistake.
+
+.. warning::
+
+   These features are meant to be used in a JSON configuration file.
+   Their usage in any other way may result in errors.
+
 The configuration file consists of a single object (often colloquially
 called a map) started with a curly bracket. It comprises only one of
 the "Dhcp4", "Dhcp6", "DhcpDdns", "Control-agent", or "Netconf" objects.
@@ -90,19 +100,6 @@ A very simple configuration for DHCPv4 could look like this:
 
 More examples are available in the installed ``share/doc/kea/examples``
 directory.
-
- .. note::
-
-   As of Kea 1.6.0, the "Logging" element was removed and its contents (the
-   "loggers" object) moved inside the configuration objects (maps) for the
-   respective Kea modules. For example, the "Dhcp4" map contains the
-   "loggers" object, specifying logging configuration for the DHCPv4
-   server. Support for the top-level "Logging" object was
-   removed in Kea 1.7.10.
-
-   The specification for supporting several elements (e.g. "Dhcp4", "Dhcp6")
-   in one file was removed in Kea 1.7.10, so each component
-   now requires a separate configuration file.
 
 To avoid repetition of mostly similar structures, examples in the rest
 of this guide will showcase only the subset of parameters appropriate

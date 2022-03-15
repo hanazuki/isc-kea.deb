@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -177,6 +177,10 @@ The source of that configuration depends on used configuration backend.
 This is a debug message that is issued every time the server receives a
 configuration. That happens at start up and also when a server configuration
 change is committed by the administrator.
+
+% DHCP4_CONFIG_SYNTAX_WARNING configuration syntax warning: %1
+This warning message indicates that the DHCPv4 configuration had a minor
+syntax error. The error was displayed and the configuration parsing resumed.
 
 % DHCP4_CONFIG_UNRECOVERABLE_ERROR DHCPv4 server new configuration failed with an error which cannot be recovered
 This fatal error message is issued when a new configuration raised an error
@@ -795,6 +799,10 @@ and the lease. The first argument includes the client and the
 transaction identification information. The second argument specifies
 the leased address.
 
+% DHCP4_RESERVATIONS_LOOKUP_FIRST_ENABLED Multi-threading is enabled and host reservations lookup is always performed first.
+This is a message informing that host reservations lookup is performed before
+lease lookup when multi-threading is enabled overwriting configured value.
+
 % DHCP4_RESERVED_HOSTNAME_ASSIGNED %1: server assigned reserved hostname %2
 This debug message is issued when the server found a hostname reservation
 for a client and uses this reservation in a hostname option sent back
@@ -919,6 +927,14 @@ This message is printed then KEA_TEST_SEND_RESPONSES_TO_SOURCE
 environment variable is set. It's causing Kea to send packets to
 source address of incoming packet. Usable just in testing environment
 to simulate multiple subnet traffic from single source.
+
+% DHCP4_UNKNOWN_ADDRESS_REQUESTED %1: client requested an unknown address, client sent ciaddr %2, requested-ip-address %3
+This message indicates that the client requested an address that does
+not belong to any dynamic pools managed by this server.  The first argument
+contains the client and the transaction identification information.
+The second argument contains the IPv4 address in the ciaddr field. The
+third argument contains the IPv4 address in the requested-ip-address
+option (if present).
 
 % DHCP6_DHCP4O6_PACKET_RECEIVED received DHCPv4o6 packet from DHCPv6 server (type %1) for %2 port %3 on interface %4
 This debug message is printed when the server is receiving a DHCPv4o6

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -85,6 +85,77 @@ void runMySQLScript(const std::string& path, const std::string& script_name,
         std::cerr << "runMySQLSchema failed: " << cmd.str() << std::endl;
         isc_throw(Unexpected, "runMySQLSchema failed: " << cmd.str());
     }
+}
+
+string getMySQLTlsEnv() {
+    const string name("KEA_MYSQL_HAVE_SSL");
+    const char* val = getenv(name.c_str());
+    return (val ? string(val) : "");
+}
+
+string getMySQLTlsServerVariable(string variable) {
+    MYSQL_RES* result(0);
+    try {
+        DatabaseConnection::ParameterMap parameters =
+            DatabaseConnection::parse(validMySQLConnectionString());
+        MySqlConnection conn(parameters);
+        conn.openDatabase();
+        string sql("SHOW GLOBAL VARIABLES LIKE '");
+        sql += variable;
+        sql += "'";
+        if (mysql_query(conn.mysql_, sql.c_str())) {
+            isc_throw(DbOperationError,
+                      sql << ": " << mysql_error(conn.mysql_));
+        }
+        result = mysql_use_result(conn.mysql_);
+        size_t count = mysql_num_fields(result);
+        if (count != 2) {
+            isc_throw(DbOperationError,
+                      sql << " returned " << count << " rows, expecting 2");
+        }
+        MYSQL_ROW row = mysql_fetch_row(result);
+        if (!row) {
+            isc_throw(DbOperationError, sql << " returned row is null");
+        }
+        // first column is 'have_ssl', second is the status.
+        string name(row[0]);
+        if (name != variable) {
+            isc_throw(DbOperationError,
+                      sql << " returned a wrong name '" << name
+                      << "', expected '" << variable << "'");
+        }
+        string value(row[1]);
+        mysql_free_result(result);
+        return (value);
+    } catch (...) {
+        if (result) {
+            mysql_free_result(result);
+        }
+        throw;
+    }
+}
+
+bool isMySQLTlsConfigured() {
+    if (getMySQLTlsServerVariable("ssl_ca").find("kea-ca.crt") == string::npos) {
+        return (false);
+    }
+    if (getMySQLTlsServerVariable("ssl_cert").find("kea-server.crt") == string::npos) {
+        return (false);
+    }
+    if (getMySQLTlsServerVariable("ssl_key").find("kea-server.key") == string::npos) {
+        return (false);
+    }
+    return (true);
+}
+
+string getMySQLTlsServer() {
+    string value = getMySQLTlsServerVariable("have_ssl");
+    if (value == "YES" && !isMySQLTlsConfigured()) {
+        value = "UNCONFIGURED";
+    }
+    const string env("KEA_MYSQL_HAVE_SSL");
+    static_cast<void>(setenv(env.c_str(), value.c_str(), 1));
+    return (value);
 }
 
 }  // namespace test

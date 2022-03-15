@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -333,8 +333,7 @@ NameChangeUDPSender::sendCompletionHandler(const bool successful,
     Result result;
     if (successful) {
         result = SUCCESS;
-    }
-    else {
+    } else {
         // On a failure, log the error and set the result to ERROR.
         boost::system::error_code error_code = send_callback->getErrorCode();
         if (error_code.value() == boost::asio::error::operation_aborted) {
