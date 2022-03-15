@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,7 @@
 #include <dhcpsrv/cfg_db_access.h>
 #include <dhcpsrv/cfg_duid.h>
 #include <dhcpsrv/cfg_expiration.h>
+#include <dhcpsrv/cfg_globals.h>
 #include <dhcpsrv/cfg_host_operations.h>
 #include <dhcpsrv/cfg_hosts.h>
 #include <dhcpsrv/cfg_iface.h>
@@ -72,42 +73,50 @@ public:
 
     /// @brief Returns whether or not DHCP DDNS updating is enabled.
     /// The value is the logical AND of d2_client_enabled_ and
-    /// the value returned by subnet_'s getDdnsSendUpdates().  It
+    /// the value returned by subnet_'s getDdnsSendUpdates().
+    ///
     /// @return True if updates are enabled, false otherwise or if
     /// subnet_ is empty.
     bool getEnableUpdates() const;
 
     /// @brief Returns whether or not Kea should perform updates, even if
     /// client requested no updates.
+    ///
     /// @return The value from the subnet_ or false if subnet_ is empty.
     bool getOverrideNoUpdate() const;
 
     /// @brief Returns whether or not Kea should perform updates, even if
     /// client requested delegation.
+    ///
     /// @return The value from the subnet_ or false if subnet_ is empty.
     bool getOverrideClientUpdate() const;
 
     /// @brief Returns how Kea should handle the domain-name supplied by
     /// the client.
+    ///
     /// @return The value from the subnet_ or RCM_NEVER if subnet_ is empty.
     D2ClientConfig::ReplaceClientNameMode getReplaceClientNameMode() const;
 
     /// @brief Returns the Prefix Kea should use when generating domain-names.
+    ///
     /// @return The value from the subnet_ or an empty string if subnet_ is empty.
     std::string getGeneratedPrefix() const;
 
     /// @brief Returns the suffix Kea should use when to qualify partial
     /// domain-names.
+    ///
     /// @return The value from the subnet_ or an empty string if subnet_ is empty.
     std::string getQualifyingSuffix() const;
 
     /// @brief Returns the regular expression describing invalid characters
     /// for client hostnames.  If empty, host name scrubbing should not be done.
+    ///
     /// @return The value from the subnet_ or an empty string if subnet_ is empty.
     std::string getHostnameCharSet() const;
 
     /// @brief Returns the string to replace invalid characters when scrubbing
     /// hostnames. Meaningful only if hostname_char_set_ is not empty.
+    ///
     /// @return The value from the subnet_ or an empty string if subnet_ is empty.
     std::string getHostnameCharReplacement() const;
 
@@ -141,12 +150,13 @@ public:
     bool getUseConflictResolution() const;
 
     /// @brief Returns the subnet-id of the subnet associated with these parameters
+    ///
     /// @return value of subnet-id (or 0 if no subnet is associated)
     SubnetID getSubnetId() const {
-        if (subnet_){
-            return subnet_->getID();
+        if (subnet_) {
+            return (subnet_->getID());
         } else {
-            return 0;
+            return (0);
         }
     }
 
@@ -203,6 +213,8 @@ public:
     /// @brief Constructor.
     ///
     /// Sets arbitrary configuration sequence number.
+    ///
+    /// @param sequence The configuration sequence.
     SrvConfig(const uint32_t sequence);
 
     /// @brief Returns summary of the configuration in the textual format.
@@ -226,6 +238,8 @@ public:
     std::string getConfigSummary(const uint32_t selection) const;
 
     /// @brief Returns configuration sequence number.
+    ///
+    /// @return The configuration sequence number.
     uint32_t getSequence() const {
         return (sequence_);
     }
@@ -382,73 +396,104 @@ public:
     /// @brief Returns pointer to the const object representing set
     /// of RSOO-enabled options.
     ///
-    /// @return Pointer to the const object holding RSOO-enabled
-    /// options.
+    /// @return Pointer to the const object holding RSOO-enabled options.
     ConstCfgRSOOPtr getCfgRSOO() const {
         return (cfg_rsoo_);
     }
 
     /// @brief Returns pointer to the object holding configuration pertaining
     /// to processing expired leases.
+    ///
+    /// @return Pointer to the object holding configuration pertaining to
+    /// processing expired leases.
     CfgExpirationPtr getCfgExpiration() {
         return (cfg_expiration_);
     }
 
     /// @brief Returns pointer to the const object holding configuration
     /// pertaining to processing expired leases.
+    ///
+    /// @return Pointer to the const object holding configuration pertaining to
+    /// processing expired leases.
     ConstCfgExpirationPtr getCfgExpiration() const {
         return (cfg_expiration_);
     }
 
     /// @brief Returns pointer to the object holding configuration of the
     /// server identifier.
+    ///
+    /// @return Pointer to the object holding configuration of the server
+    /// identifier.
     CfgDUIDPtr getCfgDUID() {
         return (cfg_duid_);
     }
 
     /// @brief Returns const pointer to the object holding configuration
     /// of the server identifier.
+    ///
+    /// @return Const pointer to the object holding configuration of the server
+    /// identifier.
     ConstCfgDUIDPtr getCfgDUID() const {
         return (cfg_duid_);
     }
 
     /// @brief Returns pointer to the object holding configuration of the
     /// lease and host database connection parameters.
+    ///
+    /// @return Pointer to the object holding configuration of the lease and
+    /// host database connection parameters.
     CfgDbAccessPtr getCfgDbAccess() {
         return (cfg_db_access_);
     }
 
     /// @brief Returns const pointer to the object holding configuration of
     /// the lease and host database connection parameters.
+    ///
+    /// @return Const pointer to the object holding configuration of the lease
+    /// and host database connection parameters.
     ConstCfgDbAccessPtr getCfgDbAccess() const {
         return (cfg_db_access_);
     }
 
     /// @brief Returns pointer to the object holding general configuration
     /// for host reservations in DHCPv4.
+    ///
+    /// @return Pointer to the object holding general configuration for host
+    /// reservations in DHCPv4.
     CfgHostOperationsPtr getCfgHostOperations4() {
         return (cfg_host_operations4_);
     }
 
-    /// @brief Returns const pointer to the object holding general
-    /// configuration for host reservations in DHCPv4
+    /// @brief Returns const pointer to the object holding general configuration
+    /// for host reservations in DHCPv4.
+    ///
+    /// @return Const pointer to the object holding general configuration for
+    /// host reservations in DHCPv4.
     ConstCfgHostOperationsPtr getCfgHostOperations4() const {
         return (cfg_host_operations4_);
     }
 
     /// @brief Returns pointer to the object holding general configuration
     /// for host reservations in DHCPv6.
+    ///
+    /// @return Pointer to the object holding general configuration for host
+    /// reservations in DHCPv6.
     CfgHostOperationsPtr getCfgHostOperations6() {
         return (cfg_host_operations6_);
     }
 
-    /// @brief Returns const pointer to the object holding general
-    /// configuration for host reservations in DHCPv6
+    /// @brief Returns const pointer to the object holding general configuration
+    /// for host reservations in DHCPv6.
+    ///
+    /// @return Const pointer to the object holding general configuration for
+    /// host reservations in DHCPv6.
     ConstCfgHostOperationsPtr getCfgHostOperations6() const {
         return (cfg_host_operations6_);
     }
 
     /// @brief Returns const pointer to object holding sanity checks flags
+    ///
+    /// @return Const pointer to object holding sanity checks flags
     CfgConsistencyPtr getConsistency() {
         return (cfg_consist_);
     }
@@ -472,36 +517,42 @@ public:
     }
 
     /// @brief Returns information about control socket
+    ///
     /// @return pointer to the Element that holds control-socket map
     const isc::data::ConstElementPtr getControlSocketInfo() const {
         return (control_socket_);
     }
 
     /// @brief Sets information about the control socket
+    ///
     /// @param control_socket Element that holds control-socket map
     void setControlSocketInfo(const isc::data::ConstElementPtr& control_socket) {
         control_socket_ = control_socket;
     }
 
     /// @brief Returns DHCP queue control information
+    ///
     /// @return pointer to the DHCP queue control information
     const isc::data::ConstElementPtr getDHCPQueueControl() const {
         return (dhcp_queue_control_);
     }
 
     /// @brief Sets information about the dhcp queue control
+    ///
     /// @param dhcp_queue_control new dhcp queue control information
     void setDHCPQueueControl(const isc::data::ConstElementPtr dhcp_queue_control) {
         dhcp_queue_control_ = dhcp_queue_control;
     }
 
     /// @brief Returns DHCP multi threading information
+    ///
     /// @return pointer to the DHCP multi threading information
     const isc::data::ConstElementPtr getDHCPMultiThreading() const {
         return (dhcp_multi_threading_);
     }
 
     /// @brief Sets information about the dhcp multi threading
+    ///
     /// @param dhcp_multi_threading new dhcp multi threading information
     void setDHCPMultiThreading(const isc::data::ConstElementPtr dhcp_multi_threading) {
         dhcp_multi_threading_ = dhcp_multi_threading;
@@ -509,17 +560,22 @@ public:
 
     /// @brief Returns pointer to the dictionary of global client
     /// class definitions
+    ///
+    /// @return Pointer to the dictionary of global client class definitions
     ClientClassDictionaryPtr getClientClassDictionary() {
         return (class_dictionary_);
     }
 
     /// @brief Returns pointer to const dictionary of global client
     /// class definitions
+    ///
+    /// @return Pointer to const dictionary of global client class definitions
     const ClientClassDictionaryPtr getClientClassDictionary() const {
         return (class_dictionary_);
     }
 
     /// @brief Sets the client class dictionary
+    ///
     /// @param dictionary pointer to the new class dictionary
     void setClientClassDictionary(const ClientClassDictionaryPtr& dictionary) {
         class_dictionary_ = dictionary;
@@ -714,6 +770,7 @@ public:
     /// @brief Returns probation-period
     ///
     /// See @ref setDeclinePeriod for brief discussion.
+    ///
     /// @return value of probation-period, expressed in seconds
     uint32_t getDeclinePeriod() const {
         return (decline_timer_);
@@ -730,6 +787,7 @@ public:
     }
 
     /// @brief Returns whether server should send back client-id in DHCPv4.
+    ///
     /// @return true if client-id should be returned, false otherwise.
     bool getEchoClientId() const {
         return (echo_v4_client_id_);
@@ -737,7 +795,7 @@ public:
 
     /// @brief Sets DHCP4o6 IPC port
     ///
-    /// DHCPv4-over-DHCPv6 uses a UDP socket for interserver communication,
+    /// DHCPv4-over-DHCPv6 uses a UDP socket for inter-server communication,
     /// this socket is bound and connected to this port and port + 1
     ///
     /// @param port port and port + 1 to use
@@ -748,55 +806,93 @@ public:
     /// @brief Returns DHCP4o6 IPC port
     ///
     /// See @ref setDhcp4o6Port for brief discussion.
+    ///
     /// @return value of DHCP4o6 IPC port
     uint16_t getDhcp4o6Port() const {
         return (dhcp4o6_port_);
     }
 
     /// @brief Returns pointer to the D2 client configuration
+    ///
+    /// @return Pointer to the D2 client configuration
     D2ClientConfigPtr getD2ClientConfig() {
         return (d2_client_config_);
     }
 
     /// @brief Returns pointer to const D2 client configuration
+    ///
+    /// @return Pointer to const D2 client configuration
     const D2ClientConfigPtr getD2ClientConfig() const {
         return (d2_client_config_);
     }
 
     /// @brief Sets the D2 client configuration
+    ///
     /// @param d2_client_config pointer to the new D2 client configuration
     void setD2ClientConfig(const D2ClientConfigPtr& d2_client_config) {
         d2_client_config_ = d2_client_config;
     }
 
-    /// @brief Returns pointer to configured global parameters
-    isc::data::ConstElementPtr getConfiguredGlobals() const {
-        return (isc::data::ConstElementPtr(configured_globals_));
+    /// @brief Returns non-const pointer to configured global parameters.
+    ///
+    /// This function returns a non-const pointer to the configured
+    /// global parameters.
+    ///
+    /// @return Object representing configured global parameters.
+    CfgGlobalsPtr getConfiguredGlobals() {
+        return (configured_globals_);
+    }
+
+    /// @brief Returns const pointer to configured global parameters.
+    ///
+    /// This function returns a const pointer to the configured
+    /// global parameters.
+    ///
+    /// @return Object representing configured global parameters.
+    ConstCfgGlobalsPtr getConfiguredGlobals() const {
+        return (configured_globals_);
     }
 
     /// @brief Returns pointer to a given configured global parameter
-    /// @param name name of the parameter to fetch
+    ///
+    /// @param name Name of the parameter to fetch.
     /// @return Pointer to the parameter if it exists, otherwise an
     /// empty pointer.
-    isc::data::ConstElementPtr getConfiguredGlobal(std::string name) const;
+    isc::data::ConstElementPtr getConfiguredGlobal(std::string name) const {
+        return (configured_globals_->get(name));
+    }
+
+    /// @brief Returns pointer to a given configured global parameter
+    ///
+    /// @param index Index of the parameter to fetch.
+    /// @return Pointer to the parameter if it exists, otherwise an
+    /// empty pointer.
+    isc::data::ConstElementPtr getConfiguredGlobal(int index) const {
+        return (configured_globals_->get(index));
+    }
 
     /// @brief Removes all configured global parameters.
+    ///
     /// @note This removes the default values too so either
     /// @c applyDefaultsConfiguredGlobals and @c mergeGlobals,
     /// or @c isc::data::SimpleParser::setDefaults and
     /// @c extractConfiguredGlobals should be called after.
-    void clearConfiguredGlobals();
+    void clearConfiguredGlobals() {
+        configured_globals_->clear();
+    }
 
     /// @brief Applies defaults to global parameters.
+    ///
     /// @param defaults vector of (name, type, value) defaults to apply.
     void applyDefaultsConfiguredGlobals(const isc::data::SimpleDefaults& defaults);
 
-    /// @brief Saves scalar elements from the global scope of a configuration
+    /// @brief Saves scalar elements from the global scope of a configuration.
     void extractConfiguredGlobals(isc::data::ConstElementPtr config);
 
     /// @brief Adds a parameter to the collection configured globals
-    /// @param name std::string name of the global to add
-    /// @param value ElementPtr containing the value of the global
+    ///
+    /// @param name std::string name of the global to add.
+    /// @param value ElementPtr containing the value of the global.
     void addConfiguredGlobal(const std::string& name, isc::data::ConstElementPtr value) {
         configured_globals_->set(name, value);
     }
@@ -849,6 +945,24 @@ public:
     /// @param unique Boolean value indicating if it is allowed (when false)
     /// or disallowed to specify multiple hosts with the same IP reservation.
     void setIPReservationsUnique(const bool unique);
+
+    /// @brief Sets whether the server does host reservations lookup before lease
+    /// lookup.
+    ///
+    /// @param first Boolean value indicating if host reservations lookup should
+    /// be performed before lease lookup.
+    void setReservationsLookupFirst(const bool first) {
+        reservations_lookup_first_ = first;
+    }
+
+    /// @brief Returns whether the server does host reservations lookup before
+    /// lease lookup.
+    ///
+    /// @return Boolean value indicating if host reservations lookup should be
+    /// performed before lease lookup.
+    bool getReservationsLookupFirst() const {
+        return (reservations_lookup_first_);
+    }
 
     /// @brief Unparse a configuration object
     ///
@@ -1026,7 +1140,7 @@ private:
     D2ClientConfigPtr d2_client_config_;
 
     /// @brief Stores the global parameters specified via configuration
-    isc::data::ElementPtr configured_globals_;
+    CfgGlobalsPtr configured_globals_;
 
     /// @brief Pointer to the configuration consistency settings
     CfgConsistencyPtr cfg_consist_;
@@ -1035,6 +1149,13 @@ private:
     /// @{
     bool lenient_option_parsing_;
     /// @}
+
+    /// @brief Flag which indicates if the server should do host reservations
+    /// lookup before lease lookup. This parameter has effect only when
+    /// multi-threading is disabled. If multi-threading is enabled, host
+    /// reservations lookup is always performed first.
+    /// It default to false when multi-threading is disabled.
+    bool reservations_lookup_first_;
 };
 
 /// @name Pointers to the @c SrvConfig object.

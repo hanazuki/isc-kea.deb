@@ -13,7 +13,7 @@ respective chapters elsewhere in this Kea Administrator Reference Manual (ARM).
 Quick Start Guide Using tarball
 ===============================
 
-1.  Install required run-time and build dependencies. See
+1.  Install required runtime and build dependencies. See
     :ref:`build-requirements` for details.
 
 2.  Download the Kea source tarball from the `ISC.org downloads
@@ -51,10 +51,9 @@ Quick Start Guide Using tarball
 Quick Start Guide Using Native Packages
 =======================================
 
-As of Kea 1.6.0, ISC provides native RPM, deb, and APK
-packages, which make Kea installation much easier. Unless
-specific compilation options are desired, it is usually easier to install
-Kea using native packages.
+ISC provides native Alpine, deb, and RPM packages, which make Kea installation
+much easier. Unless specific compilation options are desired, it is usually
+easier to install Kea using native packages.
 
 1. Go to `Kea on cloudsmith.io <https://cloudsmith.io/~isc/repos/>`__,
    choose the Kea version, and enter the repository.

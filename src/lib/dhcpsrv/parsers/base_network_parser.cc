@@ -1,11 +1,11 @@
-// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
-#include <dhcpsrv/triplet.h>
+#include <util/triplet.h>
 #include <dhcpsrv/parsers/base_network_parser.h>
 #include <util/optional.h>
 #include <util/strutil.h>
@@ -49,6 +49,42 @@ BaseNetworkParser::moveReservationMode(ElementPtr config) {
                   << getPosition("reservation-mode", config) << ")");
     }
     config->remove("reservation-mode");
+}
+
+void
+BaseNetworkParser::moveReservationMode(CfgGlobalsPtr config) {
+    if (!config->get(CfgGlobals::RESERVATION_MODE)) {
+        return;
+    }
+    if (config->get(CfgGlobals::RESERVATIONS_GLOBAL) ||
+        config->get(CfgGlobals::RESERVATIONS_IN_SUBNET) ||
+        config->get(CfgGlobals::RESERVATIONS_OUT_OF_POOL)) {
+        isc_throw(DhcpConfigError, "invalid use of both 'reservation-mode'"
+                  " and one of 'reservations-global', 'reservations-in-subnet'"
+                  " or 'reservations-out-of-pool' parameters");
+    }
+    std::string hr_mode = config->get(CfgGlobals::RESERVATION_MODE)->stringValue();
+    if ((hr_mode == "disabled") || (hr_mode == "off")) {
+        config->set(CfgGlobals::RESERVATIONS_GLOBAL, Element::create(false));
+        config->set(CfgGlobals::RESERVATIONS_IN_SUBNET, Element::create(false));
+    } else if (hr_mode == "out-of-pool") {
+        config->set(CfgGlobals::RESERVATIONS_GLOBAL, Element::create(false));
+        config->set(CfgGlobals::RESERVATIONS_IN_SUBNET, Element::create(true));
+        config->set(CfgGlobals::RESERVATIONS_OUT_OF_POOL, Element::create(true));
+    } else if (hr_mode == "global") {
+        config->set(CfgGlobals::RESERVATIONS_GLOBAL, Element::create(true));
+        config->set(CfgGlobals::RESERVATIONS_IN_SUBNET, Element::create(false));
+    } else if (hr_mode == "all") {
+        config->set(CfgGlobals::RESERVATIONS_GLOBAL, Element::create(false));
+        config->set(CfgGlobals::RESERVATIONS_IN_SUBNET, Element::create(true));
+        config->set("reservations-out-of-pool", Element::create(false));
+    } else {
+        isc_throw(DhcpConfigError, "invalid reservation-mode parameter: '"
+                  << hr_mode << "' ("
+                  << config->get(CfgGlobals::RESERVATION_MODE)->getPosition()
+                  << ")");
+    }
+    config->set(CfgGlobals::RESERVATION_MODE, ConstElementPtr());
 }
 
 void

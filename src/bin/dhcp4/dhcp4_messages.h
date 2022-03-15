@@ -37,6 +37,7 @@ extern const isc::log::MessageID DHCP4_CONFIG_OPTION_DUPLICATE;
 extern const isc::log::MessageID DHCP4_CONFIG_PACKET_QUEUE;
 extern const isc::log::MessageID DHCP4_CONFIG_RECEIVED;
 extern const isc::log::MessageID DHCP4_CONFIG_START;
+extern const isc::log::MessageID DHCP4_CONFIG_SYNTAX_WARNING;
 extern const isc::log::MessageID DHCP4_CONFIG_UNRECOVERABLE_ERROR;
 extern const isc::log::MessageID DHCP4_CONFIG_UNSUPPORTED_OBJECT;
 extern const isc::log::MessageID DHCP4_CONFIG_UPDATE;
@@ -136,6 +137,7 @@ extern const isc::log::MessageID DHCP4_RELEASE_EXCEPTION;
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL;
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL_NO_LEASE;
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL_WRONG_CLIENT;
+extern const isc::log::MessageID DHCP4_RESERVATIONS_LOOKUP_FIRST_ENABLED;
 extern const isc::log::MessageID DHCP4_RESERVED_HOSTNAME_ASSIGNED;
 extern const isc::log::MessageID DHCP4_RESPONSE_DATA;
 extern const isc::log::MessageID DHCP4_RESPONSE_FQDN_DATA;
@@ -156,6 +158,7 @@ extern const isc::log::MessageID DHCP4_SUBNET_DYNAMICALLY_CHANGED;
 extern const isc::log::MessageID DHCP4_SUBNET_SELECTED;
 extern const isc::log::MessageID DHCP4_SUBNET_SELECTION_FAILED;
 extern const isc::log::MessageID DHCP4_TESTING_MODE_SEND_TO_SOURCE_ENABLED;
+extern const isc::log::MessageID DHCP4_UNKNOWN_ADDRESS_REQUESTED;
 extern const isc::log::MessageID DHCP6_DHCP4O6_PACKET_RECEIVED;
 
 } // namespace dhcp

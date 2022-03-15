@@ -6,7 +6,7 @@ AC_PREREQ([2.69])
 # For released versions, this is in x.y.z format.
 # For GIT versions, this is x.y.z-git, where x.y.z denotes the next development
 # version that is worked on and that is to be released.
-AC_INIT(kea,2.0.2, kea-dev@lists.isc.org)
+AC_INIT(kea,2.1.3, kea-dev@lists.isc.org)
 AC_CONFIG_SRCDIR(README)
 
 # serial-tests is not available in automake version before 1.13, so
@@ -339,7 +339,7 @@ esac
 
 werror_extras=
 AC_ARG_WITH(werror,
-    AS_HELP_STRING([--with-werror],[Compile using -Werror (default=no)]),
+    [AS_HELP_STRING([--with-werror],[Compile using -Werror (default=no)])],
     [
      case "${withval}" in
          yes) with_werror=1 ;;
@@ -643,12 +643,12 @@ enable_benchmark="no"
 BENCHMARK_INCLUDES=
 
 AC_ARG_WITH([benchmark-source],
-            [AS_HELP_STRING([--with-benchmark-source=PATH],
+            [AS_HELP_STRING([--with-benchmark-source[[=PATH]]],
                             [location of the benchmark source])],
             [enable_benchmark="yes" ; BENCHMARK_SOURCE="$withval"])
 
 AC_ARG_WITH([benchmark],
-            [AS_HELP_STRING([--with-benchmark=PATH],
+            [AS_HELP_STRING([--with-benchmark[[=PATH]]],
                             [specify a path to benchmark header files (PATH/include) and library (PATH/lib)])],
         [benchmark_path="$withval"; enable_benchmark="yes"], [benchmark_path="no"])
 
@@ -665,8 +665,8 @@ defaultdirs="/usr /usr/local /usr/pkg /opt /opt/local"
 # the software is not built with MySQL support enabled.
 mysql_config="no"
 AC_ARG_WITH([mysql],
-  AS_HELP_STRING([--with-mysql=PATH],
-    [path to the MySQL 'mysql_config' script (MySQL is used for the DHCP database)]),
+  [AS_HELP_STRING([--with-mysql[[=PATH]]],
+    [path to the MySQL 'mysql_config' script (MySQL is used for the DHCP database)])],
   [mysql_config="$withval"])
 
 deprec_msg="no"
@@ -745,8 +745,8 @@ AM_CONDITIONAL(HAVE_MYSQL, test "$MYSQL_CONFIG" != "")
 
 pg_config="no"
 AC_ARG_WITH([pgsql],
-  AS_HELP_STRING([--with-pgsql=PATH],
-    [path to the PostgreSQL 'pg_config' script]),
+  [AS_HELP_STRING([--with-pgsql[[=PATH]]],
+    [path to the PostgreSQL 'pg_config' script])],
   [pg_config="$withval"])
 
 deprec_msg="no"
@@ -815,6 +815,15 @@ fi
 # ... and at the shell level, so Makefile.am can take action depending on this.
 AM_CONDITIONAL(HAVE_PGSQL, test "$PG_CONFIG" != "")
 
+# allow building kea programs with a PostgreSQL without OpenSSL.
+AC_ARG_ENABLE([pgsql-ssl],
+  [AS_HELP_STRING([--enable-pgsql-ssl],
+    [enable OpenSSL support in PostgreSQL [default=yes]])],
+  [pgsql_ssl=$enableval], [pgsql_ssl=no], [pgsql_ssl=yes])
+if test "${pgsql_ssl}" = "yes"; then
+    AC_DEFINE([HAVE_PGSQL_SSL], [1], [PostgreSQL was built with OpenSSL support])
+fi
+
 # allow building kea programs with static link to cassandra cpp-driver.
 AC_ARG_ENABLE([cql-static-lib],
   [AS_HELP_STRING([--enable-cql-static-lib],
@@ -830,8 +839,8 @@ fi
 
 cql_config="no"
 AC_ARG_WITH([cql],
-  AS_HELP_STRING([--with-cql=PATH],
-    [path to pkg-config or the Cassandra CQL 'cql_config' script (deprecated)]),
+  [AS_HELP_STRING([--with-cql[[=PATH]]],
+    [path to pkg-config or the Cassandra CQL 'cql_config' script (deprecated)])],
   [cql_config="$withval"])
 
 if test "${cql_config}" = "yes" ; then
@@ -1283,8 +1292,8 @@ if test "x$enable_shell" != xno -o "x$enable_generate_docs" != xno; then
   AM_PATH_PYTHON([2.7])
 
   AC_ARG_WITH(site-packages,
-           AS_HELP_STRING([--with-site-packages],
-                          [place to install Kea Python module]),
+           [AS_HELP_STRING([--with-site-packages],
+                          [place to install Kea Python module])],
            [pythondir=$withval;
             pkgpythondir=${pythondir}/$PACKAGE_NAME])
   if test "$pythondir" = "yes"; then
@@ -1337,11 +1346,11 @@ fi
 AM_CONDITIONAL(CA_TLS_TEST, test x$ca_tls_test != xno)
 
 AC_ARG_WITH([sphinx],
-  AS_HELP_STRING([--with-sphinx=PATH],[path to sphinx-build tool]),
+  [AS_HELP_STRING([--with-sphinx=PATH],[path to sphinx-build tool])],
   [sphinx_path="$withval"])
 
 AC_ARG_WITH([pdflatex],
-  AS_HELP_STRING([--with-pdflatex=PATH],[path to pdflatex tool]),
+  [AS_HELP_STRING([--with-pdflatex=PATH],[path to pdflatex tool])],
   [pdflatex_path="$withval"])
 PDFLATEX=no
 
@@ -1629,6 +1638,8 @@ AC_CONFIG_FILES([src/hooks/dhcp/lease_cmds/Makefile])
 AC_CONFIG_FILES([src/hooks/dhcp/lease_cmds/tests/Makefile])
 AC_CONFIG_FILES([src/hooks/dhcp/mysql_cb/Makefile])
 AC_CONFIG_FILES([src/hooks/dhcp/mysql_cb/tests/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/pgsql_cb/Makefile])
+AC_CONFIG_FILES([src/hooks/dhcp/pgsql_cb/tests/Makefile])
 AC_CONFIG_FILES([src/hooks/dhcp/run_script/Makefile])
 AC_CONFIG_FILES([src/hooks/dhcp/run_script/libloadtests/Makefile])
 AC_CONFIG_FILES([src/hooks/dhcp/run_script/tests/Makefile])
@@ -1800,31 +1811,39 @@ AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_010_to_011.sh],
                 [chmod +x src/share/database/scripts/mysql/upgrade_010_to_011.sh])
 AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_011_to_012.sh],
                 [chmod +x src/share/database/scripts/mysql/upgrade_011_to_012.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_012_to_013.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_012_to_013.sh])
 AC_CONFIG_FILES([src/share/database/scripts/mysql/wipe_data.sh],
                 [chmod +x src/share/database/scripts/mysql/wipe_data.sh])
 AC_CONFIG_FILES([src/share/database/scripts/pgsql/Makefile])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_1.0_to_2.0.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_1.0_to_2.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_2.0_to_3.0.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_2.0_to_3.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.0_to_3.1.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_3.0_to_3.1.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.1_to_3.2.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_3.1_to_3.2.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.2_to_3.3.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_3.2_to_3.3.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_3.3_to_4.0.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_3.3_to_4.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_4.0_to_5.0.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_4.0_to_5.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_5.0_to_5.1.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_5.0_to_5.1.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_5.1_to_6.0.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_5.1_to_6.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_6.0_to_6.1.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_6.0_to_6.1.sh])
-AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_6.1_to_6.2.sh],
-                [chmod +x src/share/database/scripts/pgsql/upgrade_6.1_to_6.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_001.0_to_002.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_001.0_to_002.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_002.0_to_003.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_002.0_to_003.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_003.0_to_003.1.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_003.0_to_003.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_003.1_to_003.2.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_003.1_to_003.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_003.2_to_003.3.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_003.2_to_003.3.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_003.3_to_004.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_003.3_to_004.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_004.0_to_005.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_004.0_to_005.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_005.0_to_005.1.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_005.0_to_005.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_005.1_to_006.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_005.1_to_006.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_006.0_to_006.1.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_006.0_to_006.1.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_006.1_to_006.2.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_006.1_to_006.2.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_006.2_to_007.0.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_006.2_to_007.0.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_007_to_008.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_007_to_008.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_008_to_009.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_008_to_009.sh])
 AC_CONFIG_FILES([src/share/database/scripts/pgsql/wipe_data.sh],
                 [chmod +x src/share/database/scripts/pgsql/wipe_data.sh])
 AC_CONFIG_FILES([src/share/yang/Makefile])

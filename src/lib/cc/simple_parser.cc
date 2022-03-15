@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -101,6 +101,7 @@ SimpleParser::getInteger(isc::data::ConstElementPtr scope, const std::string& na
                   << ") is not within expected range: (" << min << " - " << max
                   << ")");
     }
+
     return (tmp);
 }
 
@@ -163,6 +164,7 @@ SimpleParser::getPosition(const std::string& name, const data::ConstElementPtr p
     if (!elem) {
         return (parent->getPosition());
     }
+
     return (elem->getPosition());
 }
 
@@ -281,7 +283,7 @@ SimpleParser::deriveParams(ConstElementPtr parent,
     return (cnt);
 }
 
-const Triplet<uint32_t>
+const util::Triplet<uint32_t>
 SimpleParser::parseIntTriplet(const ConstElementPtr& scope,
                               const std::string& name) {
     // Initialize as some compilers complain otherwise.
@@ -304,7 +306,7 @@ SimpleParser::parseIntTriplet(const ConstElementPtr& scope,
         has_max = true;
     }
     if (!has_value && !has_min && !has_max) {
-        return (Triplet<uint32_t>());
+        return (util::Triplet<uint32_t>());
     }
     if (has_value) {
         if (!has_min && !has_max) {
@@ -359,8 +361,9 @@ SimpleParser::parseIntTriplet(const ConstElementPtr& scope,
                   << min_value << ") and max-" << name << " ("
                   << max_value << ")");
     }
-    return (Triplet<uint32_t>(min_value, value, max_value));
+
+    return (util::Triplet<uint32_t>(min_value, value, max_value));
 }
 
-}; // end of isc::dhcp namespace
-}; // end of isc namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace

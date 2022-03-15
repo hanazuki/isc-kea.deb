@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -655,7 +655,7 @@ SubnetConfigParser::createSubnet(ConstElementPtr params) {
     // In order to take advantage of the dynamic inheritance of global
     // parameters to a subnet we need to set a callback function for each
     // subnet to allow for fetching global parameters.
-    subnet_->setFetchGlobalsFn([]() -> ConstElementPtr {
+    subnet_->setFetchGlobalsFn([]() -> ConstCfgGlobalsPtr {
         return (CfgMgr::instance().getCurrentCfg()->getConfiguredGlobals());
     });
 }

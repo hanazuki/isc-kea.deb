@@ -2040,23 +2040,19 @@ TEST_F(HooksDhcpv4SrvTest, leases4CommittedRequest) {
 
     resetCalloutBuffers();
 
-    // Now request an address that can't be allocated. The client should receive
-    // the DHCPNAK.
+    // Now request an address that can't be allocated.
     client.ciaddr_ = IOAddress("10.0.0.1");
 
     ASSERT_NO_THROW(client.doRequest());
 
-    // Make sure that we received a response
-    ASSERT_TRUE(client.getContext().response_);
+    // Make sure that we did not receive a response. Since we're
+    // not authoritative, there should not be a DHCPNAK.
+    ASSERT_FALSE(client.getContext().response_);
 
-    // Check that the callback called is indeed the one we installed
-    EXPECT_EQ("leases4_committed", callback_name_);
-
+    // Check that no callback was not called.
+    EXPECT_EQ("", callback_name_);
     EXPECT_FALSE(callback_lease4_);
     EXPECT_FALSE(callback_deleted_lease4_);
-
-    // Check if the callout handle state was reset after the callout.
-    checkCalloutHandleReset(client.getContext().query_);
 }
 
 // This test verifies that the callout installed on the leases4_committed hook

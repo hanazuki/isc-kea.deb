@@ -543,10 +543,15 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = .
+
+# Add to the tarball:
+EXTRA_DIST = testdata/empty testdata/hiddenp testdata/hiddens \
+	testdata/hiddenu
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 	$(BOOST_INCLUDES) $(CRYPTO_CFLAGS) $(CRYPTO_INCLUDES) \
 	-DTEST_DATA_BUILDDIR=\"$(TEST_CA_DIR)\" \
-	-DINSTALL_PROG=\"$(abs_top_srcdir)/install-sh\"
+	-DINSTALL_PROG=\"$(abs_top_srcdir)/install-sh\" \
+	-DDATA_DIR=\"$(abs_srcdir)/testdata\"
 TEST_CA_DIR = $(srcdir)/../../asiolink/testutils/ca
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 @USE_STATIC_LINK_TRUE@AM_LDFLAGS = -static

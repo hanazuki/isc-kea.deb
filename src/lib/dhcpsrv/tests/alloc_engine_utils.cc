@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -34,6 +34,7 @@ using namespace std;
 using namespace isc::hooks;
 using namespace isc::asiolink;
 using namespace isc::stats;
+using namespace isc::util;
 
 namespace isc {
 namespace dhcp {
@@ -138,6 +139,7 @@ AllocEngine4Test::generateDeclinedLease(const std::string& addr,
 }
 
 AllocEngine6Test::AllocEngine6Test() {
+    Subnet::resetSubnetID();
     CfgMgr::instance().clear();
 
     // This lease mgr needs to exist to before configuration commits.
@@ -607,7 +609,7 @@ AllocEngine4Test::initSubnet(const asiolink::IOAddress& pool_start,
 }
 
 AllocEngine4Test::AllocEngine4Test() {
-
+    Subnet::resetSubnetID();
     CfgMgr::instance().clear();
 
     // This lease mgr needs to exist to before configuration commits.

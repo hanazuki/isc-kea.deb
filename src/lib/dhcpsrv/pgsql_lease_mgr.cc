@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -502,7 +502,12 @@ public:
             valid_lifetime_str_ = boost::lexical_cast<std::string>(lease->valid_lft_);
             bind_array.add(valid_lifetime_str_);
 
-            // Avoid overflow
+            // The lease structure holds the client last transmission time (cltt_)
+            // For convenience for external tools, this is converted to lease
+            // expiry time (expire).  The relationship is given by:
+            // expire = cltt_ + valid_lft_
+            // Avoid overflow with infinite valid lifetime by using
+            // expire = cltt_ when valid_lft_ = 0xffffffff
             if (lease_->valid_lft_ == Lease::INFINITY_LFT) {
                 expire_str_ = convertToDatabaseTime(lease->cltt_, 0);
             } else {
@@ -562,7 +567,7 @@ public:
 
             getColumnValue(r, row , SUBNET_ID_COL, subnet_id_);
 
-            // Recover from overflow
+            // Recover from overflow (see createBindForSend)
             if (valid_lifetime_ == Lease::INFINITY_LFT) {
                 cltt_ = expire_;
             } else {
@@ -744,7 +749,12 @@ public:
             valid_lifetime_str_ = boost::lexical_cast<std::string>(lease->valid_lft_);
             bind_array.add(valid_lifetime_str_);
 
-            // Avoid overflow
+            // The lease structure holds the client last transmission time (cltt_)
+            // For convenience for external tools, this is converted to lease
+            // expiry time (expire).  The relationship is given by:
+            // expire = cltt_ + valid_lft_
+            // Avoid overflow with infinite valid lifetime by using
+            // expire = cltt_ when valid_lft_ = 0xffffffff
             if (lease_->valid_lft_ == Lease::INFINITY_LFT) {
                 expire_str_ = convertToDatabaseTime(lease->cltt_, 0);
             } else {
@@ -855,7 +865,7 @@ public:
             expire_ = convertFromDatabaseTime(getRawColumnValue(r, row,
                                                                 EXPIRE_COL));
 
-            // Recover from overflow
+            // Recover from overflow (see createBindForSend)
             if (valid_lifetime_ == Lease::INFINITY_LFT) {
                 cltt_ = expire_;
             } else {
@@ -1064,14 +1074,12 @@ public:
             PsqlBindArray parms;
 
             // Add first_subnet_id used by both single and range.
-            std::string subnet_id_str = boost::lexical_cast<std::string>(getFirstSubnetID());
-            parms.add(subnet_id_str);
+            parms.addTempString(boost::lexical_cast<std::string>(getFirstSubnetID()));
 
             // Add last_subnet_id for range.
             if (getSelectMode() == SUBNET_RANGE) {
                 // Add last_subnet_id used by range.
-                std::string subnet_id_str = boost::lexical_cast<std::string>(getLastSubnetID());
-                parms.add(subnet_id_str);
+                parms.addTempString(boost::lexical_cast<std::string>(getLastSubnetID()));
             }
 
             // Run the query with where clause parameters.
@@ -1222,9 +1230,31 @@ PgSqlLeaseMgr::PgSqlLeaseMgr(const DatabaseConnection::ParameterMap& parameters)
     timer_name_ += boost::lexical_cast<std::string>(reinterpret_cast<uint64_t>(this));
     timer_name_ += "]DbReconnectTimer";
 
+    // Check TLS support.
+    size_t tls(0);
+    tls += parameters.count("trust-anchor");
+    tls += parameters.count("cert-file");
+    tls += parameters.count("key-file");
+    tls += parameters.count("cipher-list");
+#ifdef HAVE_PGSQL_SSL
+    if ((tls > 0) && !PgSqlConnection::warned_about_tls) {
+        PgSqlConnection::warned_about_tls = true;
+        LOG_INFO(dhcpsrv_logger, DHCPSRV_PGSQL_TLS_SUPPORT)
+            .arg(DatabaseConnection::redactedAccessString(parameters_));
+        PQinitSSL(1);
+    }
+#else
+    if (tls > 0) {
+        LOG_ERROR(dhcpsrv_logger, DHCPSRV_PGSQL_NO_TLS_SUPPORT)
+            .arg(DatabaseConnection::redactedAccessString(parameters_));
+        isc_throw(DbOpenError, "Attempt to configure TLS for PostgreSQL "
+                  << "backend (built with this feature disabled)");
+    }
+#endif
+
     // Validate schema version first.
-    std::pair<uint32_t, uint32_t> code_version(PG_SCHEMA_VERSION_MAJOR,
-                                               PG_SCHEMA_VERSION_MINOR);
+    std::pair<uint32_t, uint32_t> code_version(PGSQL_SCHEMA_VERSION_MAJOR,
+                                               PGSQL_SCHEMA_VERSION_MINOR);
     std::pair<uint32_t, uint32_t> db_version = getVersion();
     if (code_version != db_version) {
         isc_throw(DbOpenError,
@@ -1347,8 +1377,8 @@ PgSqlLeaseMgr::createContext() const {
 std::string
 PgSqlLeaseMgr::getDBVersion() {
     std::stringstream tmp;
-    tmp << "PostgreSQL backend " << PG_SCHEMA_VERSION_MAJOR;
-    tmp << "." << PG_SCHEMA_VERSION_MINOR;
+    tmp << "PostgreSQL backend " << PGSQL_SCHEMA_VERSION_MAJOR;
+    tmp << "." << PGSQL_SCHEMA_VERSION_MINOR;
     tmp << ", library " << PQlibVersion();
     return (tmp.str());
 }
@@ -1989,7 +2019,7 @@ PgSqlLeaseMgr::getExpiredLeasesCommon(LeaseCollection& expired_leases,
     bind_array.add(state_str);
 
     // Expiration timestamp.
-    std::string timestamp_str = PgSqlLeaseExchange::convertToDatabaseTime(time(NULL));
+    std::string timestamp_str = PgSqlLeaseExchange::convertToDatabaseTime(time(0));
     bind_array.add(timestamp_str);
 
     // If the number of leases is 0, we will return all leases. This is
@@ -2059,8 +2089,14 @@ PgSqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
     std::string addr4_str = boost::lexical_cast<std::string>(lease->addr_.toUint32());
     bind_array.add(addr4_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
-                                                                       lease->current_valid_lft_);
+    std::string expire_str;
+    // Avoid overflow (see createBindForSend)
+    if (lease->current_valid_lft_ == Lease::INFINITY_LFT) {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_, 0);
+    } else {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                               lease->current_valid_lft_);
+    }
     bind_array.add(expire_str);
 
     // Drop to common update code
@@ -2090,8 +2126,14 @@ PgSqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
     std::string addr_str = lease->addr_.toText();
     bind_array.add(addr_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
-                                                                       lease->current_valid_lft_);
+    std::string expire_str;
+    // Avoid overflow (see createBindForSend)
+    if (lease->current_valid_lft_ == Lease::INFINITY_LFT) {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_, 0);
+    } else {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                               lease->current_valid_lft_);
+    }
     bind_array.add(expire_str);
 
     // Drop to common update code
@@ -2132,8 +2174,14 @@ PgSqlLeaseMgr::deleteLease(const Lease4Ptr& lease) {
     std::string addr4_str = boost::lexical_cast<std::string>(addr.toUint32());
     bind_array.add(addr4_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
-                                                                       lease->current_valid_lft_);
+    std::string expire_str;
+    // Avoid overflow (see createBindForSend)
+    if (lease->current_valid_lft_ == Lease::INFINITY_LFT) {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_, 0);
+    } else {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                               lease->current_valid_lft_);
+    }
     bind_array.add(expire_str);
 
     auto affected_rows = deleteLeaseCommon(DELETE_LEASE4, bind_array);
@@ -2167,8 +2215,14 @@ PgSqlLeaseMgr::deleteLease(const Lease6Ptr& lease) {
     std::string addr6_str = addr.toText();
     bind_array.add(addr6_str);
 
-    std::string expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
-                                                                       lease->current_valid_lft_);
+    std::string expire_str;
+    // Avoid overflow (see createBindForSend)
+    if (lease->current_valid_lft_ == Lease::INFINITY_LFT) {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_, 0);
+    } else {
+        expire_str = PgSqlLeaseExchange::convertToDatabaseTime(lease->current_cltt_,
+                                                               lease->current_valid_lft_);
+    }
     bind_array.add(expire_str);
 
     auto affected_rows = deleteLeaseCommon(DELETE_LEASE6, bind_array);
@@ -2213,7 +2267,7 @@ PgSqlLeaseMgr::deleteExpiredReclaimedLeasesCommon(const uint32_t secs,
     bind_array.add(state_str);
 
     // Expiration timestamp.
-    std::string expiration_str = PgSqlLeaseExchange::convertToDatabaseTime(time(NULL) -
+    std::string expiration_str = PgSqlLeaseExchange::convertToDatabaseTime(time(0) -
         static_cast<time_t>(secs));
     bind_array.add(expiration_str);
 

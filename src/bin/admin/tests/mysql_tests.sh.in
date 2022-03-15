@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -49,6 +49,9 @@ run_statement() {
     # Execute the statement
     run_command \
         mysql_execute "${qry}"
+    # shellcheck disable=SC2153
+    # SC2153: Possible misspelling: ... may not be assigned, but ... is.
+    # Reason for disable: OUTPUT is assigned in run_command.
     value="${OUTPUT}"
 
     # Execution should succeed
@@ -154,6 +157,52 @@ INSERT INTO schema_version VALUES (1, 7);'
     test_finish 0
 }
 
+mysql_db_version_with_extra_test() {
+    test_start "mysql.db-version-with-extra"
+
+    # Let's wipe the whole database
+    mysql_wipe
+
+    # Do not create any table so db-version will raise an error
+    printf 'Checking db-version error case...\n'
+    run_command \
+        "${kea_admin}" db-version mysql -u "${db_user}" -p "${db_password}" -n "${db_name}"
+    assert_eq 1 "${EXIT_CODE}" "schema_version table still exists. (expected %d, exit code %d)"
+
+    # Ok, now let's create a version 1.7
+    run_command \
+        mysql -u"${db_user}" -p"${db_password}" "${db_name}" -e \
+'CREATE TABLE schema_version (
+    version INT PRIMARY KEY NOT NULL,
+    minor INT
+);
+INSERT INTO schema_version VALUES (1, 7);'
+    assert_eq 0 "${EXIT_CODE}" "schema_version table cannot be created. (expected %d, exit code %d)"
+
+    # Single -x.
+    run_command \
+        "${kea_admin}" db-version mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" -x --protocol=TCP
+    version="${OUTPUT}"
+    assert_eq 0 "${EXIT_CODE}" "kea-admin -x failed. (expected %d, exit code %d)"
+    assert_str_eq "1.7" "${version}" "Expected kea-admin to return %s, returned value was %s"
+
+    # Multiple -x.
+    run_command \
+        "${kea_admin}" db-version mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" \
+        -x --protocol=TCP -x --hello 2> "@abs_top_srcdir@/src/bin/admin/test-data"
+    assert_eq 2 "${EXIT_CODE}" "kea-admin -x -x succeeded. (expected %d, exit code %d)"
+    if ! grep -F "unknown option '--hello'" "@abs_top_srcdir@/src/bin/admin/test-data"; then
+        printf 'second parameter --hello was not passed to mysql with -x\n'
+        test_finish 1
+    fi
+    rm -f "@abs_top_srcdir@/src/bin/admin/test-data"
+
+    # Let's wipe the whole database
+    mysql_wipe
+
+    test_finish 0
+}
+
 mysql_host_reservation_init_test() {
     test_start "mysql.host_reservation-init"
 
@@ -247,6 +296,85 @@ mysql_upgrade_schema_to_version() {
     echo "Schema upgraded to $version"
 }
 
+mysql_upgrade_12_to_13_test() {
+    # Check the output of colonSeparatedHex().
+    run_command \
+        mysql_execute 'SELECT colonSeparatedHex(HEX(0xF123456789));'
+    assert_eq 0 "${EXIT_CODE}" 'colonSeparatedHex() failed, expected exit code %d, actual %d'
+    assert_str_eq 'f1:23:45:67:89' "${OUTPUT}"
+
+    run_command \
+        mysql_execute 'SELECT colonSeparatedHex("");'
+    assert_eq 0 "${EXIT_CODE}" 'colonSeparatedHex() failed, expected exit code %d, actual %d'
+    assert_str_eq '' "${OUTPUT}"
+
+    run_command \
+        mysql_execute 'SELECT colonSeparatedHex(HEX(0xF));'
+    assert_eq 0 "${EXIT_CODE}" 'colonSeparatedHex() failed, expected exit code %d, actual %d'
+    assert_str_eq '0f' "${OUTPUT}"
+
+    run_command \
+        mysql_execute 'SELECT colonSeparatedHex(HEX(0xF1));'
+    assert_eq 0 "${EXIT_CODE}" 'colonSeparatedHex() failed, expected exit code %d, actual %d'
+    assert_str_eq 'f1' "${OUTPUT}"
+
+    run_command \
+        mysql_execute 'SELECT colonSeparatedHex(HEX(0xF12));'
+    assert_eq 0 "${EXIT_CODE}" 'colonSeparatedHex() failed, expected exit code %d, actual %d'
+    assert_str_eq '0f:12' "${OUTPUT}"
+
+    run_command \
+        mysql_execute 'SELECT colonSeparatedHex(HEX(458753));'
+    assert_eq 0 "${EXIT_CODE}" 'colonSeparatedHex() failed, expected exit code %d, actual %d'
+    assert_str_eq '07:00:01' "${OUTPUT}"
+
+    # Check lease4Dump*().
+    run_command \
+        mysql_execute "INSERT INTO lease4 VALUES(10,20,30,40,(SELECT FROM_UNIXTIME(1678900000)),50,1,1,'one,example,com',0,'{ \"a\": 1, \"b\": 2 }');"
+    assert_eq 0 "${EXIT_CODE}" 'INSERT INTO lease4 failed, expected exit code %d, actual %d'
+    assert_str_eq '' "${OUTPUT}"
+
+    run_command \
+        mysql_execute "CALL lease4DumpHeader();"
+    assert_eq 0 "${EXIT_CODE}" 'lease4DumpHeader() failed, expected exit code %d, actual %d'
+    assert_str_eq 'address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context' "${OUTPUT}"
+
+    run_command \
+        mysql_execute "CALL lease4DumpData();"
+    assert_eq 0 "${EXIT_CODE}" 'lease4DumpData() failed, expected exit code %d, actual %d'
+    output=$(printf '%s' "${OUTPUT}" | sed 's/\t/,/g')  # turn tabs into commas
+    assert_str_eq '0.0.0.10,32:30,33:30,40,1678900000,50,1,1,one&#x2cexample&#x2ccom,0,{ "a": 1&#x2c "b": 2 }' "${output}"
+
+    # Check lease6Dump*().
+    run_command \
+        mysql_execute "INSERT INTO lease6 VALUES('::10',20,30,(SELECT FROM_UNIXTIME(1678900000)),40,50,1,60,70,1,1,'one,example,com',80,90,16,0,'{ \"a\": 1, \"b\": 2 }');"
+    assert_eq 0 "${EXIT_CODE}" 'INSERT INTO lease6 failed, expected exit code %d, actual %d'
+    assert_str_eq '' "${OUTPUT}"
+
+    run_command \
+        mysql_execute "CALL lease6DumpHeader();"
+    assert_eq 0 "${EXIT_CODE}" 'lease6DumpHeader() failed, expected exit code %d, actual %d'
+    assert_str_eq 'address,duid,valid_lifetime,expire,subnet_id,pref_lifetime,lease_type,iaid,prefix_len,fqdn_fwd,fqdn_rev,hostname,hwaddr,state,user_context,hwtype,hwaddr_source' "${OUTPUT}"
+
+    run_command \
+        mysql_execute "CALL lease6DumpData();"
+    assert_eq 0 "${EXIT_CODE}" 'lease6DumpData() failed, expected exit code %d, actual %d'
+    output=$(printf '%s' "${OUTPUT}" | sed 's/\t/,/g')  # turn tabs into commas
+    assert_str_eq '::10,32:30,30,1678900000,40,50,1,60,70,1,1,one&#x2cexample&#x2ccom,38:30,0,{ "a": 1&#x2c "b": 2 },90,16' "${output}"
+
+    # Check lease4Upload().
+    run_command \
+        mysql_execute "CALL lease4Upload('192.0.0.0','ff0102030405','01ff0102030405',7200,1234567890,1,0,0,'',0,'');"
+    assert_eq 0 "${EXIT_CODE}" 'lease4Upload() failed, expected exit code %d, actual %d'
+    assert_str_eq '' "${OUTPUT}"
+
+    # Check lease6Upload().
+    run_command \
+        mysql_execute "CALL lease6Upload('2001:db8::','000100012955cb80ff0102030407',7200,1234567890,1,3600,0,1,128,0,0,'','ff0102030407',0,'',90,16);"
+    assert_eq 0 "${EXIT_CODE}" 'lease6Upload() failed, expected exit code %d, actual %d'
+    assert_str_eq '' "${OUTPUT}"
+}
+
 mysql_upgrade_test() {
 
     test_start "mysql.upgrade"
@@ -261,10 +389,14 @@ mysql_upgrade_test() {
     version=$("${kea_admin}" db-version mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}")
     assert_str_eq "1.0" "${version}" "Expected kea-admin to return %s, returned value was %s"
 
-    # Ok, we have a 1.0 database. Let's upgrade it to 12.0.
+    # Ok, we have a 1.0 database. Let's upgrade it to 13.0.
     run_command \
         "${kea_admin}" db-upgrade mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}"
     assert_eq 0 "${EXIT_CODE}" "kea-admin db-upgrade mysql failed, expected %d, returned non-zero status code %d\n"
+
+    # Verify upgraded schema reports version 13.0.
+    version=$("${kea_admin}" db-version mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}")
+    assert_str_eq "13.0" "${version}" "Expected kea-admin to return %s, returned value was %s"
 
     # Let's check that the new tables are indeed there.
 
@@ -342,15 +474,15 @@ mysql_upgrade_test() {
     run_command \
         mysql_execute "${qry}"
     assert_eq 0 "${EXIT_CODE}" "procedure text fetch for lease4DumpData failed. (returned status code %d, expected %d)"
-    count=$(echo "${OUTPUT}" | grep -Fci 'order by l.address') || true
-    assert_eq 1 "${count}" "lease4DumpData doesn't have order by clause. (returned count %d, expected %d)"
+    count=$(echo "${OUTPUT}" | grep -Eci 'order by [a-z]*[\.]?address') || true
+    assert_eq 1 "${count}" "lease4DumpData is missing order by clause. (expected count %d, returned %d)"
 
     # verify  lease6DumpData has order by lease address
     qry="show create procedure lease6DumpData"
     run_command \
         mysql_execute "${qry}"
     assert_eq 0 "${EXIT_CODE}" "procedure text fetch for lease6DumpData failed. (returned status code %d, expected %d)"
-    count=$(echo "${OUTPUT}" | grep -Fci 'order by l.address') || true
+    count=$(echo "${OUTPUT}" | grep -Eci 'order by [a-z]*[\.]?address') || true
     assert_eq 1 "${count}" "lease6DumpData doesn't have order by clause. (returned count %d, expected %d)"
 
     #table: host_identifier_type (upgrade 4.1 -> 5.0)
@@ -885,9 +1017,8 @@ SET @disable_audit = 0;"
     qry="SELECT COUNT(*) from dhcp6_options"
     run_statement "dhcp6_options count" "$qry" 0
 
-    # Verify upgraded schema reports version 12.0
-    version=$("${kea_admin}" db-version mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}")
-    assert_str_eq "12.0" "${version}" "Expected kea-admin to return %s, returned value was %s"
+    # Check upgrade from 12.0 to 13.0.
+    mysql_upgrade_12_to_13_test
 
     # Let's wipe the whole database
     mysql_wipe
@@ -902,20 +1033,10 @@ mysql_lease4_dump_test() {
     output_dir="@abs_top_builddir@/src/bin/admin/tests"
 
     output_file="$output_dir/data/mysql.lease4_dump_test.output.csv"
-    tmp_file="$output_file.tmp"
+    ref_file="$test_dir/data/lease4_dump_test.reference.csv"
 
-    ref_file="$test_dir/data/mysql.lease4_dump_test.reference.csv"
-
-    # wipe out any residuals from prior failed runs
-    if [ -e $output_file ]
-    then
-        rm $output_file
-    fi
-
-    if [ -e $tmp_file ]
-    then
-        rm $tmp_file
-    fi
+    # Clean up any test files left from prior failed runs.
+    rm -f "${output_file}"
 
     # Let's wipe the whole database
     mysql_wipe
@@ -927,9 +1048,9 @@ mysql_lease4_dump_test() {
 
     # Insert the reference record
     insert_sql="\
-insert into lease4 values(10,20,30,40,'2015-01-01 01:15:30',50,1,1,'one.example.com', 0,NULL);\
-insert into lease4 values(11,NULL,123,40,'2015-02-02 02:30:45',50,1,1,'', 1,NULL);\
-insert into lease4 values(12,22,NULL,40,'2015-03-03 11:01:07',50,1,1,'three.example.com', 2,NULL);"
+insert into lease4 values(10,20,30,40,(SELECT FROM_UNIXTIME(1642000000)),50,1,1,'one.example.com',0,NULL);
+insert into lease4 values(11,NULL,123,40,(SELECT FROM_UNIXTIME(1643210000)),50,1,1,'',1,'{}');\
+insert into lease4 values(12,22,NULL,40,(SELECT FROM_UNIXTIME(1643212345)),50,1,1,'three,example,com',2,'{\"a\":1,\"b\":\"c\"}');"
 
     run_command \
         mysql_execute "$insert_sql"
@@ -943,10 +1064,10 @@ insert into lease4 values(12,22,NULL,40,'2015-03-03 11:01:07',50,1,1,'three.exam
     # Compare the dump output to reference file, they should be identical
     run_command \
         cmp -s "${output_file}" "${ref_file}"
-    assert_eq 0 "${EXIT_CODE}" "dump file does not match reference file, expected exit code %d, actual %d"
+    assert_eq 0 "${EXIT_CODE}" "dump file does not match reference file, expected exit code %d, actual %d, diff:\n$(diff ${ref_file} ${output_file})"
 
-    # remove the output file
-    rm $output_file
+    # Remove the output file.
+    rm -f "${output_file}"
 
     # Let's wipe the whole database
     mysql_wipe
@@ -961,20 +1082,10 @@ mysql_lease6_dump_test() {
     output_dir="@abs_top_builddir@/src/bin/admin/tests"
 
     output_file="$output_dir/data/mysql.lease6_dump_test.output.csv"
-    tmp_file="$output_file.tmp"
+    ref_file="$test_dir/data/lease6_dump_test.reference.csv"
 
-    ref_file="$test_dir/data/mysql.lease6_dump_test.reference.csv"
-
-    # wipe out any residuals from prior failed runs
-    if [ -e $output_file ]
-    then
-        rm $output_file
-    fi
-
-    if [ -e $tmp_file ]
-    then
-        rm $tmp_file
-    fi
+    # Clean up any test files left from prior failed runs.
+    rm -f "${output_file}"
 
     # Let's wipe the whole database
     mysql_wipe
@@ -986,9 +1097,9 @@ mysql_lease6_dump_test() {
 
     # Insert the reference record
     insert_sql="\
-insert into lease6 values(10,20,30,'2015-04-04 01:15:30',40,50,1,60,70,1,1,'one.example.com',80,90,16,0,NULL);\
-insert into lease6 values(11,NULL,30,'2015-05-05 02:30:45',40,50,1,60,70,1,1,'',80,90,1,1,NULL);\
-insert into lease6 values(12,21,30,'2015-06-06 11:01:07',40,50,1,60,70,1,1,'three.example.com',80,90,4,2,NULL);"
+insert into lease6 values('::10',20,30,(SELECT FROM_UNIXTIME(1642000000)),40,50,1,60,70,1,1,'one.example.com',80,90,16,0,NULL);\
+insert into lease6 values('::11',NULL,30,(SELECT FROM_UNIXTIME(1643210000)),40,50,1,60,70,1,1,'',80,90,1,1,'{}');\
+insert into lease6 values('::12',21,30,(SELECT FROM_UNIXTIME(1643212345)),40,50,1,60,70,1,1,'three,example,com',80,90,4,2,'{\"a\":1,\"b\":\"c\"}');"
 
     run_command \
         mysql_execute "$insert_sql"
@@ -997,17 +1108,101 @@ insert into lease6 values(12,21,30,'2015-06-06 11:01:07',40,50,1,60,70,1,1,'thre
     # Dump lease4 to output_file
     run_command \
         "${kea_admin}" lease-dump mysql -6 -u "${db_user}" -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}" -o $output_file
-    assert_eq 0 "${EXIT_CODE}" "kea-admin lease-dump -6 failed, status code %d"
+    assert_eq 0 "${EXIT_CODE}" "kea-admin lease-dump -6 failed, expected exit code %d, actual %d"
 
     # Compare the dump output to reference file, they should be identical
     run_command \
         cmp -s "${output_file}" "${ref_file}"
-    assert_eq 0 "${EXIT_CODE}" "dump file does not match reference file, expected exit code %d, actual %d"
+    assert_eq 0 "${EXIT_CODE}" "dump file does not match reference file, expected exit code %d, actual %d, diff:\n$(diff ${ref_file} ${output_file})"
 
-    # remove the output file
-    rm $output_file
+    # Remove the output file.
+    rm -f "${output_file}"
 
     # Let's wipe the whole database
+    mysql_wipe
+
+    test_finish 0
+}
+
+mysql_lease4_upload_test() {
+    test_start "mysql.lease4_upload_test"
+
+    input_file="@abs_top_srcdir@/src/bin/admin/tests/data/lease4_dump_test.reference.csv"
+    output_file="@abs_top_srcdir@/src/bin/admin/tests/data/lease4_dump_test.output.csv"
+
+    # Wipe the whole database.
+    mysql_wipe
+
+    # Initialize the database.
+    run_command \
+        "${kea_admin}" db-init mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}"
+    assert_eq 0 "${EXIT_CODE}" "could not create database, expected exit code %d, actual %d"
+
+    # Upload leases.
+    run_command \
+        "${kea_admin}" lease-upload mysql -4 -u "${db_user}" \
+            -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}" \
+            -i "${input_file}"
+    assert_eq 0 "${EXIT_CODE}" "kea-admin lease-upload -4 failed, expected exit code %d, actual %d"
+
+    # Dump leases.
+    run_command \
+        "${kea_admin}" lease-dump mysql -4 -u "${db_user}" \
+            -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}" \
+            -o "${output_file}"
+    assert_eq 0 "${EXIT_CODE}" "kea-admin lease-dump -4 failed, expected exit code %d, actual %d"
+
+    # Compare the initial file used for upload to the file retrieved from dump, they should be identical.
+    run_command \
+        cmp -s "${input_file}" "${output_file}"
+    assert_eq 0 "${EXIT_CODE}" "file resulted from dump after upload does not match file used for upload, expected exit code %d, actual %d, diff:\n$(diff ${input_file} ${output_file})"
+
+    # Remove the output file.
+    rm -f "${output_file}"
+
+    # Wipe the whole database.
+    mysql_wipe
+
+    test_finish 0
+}
+
+mysql_lease6_upload_test() {
+    test_start "mysql.lease6_upload_test"
+
+    input_file="@abs_top_srcdir@/src/bin/admin/tests/data/lease6_dump_test.reference.csv"
+    output_file="@abs_top_srcdir@/src/bin/admin/tests/data/lease6_dump_test.output.csv"
+
+    # Wipe the whole database.
+    mysql_wipe
+
+    # Initialize the database.
+    run_command \
+        "${kea_admin}" db-init mysql -u "${db_user}" -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}"
+    assert_eq 0 "${EXIT_CODE}" "could not create database, expected exit code %d, actual %d"
+
+    # Upload leases.
+    run_command \
+        "${kea_admin}" lease-upload mysql -6 -u "${db_user}" \
+            -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}" \
+            -i "${input_file}"
+    assert_eq 0 "${EXIT_CODE}" "kea-admin lease-upload -6 failed, expected exit code %d, actual %d"
+
+    # Dump leases.
+    run_command \
+        "${kea_admin}" lease-dump mysql -6 -u "${db_user}" \
+            -p "${db_password}" -n "${db_name}" -d "${db_scripts_dir}" \
+            -o "${output_file}"
+    assert_eq 0 "${EXIT_CODE}" "kea-admin lease-dump -6 failed, expected exit code %d, actual %d"
+
+    # Compare the initial file used for upload to the file retrieved from dump, they should be identical.
+    run_command \
+        cmp -s "${input_file}" "${output_file}"
+    assert_eq 0 "${EXIT_CODE}" "file resulted from dump after upload does not match file used for upload, expected exit code %d, actual %d, diff:\n$(diff ${input_file} ${output_file})"
+
+    # Remove the output file.
+    rm -f "${output_file}"
+
+    # Wipe the whole database.
     mysql_wipe
 
     test_finish 0
@@ -1304,12 +1499,12 @@ mysql_lease_stat_recount_test() {
     run_statement "insert v4 leases" "$qry"
 
     qry=\
-"insert into lease6 (address, lease_type, subnet_id, state) values (111,0,40,0);\
- insert into lease6 (address, lease_type, subnet_id, state) values (222,0,40,1);\
- insert into lease6 (address, lease_type, subnet_id, state) values (333,1,40,0);\
- insert into lease6 (address, lease_type, subnet_id, state) values (444,1,50,0);\
- insert into lease6 (address, lease_type, subnet_id, state) values (555,1,50,0);\
- insert into lease6 (address, lease_type, subnet_id, state) values (666,1,40,2);"
+"insert into lease6 (address, lease_type, subnet_id, state) values ('::111',0,40,0);\
+ insert into lease6 (address, lease_type, subnet_id, state) values ('::222',0,40,1);\
+ insert into lease6 (address, lease_type, subnet_id, state) values ('::333',1,40,0);\
+ insert into lease6 (address, lease_type, subnet_id, state) values ('::444',1,50,0);\
+ insert into lease6 (address, lease_type, subnet_id, state) values ('::555',1,50,0);\
+ insert into lease6 (address, lease_type, subnet_id, state) values ('::666',1,40,2);"
     run_statement "insert v6 leases" "$qry"
 
     # Now we change some counters.
@@ -1792,9 +1987,12 @@ mysql_shrink_server_tag_test() {
 mysql_db_init_test
 mysql_host_reservation_init_test
 mysql_db_version_test
+mysql_db_version_with_extra_test
 mysql_upgrade_test
 mysql_lease4_dump_test
 mysql_lease6_dump_test
+mysql_lease4_upload_test
+mysql_lease6_upload_test
 mysql_lease4_stat_test
 mysql_lease6_stat_test
 mysql_lease_stat_upgrade_test

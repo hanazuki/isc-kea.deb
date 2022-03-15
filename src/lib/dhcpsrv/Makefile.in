@@ -205,12 +205,13 @@ am__libkea_dhcpsrv_la_SOURCES_DIST = alloc_engine.cc alloc_engine.h \
 	cb_ctl_dhcp4.cc cb_ctl_dhcp4.h cb_ctl_dhcp6.cc cb_ctl_dhcp6.h \
 	cfg_4o6.cc cfg_4o6.h cfg_consistency.cc cfg_consistency.h \
 	cfg_db_access.cc cfg_db_access.h cfg_duid.cc cfg_duid.h \
-	cfg_hosts.cc cfg_hosts.h cfg_hosts_util.cc cfg_hosts_util.h \
-	cfg_iface.cc cfg_iface.h cfg_expiration.cc cfg_expiration.h \
-	cfg_host_operations.cc cfg_host_operations.h cfg_option.cc \
-	cfg_option.h cfg_option_def.cc cfg_option_def.h cfg_rsoo.cc \
-	cfg_rsoo.h cfg_shared_networks.cc cfg_shared_networks.h \
-	cfg_subnets4.cc cfg_subnets4.h cfg_subnets6.cc cfg_subnets6.h \
+	cfg_globals.cc cfg_globals.h cfg_hosts.cc cfg_hosts.h \
+	cfg_hosts_util.cc cfg_hosts_util.h cfg_iface.cc cfg_iface.h \
+	cfg_expiration.cc cfg_expiration.h cfg_host_operations.cc \
+	cfg_host_operations.h cfg_option.cc cfg_option.h \
+	cfg_option_def.cc cfg_option_def.h cfg_rsoo.cc cfg_rsoo.h \
+	cfg_shared_networks.cc cfg_shared_networks.h cfg_subnets4.cc \
+	cfg_subnets4.h cfg_subnets6.cc cfg_subnets6.h \
 	cfg_mac_source.cc cfg_mac_source.h cfg_multi_threading.cc \
 	cfg_multi_threading.h cfgmgr.cc cfgmgr.h client_class_def.cc \
 	client_class_def.h config_backend_dhcp4.h \
@@ -242,7 +243,7 @@ am__libkea_dhcpsrv_la_SOURCES_DIST = alloc_engine.cc alloc_engine.h \
 	resource_handler.cc resource_handler.h sanity_checker.cc \
 	sanity_checker.h shared_network.cc shared_network.h \
 	srv_config.cc srv_config.h subnet.cc subnet.h subnet_id.h \
-	subnet_selector.h timer_mgr.cc timer_mgr.h triplet.h utils.h \
+	subnet_selector.h timer_mgr.cc timer_mgr.h utils.h \
 	writable_host_data_source.h parsers/base_network_parser.cc \
 	parsers/base_network_parser.h \
 	parsers/client_class_def_parser.cc \
@@ -286,7 +287,8 @@ am_libkea_dhcpsrv_la_OBJECTS = libkea_dhcpsrv_la-alloc_engine.lo \
 	libkea_dhcpsrv_la-cb_ctl_dhcp6.lo libkea_dhcpsrv_la-cfg_4o6.lo \
 	libkea_dhcpsrv_la-cfg_consistency.lo \
 	libkea_dhcpsrv_la-cfg_db_access.lo \
-	libkea_dhcpsrv_la-cfg_duid.lo libkea_dhcpsrv_la-cfg_hosts.lo \
+	libkea_dhcpsrv_la-cfg_duid.lo libkea_dhcpsrv_la-cfg_globals.lo \
+	libkea_dhcpsrv_la-cfg_hosts.lo \
 	libkea_dhcpsrv_la-cfg_hosts_util.lo \
 	libkea_dhcpsrv_la-cfg_iface.lo \
 	libkea_dhcpsrv_la-cfg_expiration.lo \
@@ -379,6 +381,7 @@ am__depfiles_remade = ./$(DEPDIR)/libkea_dhcpsrv_la-alloc_engine.Plo \
 	./$(DEPDIR)/libkea_dhcpsrv_la-cfg_db_access.Plo \
 	./$(DEPDIR)/libkea_dhcpsrv_la-cfg_duid.Plo \
 	./$(DEPDIR)/libkea_dhcpsrv_la-cfg_expiration.Plo \
+	./$(DEPDIR)/libkea_dhcpsrv_la-cfg_globals.Plo \
 	./$(DEPDIR)/libkea_dhcpsrv_la-cfg_host_operations.Plo \
 	./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts.Plo \
 	./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts_util.Plo \
@@ -524,7 +527,7 @@ am__libkea_dhcpsrv_include_HEADERS_DIST = alloc_engine.h \
 	memfile_lease_storage.h ncr_generator.h network.h \
 	network_state.h pool.h resource_handler.h sanity_checker.h \
 	shared_network.h srv_config.h subnet.h subnet_id.h \
-	subnet_selector.h timer_mgr.h triplet.h utils.h \
+	subnet_selector.h timer_mgr.h utils.h \
 	writable_host_data_source.h cql_host_data_source.h \
 	cql_lease_mgr.h mysql_host_data_source.h mysql_lease_mgr.h \
 	pgsql_host_data_source.h pgsql_lease_mgr.h
@@ -843,12 +846,13 @@ libkea_dhcpsrv_la_SOURCES = alloc_engine.cc alloc_engine.h \
 	cb_ctl_dhcp4.cc cb_ctl_dhcp4.h cb_ctl_dhcp6.cc cb_ctl_dhcp6.h \
 	cfg_4o6.cc cfg_4o6.h cfg_consistency.cc cfg_consistency.h \
 	cfg_db_access.cc cfg_db_access.h cfg_duid.cc cfg_duid.h \
-	cfg_hosts.cc cfg_hosts.h cfg_hosts_util.cc cfg_hosts_util.h \
-	cfg_iface.cc cfg_iface.h cfg_expiration.cc cfg_expiration.h \
-	cfg_host_operations.cc cfg_host_operations.h cfg_option.cc \
-	cfg_option.h cfg_option_def.cc cfg_option_def.h cfg_rsoo.cc \
-	cfg_rsoo.h cfg_shared_networks.cc cfg_shared_networks.h \
-	cfg_subnets4.cc cfg_subnets4.h cfg_subnets6.cc cfg_subnets6.h \
+	cfg_globals.cc cfg_globals.h cfg_hosts.cc cfg_hosts.h \
+	cfg_hosts_util.cc cfg_hosts_util.h cfg_iface.cc cfg_iface.h \
+	cfg_expiration.cc cfg_expiration.h cfg_host_operations.cc \
+	cfg_host_operations.h cfg_option.cc cfg_option.h \
+	cfg_option_def.cc cfg_option_def.h cfg_rsoo.cc cfg_rsoo.h \
+	cfg_shared_networks.cc cfg_shared_networks.h cfg_subnets4.cc \
+	cfg_subnets4.h cfg_subnets6.cc cfg_subnets6.h \
 	cfg_mac_source.cc cfg_mac_source.h cfg_multi_threading.cc \
 	cfg_multi_threading.h cfgmgr.cc cfgmgr.h client_class_def.cc \
 	client_class_def.h config_backend_dhcp4.h \
@@ -876,7 +880,7 @@ libkea_dhcpsrv_la_SOURCES = alloc_engine.cc alloc_engine.h \
 	resource_handler.cc resource_handler.h sanity_checker.cc \
 	sanity_checker.h shared_network.cc shared_network.h \
 	srv_config.cc srv_config.h subnet.cc subnet.h subnet_id.h \
-	subnet_selector.h timer_mgr.cc timer_mgr.h triplet.h utils.h \
+	subnet_selector.h timer_mgr.cc timer_mgr.h utils.h \
 	writable_host_data_source.h parsers/base_network_parser.cc \
 	parsers/base_network_parser.h \
 	parsers/client_class_def_parser.cc \
@@ -922,7 +926,7 @@ libkea_dhcpsrv_la_LIBADD =  \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
-libkea_dhcpsrv_la_LDFLAGS = -no-undefined -version-info 51:0:0 \
+libkea_dhcpsrv_la_LDFLAGS = -no-undefined -version-info 64:0:0 \
 	$(CRYPTO_LDFLAGS) $(am__append_11) $(am__append_12) \
 	$(am__append_13)
 
@@ -950,7 +954,7 @@ libkea_dhcpsrv_include_HEADERS = alloc_engine.h alloc_engine_log.h \
 	memfile_lease_storage.h ncr_generator.h network.h \
 	network_state.h pool.h resource_handler.h sanity_checker.h \
 	shared_network.h srv_config.h subnet.h subnet_id.h \
-	subnet_selector.h timer_mgr.h triplet.h utils.h \
+	subnet_selector.h timer_mgr.h utils.h \
 	writable_host_data_source.h $(am__append_14) $(am__append_15) \
 	$(am__append_16)
 
@@ -1098,6 +1102,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_dhcpsrv_la-cfg_db_access.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_dhcpsrv_la-cfg_duid.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_dhcpsrv_la-cfg_expiration.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_dhcpsrv_la-cfg_globals.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_dhcpsrv_la-cfg_host_operations.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts_util.Plo@am__quote@ # am--include-marker
@@ -1261,6 +1266,13 @@ libkea_dhcpsrv_la-cfg_duid.lo: cfg_duid.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cfg_duid.cc' object='libkea_dhcpsrv_la-cfg_duid.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcpsrv_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcpsrv_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_dhcpsrv_la-cfg_duid.lo `test -f 'cfg_duid.cc' || echo '$(srcdir)/'`cfg_duid.cc
+
+libkea_dhcpsrv_la-cfg_globals.lo: cfg_globals.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcpsrv_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcpsrv_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_dhcpsrv_la-cfg_globals.lo -MD -MP -MF $(DEPDIR)/libkea_dhcpsrv_la-cfg_globals.Tpo -c -o libkea_dhcpsrv_la-cfg_globals.lo `test -f 'cfg_globals.cc' || echo '$(srcdir)/'`cfg_globals.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libkea_dhcpsrv_la-cfg_globals.Tpo $(DEPDIR)/libkea_dhcpsrv_la-cfg_globals.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='cfg_globals.cc' object='libkea_dhcpsrv_la-cfg_globals.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcpsrv_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcpsrv_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_dhcpsrv_la-cfg_globals.lo `test -f 'cfg_globals.cc' || echo '$(srcdir)/'`cfg_globals.cc
 
 libkea_dhcpsrv_la-cfg_hosts.lo: cfg_hosts.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_dhcpsrv_la_CPPFLAGS) $(CPPFLAGS) $(libkea_dhcpsrv_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_dhcpsrv_la-cfg_hosts.lo -MD -MP -MF $(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts.Tpo -c -o libkea_dhcpsrv_la-cfg_hosts.lo `test -f 'cfg_hosts.cc' || echo '$(srcdir)/'`cfg_hosts.cc
@@ -2022,6 +2034,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_db_access.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_duid.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_expiration.Plo
+	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_globals.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_host_operations.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts_util.Plo
@@ -2149,6 +2162,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_db_access.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_duid.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_expiration.Plo
+	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_globals.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_host_operations.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts.Plo
 	-rm -f ./$(DEPDIR)/libkea_dhcpsrv_la-cfg_hosts_util.Plo

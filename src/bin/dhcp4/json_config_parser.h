@@ -1,8 +1,11 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
+
+#ifndef DHCP4_CONFIG_PARSER_H
+#define DHCP4_CONFIG_PARSER_H
 
 #include <cc/data.h>
 #include <cc/stamped_value.h>
@@ -11,9 +14,6 @@
 
 #include <stdint.h>
 #include <string>
-
-#ifndef DHCP4_CONFIG_PARSER_H
-#define DHCP4_CONFIG_PARSER_H
 
 /// @todo: This header file and its .cc counterpart are very similar between
 /// DHCPv4 and DHCPv6. They should be merged. A ticket #2355.
@@ -56,8 +56,7 @@ class Dhcpv4Srv;
 /// @param check_only whether this configuration is for testing only
 /// @return answer that contains result of reconfiguration
 isc::data::ConstElementPtr
-configureDhcp4Server(Dhcpv4Srv&,
-                     isc::data::ConstElementPtr config_set,
+configureDhcp4Server(Dhcpv4Srv& server, isc::data::ConstElementPtr config_set,
                      bool check_only = false);
 
 }  // namespace dhcp

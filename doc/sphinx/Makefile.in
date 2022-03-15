@@ -89,8 +89,7 @@ build_triplet = @build@
 host_triplet = @host@
 
 # some tools do not use this makefile but still need generate files.
-@GENERATE_DOCS_TRUE@am__append_1 = static/static_sources.mk \
-@GENERATE_DOCS_TRUE@	arm/rst_arm_sources.mk \
+@GENERATE_DOCS_TRUE@am__append_1 = arm/rst_arm_sources.mk \
 @GENERATE_DOCS_TRUE@	man/rst_man_sources.mk man/man8s.mk \
 @GENERATE_DOCS_TRUE@	$(main_sources) $(man_sources) mes2doc.py \
 @GENERATE_DOCS_TRUE@	api2doc.py $(man8s) mes_files.mk \
@@ -170,7 +169,6 @@ am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 am__DIST_COMMON = $(srcdir)/Makefile.in \
 	$(srcdir)/arm/rst_arm_sources.mk $(srcdir)/man/man8s.mk \
 	$(srcdir)/man/rst_man_sources.mk $(srcdir)/mes_files.mk \
-	$(srcdir)/static/static_sources.mk \
 	$(top_srcdir)/src/share/api/api_files.mk
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 ACLOCAL = @ACLOCAL@
@@ -653,7 +651,7 @@ all: all-am
 
 .SUFFIXES:
 .SUFFIXES: .png .svg .uml
-$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(srcdir)/static/static_sources.mk $(srcdir)/arm/rst_arm_sources.mk $(srcdir)/man/rst_man_sources.mk $(srcdir)/man/man8s.mk $(srcdir)/mes_files.mk $(top_srcdir)/src/share/api/api_files.mk $(am__configure_deps)
+$(srcdir)/Makefile.in:  $(srcdir)/Makefile.am $(srcdir)/arm/rst_arm_sources.mk $(srcdir)/man/rst_man_sources.mk $(srcdir)/man/man8s.mk $(srcdir)/mes_files.mk $(top_srcdir)/src/share/api/api_files.mk $(am__configure_deps)
 	@for dep in $?; do \
 	  case '$(am__configure_deps)' in \
 	    *$$dep*) \
@@ -673,7 +671,7 @@ Makefile: $(srcdir)/Makefile.in $(top_builddir)/config.status
 	    echo ' cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__maybe_remake_depfiles)'; \
 	    cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@ $(am__maybe_remake_depfiles);; \
 	esac;
-$(srcdir)/static/static_sources.mk $(srcdir)/arm/rst_arm_sources.mk $(srcdir)/man/rst_man_sources.mk $(srcdir)/man/man8s.mk $(srcdir)/mes_files.mk $(top_srcdir)/src/share/api/api_files.mk $(am__empty):
+$(srcdir)/arm/rst_arm_sources.mk $(srcdir)/man/rst_man_sources.mk $(srcdir)/man/man8s.mk $(srcdir)/mes_files.mk $(top_srcdir)/src/share/api/api_files.mk $(am__empty):
 
 $(top_builddir)/config.status: $(top_srcdir)/configure $(CONFIG_STATUS_DEPENDENCIES)
 	cd $(top_builddir) && $(MAKE) $(AM_MAKEFLAGS) am--refresh
@@ -912,6 +910,13 @@ uninstall-am: uninstall-local
 
 @GENERATE_DOCS_TRUE@mans: $(man_sources) api-files.txt mes-files.txt
 @GENERATE_DOCS_TRUE@	$(SPHINXBUILD) -M man $(srcdir) $(sphinxbuilddir) $(sphinxopts)
+
+# Updates sphinx dependencies to the latest versions available on the current
+# host and freezes them in ./src/requirements.txt. Requires pip-compile:
+#   pip install pip-tools
+# Run this when dependencies are added, changed or removed.
+@GENERATE_DOCS_TRUE@update-python-dependencies: ./src/requirements.in
+@GENERATE_DOCS_TRUE@	pip-compile -r ./src/requirements.in
 
 @GENERATE_DOCS_TRUE@clean-local:
 @GENERATE_DOCS_TRUE@	rm -rf $(sphinxbuilddir)

@@ -14,7 +14,7 @@ interface for managing Kea servers. The daemon can receive control
 commands over HTTP and either forward these commands to the respective
 Kea servers or handle these commands on its own. The determination
 whether the command should be handled by the CA or forwarded is made by
-checking the value of the `service` parameter, which may be included in
+checking the value of the ``service`` parameter, which may be included in
 the command from the controlling client. The details of the supported
 commands, as well as their structures, are provided in
 :ref:`ctrl-channel`.
@@ -108,7 +108,7 @@ different from the HA peer URLs, which are strictly
 for internal HA traffic between the peers. User commands should
 still be sent via CA.
 
-The ``trust-anchor``, ``cert-file``, ```key-file``, and ``cert-required``
+The ``trust-anchor``, ``cert-file``, ``key-file``, and ``cert-required``
 parameters specify the TLS setup for HTTP, i.e. HTTPS. If these parameters
 are not specified, HTTP is used. The TLS/HTTPS support in Kea is
 described in :ref:`tls`.
@@ -134,13 +134,6 @@ for the DHCPv4 server and the CA (for that server) must match. Consult
 :ref:`dhcp4-ctrl-channel`, :ref:`dhcp6-ctrl-channel`, and
 :ref:`d2-ctrl-channel` to learn how the socket configuration is
 specified for the DHCPv4, DHCPv6, and D2 services.
-
-.. warning::
-
-   ``dhcp4-server``, ``dhcp6-server``, and ``d2-server`` were renamed to
-   ``dhcp4``, ``dhcp6``, and ``d2`` respectively in Kea 1.2. If
-   migrating from Kea 1.2, be sure to modify the CA configuration to use
-   this new naming convention.
 
 User contexts can store arbitrary data as long as they are in valid JSON
 syntax and their top-level element is a map (i.e. the data must be
@@ -179,6 +172,23 @@ is used.
    The basic HTTP authentication user ID and password are encoded
    in UTF-8, but the current Kea JSON syntax only supports the Latin-1
    (i.e. 0x00..0xff) Unicode subset.
+
+To avoid to expose the password or both the user ID and the associated
+password these values can be read from files. The syntax was extended by:
+
+-  The ``directory`` authentication parameter which handles the common
+   part of file paths. By default the value is the empty string.
+
+-  The``password-file`` client parameter which with the ``directory``
+   parameter specifies the path of a file where the password or when no
+   user ID is given the whole basic HTTP authentication secret before
+   encoding can be read.
+
+-  The ``user-file`` client parameter which with the ``directory`` parameter
+   specifies the path of a file where the user ID can be read.
+
+When files are used they are read when the configuration is loaded in order
+to detect configuration errors as soon as possible.
 
 Hook libraries can be loaded by the Control Agent in the same way as
 they are loaded by the DHCPv4 and DHCPv6 servers. The CA currently
@@ -291,11 +301,9 @@ server enables authentication of the clients using certificates.
        }
    }
 
-..
-
 .. note::
 
-   Note that the configuration snippet provided above is for testing
+   The configuration snippet provided above is for testing
    purposes only. It should be modified according to the security
    policies and best practices of the administrator's organization.
 
@@ -328,7 +336,7 @@ a boolean parameter:
    authentication.
 
 The file format is PEM. Either all the string parameters are specified and
-HTTP over TLS aka HTTPS is used, or none is specified and plain HTTP is used.
+HTTP over TLS (HTTPS) is used, or none is specified and plain HTTP is used.
 Configuring only one or two string parameters results in an error.
 
 .. note::
@@ -336,7 +344,7 @@ Configuring only one or two string parameters results in an error.
    When client certificates are not required, only the server side is
    authenticated, i.e. the communication is encrypted with an unknown
    client. This protects only against passive attacks; active
-   attacks, such as "Man in the Middle," are still possible.
+   attacks, such as "man-in-the-middle," are still possible.
 
 .. note::
 
@@ -359,7 +367,7 @@ file it should use. For example:
 
    $ ./kea-ctrl-agent -c /usr/local/etc/kea/kea-ctrl-agent.conf
 
-It can be started by keactrl as well (see :ref:`keactrl`).
+It can be started by ``keactrl`` as well (see :ref:`keactrl`).
 
 .. _agent-clients:
 

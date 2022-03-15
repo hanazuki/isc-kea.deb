@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -626,6 +626,50 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp4Parser::make_MAX_ROW_ERRORS(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("max_row_errors", driver.loc_);
+    }
+}
+
+\"trust-anchor\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_TRUST_ANCHOR(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("trust-anchor", driver.loc_);
+    }
+}
+
+\"cert-file\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_CERT_FILE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("cert-file", driver.loc_);
+    }
+}
+
+\"key-file\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_KEY_FILE(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("key-file", driver.loc_);
+    }
+}
+
+\"cipher-list\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_CIPHER_LIST(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("cipher-list", driver.loc_);
     }
 }
 
@@ -1980,6 +2024,15 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp4Parser::make_IP_RESERVATIONS_UNIQUE(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("ip-reservations-unique", driver.loc_);
+    }
+}
+
+\"reservations-lookup-first\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+        return isc::dhcp::Dhcp4Parser::make_RESERVATIONS_LOOKUP_FIRST(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("reservations-lookup-first", driver.loc_);
     }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,6 +16,7 @@
 #include <cc/cfg_to_element.h>
 #include <cc/user_context.h>
 #include <dhcp_ddns/ncr_io.h>
+#include <dhcpsrv/cfg_globals.h>
 #include <exceptions/exceptions.h>
 #include <util/optional.h>
 
@@ -44,7 +45,7 @@ public:
 
 /// @brief Callback function for @c D2ClientConfig that retrieves globally
 /// configured parameters.
-typedef std::function<data::ConstElementPtr()> FetchNetworkGlobalsFn;
+typedef std::function<ConstCfgGlobalsPtr()> FetchNetworkGlobalsFn;
 
 
 /// @brief Acts as a storage vault for D2 client configuration

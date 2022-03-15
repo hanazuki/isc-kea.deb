@@ -1,5 +1,4 @@
-
-Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanation.
+This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more details.
 
 .. code-block:: BNF
    :linenos:
@@ -55,6 +54,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_map ::= STRING ":" value
                   | not_empty_map "," STRING ":" value
+                  | not_empty_map ","
 
      list_generic ::= "[" list_content "]"
 
@@ -63,6 +63,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_list ::= value
                    | not_empty_list "," value
+                   | not_empty_list ","
 
      list_strings ::= "[" list_strings_content "]"
 
@@ -71,17 +72,22 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_list_strings ::= STRING
                            | not_empty_list_strings "," STRING
+                           | not_empty_list_strings ","
 
      unknown_map_entry ::= STRING ":"
 
      syntax_map ::= "{" global_object "}"
 
      global_object ::= "Dhcp6" ":" "{" global_params "}"
+                  | global_object_comma
+
+     global_object_comma ::= global_object ","
 
      sub_dhcp6 ::= "{" global_params "}"
 
      global_params ::= global_param
                   | global_params "," global_param
+                  | global_params ","
 
      global_param ::= data_directory
                  | preferred_lifetime
@@ -143,6 +149,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
                  | statistic_default_sample_age
                  | dhcp_multi_threading
                  | ip_reservations_unique
+                 | reservations_lookup_first
                  | compatibility
                  | parked_packet_limit
                  | unknown_map_entry
@@ -215,12 +222,15 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      ip_reservations_unique ::= "ip-reservations-unique" ":" BOOLEAN
 
+     reservations_lookup_first ::= "reservations-lookup-first" ":" BOOLEAN
+
      interfaces_config ::= "interfaces-config" ":" "{" interfaces_config_params "}"
 
      sub_interfaces6 ::= "{" interfaces_config_params "}"
 
      interfaces_config_params ::= interfaces_config_param
                              | interfaces_config_params "," interfaces_config_param
+                             | interfaces_config_params ","
 
      interfaces_config_param ::= interfaces_list
                             | re_detect
@@ -243,11 +253,13 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_database_list ::= database
                             | not_empty_database_list "," database
+                            | not_empty_database_list ","
 
      database ::= "{" database_map_params "}"
 
      database_map_params ::= database_map_param
                         | database_map_params "," database_map_param
+                        | database_map_params ","
 
      database_map_param ::= database_type
                        | user
@@ -270,6 +282,10 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
                        | consistency
                        | serial_consistency
                        | max_row_errors
+                       | trust_anchor
+                       | cert_file
+                       | key_file
+                       | cipher_list
                        | unknown_map_entry
 
      database_type ::= "type" ":" db_type
@@ -323,10 +339,19 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      serial_consistency ::= "serial-consistency" ":" STRING
 
+     trust_anchor ::= "trust-anchor" ":" STRING
+
+     cert_file ::= "cert-file" ":" STRING
+
+     key_file ::= "key-file" ":" STRING
+
+     cipher_list ::= "cipher-list" ":" STRING
+
      sanity_checks ::= "sanity-checks" ":" "{" sanity_checks_params "}"
 
      sanity_checks_params ::= sanity_checks_param
                          | sanity_checks_params "," sanity_checks_param
+                         | sanity_checks_params ","
 
      sanity_checks_param ::= lease_checks
 
@@ -336,6 +361,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      mac_sources_list ::= mac_sources_value
                      | mac_sources_list "," mac_sources_value
+                     | mac_sources_list ","
 
      mac_sources_value ::= duid_id
                       | string_id
@@ -348,6 +374,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      host_reservation_identifiers_list ::= host_reservation_identifier
                                       | host_reservation_identifiers_list "," host_reservation_identifier
+                                      | host_reservation_identifiers_list ","
 
      host_reservation_identifier ::= duid_id
                                 | hw_address_id
@@ -363,6 +390,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      multi_threading_params ::= multi_threading_param
                            | multi_threading_params "," multi_threading_param
+                           | multi_threading_params ","
 
      multi_threading_param ::= enable_multi_threading
                           | thread_pool_size
@@ -384,6 +412,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_hooks_libraries_list ::= hooks_library
                                    | not_empty_hooks_libraries_list "," hooks_library
+                                   | not_empty_hooks_libraries_list ","
 
      hooks_library ::= "{" hooks_params "}"
 
@@ -391,6 +420,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      hooks_params ::= hooks_param
                  | hooks_params "," hooks_param
+                 | hooks_params ","
                  | unknown_map_entry
 
      hooks_param ::= library
@@ -404,6 +434,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      expired_leases_params ::= expired_leases_param
                           | expired_leases_params "," expired_leases_param
+                          | expired_leases_params ","
 
      expired_leases_param ::= reclaim_timer_wait_time
                          | flush_reclaimed_timer_wait_time
@@ -431,6 +462,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_subnet6_list ::= subnet6
                            | not_empty_subnet6_list "," subnet6
+                           | not_empty_subnet6_list ","
 
      subnet6 ::= "{" subnet6_params "}"
 
@@ -438,6 +470,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      subnet6_params ::= subnet6_param
                    | subnet6_params "," subnet6_param
+                   | subnet6_params ","
 
      subnet6_param ::= preferred_lifetime
                   | min_preferred_lifetime
@@ -517,11 +550,13 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      shared_networks_list ::= shared_network
                          | shared_networks_list "," shared_network
+                         | shared_networks_list ","
 
      shared_network ::= "{" shared_network_params "}"
 
      shared_network_params ::= shared_network_param
                           | shared_network_params "," shared_network_param
+                          | shared_network_params ","
 
      shared_network_param ::= name
                          | subnet6_list
@@ -573,6 +608,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_option_def_list ::= option_def_entry
                               | not_empty_option_def_list "," option_def_entry
+                              | not_empty_option_def_list ","
 
      option_def_entry ::= "{" option_def_params "}"
 
@@ -583,6 +619,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_option_def_params ::= option_def_param
                                 | not_empty_option_def_params "," option_def_param
+                                | not_empty_option_def_params ","
 
      option_def_param ::= option_def_name
                      | option_def_code
@@ -620,6 +657,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_option_data_list ::= option_data_entry
                                | not_empty_option_data_list "," option_data_entry
+                               | not_empty_option_data_list ","
 
      option_data_entry ::= "{" option_data_params "}"
 
@@ -630,6 +668,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_option_data_params ::= option_data_param
                                  | not_empty_option_data_params "," option_data_param
+                                 | not_empty_option_data_params ","
 
      option_data_param ::= option_data_name
                       | option_data_data
@@ -660,6 +699,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_pools_list ::= pool_list_entry
                          | not_empty_pools_list "," pool_list_entry
+                         | not_empty_pools_list ","
 
      pool_list_entry ::= "{" pool_params "}"
 
@@ -667,6 +707,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      pool_params ::= pool_param
                 | pool_params "," pool_param
+                | pool_params ","
 
      pool_param ::= pool_entry
                | option_data_list
@@ -689,6 +730,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_pd_pools_list ::= pd_pool_entry
                             | not_empty_pd_pools_list "," pd_pool_entry
+                            | not_empty_pd_pools_list ","
 
      pd_pool_entry ::= "{" pd_pool_params "}"
 
@@ -696,6 +738,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      pd_pool_params ::= pd_pool_param
                    | pd_pool_params "," pd_pool_param
+                   | pd_pool_params ","
 
      pd_pool_param ::= pd_prefix
                   | pd_prefix_len
@@ -726,6 +769,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_reservations_list ::= reservation
                                 | not_empty_reservations_list "," reservation
+                                | not_empty_reservations_list ","
 
      reservation ::= "{" reservation_params "}"
 
@@ -736,6 +780,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_reservation_params ::= reservation_param
                                  | not_empty_reservation_params "," reservation_param
+                                 | not_empty_reservation_params ","
 
      reservation_param ::= duid
                       | reservation_client_classes
@@ -774,6 +819,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      client_classes_list ::= client_class_entry
                         | client_classes_list "," client_class_entry
+                        | client_classes_list ","
 
      client_class_entry ::= "{" client_class_params "}"
 
@@ -782,6 +828,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      not_empty_client_class_params ::= client_class_param
                                   | not_empty_client_class_params "," client_class_param
+                                  | not_empty_client_class_params ","
 
      client_class_param ::= client_class_name
                        | client_class_test
@@ -807,6 +854,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      server_id_params ::= server_id_param
                      | server_id_params "," server_id_param
+                     | server_id_params ","
 
      server_id_param ::= server_id_type
                     | identifier
@@ -838,6 +886,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      control_socket_params ::= control_socket_param
                           | control_socket_params "," control_socket_param
+                          | control_socket_params ","
 
      control_socket_param ::= socket_type
                          | socket_name
@@ -853,6 +902,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      queue_control_params ::= queue_control_param
                          | queue_control_params "," queue_control_param
+                         | queue_control_params ","
 
      queue_control_param ::= enable_queue
                         | queue_type
@@ -875,6 +925,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      dhcp_ddns_params ::= dhcp_ddns_param
                      | dhcp_ddns_params "," dhcp_ddns_param
+                     | dhcp_ddns_params ","
 
      dhcp_ddns_param ::= enable_updates
                     | server_ip
@@ -934,6 +985,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      config_control_params ::= config_control_param
                           | config_control_params "," config_control_param
+                          | config_control_params ","
 
      config_control_param ::= config_databases
                          | config_fetch_wait_time
@@ -946,11 +998,13 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      loggers_entries ::= logger_entry
                     | loggers_entries "," logger_entry
+                    | loggers_entries ","
 
      logger_entry ::= "{" logger_params "}"
 
      logger_params ::= logger_param
                   | logger_params "," logger_param
+                  | logger_params ","
 
      logger_param ::= name
                  | output_options_list
@@ -968,11 +1022,13 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      output_options_list_content ::= output_entry
                                 | output_options_list_content "," output_entry
+                                | output_options_list_content ","
 
      output_entry ::= "{" output_params_list "}"
 
      output_params_list ::= output_params
                        | output_params_list "," output_params
+                       | output_params_list ","
 
      output_params ::= output
                   | flush
@@ -994,6 +1050,7 @@ Grammar generated on 2021-12-14 13:12. See Chapter :ref:`dhcp6` for an explanati
 
      compatibility_params ::= compatibility_param
                          | compatibility_params "," compatibility_param
+                         | compatibility_params ","
 
      compatibility_param ::= lenient_option_parsing
                         | unknown_map_entry

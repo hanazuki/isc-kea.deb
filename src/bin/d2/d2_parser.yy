@@ -182,6 +182,9 @@ not_empty_map: STRING COLON value {
                   ctx.unique($3, ctx.loc2pos(@3));
                   ctx.stack_.back()->set($3, $5);
                   }
+             | not_empty_map COMMA {
+                  ctx.warnAboutExtraCommas(@2);
+                  }
              ;
 
 list_generic: LSQUARE_BRACKET {
@@ -202,6 +205,9 @@ not_empty_list: value {
               | not_empty_list COMMA value {
                   // List ending with , and a value.
                   ctx.stack_.back()->add($3);
+                  }
+              | not_empty_list COMMA {
+                  ctx.warnAboutExtraCommas(@2);
                   }
               ;
 
@@ -241,6 +247,12 @@ global_object: DHCPDDNS {
 } COLON LCURLY_BRACKET dhcpddns_params RCURLY_BRACKET {
     ctx.stack_.pop_back();
     ctx.leave();
+}
+             | global_object_comma
+             ;
+
+global_object_comma: global_object COMMA {
+    ctx.warnAboutExtraCommas(@2);
 };
 
 sub_dhcpddns: LCURLY_BRACKET {
@@ -253,6 +265,9 @@ sub_dhcpddns: LCURLY_BRACKET {
 
 dhcpddns_params: dhcpddns_param
                | dhcpddns_params COMMA dhcpddns_param
+               | dhcpddns_params COMMA {
+                   ctx.warnAboutExtraCommas(@2);
+                   }
                ;
 
 // These are the top-level parameters allowed for DhcpDdns
@@ -402,6 +417,9 @@ ddns_mgr_params: %empty
 
 not_empty_ddns_mgr_params: ddns_mgr_param
                          | ddns_mgr_params COMMA ddns_mgr_param
+                         | ddns_mgr_params COMMA {
+                             ctx.warnAboutExtraCommas(@2);
+                             }
                          ;
 
 ddns_mgr_param: ddns_domains
@@ -434,6 +452,9 @@ ddns_domain_list: %empty
 
 not_empty_ddns_domain_list: ddns_domain
                         | not_empty_ddns_domain_list COMMA ddns_domain
+                        | not_empty_ddns_domain_list COMMA {
+                            ctx.warnAboutExtraCommas(@2);
+                            }
                         ;
 
 ddns_domain: LCURLY_BRACKET {
@@ -453,6 +474,9 @@ sub_ddns_domain: LCURLY_BRACKET {
 
 ddns_domain_params: ddns_domain_param
                   | ddns_domain_params COMMA ddns_domain_param
+                  | ddns_domain_params COMMA {
+                      ctx.warnAboutExtraCommas(@2);
+                      }
                   ;
 
 ddns_domain_param: ddns_domain_name
@@ -510,6 +534,9 @@ sub_dns_servers: LSQUARE_BRACKET {
 
 dns_server_list: dns_server
                | dns_server_list COMMA dns_server
+               | dns_server_list COMMA {
+                   ctx.warnAboutExtraCommas(@2);
+                   }
                ;
 
 dns_server: LCURLY_BRACKET {
@@ -529,6 +556,9 @@ sub_dns_server: LCURLY_BRACKET {
 
 dns_server_params: dns_server_param
                | dns_server_params COMMA dns_server_param
+               | dns_server_params COMMA {
+                   ctx.warnAboutExtraCommas(@2);
+                   }
                ;
 
 dns_server_param: dns_server_hostname
@@ -601,6 +631,9 @@ tsig_keys_list: %empty
 
 not_empty_tsig_keys_list: tsig_key
                         | not_empty_tsig_keys_list COMMA tsig_key
+                        | not_empty_tsig_keys_list COMMA {
+                            ctx.warnAboutExtraCommas(@2);
+                            }
                         ;
 
 tsig_key: LCURLY_BRACKET {
@@ -622,6 +655,9 @@ sub_tsig_key: LCURLY_BRACKET {
 
 tsig_key_params: tsig_key_param
                | tsig_key_params COMMA tsig_key_param
+               | tsig_key_params COMMA {
+                   ctx.warnAboutExtraCommas(@2);
+                   }
                ;
 
 tsig_key_param: tsig_key_name
@@ -697,6 +733,9 @@ control_socket: CONTROL_SOCKET {
 
 control_socket_params: control_socket_param
                      | control_socket_params COMMA control_socket_param
+                     | control_socket_params COMMA {
+                         ctx.warnAboutExtraCommas(@2);
+                         }
                      ;
 
 control_socket_param: control_socket_type
@@ -743,6 +782,9 @@ hooks_libraries_list: %empty
 
 not_empty_hooks_libraries_list: hooks_library
     | not_empty_hooks_libraries_list COMMA hooks_library
+    | not_empty_hooks_libraries_list COMMA {
+        ctx.warnAboutExtraCommas(@2);
+        }
     ;
 
 hooks_library: LCURLY_BRACKET {
@@ -767,6 +809,9 @@ sub_hooks_library: LCURLY_BRACKET {
 
 hooks_params: hooks_param
             | hooks_params COMMA hooks_param
+            | hooks_params COMMA {
+                ctx.warnAboutExtraCommas(@2);
+                }
             | unknown_map_entry
             ;
 
@@ -808,6 +853,9 @@ loggers: LOGGERS {
 // entry or multiple entries separate by commas.
 loggers_entries: logger_entry
                | loggers_entries COMMA logger_entry
+               | loggers_entries COMMA {
+                   ctx.warnAboutExtraCommas(@2);
+                   }
                ;
 
 // This defines a single entry defined in loggers.
@@ -821,6 +869,9 @@ logger_entry: LCURLY_BRACKET {
 
 logger_params: logger_param
              | logger_params COMMA logger_param
+             | logger_params COMMA {
+                 ctx.warnAboutExtraCommas(@2);
+                 }
              ;
 
 logger_param: name
@@ -869,6 +920,9 @@ output_options_list: OUTPUT_OPTIONS {
 
 output_options_list_content: output_entry
                            | output_options_list_content COMMA output_entry
+                           | output_options_list_content COMMA {
+                               ctx.warnAboutExtraCommas(@2);
+                               }
                            ;
 
 output_entry: LCURLY_BRACKET {
@@ -881,6 +935,9 @@ output_entry: LCURLY_BRACKET {
 
 output_params_list: output_params
              | output_params_list COMMA output_params
+             | output_params_list COMMA {
+                 ctx.warnAboutExtraCommas(@2);
+                 }
              ;
 
 output_params: output

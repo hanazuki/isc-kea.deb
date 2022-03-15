@@ -9,11 +9,16 @@
 #include <dhcp6/parser_context.h>
 #include <dhcpsrv/parsers/simple_parser6.h>
 #include <testutils/io_utils.h>
+#include <testutils/log_utils.h>
 #include <testutils/user_context_utils.h>
 #include <testutils/gtest_utils.h>
+
 #include <gtest/gtest.h>
+
 #include <fstream>
 #include <set>
+
+#include <boost/algorithm/string.hpp>
 
 using namespace isc::data;
 using namespace std;
@@ -48,8 +53,9 @@ void compareJSON(ConstElementPtr a, ConstElementPtr b) {
 /// @param compare whether to compare the output with legacy JSON parser
 void testParser(const std::string& txt, Parser6Context::ParserType parser_type,
     bool compare = true) {
-    ConstElementPtr test_json;
+    SCOPED_TRACE("\n=== tested config ===\n" + txt + "=====================");
 
+    ConstElementPtr test_json;
     ASSERT_NO_THROW({
             try {
                 Parser6Context ctx;
@@ -320,8 +326,9 @@ TEST(ParserTest, globalParameters) {
 /// @param msg expected content of the exception
 void testError(const std::string& txt,
                Parser6Context::ParserType parser_type,
-               const std::string& msg)
-{
+               const std::string& msg) {
+    SCOPED_TRACE("\n=== tested config ===\n" + txt + "=====================");
+
     try {
         Parser6Context ctx;
         ConstElementPtr parsed = ctx.parseString(txt, parser_type);
@@ -564,10 +571,6 @@ TEST(ParserTest, errors) {
               Parser6Context::PARSER_JSON,
               "<string>:1.3: syntax error, unexpected \",\", "
               "expecting }");
-    testError("{ \"foo\":true, }\n",
-              Parser6Context::PARSER_JSON,
-              "<string>:1.15: syntax error, unexpected }, "
-              "expecting constant string");
 
     // bad type
     testError("{ \"Dhcp6\":{\n"
@@ -635,7 +638,7 @@ TEST(ParserTest, errors) {
               "  \"Dhcp6\":{\n"
               "  \"comment\": \"second\" }}\n",
               Parser6Context::PARSER_DHCP6,
-              "<string>:2.23: syntax error, unexpected \",\", expecting }");
+              "<string>:3.3-9: syntax error, unexpected Dhcp6, expecting \",\" or }");
 
     // duplicate of not string entries
     testError("{ \"Dhcp6\":{\n"
@@ -752,7 +755,8 @@ TEST(ParserTest, mapEntries) {
     loadFile(sample_dir + "reservations.json", sample_json);
     loadFile(sample_dir + "all-keys-netconf.json", sample_json);
     KeywordSet sample_keys = {
-        "hosts-database"
+        "hosts-database",
+        "reservation-mode"
     };
     // Recursively extract keywords.
     static void (*extract)(ConstElementPtr, KeywordSet&) =
@@ -863,6 +867,98 @@ TEST(ParserTest, duplicateMapEntries) {
     cout << "checked " << cnt << " duplicated map entries\n";
 }
 
+/// @brief Test fixture for trailing commas.
+class TrailingCommasTest : public isc::dhcp::test::LogContentTest {
+public:
+    /// @brief Add a log entry.
+    ///
+    /// @param loc Location of the trailing comma.
+    void addLog(const string& loc) {
+        string log = "DHCP6_CONFIG_SYNTAX_WARNING configuration syntax ";
+        log += "warning: " + loc;
+        log += ": Extraneous comma. ";
+        log += "A piece of configuration may have been omitted.";
+        addString(log);
+    }
+};
+
+// Test that trailing commas are allowed.
+TEST_F(TrailingCommasTest, tests) {
+    string txt(R"({
+  "Dhcp6": {
+    "control-socket": {
+      "socket-name": "/tmp/kea-dhcp6-ctrl.sock",
+      "socket-type": "unix",
+    },
+    "hooks-libraries": [
+      {
+        "library": "/usr/local/lib/kea/hooks/libdhcp_dummy.so",
+      },
+    ],
+    "interfaces-config": {
+      "interfaces": [
+        "eth0",
+      ],
+    },
+    "lease-database": {
+      "name": "/tmp/kea-dhcp6.csv",
+      "persist": true,
+      "type": "memfile",
+    },
+    "loggers": [
+      {
+        "debuglevel": 99,
+        "name": "kea-dhcp6",
+        "output_options": [
+          {
+            "output": "stdout",
+          },
+        ],
+        "severity": "DEBUG",
+      },
+    ],
+    "multi-threading": {
+      "enable-multi-threading": false,
+      "packet-queue-size": 0,
+      "thread-pool-size": 0
+    },
+    "subnet6": [
+      {
+        "pools": [
+          {
+            "pool": "2001:db8:1::/64",
+          },
+        ],
+        "subnet": "2001:db8:1::/64",
+      },
+    ],
+  },
+})");
+    testParser(txt, Parser6Context::PARSER_DHCP6, false);
+
+    addLog("<string>:5.28");
+    addLog("<string>:9.63");
+    addLog("<string>:10.8");
+    addLog("<string>:14.15");
+    addLog("<string>:15.8");
+    addLog("<string>:20.24");
+    addLog("<string>:28.31");
+    addLog("<string>:29.12");
+    addLog("<string>:31.28");
+    addLog("<string>:32.8");
+    addLog("<string>:43.38");
+    addLog("<string>:44.12");
+    addLog("<string>:46.36");
+    addLog("<string>:47.8");
+    addLog("<string>:48.6");
+    addLog("<string>:49.4");
+    EXPECT_TRUE(checkFile());
+
+    // Test with many consecutive commas.
+    boost::replace_all(txt, ",", ",,,,");
+    testParser(txt, Parser6Context::PARSER_DHCP6, false);
 }
-}
-}
+
+}  // namespace test
+}  // namespace dhcp
+}  // namespace isc

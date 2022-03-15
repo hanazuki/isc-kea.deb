@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -168,7 +168,12 @@ public:
         std::string footer =
             "\"    },"
             "    \"lease-database\": {"
-            "       \"type\": \"memfile\", \"persist\": false }"
+            "       \"type\": \"memfile\", \"persist\": false },"
+            "    \"loggers\": [ {"
+            "       \"name\": \"kea-dhcp4\","
+            "       \"severity\": \"INFO\","
+            "       \"debuglevel\": 0"
+            "       } ]"
             "}";
 
         // Fill in the socket-name value with socket_path_  to
@@ -179,6 +184,17 @@ public:
 
         ConstElementPtr config;
         ASSERT_NO_THROW(config = parseDHCP4(config_txt));
+
+        // Parse the logger configuration explicitly into the staging config.
+        // Note this does not alter the current loggers, they remain in
+        // effect until we apply the logging config below.  If no logging
+        // is supplied logging will revert to default logging.
+        server_->configureLogger(config, CfgMgr::instance().getStagingCfg());
+
+        // Let's apply the new logging. We do it early, so we'll be able to print
+        // out what exactly is wrong with the new config in case of problems.
+        CfgMgr::instance().getStagingCfg()->applyLoggingCfg();
+
         ConstElementPtr answer = server_->processConfig(config);
 
         // Commit the configuration so any subsequent reconfigurations
@@ -627,7 +643,12 @@ TEST_F(CtrlChannelDhcpv4SrvTest, controlChannelStats) {
         "pkt4-ack-sent",
         "pkt4-nak-sent",
         "pkt4-parse-failed",
-        "pkt4-receive-drop"
+        "pkt4-receive-drop",
+        "v4-allocation-fail",
+        "v4-allocation-fail-shared-network",
+        "v4-allocation-fail-subnet",
+        "v4-allocation-fail-no-pools",
+        "v4-allocation-fail-classes"
     };
 
     // preparing the schema which check if all statistics are set to zero
@@ -892,6 +913,7 @@ TEST_F(CtrlChannelDhcpv4SrvTest, configGet) {
     ASSERT_TRUE(cfg);
     ASSERT_EQ(Element::map, cfg->getType());
     EXPECT_TRUE(cfg->get("Dhcp4"));
+    EXPECT_TRUE(cfg->get("Dhcp4")->get("loggers"));
 }
 
 // Verify that the "config-test" command will do what we expect.

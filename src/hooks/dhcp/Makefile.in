@@ -88,6 +88,7 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 @HAVE_MYSQL_TRUE@am__append_1 = mysql_cb
+@HAVE_PGSQL_TRUE@am__append_2 = pgsql_cb
 subdir = src/hooks/dhcp
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
@@ -166,7 +167,7 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = bootp flex_option high_availability lease_cmds mysql_cb \
-	run_script stat_cmds user_chk
+	pgsql_cb run_script stat_cmds user_chk
 am__DIST_COMMON = $(srcdir)/Makefile.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
@@ -394,7 +395,7 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = bootp flex_option high_availability lease_cmds \
-	$(am__append_1) run_script stat_cmds user_chk
+	$(am__append_1) $(am__append_2) run_script stat_cmds user_chk
 all: all-recursive
 
 .SUFFIXES:

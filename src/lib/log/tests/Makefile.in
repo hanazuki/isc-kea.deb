@@ -90,12 +90,14 @@ POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
 @USE_STATIC_LINK_TRUE@am__append_1 = -static
-noinst_PROGRAMS = logger_example$(EXEEXT) init_logger_test$(EXEEXT) \
-	buffer_logger_test$(EXEEXT) logger_lock_test$(EXEEXT) \
-	$(am__EXEEXT_2)
-@HAVE_GTEST_TRUE@TESTS = run_unittests$(EXEEXT) \
-@HAVE_GTEST_TRUE@	initializer_unittests_1$(EXEEXT)
-@HAVE_GTEST_TRUE@am__append_2 = $(TESTS)
+noinst_PROGRAMS = $(am__EXEEXT_1) $(am__EXEEXT_3)
+TESTS = $(SHTESTS) $(am__EXEEXT_3)
+
+# Run C++ tests on "make check".
+@HAVE_GTEST_TRUE@am__append_2 = $(PROGRAM_TESTS)
+
+# Don't install test binaries.
+@HAVE_GTEST_TRUE@am__append_3 = $(PROGRAM_TESTS)
 subdir = src/lib/log/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
@@ -121,39 +123,37 @@ CONFIG_CLEAN_FILES = buffer_logger_test.sh console_test.sh \
 	destination_test.sh init_logger_test.sh local_file_test.sh \
 	logger_lock_test.sh severity_test.sh tempdir.h
 CONFIG_CLEAN_VPATH_FILES =
-@HAVE_GTEST_TRUE@am__EXEEXT_1 = run_unittests$(EXEEXT) \
+am__EXEEXT_1 = logger_example$(EXEEXT) init_logger_test$(EXEEXT) \
+	buffer_logger_test$(EXEEXT) logger_lock_test$(EXEEXT)
+@HAVE_GTEST_TRUE@am__EXEEXT_2 = run_unittests$(EXEEXT) \
 @HAVE_GTEST_TRUE@	initializer_unittests_1$(EXEEXT)
-@HAVE_GTEST_TRUE@am__EXEEXT_2 = $(am__EXEEXT_1)
+@HAVE_GTEST_TRUE@am__EXEEXT_3 = $(am__EXEEXT_2)
 PROGRAMS = $(noinst_PROGRAMS)
 am_buffer_logger_test_OBJECTS =  \
 	buffer_logger_test-buffer_logger_test.$(OBJEXT)
 buffer_logger_test_OBJECTS = $(am_buffer_logger_test_OBJECTS)
 am__DEPENDENCIES_1 =
-buffer_logger_test_DEPENDENCIES =  \
-	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
+am__DEPENDENCIES_2 = $(top_builddir)/src/lib/log/libkea-log.la \
+	$(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+buffer_logger_test_DEPENDENCIES = $(am__DEPENDENCIES_2)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
 am__v_lt_0 = --silent
 am__v_lt_1 = 
 buffer_logger_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
-	$(AM_CXXFLAGS) $(CXXFLAGS) $(buffer_logger_test_LDFLAGS) \
-	$(LDFLAGS) -o $@
+	$(buffer_logger_test_CXXFLAGS) $(CXXFLAGS) \
+	$(buffer_logger_test_LDFLAGS) $(LDFLAGS) -o $@
 am_init_logger_test_OBJECTS =  \
 	init_logger_test-init_logger_test.$(OBJEXT)
 init_logger_test_OBJECTS = $(am_init_logger_test_OBJECTS)
-init_logger_test_DEPENDENCIES =  \
-	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
-	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+init_logger_test_DEPENDENCIES = $(am__DEPENDENCIES_2)
 init_logger_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
-	$(AM_CXXFLAGS) $(CXXFLAGS) $(init_logger_test_LDFLAGS) \
-	$(LDFLAGS) -o $@
+	$(init_logger_test_CXXFLAGS) $(CXXFLAGS) \
+	$(init_logger_test_LDFLAGS) $(LDFLAGS) -o $@
 am__initializer_unittests_1_SOURCES_DIST =  \
 	run_initializer_unittests.cc message_initializer_1_unittest.cc \
 	message_initializer_1a_unittest.cc
@@ -162,12 +162,6 @@ am__initializer_unittests_1_SOURCES_DIST =  \
 @HAVE_GTEST_TRUE@	initializer_unittests_1-message_initializer_1a_unittest.$(OBJEXT)
 initializer_unittests_1_OBJECTS =  \
 	$(am_initializer_unittests_1_OBJECTS)
-@HAVE_GTEST_TRUE@am__DEPENDENCIES_2 = $(am__DEPENDENCIES_1) \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-@HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 @HAVE_GTEST_TRUE@initializer_unittests_1_DEPENDENCIES =  \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_2)
 initializer_unittests_1_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
@@ -176,28 +170,20 @@ initializer_unittests_1_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(initializer_unittests_1_LDFLAGS) $(LDFLAGS) -o $@
 am_logger_example_OBJECTS = logger_example-logger_example.$(OBJEXT)
 logger_example_OBJECTS = $(am_logger_example_OBJECTS)
-logger_example_DEPENDENCIES =  \
-	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
-	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+logger_example_DEPENDENCIES = $(am__DEPENDENCIES_2)
 logger_example_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
-	$(AM_CXXFLAGS) $(CXXFLAGS) $(logger_example_LDFLAGS) \
-	$(LDFLAGS) -o $@
+	$(logger_example_CXXFLAGS) $(CXXFLAGS) \
+	$(logger_example_LDFLAGS) $(LDFLAGS) -o $@
 am_logger_lock_test_OBJECTS =  \
 	logger_lock_test-logger_lock_test.$(OBJEXT) \
 	logger_lock_test-log_test_messages.$(OBJEXT)
 logger_lock_test_OBJECTS = $(am_logger_lock_test_OBJECTS)
-logger_lock_test_DEPENDENCIES =  \
-	$(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
-	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
+logger_lock_test_DEPENDENCIES = $(am__DEPENDENCIES_2)
 logger_lock_test_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
-	$(AM_CXXFLAGS) $(CXXFLAGS) $(logger_lock_test_LDFLAGS) \
-	$(LDFLAGS) -o $@
+	$(logger_lock_test_CXXFLAGS) $(CXXFLAGS) \
+	$(logger_lock_test_LDFLAGS) $(LDFLAGS) -o $@
 am__run_unittests_SOURCES_DIST = run_unittests.cc \
 	log_formatter_unittest.cc logger_level_impl_unittest.cc \
 	logger_level_unittest.cc logger_manager_unittest.cc \
@@ -607,59 +593,71 @@ top_build_prefix = @top_build_prefix@
 top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = .
+
+# Define the flags used in each set of tests.
 AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
-	$(BOOST_INCLUDES)
+	$(BOOST_INCLUDES) $(GTEST_INCLUDES) $(LOG4CPLUS_INCLUDES)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
-AM_LDADD = 
+AM_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
+	$(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
+	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
+	$(LOG4CPLUS_LIBS) $(GTEST_LDADD)
 AM_LDFLAGS = $(am__append_1)
 CLEANFILES = *.gcno *.gcda *.lock
-DISTCLEANFILES = buffer_logger_test.sh console_test.sh \
-	destination_test.sh init_logger_test.sh local_file_test.sh \
-	logger_lock_test.sh severity_test.sh tempdir.h
+
+# As with every file generated by ./configure, clean them up when running
+# "make distclean", but not on "make clean".
+DISTCLEANFILES = tempdir.h $(SHTESTS)
 EXTRA_DIST = log_test_messages.mes
+
+# Helper programs used in shell tests
+TEST_HELPERS = logger_example init_logger_test buffer_logger_test \
+	logger_lock_test
 logger_example_SOURCES = logger_example.cc
 logger_example_CPPFLAGS = $(AM_CPPFLAGS)
+logger_example_CXXFLAGS = $(AM_CXXFLAGS)
+logger_example_LDADD = $(AM_LDADD)
 logger_example_LDFLAGS = $(AM_LDFLAGS)
-logger_example_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
-	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(AM_LDADD) $(LOG4CPLUS_LIBS)
 init_logger_test_SOURCES = init_logger_test.cc
 init_logger_test_CPPFLAGS = $(AM_CPPFLAGS)
+init_logger_test_CXXFLAGS = $(AM_CXXFLAGS)
+init_logger_test_LDADD = $(AM_LDADD)
 init_logger_test_LDFLAGS = $(AM_LDFLAGS)
-init_logger_test_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
-	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(AM_LDADD) $(LOG4CPLUS_LIBS)
 buffer_logger_test_SOURCES = buffer_logger_test.cc
 buffer_logger_test_CPPFLAGS = $(AM_CPPFLAGS)
+buffer_logger_test_CXXFLAGS = $(AM_CXXFLAGS)
+buffer_logger_test_LDADD = $(AM_LDADD)
 buffer_logger_test_LDFLAGS = $(AM_LDFLAGS)
-buffer_logger_test_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
-	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(AM_LDADD) $(LOG4CPLUS_LIBS)
 logger_lock_test_SOURCES = logger_lock_test.cc log_test_messages.cc \
 	log_test_messages.h
 logger_lock_test_CPPFLAGS = $(AM_CPPFLAGS)
+logger_lock_test_CXXFLAGS = $(AM_CXXFLAGS)
+logger_lock_test_LDADD = $(AM_LDADD)
 logger_lock_test_LDFLAGS = $(AM_LDFLAGS)
-logger_lock_test_LDADD = $(top_builddir)/src/lib/log/libkea-log.la \
-	$(top_builddir)/src/lib/util/libkea-util.la \
-	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(AM_LDADD) $(LOG4CPLUS_LIBS)
-TESTS_ENVIRONMENT = \
-	$(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
+
+# Shell tests. These are principally tests where the global logging environment
+# is affected, and where the output needs to be compared with stored output
+# (where "cut" and "diff" are useful utilities).
+SHTESTS = buffer_logger_test.sh console_test.sh destination_test.sh \
+	init_logger_test.sh local_file_test.sh logger_lock_test.sh \
+	severity_test.sh
+
+# Run shell tests on "make check".
+check_SCRIPTS = $(SHTESTS)
+
+# Don't install shell tests.
+noinst_SCRIPTS = $(SHTESTS)
+@HAVE_GTEST_TRUE@TESTS_ENVIRONMENT = \
+@HAVE_GTEST_TRUE@	$(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 
 
-# Define the flags used in each set of tests
-@HAVE_GTEST_TRUE@TESTSCXXFLAGS = $(AM_CXXFLAGS)
-@HAVE_GTEST_TRUE@TESTSCPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES) $(LOG4CPLUS_INCLUDES)
-@HAVE_GTEST_TRUE@TESTSLDFLAGS = $(AM_LDFLAGS) $(GTEST_LDFLAGS)
-@HAVE_GTEST_TRUE@TESTSLDADD = $(AM_LDADD) \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/unittests/libutil_unittests.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-@HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(GTEST_LDADD)
+# Set of unit tests for the general logging classes
+
+# logging initialization tests.  These are put in a separate program to
+# ensure that the initialization status at the start of each test is known,
+# and to prevent circumstances where the execution of one test affects the
+# starting conditions of the next.
+@HAVE_GTEST_TRUE@PROGRAM_TESTS = run_unittests initializer_unittests_1
 @HAVE_GTEST_TRUE@run_unittests_SOURCES = run_unittests.cc \
 @HAVE_GTEST_TRUE@	log_formatter_unittest.cc \
 @HAVE_GTEST_TRUE@	logger_level_impl_unittest.cc \
@@ -673,21 +671,18 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	output_option_unittest.cc \
 @HAVE_GTEST_TRUE@	buffer_appender_unittest.cc \
 @HAVE_GTEST_TRUE@	log_test_messages.cc log_test_messages.h
-@HAVE_GTEST_TRUE@run_unittests_CPPFLAGS = $(TESTSCPPFLAGS)
-@HAVE_GTEST_TRUE@run_unittests_CXXFLAGS = $(TESTSCXXFLAGS)
-@HAVE_GTEST_TRUE@run_unittests_LDADD = $(TESTSLDADD)
-@HAVE_GTEST_TRUE@run_unittests_LDFLAGS = $(TESTSLDFLAGS)
+@HAVE_GTEST_TRUE@run_unittests_CPPFLAGS = $(AM_CPPFLAGS)
+@HAVE_GTEST_TRUE@run_unittests_CXXFLAGS = $(AM_CXXFLAGS)
+@HAVE_GTEST_TRUE@run_unittests_LDADD = $(AM_LDADD)
+@HAVE_GTEST_TRUE@run_unittests_LDFLAGS = $(AM_LDFLAGS)
 @HAVE_GTEST_TRUE@initializer_unittests_1_SOURCES =  \
 @HAVE_GTEST_TRUE@	run_initializer_unittests.cc \
 @HAVE_GTEST_TRUE@	message_initializer_1_unittest.cc \
 @HAVE_GTEST_TRUE@	message_initializer_1a_unittest.cc
-@HAVE_GTEST_TRUE@initializer_unittests_1_CPPFLAGS = $(TESTSCPPFLAGS)
-@HAVE_GTEST_TRUE@initializer_unittests_1_CXXFLAGS = $(TESTSCXXFLAGS)
-@HAVE_GTEST_TRUE@initializer_unittests_1_LDADD = $(TESTSLDADD)
-@HAVE_GTEST_TRUE@initializer_unittests_1_LDFLAGS = $(TESTSLDFLAGS)
-noinst_SCRIPTS = buffer_logger_test.sh console_test.sh \
-	destination_test.sh init_logger_test.sh local_file_test.sh \
-	logger_lock_test.sh severity_test.sh
+@HAVE_GTEST_TRUE@initializer_unittests_1_CPPFLAGS = $(AM_CPPFLAGS)
+@HAVE_GTEST_TRUE@initializer_unittests_1_CXXFLAGS = $(AM_CXXFLAGS)
+@HAVE_GTEST_TRUE@initializer_unittests_1_LDADD = $(AM_LDADD)
+@HAVE_GTEST_TRUE@initializer_unittests_1_LDFLAGS = $(AM_LDFLAGS)
 all: all-recursive
 
 .SUFFIXES:
@@ -828,32 +823,32 @@ am--depfiles: $(am__depfiles_remade)
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
 
 buffer_logger_test-buffer_logger_test.o: buffer_logger_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT buffer_logger_test-buffer_logger_test.o -MD -MP -MF $(DEPDIR)/buffer_logger_test-buffer_logger_test.Tpo -c -o buffer_logger_test-buffer_logger_test.o `test -f 'buffer_logger_test.cc' || echo '$(srcdir)/'`buffer_logger_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(buffer_logger_test_CXXFLAGS) $(CXXFLAGS) -MT buffer_logger_test-buffer_logger_test.o -MD -MP -MF $(DEPDIR)/buffer_logger_test-buffer_logger_test.Tpo -c -o buffer_logger_test-buffer_logger_test.o `test -f 'buffer_logger_test.cc' || echo '$(srcdir)/'`buffer_logger_test.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/buffer_logger_test-buffer_logger_test.Tpo $(DEPDIR)/buffer_logger_test-buffer_logger_test.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='buffer_logger_test.cc' object='buffer_logger_test-buffer_logger_test.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o buffer_logger_test-buffer_logger_test.o `test -f 'buffer_logger_test.cc' || echo '$(srcdir)/'`buffer_logger_test.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(buffer_logger_test_CXXFLAGS) $(CXXFLAGS) -c -o buffer_logger_test-buffer_logger_test.o `test -f 'buffer_logger_test.cc' || echo '$(srcdir)/'`buffer_logger_test.cc
 
 buffer_logger_test-buffer_logger_test.obj: buffer_logger_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT buffer_logger_test-buffer_logger_test.obj -MD -MP -MF $(DEPDIR)/buffer_logger_test-buffer_logger_test.Tpo -c -o buffer_logger_test-buffer_logger_test.obj `if test -f 'buffer_logger_test.cc'; then $(CYGPATH_W) 'buffer_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/buffer_logger_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(buffer_logger_test_CXXFLAGS) $(CXXFLAGS) -MT buffer_logger_test-buffer_logger_test.obj -MD -MP -MF $(DEPDIR)/buffer_logger_test-buffer_logger_test.Tpo -c -o buffer_logger_test-buffer_logger_test.obj `if test -f 'buffer_logger_test.cc'; then $(CYGPATH_W) 'buffer_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/buffer_logger_test.cc'; fi`
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/buffer_logger_test-buffer_logger_test.Tpo $(DEPDIR)/buffer_logger_test-buffer_logger_test.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='buffer_logger_test.cc' object='buffer_logger_test-buffer_logger_test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o buffer_logger_test-buffer_logger_test.obj `if test -f 'buffer_logger_test.cc'; then $(CYGPATH_W) 'buffer_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/buffer_logger_test.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(buffer_logger_test_CPPFLAGS) $(CPPFLAGS) $(buffer_logger_test_CXXFLAGS) $(CXXFLAGS) -c -o buffer_logger_test-buffer_logger_test.obj `if test -f 'buffer_logger_test.cc'; then $(CYGPATH_W) 'buffer_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/buffer_logger_test.cc'; fi`
 
 init_logger_test-init_logger_test.o: init_logger_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT init_logger_test-init_logger_test.o -MD -MP -MF $(DEPDIR)/init_logger_test-init_logger_test.Tpo -c -o init_logger_test-init_logger_test.o `test -f 'init_logger_test.cc' || echo '$(srcdir)/'`init_logger_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(init_logger_test_CXXFLAGS) $(CXXFLAGS) -MT init_logger_test-init_logger_test.o -MD -MP -MF $(DEPDIR)/init_logger_test-init_logger_test.Tpo -c -o init_logger_test-init_logger_test.o `test -f 'init_logger_test.cc' || echo '$(srcdir)/'`init_logger_test.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/init_logger_test-init_logger_test.Tpo $(DEPDIR)/init_logger_test-init_logger_test.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='init_logger_test.cc' object='init_logger_test-init_logger_test.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o init_logger_test-init_logger_test.o `test -f 'init_logger_test.cc' || echo '$(srcdir)/'`init_logger_test.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(init_logger_test_CXXFLAGS) $(CXXFLAGS) -c -o init_logger_test-init_logger_test.o `test -f 'init_logger_test.cc' || echo '$(srcdir)/'`init_logger_test.cc
 
 init_logger_test-init_logger_test.obj: init_logger_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT init_logger_test-init_logger_test.obj -MD -MP -MF $(DEPDIR)/init_logger_test-init_logger_test.Tpo -c -o init_logger_test-init_logger_test.obj `if test -f 'init_logger_test.cc'; then $(CYGPATH_W) 'init_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/init_logger_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(init_logger_test_CXXFLAGS) $(CXXFLAGS) -MT init_logger_test-init_logger_test.obj -MD -MP -MF $(DEPDIR)/init_logger_test-init_logger_test.Tpo -c -o init_logger_test-init_logger_test.obj `if test -f 'init_logger_test.cc'; then $(CYGPATH_W) 'init_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/init_logger_test.cc'; fi`
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/init_logger_test-init_logger_test.Tpo $(DEPDIR)/init_logger_test-init_logger_test.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='init_logger_test.cc' object='init_logger_test-init_logger_test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o init_logger_test-init_logger_test.obj `if test -f 'init_logger_test.cc'; then $(CYGPATH_W) 'init_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/init_logger_test.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(init_logger_test_CPPFLAGS) $(CPPFLAGS) $(init_logger_test_CXXFLAGS) $(CXXFLAGS) -c -o init_logger_test-init_logger_test.obj `if test -f 'init_logger_test.cc'; then $(CYGPATH_W) 'init_logger_test.cc'; else $(CYGPATH_W) '$(srcdir)/init_logger_test.cc'; fi`
 
 initializer_unittests_1-run_initializer_unittests.o: run_initializer_unittests.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(initializer_unittests_1_CPPFLAGS) $(CPPFLAGS) $(initializer_unittests_1_CXXFLAGS) $(CXXFLAGS) -MT initializer_unittests_1-run_initializer_unittests.o -MD -MP -MF $(DEPDIR)/initializer_unittests_1-run_initializer_unittests.Tpo -c -o initializer_unittests_1-run_initializer_unittests.o `test -f 'run_initializer_unittests.cc' || echo '$(srcdir)/'`run_initializer_unittests.cc
@@ -898,46 +893,46 @@ initializer_unittests_1-message_initializer_1a_unittest.obj: message_initializer
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(initializer_unittests_1_CPPFLAGS) $(CPPFLAGS) $(initializer_unittests_1_CXXFLAGS) $(CXXFLAGS) -c -o initializer_unittests_1-message_initializer_1a_unittest.obj `if test -f 'message_initializer_1a_unittest.cc'; then $(CYGPATH_W) 'message_initializer_1a_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/message_initializer_1a_unittest.cc'; fi`
 
 logger_example-logger_example.o: logger_example.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT logger_example-logger_example.o -MD -MP -MF $(DEPDIR)/logger_example-logger_example.Tpo -c -o logger_example-logger_example.o `test -f 'logger_example.cc' || echo '$(srcdir)/'`logger_example.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(logger_example_CXXFLAGS) $(CXXFLAGS) -MT logger_example-logger_example.o -MD -MP -MF $(DEPDIR)/logger_example-logger_example.Tpo -c -o logger_example-logger_example.o `test -f 'logger_example.cc' || echo '$(srcdir)/'`logger_example.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/logger_example-logger_example.Tpo $(DEPDIR)/logger_example-logger_example.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='logger_example.cc' object='logger_example-logger_example.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o logger_example-logger_example.o `test -f 'logger_example.cc' || echo '$(srcdir)/'`logger_example.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(logger_example_CXXFLAGS) $(CXXFLAGS) -c -o logger_example-logger_example.o `test -f 'logger_example.cc' || echo '$(srcdir)/'`logger_example.cc
 
 logger_example-logger_example.obj: logger_example.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT logger_example-logger_example.obj -MD -MP -MF $(DEPDIR)/logger_example-logger_example.Tpo -c -o logger_example-logger_example.obj `if test -f 'logger_example.cc'; then $(CYGPATH_W) 'logger_example.cc'; else $(CYGPATH_W) '$(srcdir)/logger_example.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(logger_example_CXXFLAGS) $(CXXFLAGS) -MT logger_example-logger_example.obj -MD -MP -MF $(DEPDIR)/logger_example-logger_example.Tpo -c -o logger_example-logger_example.obj `if test -f 'logger_example.cc'; then $(CYGPATH_W) 'logger_example.cc'; else $(CYGPATH_W) '$(srcdir)/logger_example.cc'; fi`
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/logger_example-logger_example.Tpo $(DEPDIR)/logger_example-logger_example.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='logger_example.cc' object='logger_example-logger_example.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o logger_example-logger_example.obj `if test -f 'logger_example.cc'; then $(CYGPATH_W) 'logger_example.cc'; else $(CYGPATH_W) '$(srcdir)/logger_example.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_example_CPPFLAGS) $(CPPFLAGS) $(logger_example_CXXFLAGS) $(CXXFLAGS) -c -o logger_example-logger_example.obj `if test -f 'logger_example.cc'; then $(CYGPATH_W) 'logger_example.cc'; else $(CYGPATH_W) '$(srcdir)/logger_example.cc'; fi`
 
 logger_lock_test-logger_lock_test.o: logger_lock_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-logger_lock_test.o -MD -MP -MF $(DEPDIR)/logger_lock_test-logger_lock_test.Tpo -c -o logger_lock_test-logger_lock_test.o `test -f 'logger_lock_test.cc' || echo '$(srcdir)/'`logger_lock_test.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-logger_lock_test.o -MD -MP -MF $(DEPDIR)/logger_lock_test-logger_lock_test.Tpo -c -o logger_lock_test-logger_lock_test.o `test -f 'logger_lock_test.cc' || echo '$(srcdir)/'`logger_lock_test.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/logger_lock_test-logger_lock_test.Tpo $(DEPDIR)/logger_lock_test-logger_lock_test.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='logger_lock_test.cc' object='logger_lock_test-logger_lock_test.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-logger_lock_test.o `test -f 'logger_lock_test.cc' || echo '$(srcdir)/'`logger_lock_test.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-logger_lock_test.o `test -f 'logger_lock_test.cc' || echo '$(srcdir)/'`logger_lock_test.cc
 
 logger_lock_test-logger_lock_test.obj: logger_lock_test.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-logger_lock_test.obj -MD -MP -MF $(DEPDIR)/logger_lock_test-logger_lock_test.Tpo -c -o logger_lock_test-logger_lock_test.obj `if test -f 'logger_lock_test.cc'; then $(CYGPATH_W) 'logger_lock_test.cc'; else $(CYGPATH_W) '$(srcdir)/logger_lock_test.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-logger_lock_test.obj -MD -MP -MF $(DEPDIR)/logger_lock_test-logger_lock_test.Tpo -c -o logger_lock_test-logger_lock_test.obj `if test -f 'logger_lock_test.cc'; then $(CYGPATH_W) 'logger_lock_test.cc'; else $(CYGPATH_W) '$(srcdir)/logger_lock_test.cc'; fi`
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/logger_lock_test-logger_lock_test.Tpo $(DEPDIR)/logger_lock_test-logger_lock_test.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='logger_lock_test.cc' object='logger_lock_test-logger_lock_test.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-logger_lock_test.obj `if test -f 'logger_lock_test.cc'; then $(CYGPATH_W) 'logger_lock_test.cc'; else $(CYGPATH_W) '$(srcdir)/logger_lock_test.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-logger_lock_test.obj `if test -f 'logger_lock_test.cc'; then $(CYGPATH_W) 'logger_lock_test.cc'; else $(CYGPATH_W) '$(srcdir)/logger_lock_test.cc'; fi`
 
 logger_lock_test-log_test_messages.o: log_test_messages.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-log_test_messages.o -MD -MP -MF $(DEPDIR)/logger_lock_test-log_test_messages.Tpo -c -o logger_lock_test-log_test_messages.o `test -f 'log_test_messages.cc' || echo '$(srcdir)/'`log_test_messages.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-log_test_messages.o -MD -MP -MF $(DEPDIR)/logger_lock_test-log_test_messages.Tpo -c -o logger_lock_test-log_test_messages.o `test -f 'log_test_messages.cc' || echo '$(srcdir)/'`log_test_messages.cc
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/logger_lock_test-log_test_messages.Tpo $(DEPDIR)/logger_lock_test-log_test_messages.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='log_test_messages.cc' object='logger_lock_test-log_test_messages.o' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-log_test_messages.o `test -f 'log_test_messages.cc' || echo '$(srcdir)/'`log_test_messages.cc
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-log_test_messages.o `test -f 'log_test_messages.cc' || echo '$(srcdir)/'`log_test_messages.cc
 
 logger_lock_test-log_test_messages.obj: log_test_messages.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-log_test_messages.obj -MD -MP -MF $(DEPDIR)/logger_lock_test-log_test_messages.Tpo -c -o logger_lock_test-log_test_messages.obj `if test -f 'log_test_messages.cc'; then $(CYGPATH_W) 'log_test_messages.cc'; else $(CYGPATH_W) '$(srcdir)/log_test_messages.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -MT logger_lock_test-log_test_messages.obj -MD -MP -MF $(DEPDIR)/logger_lock_test-log_test_messages.Tpo -c -o logger_lock_test-log_test_messages.obj `if test -f 'log_test_messages.cc'; then $(CYGPATH_W) 'log_test_messages.cc'; else $(CYGPATH_W) '$(srcdir)/log_test_messages.cc'; fi`
 @am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/logger_lock_test-log_test_messages.Tpo $(DEPDIR)/logger_lock_test-log_test_messages.Po
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='log_test_messages.cc' object='logger_lock_test-log_test_messages.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-log_test_messages.obj `if test -f 'log_test_messages.cc'; then $(CYGPATH_W) 'log_test_messages.cc'; else $(CYGPATH_W) '$(srcdir)/log_test_messages.cc'; fi`
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(logger_lock_test_CPPFLAGS) $(CPPFLAGS) $(logger_lock_test_CXXFLAGS) $(CXXFLAGS) -c -o logger_lock_test-log_test_messages.obj `if test -f 'log_test_messages.cc'; then $(CYGPATH_W) 'log_test_messages.cc'; else $(CYGPATH_W) '$(srcdir)/log_test_messages.cc'; fi`
 
 run_unittests-run_unittests.o: run_unittests.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(run_unittests_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-run_unittests.o -MD -MP -MF $(DEPDIR)/run_unittests-run_unittests.Tpo -c -o run_unittests-run_unittests.o `test -f 'run_unittests.cc' || echo '$(srcdir)/'`run_unittests.cc
@@ -1392,7 +1387,8 @@ distdir-am: $(DISTFILES)
 	  fi; \
 	done
 check-am: all-am
-	$(MAKE) $(AM_MAKEFLAGS) check-TESTS check-local
+	$(MAKE) $(AM_MAKEFLAGS) $(check_SCRIPTS)
+	$(MAKE) $(AM_MAKEFLAGS) check-TESTS
 check: check-recursive
 all-am: Makefile $(PROGRAMS) $(SCRIPTS)
 installdirs: installdirs-recursive
@@ -1546,9 +1542,9 @@ uninstall-am:
 .MAKE: $(am__recursive_targets) check-am install-am install-strip
 
 .PHONY: $(am__recursive_targets) CTAGS GTAGS TAGS all all-am \
-	am--depfiles check check-TESTS check-am check-local clean \
-	clean-generic clean-libtool clean-noinstPROGRAMS cscopelist-am \
-	ctags ctags-am distclean distclean-compile distclean-generic \
+	am--depfiles check check-TESTS check-am clean clean-generic \
+	clean-libtool clean-noinstPROGRAMS cscopelist-am ctags \
+	ctags-am distclean distclean-compile distclean-generic \
 	distclean-libtool distclean-tags distdir dvi dvi-am html \
 	html-am info info-am install install-am install-data \
 	install-data-am install-dvi install-dvi-am install-exec \
@@ -1562,19 +1558,6 @@ uninstall-am:
 
 .PRECIOUS: Makefile
 
-
-# Additional test using the shell.  These are principally tests
-# where the global logging environment is affected, and where the
-# output needs to be compared with stored output (where "cut" and
-# "diff" are useful utilities).
-check-local:
-	$(SHELL) $(abs_builddir)/buffer_logger_test.sh
-	$(SHELL) $(abs_builddir)/console_test.sh
-	$(SHELL) $(abs_builddir)/destination_test.sh
-	$(SHELL) $(abs_builddir)/init_logger_test.sh
-	$(SHELL) $(abs_builddir)/local_file_test.sh
-	$(SHELL) $(abs_builddir)/logger_lock_test.sh
-	$(SHELL) $(abs_builddir)/severity_test.sh
 
 # If we want to get rid of all generated messages files, we need to use
 # make maintainer-clean. The proper way to introduce custom commands for

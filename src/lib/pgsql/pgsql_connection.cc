@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,9 +6,9 @@
 
 #include <config.h>
 
+#include <database/db_exceptions.h>
 #include <database/db_log.h>
 #include <pgsql/pgsql_connection.h>
-#include <pgsql/pgsql_exchange.h>
 
 // PostgreSQL errors should be tested based on the SQL state code.  Each state
 // code is 5 decimal, ASCII, digits, the first two define the category of
@@ -39,6 +39,9 @@ namespace db {
 const int PGSQL_DEFAULT_CONNECTION_TIMEOUT = 5; // seconds
 
 const char PgSqlConnection::DUPLICATE_KEY[] = ERRCODE_UNIQUE_VIOLATION;
+const char PgSqlConnection::NULL_KEY[] = ERRCODE_NOT_NULL_VIOLATION;
+
+bool PgSqlConnection::warned_about_tls = false;
 
 PgSqlResult::PgSqlResult(PGresult *result)
     : result_(result), rows_(0), cols_(0) {
@@ -161,7 +164,9 @@ PgSqlConnection::prepareStatement(const PgSqlTaggedStatement& statement) {
                             statement.nbparams, statement.types));
     if (PQresultStatus(r) != PGRES_COMMAND_OK) {
         isc_throw(DbOperationError, "unable to prepare PostgreSQL statement: "
-                  << statement.text << ", reason: " << PQerrorMessage(conn_));
+                  << " name: " << statement.name
+                  << ", reason: " << PQerrorMessage(conn_)
+                  << ", text: " << statement.text);
     }
 }
 
@@ -347,6 +352,18 @@ PgSqlConnection::checkStatementError(const PgSqlResult& r,
                       "fatal database error or connectivity lost");
         }
 
+        // Failure: check for the special case of duplicate entry.
+        if (compareError(r, PgSqlConnection::DUPLICATE_KEY)) {
+            isc_throw(DuplicateEntry, "statement: " << statement.name
+                      << ", reason: " << PQerrorMessage(conn_));
+        }
+
+        // Failure: check for the special case of null key violation.
+        if (compareError(r, PgSqlConnection::NULL_KEY)) {
+            isc_throw(NullKeyError, "statement: " << statement.name
+                      << ", reason: " << PQerrorMessage(conn_));
+        }
+
         // Apparently it wasn't fatal, so we throw with a helpful message.
         const char* error_message = PQerrorMessage(conn_);
         isc_throw(DbOperationError, "Statement exec failed for: "
@@ -358,6 +375,11 @@ PgSqlConnection::checkStatementError(const PgSqlResult& r,
 
 void
 PgSqlConnection::startTransaction() {
+    // If it is nested transaction, do nothing.
+    if (++transaction_ref_count_ > 1) {
+        return;
+    }
+
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, PGSQL_START_TRANSACTION);
     checkUnusable();
     PgSqlResult r(PQexec(conn_, "START TRANSACTION"));
@@ -368,8 +390,22 @@ PgSqlConnection::startTransaction() {
     }
 }
 
+bool
+PgSqlConnection::isTransactionStarted() const {
+    return (transaction_ref_count_ > 0);
+}
+
 void
 PgSqlConnection::commit() {
+    if (transaction_ref_count_ <= 0) {
+        isc_throw(Unexpected, "commit called for not started transaction - coding error");
+    }
+
+    // When committing nested transaction, do nothing.
+    if (--transaction_ref_count_ > 0) {
+        return;
+    }
+
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, PGSQL_COMMIT);
     checkUnusable();
     PgSqlResult r(PQexec(conn_, "COMMIT"));
@@ -381,6 +417,15 @@ PgSqlConnection::commit() {
 
 void
 PgSqlConnection::rollback() {
+    if (transaction_ref_count_ <= 0) {
+        isc_throw(Unexpected, "rollback called for not started transaction - coding error");
+    }
+
+    // When rolling back nested transaction, do nothing.
+    if (--transaction_ref_count_ > 0) {
+        return;
+    }
+
     DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, PGSQL_ROLLBACK);
     checkUnusable();
     PgSqlResult r(PQexec(conn_, "ROLLBACK"));
@@ -388,6 +433,104 @@ PgSqlConnection::rollback() {
         const char* error_message = PQerrorMessage(conn_);
         isc_throw(DbOperationError, "rollback failed: " << error_message);
     }
+}
+
+void
+PgSqlConnection::createSavepoint(const std::string& name) {
+    if (transaction_ref_count_ <= 0) {
+        isc_throw(InvalidOperation, "no transaction, cannot create savepoint: " << name);
+    }
+
+    DB_LOG_DEBUG(DB_DBG_TRACE_DETAIL, PGSQL_CREATE_SAVEPOINT).arg(name);
+    std::string sql("SAVEPOINT " + name);
+    executeSQL(sql);
+}
+
+void
+PgSqlConnection::rollbackToSavepoint(const std::string& name) {
+    if (transaction_ref_count_ <= 0) {
+        isc_throw(InvalidOperation, "no transaction, cannot rollback to savepoint: " << name);
+    }
+
+    std::string sql("ROLLBACK TO SAVEPOINT " + name);
+    executeSQL(sql);
+}
+
+void
+PgSqlConnection::executeSQL(const std::string& sql) {
+    // Use a TaggedStatement so we can call checkStatementError and ensure
+    // we detect connectivity issues properly.
+    PgSqlTaggedStatement statement({0, {OID_NONE}, "run-statement", sql.c_str()});
+    checkUnusable();
+    PgSqlResult r(PQexec(conn_, statement.text));
+    checkStatementError(r, statement);
+}
+
+PgSqlResultPtr
+PgSqlConnection::executePreparedStatement(PgSqlTaggedStatement& statement,
+                                          const PsqlBindArray& in_bindings) {
+    checkUnusable();
+
+    if (statement.nbparams != in_bindings.size()) {
+        isc_throw (InvalidOperation, "executePreparedStatement:"
+                   << " expected: " << statement.nbparams
+                   << " parameters, given: " << in_bindings.size()
+                   << ", statement: " << statement.name
+                   << ", SQL: " << statement.text);
+    }
+
+    const char* const* values = 0;
+    const int* lengths = 0;
+    const int* formats = 0;
+    if (statement.nbparams > 0) {
+        values = static_cast<const char* const*>(&in_bindings.values_[0]);
+        lengths = static_cast<const int *>(&in_bindings.lengths_[0]);
+        formats = static_cast<const int *>(&in_bindings.formats_[0]);
+    }
+
+    PgSqlResultPtr result_set;
+    result_set.reset(new PgSqlResult(PQexecPrepared(conn_, statement.name, statement.nbparams,
+                                                    values, lengths, formats, 0)));
+
+    checkStatementError(*result_set, statement);
+    return (result_set);
+}
+
+void
+PgSqlConnection::selectQuery(PgSqlTaggedStatement& statement,
+                             const PsqlBindArray& in_bindings,
+                             ConsumeResultRowFun process_result_row) {
+    // Execute the prepared statement.
+    PgSqlResultPtr result_set = executePreparedStatement(statement, in_bindings);
+
+    // Iterate over the returned rows and invoke the row consumption
+    // function on each one.
+    int rows = result_set->getRows();
+    for (int row = 0; row < rows; ++row) {
+        try {
+            process_result_row(*result_set, row);
+        } catch (const std::exception& ex) {
+            // Rethrow the exception with a bit more data.
+            isc_throw(BadValue, ex.what() << ". Statement is <" <<
+                      statement.text << ">");
+        }
+    }
+}
+
+void
+PgSqlConnection::insertQuery(PgSqlTaggedStatement& statement,
+                             const PsqlBindArray& in_bindings) {
+    // Execute the prepared statement.
+    PgSqlResultPtr result_set = executePreparedStatement(statement, in_bindings);
+}
+
+uint64_t
+PgSqlConnection::updateDeleteQuery(PgSqlTaggedStatement& statement,
+                                   const PsqlBindArray& in_bindings) {
+    // Execute the prepared statement.
+    PgSqlResultPtr result_set = executePreparedStatement(statement, in_bindings);
+
+    return (boost::lexical_cast<int>(PQcmdTuples(*result_set)));
 }
 
 } // end of isc::db namespace

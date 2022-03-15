@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -51,10 +51,7 @@ OpaqueDataTuple::getText() const {
 
 void
 OpaqueDataTuple::pack(isc::util::OutputBuffer& buf) const {
-    if (getLength() == 0) {
-        isc_throw(OpaqueDataTupleError, "failed to create on-wire format of the"
-                  " opaque data field, because the field appears to be empty");
-    } else if ((1 << (getDataFieldSize() * 8)) <= getLength()) {
+    if ((1 << (getDataFieldSize() * 8)) <= getLength()) {
         isc_throw(OpaqueDataTupleError, "failed to create on-wire format of the"
                   " opaque data field, because current data length "
                   << getLength() << " exceeds the maximum size for the length"
@@ -67,7 +64,9 @@ OpaqueDataTuple::pack(isc::util::OutputBuffer& buf) const {
         buf.writeUint16(getLength());
     }
 
-    buf.writeData(&getData()[0], getLength());
+    if (getLength() > 0) {
+        buf.writeData(&getData()[0], getLength());
+    }
 }
 
 int

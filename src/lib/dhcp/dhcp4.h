@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2004-2020 Internet Systems Consortium, Inc. ("ISC")
+ * Copyright (C) 2004-2022 Internet Systems Consortium, Inc. ("ISC")
  * Copyright (c) 1995-2003 by Internet Software Consortium
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -173,7 +173,10 @@ enum DHCPOptionType {
     // 109-111 are removed/unassigned
     DHO_NETINFO_ADDR                 = 112, /* RFC3679 */
     DHO_NETINFO_TAG                  = 113, /* RFC3679 */
-    DHO_URL                          = 114, /* RFC3679 */
+    // URL option was replaced with captive portal.
+    // DHO_URL                       = 114, /* RFC3679 */
+    DHO_V4_CAPTIVE_PORTAL            = 114, /* RFC8910 */
+
     // 115 is removed/unassigned
     DHO_AUTO_CONFIG                  = 116, /* RFC2563 */
     DHO_NAME_SERVICE_SEARCH          = 117, /* RFC2937 */
@@ -209,8 +212,9 @@ enum DHCPOptionType {
 //  DHO_DATA_SOURCE                  = 157,
 //  DHO_V4_PCP_SERVER                = 158,
     DHO_V4_PORTPARAMS                = 159,
-    DHO_V4_CAPTIVE_PORTAL            = 160,
-    // 161-209 are removed/unassigned
+    // 160 used to be assigned in RFC7710, but was removed in RFC8910
+    // The Captive Portal option now uses code 114.
+    // 160-209 are removed/unassigned
 //  DHO_PATH_PREFIX                  = 210, /* RFC5071 */
 //  DHO_REBOOT_TIME                  = 211, /* RFC5071 */
     DHO_6RD                          = 212, /* RFC5969 */

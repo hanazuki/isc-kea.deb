@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,8 +10,9 @@
 
 # shellcheck disable=SC2086
 # SC2086: Double quote to prevent globbing and word splitting.
-# Explicitly don't quote db_port_full_parameter so it doesn't expand to empty
-# string if it is not set.
+# Reason for disable: explicitly don't quote db_port_full_parameter so it
+# doesn't expand to empty string if it is not set and explicitly don't quote
+# extra_arguments so it is considered multiple arguments instead of one.
 
 # shellcheck disable=SC2154
 # SC2154: ... is referenced but not assigned.
@@ -27,6 +28,7 @@ db_host='localhost'
 db_user='keatest'
 db_password='keatest'
 db_name='keatest'
+extra_arguments=
 
 # Runs all the given arguments as a single command. Maintains quoting. Places
 # output in ${OUTPUT} and exit code in ${EXIT_CODE}. Does not support pipes and
@@ -57,13 +59,9 @@ mysql_sanity_checks() {
     fi
 }
 
-# There are two ways of calling this method.
-# mysql_execute SQL_QUERY - This call is simpler, but requires db_user,
-#     db_password and db_name variables to be set.
+# Executes a given MySQL statement.
 # mysql_execute SQL_QUERY PARAM1 PARAM2 .. PARAMN - Additional parameters
-#     may be specified. They are passed directly to mysql. This one is
-#     more convenient to use if the script didn't parse db_user db_password
-#     and db_name.
+#     may be specified. They are passed directly to mysql.
 #
 # It returns the mysql command exit status to the caller as $?
 mysql_execute() {
@@ -72,25 +70,38 @@ mysql_execute() {
 
     mysql_sanity_checks
 
-    if [ $# -gt 1 ]; then
-        mysql -N -B "$@" -e "${QUERY}"
+    if [ $# -gt 0 ]; then
+        mysql -N -B --host="${db_host}" ${db_port_full_parameter-} \
+        --database="${db_name}" --user="${db_user}" \
+        --password="${db_password}" ${extra_arguments} \
+        --execute "${QUERY}" "${@}"
     else
         mysql -N -B --host="${db_host}" ${db_port_full_parameter-} \
-        --database="${db_name}" --user="${db_user}" --password="${db_password}" -e "${QUERY}"
+        --database="${db_name}" --user="${db_user}" \
+        --password="${db_password}" ${extra_arguments} \
+        --execute "${QUERY}"
     fi
 }
 
+# Submits SQL in a given file to MySQL.
+# pgsql_execute SQL_FILE PARAM1 PARAM2 .. PARAMN - Additional parameters
+#     may be specified. They are passed directly to pgsql.
+#
+# It returns the mysql command exit status to the caller as $?
 mysql_execute_script() {
     file=$1
     shift
 
     mysql_sanity_checks
 
-    if [ $# -ge 1 ]; then
-        mysql -N -B "$@" < "${file}"
+    if [ $# -gt 0 ]; then
+        mysql -N -B --host="${db_host}" ${db_port_full_parameter-} \
+        --database="${db_name}" --user="${db_user}" \
+        --password="${db_password}" ${extra_arguments} "${@}" < "${file}"
     else
         mysql -N -B --host="${db_host}" ${db_port_full_parameter-} \
-        --database="${db_name}" --user="${db_user}" --password="${db_password}" < "${file}"
+        --database="${db_name}" --user="${db_user}" \
+        --password="${db_password}" ${extra_arguments} < "${file}"
     fi
 }
 
@@ -112,48 +123,54 @@ checked_mysql_version() {
 }
 
 # Submits given SQL text to PostgreSQL
-# There are two ways of calling this method.
-# pgsql_execute SQL_QUERY - This call is simpler, but requires db_user,
-#     db_password and db_name variables to be set.
 # pgsql_execute SQL_QUERY PARAM1 PARAM2 .. PARAMN - Additional parameters
-#     may be specified. They are passed directly to pgsql. This one is
-#     more convenient to use if the script didn't parse db_user db_password
-#     and db_name.
+#     may be specified. They are passed directly to pgsql.
 #
 # It returns the pgsql command exit status to the caller as $?
 pgsql_execute() {
     QUERY=$1
     shift
+
+    # Prioritize externally set PGPASSWORD. wipe_data.sh sets it for example.
+    if test -z "${PGPASSWORD-}"; then
+        PGPASSWORD="${db_password}"
+    fi
+    export PGPASSWORD
+
     if [ $# -gt 0 ]; then
-        echo "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" \
-        ${db_port_full_parameter-} -q "$@"
+        printf '%s' "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t \
+        -h "${db_host}" ${db_port_full_parameter-} -q -U "${db_user}" \
+        -d "${db_name}" ${extra_arguments} "${@}"
     else
-        export PGPASSWORD=$db_password
-        echo "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" \
-        ${db_port_full_parameter-} -q -U "${db_user}" -d "${db_name}"
+        printf '%s' "${QUERY}" | psql --set ON_ERROR_STOP=1 -A -t \
+        -h "${db_host}" ${db_port_full_parameter-} -q -U "${db_user}" \
+        -d "${db_name}" ${extra_arguments}
     fi
 }
 
 # Submits SQL in a given file to PostgreSQL
-# There are two ways of calling this method.
-# pgsql_execute SQL_FILE - This call is simpler, but requires db_user,
-#     db_password and db_name variables to be set.
 # pgsql_execute SQL_FILE PARAM1 PARAM2 .. PARAMN - Additional parameters
-#     may be specified. They are passed directly to pgsql. This one is
-#     more convenient to use if the script didn't parse db_user db_password
-#     and db_name.
+#     may be specified. They are passed directly to pgsql.
 #
 # It returns the pgsql command exit status to the caller as $?
 pgsql_execute_script() {
     file=$1
     shift
+
+    # Prioritize externally set PGPASSWORD. wipe_data.sh sets it for example.
+    if test -z "${PGPASSWORD-}"; then
+        PGPASSWORD="${db_password}"
+    fi
+    export PGPASSWORD
+
     if [ $# -gt 0 ]; then
         psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" \
-        ${db_port_full_parameter-} -q -f "${file}" "$@"
+        ${db_port_full_parameter-} -q -U "${db_user}" -d "${db_name}" \
+        ${extra_arguments} -f "${file}" "${@}"
     else
-        export PGPASSWORD=$db_password
         psql --set ON_ERROR_STOP=1 -A -t -h "${db_host}" \
-        ${db_port_full_parameter-} -q -U "${db_user}" -d "${db_name}" -f "${file}"
+        ${db_port_full_parameter-} -q -U "${db_user}" -d "${db_name}" \
+        ${extra_arguments} -f "${file}"
     fi
 }
 
@@ -187,7 +204,8 @@ cql_execute() {
             cqlsh "$@" -e "$query"
     else
         run_command \
-            cqlsh -u "${db_user}" -p "${db_password}" -k "${db_name}" -e "${query}"
+            cqlsh -u "${db_user}" -p "${db_password}" -k "${db_name}" \
+            ${extra_arguments} -e "${query}"
     fi
 
     if [ "${EXIT_CODE}" -ne 0 ]; then
@@ -211,7 +229,8 @@ cql_execute_script() {
             cqlsh "$@" -e "$file"
     else
         run_command \
-            cqlsh -u "${db_user}" -p "${db_password}" -k "${db_name}" -f "${file}"
+            cqlsh -u "${db_user}" -p "${db_password}" -k "${db_name}" \
+            ${extra_arguments} -f "${file}"
     fi
 
     if [ "${EXIT_CODE}" -ne 0 ]; then

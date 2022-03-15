@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -117,6 +117,10 @@ DbAccessParser::parse(std::string& access_string,
                 // consistency
                 // serial-consistency
                 // on-fail
+                // trust-anchor
+                // cert-file
+                // key-file
+                // cipher-list
                 values_copy[param.first] = param.second->stringValue();
             }
         } catch (const isc::data::TypeError& ex) {

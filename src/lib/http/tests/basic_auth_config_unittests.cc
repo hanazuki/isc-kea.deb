@@ -1,4 +1,4 @@
-// Copyright (C) 2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2020-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,6 +19,8 @@ using namespace std;
 
 namespace {
 
+string data_dir(DATA_DIR);
+
 // Test that basic auth client works as expected.
 TEST(BasicHttpAuthClientTest, basic) {
     // Create a client.
@@ -27,13 +29,59 @@ TEST(BasicHttpAuthClientTest, basic) {
 
     // Check it.
     EXPECT_EQ("foo", client.getUser());
+    EXPECT_EQ("", client.getUserFile());
     EXPECT_EQ("bar", client.getPassword());
+    EXPECT_EQ("", client.getPasswordFile());
+    EXPECT_FALSE(client.getPasswordFileOnly());
     EXPECT_TRUE(ctx->equals(*client.getContext()));
 
     // Check toElement.
     ElementPtr expected = Element::createMap();
     expected->set("user", Element::create(string("foo")));
     expected->set("password", Element::create(string("bar")));
+    expected->set("user-context", ctx);
+    runToElementTest<BasicHttpAuthClient>(expected, client);
+}
+
+// Test that basic auth client with files works as expected.
+TEST(BasicHttpAuthClientTest, basicFiles) {
+    // Create a client.
+    ConstElementPtr ctx = Element::fromJSON("{ \"foo\": \"bar\" }");
+    BasicHttpAuthClient client("", "foo", "", "bar", false, ctx);
+
+    // Check it.
+    EXPECT_EQ("", client.getUser());
+    EXPECT_EQ("foo", client.getUserFile());
+    EXPECT_EQ("", client.getPassword());
+    EXPECT_EQ("bar", client.getPasswordFile());
+    EXPECT_FALSE(client.getPasswordFileOnly());
+    EXPECT_TRUE(ctx->equals(*client.getContext()));
+
+    // Check toElement.
+    ElementPtr expected = Element::createMap();
+    expected->set("user-file", Element::create(string("foo")));
+    expected->set("password-file", Element::create(string("bar")));
+    expected->set("user-context", ctx);
+    runToElementTest<BasicHttpAuthClient>(expected, client);
+}
+
+// Test that basic auth client with one file works as expected.
+TEST(BasicHttpAuthClientTest, basicOneFile) {
+    // Create a client.
+    ConstElementPtr ctx = Element::fromJSON("{ \"foo\": \"bar\" }");
+    BasicHttpAuthClient client("", "", "", "foobar", true, ctx);
+
+    // Check it.
+    EXPECT_EQ("", client.getUser());
+    EXPECT_EQ("", client.getUserFile());
+    EXPECT_EQ("", client.getPassword());
+    EXPECT_EQ("foobar", client.getPasswordFile());
+    EXPECT_TRUE(client.getPasswordFileOnly());
+    EXPECT_TRUE(ctx->equals(*client.getContext()));
+
+    // Check toElement.
+    ElementPtr expected = Element::createMap();
+    expected->set("password-file", Element::create(string("foobar")));
     expected->set("user-context", ctx);
     runToElementTest<BasicHttpAuthClient>(expected, client);
 }
@@ -46,23 +94,26 @@ TEST(BasicHttpAuthConfigTest, basic) {
     // Initial configuration is empty.
     EXPECT_TRUE(config.empty());
     EXPECT_TRUE(config.getRealm().empty());
+    EXPECT_TRUE(config.getDirectory().empty());
     EXPECT_TRUE(config.getClientList().empty());
     EXPECT_TRUE(config.getCredentialMap().empty());
 
-    // Set the realm and user context.
+    // Set the realm, directory and user context.
     EXPECT_NO_THROW(config.setRealm("my-realm"));
     EXPECT_EQ("my-realm", config.getRealm());
+    EXPECT_NO_THROW(config.setDirectory("/tmp"));
+    EXPECT_EQ("/tmp", config.getDirectory());
     ConstElementPtr horse = Element::fromJSON("{ \"value\": \"a horse\" }");
     EXPECT_NO_THROW(config.setContext(horse));
     EXPECT_TRUE(horse->equals(*config.getContext()));
 
     // Add rejects user id with embedded ':'.
-    EXPECT_THROW(config.add("foo:", "bar"), BadValue);
+    EXPECT_THROW(config.add("foo:", "", "bar", ""), BadValue);
 
     // Add a client.
     EXPECT_TRUE(config.empty());
     ConstElementPtr ctx = Element::fromJSON("{ \"foo\": \"bar\" }");
-    EXPECT_NO_THROW(config.add("foo", "bar", ctx));
+    EXPECT_NO_THROW(config.add("foo", "", "bar", "", false, ctx));
     EXPECT_FALSE(config.empty());
 
     // Check the client.
@@ -88,12 +139,13 @@ TEST(BasicHttpAuthConfigTest, basic) {
     clients->add(elem);
     expected->set("type", Element::create(string("basic")));
     expected->set("realm", Element::create(string("my-realm")));
+    expected->set("directory", Element::create(string("/tmp")));
     expected->set("user-context", horse);
     expected->set("clients", clients);
     runToElementTest<BasicHttpAuthConfig>(expected, config);
 
     // Add a second client and test it.
-    EXPECT_NO_THROW(config.add("test", "123\xa3"));
+    EXPECT_NO_THROW(config.add("test", "", "123\xa3", ""));
     ASSERT_EQ(2, config.getClientList().size());
     EXPECT_EQ("foo", config.getClientList().front().getUser());
     EXPECT_EQ("test", config.getClientList().back().getUser());
@@ -106,13 +158,87 @@ TEST(BasicHttpAuthConfigTest, basic) {
     runToElementTest<BasicHttpAuthConfig>(expected, config);
 
     // Add clients again.
-    EXPECT_NO_THROW(config.add("test", "123\xa3"));
-    EXPECT_NO_THROW(config.add("foo", "bar", ctx));
+    EXPECT_NO_THROW(config.add("test", "", "123\xa3", ""));
+    EXPECT_NO_THROW(config.add("foo", "", "bar", "", false, ctx));
 
     // Check that toElement keeps add order.
     ElementPtr elem0 = Element::createMap();
     elem0->set("user", Element::create(string("test")));
     elem0->set("password", Element::create(string("123\xa3")));
+    clients = Element::createList();
+    clients->add(elem0);
+    clients->add(elem);
+    expected->set("clients", clients);
+    runToElementTest<BasicHttpAuthConfig>(expected, config);
+}
+
+// Test that basic auth configuration with files works as expected.
+TEST(BasicHttpAuthConfigTest, basicFiles) {
+    // Create a configuration.
+    BasicHttpAuthConfig config;
+
+    // Set the realm, directory and user context.
+    EXPECT_NO_THROW(config.setRealm("my-realm"));
+    EXPECT_EQ("my-realm", config.getRealm());
+    EXPECT_NO_THROW(config.setDirectory(data_dir));
+    EXPECT_EQ(data_dir, config.getDirectory());
+    ConstElementPtr horse = Element::fromJSON("{ \"value\": \"a horse\" }");
+    EXPECT_NO_THROW(config.setContext(horse));
+    EXPECT_TRUE(horse->equals(*config.getContext()));
+
+    // ':' in user id check is done during parsing
+
+    // Add a client.
+    EXPECT_TRUE(config.empty());
+    ConstElementPtr ctx = Element::fromJSON("{ \"foo\": \"bar\" }");
+    EXPECT_NO_THROW(config.add("foo", "", "", "hiddenp", false, ctx));
+    EXPECT_FALSE(config.empty());
+
+    // Check the client.
+    ASSERT_EQ(1, config.getClientList().size());
+    const BasicHttpAuthClient& client = config.getClientList().front();
+    EXPECT_EQ("foo", client.getUser());
+    EXPECT_EQ("", client.getUserFile());
+    EXPECT_EQ("", client.getPassword());
+    EXPECT_EQ("hiddenp", client.getPasswordFile());
+    EXPECT_FALSE(client.getPasswordFileOnly());
+    EXPECT_TRUE(ctx->equals(*client.getContext()));
+
+    // Check toElement.
+    ElementPtr expected = Element::createMap();
+    ElementPtr clients = Element::createList();
+    ElementPtr elem = Element::createMap();
+    elem->set("user", Element::create(string("foo")));
+    elem->set("password-file", Element::create(string("hiddenp")));
+    elem->set("user-context", ctx);
+    clients->add(elem);
+    expected->set("type", Element::create(string("basic")));
+    expected->set("realm", Element::create(string("my-realm")));
+    expected->set("directory", Element::create(data_dir));
+    expected->set("user-context", horse);
+    expected->set("clients", clients);
+    runToElementTest<BasicHttpAuthConfig>(expected, config);
+
+    // Add a second client and test it.
+    EXPECT_NO_THROW(config.add("", "hiddenu", "", "hiddenp"));
+    ASSERT_EQ(2, config.getClientList().size());
+    EXPECT_EQ("foo", config.getClientList().front().getUser());
+    EXPECT_EQ("hiddenu", config.getClientList().back().getUserFile());
+
+    // Check clear.
+    config.clear();
+    EXPECT_TRUE(config.empty());
+    expected->set("clients", Element::createList());
+    runToElementTest<BasicHttpAuthConfig>(expected, config);
+
+    // Add clients again.
+    EXPECT_NO_THROW(config.add("", "hiddenu", "", "hiddenp"));
+    EXPECT_NO_THROW(config.add("foo", "", "", "hiddenp", false, ctx));
+
+    // Check that toElement keeps add order.
+    ElementPtr elem0 = Element::createMap();
+    elem0->set("user-file", Element::create(string("hiddenu")));
+    elem0->set("password-file", Element::create(string("hiddenp")));
     clients = Element::createList();
     clients->add(elem0);
     clients->add(elem);
@@ -133,6 +259,7 @@ TEST(BasicHttpAuthConfigTest, parse) {
     ElementPtr expected = Element::createMap();
     expected->set("type", Element::create(string("basic")));
     expected->set("realm", Element::create(string("")));
+    expected->set("directory", Element::create(string("")));
     expected->set("clients", Element::createList());
     runToElementTest<BasicHttpAuthConfig>(expected, config);
 
@@ -149,7 +276,7 @@ TEST(BasicHttpAuthConfigTest, parse) {
     // The type must be a string.
     cfg->set("type", Element::create(true));
     EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
-                     "type is must be a string (:0:0)");
+                     "type must be a string (:0:0)");
 
     // The type must be basic.
     cfg->set("type", Element::create(string("foobar")));
@@ -162,8 +289,15 @@ TEST(BasicHttpAuthConfigTest, parse) {
     // The realm must be a string.
     cfg->set("realm", Element::createList());
     EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
-                     "realm is must be a string (:0:0)");
+                     "realm must be a string (:0:0)");
     cfg->set("realm", Element::create(string("my-realm")));
+    EXPECT_NO_THROW(config.parse(cfg));
+
+    // The directory must be a string.
+    cfg->set("directory", Element::createMap());
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "directory must be a string (:0:0)");
+    cfg->set("directory", Element::create(data_dir));
     EXPECT_NO_THROW(config.parse(cfg));
 
     // The user context must be a map.
@@ -189,7 +323,8 @@ TEST(BasicHttpAuthConfigTest, parse) {
     EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
                      "clients items must be maps (:0:0)");
 
-    // The user parameter is mandatory in client config.
+    // The user parameter is mandatory in client config
+    // without a password file.
     client_cfg = Element::createMap();
     clients_cfg = Element::createList();
     clients_cfg->add(client_cfg);
@@ -215,7 +350,7 @@ TEST(BasicHttpAuthConfigTest, parse) {
     clients_cfg->add(client_cfg);
     cfg->set("clients", clients_cfg);
     EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
-                     "user must be not be empty (:0:0)");
+                     "user must not be empty (:0:0)");
 
     // The user parameter must not contain ':'.
     user_cfg = Element::create(string("foo:bar"));
@@ -226,6 +361,49 @@ TEST(BasicHttpAuthConfigTest, parse) {
     cfg->set("clients", clients_cfg);
     EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
                      "user must not contain a ':': 'foo:bar' (:0:0)");
+
+    // The user-file parameter must be a string.
+    ElementPtr user_file_cfg = Element::create(1);
+    client_cfg = Element::createMap();
+    client_cfg->set("user-file", user_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "user-file must be a string (:0:0)");
+
+    // The user and user-file parameters are incompatible.
+    client_cfg = Element::createMap();
+    client_cfg->set("user", user_cfg);
+    client_cfg->set("user-file", user_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "user (:0:0) and user-file (:0:0) are "
+                     "mutually exclusive");
+
+    // The user-file parameter must not be empty.
+    user_file_cfg = Element::create(string("empty"));
+    client_cfg = Element::createMap();
+    client_cfg->set("user-file", user_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "user must not be empty from user-file "
+                     "'empty' (:0:0)");
+
+    // The user-file parameter must not contain ':'.
+    user_file_cfg = Element::create(string("hiddens"));
+    client_cfg = Element::createMap();
+    client_cfg->set("user-file", user_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "user must not contain a ':' from user-file "
+                     "'hiddens' (:0:0)");
 
     // Password is not required.
     user_cfg = Element::create(string("foo"));
@@ -242,7 +420,6 @@ TEST(BasicHttpAuthConfigTest, parse) {
     // The password parameter must be a string.
     ElementPtr password_cfg = Element::create(1);
     client_cfg = Element::createMap();
-    client_cfg->set("user", user_cfg);
     client_cfg->set("password", password_cfg);
     clients_cfg = Element::createList();
     clients_cfg->add(client_cfg);
@@ -263,6 +440,65 @@ TEST(BasicHttpAuthConfigTest, parse) {
     EXPECT_EQ("", config.getClientList().front().getPassword());
     config.clear();
 
+    // The password-file parameter must be a string.
+    ElementPtr password_file_cfg = Element::create(1);
+    client_cfg = Element::createMap();
+    // user is not required when password-file is here.
+    client_cfg->set("password-file", password_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "password-file must be a string (:0:0)");
+
+    // The password and password-file parameters are incompatible.
+    client_cfg = Element::createMap();
+    client_cfg->set("user", user_cfg);
+    client_cfg->set("password", password_cfg);
+    client_cfg->set("password-file", password_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "password (:0:0) and password-file (:0:0) are "
+                     "mutually exclusive");
+
+    // Empty password-file is accepted.
+    password_file_cfg = Element::create(string("empty"));
+    client_cfg = Element::createMap();
+    client_cfg->set("user", user_cfg);
+    client_cfg->set("password-file", password_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_NO_THROW(config.parse(cfg));
+    ASSERT_EQ(1, config.getClientList().size());
+    EXPECT_EQ("", config.getClientList().front().getPassword());
+    config.clear();
+
+    // password-file is enough.
+    password_file_cfg = Element::create(string("hiddens"));
+    client_cfg = Element::createMap();
+    client_cfg->set("password-file", password_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_NO_THROW(config.parse(cfg));
+    ASSERT_EQ(1, config.getClientList().size());
+    EXPECT_EQ("test", config.getClientList().front().getPassword());
+    config.clear();
+
+    // password-file only requires a ':' in the content.
+    password_file_cfg = Element::create(string("hiddenp"));
+    client_cfg = Element::createMap();
+    client_cfg->set("password-file", password_file_cfg);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_THROW_MSG(config.parse(cfg), DhcpConfigError,
+                     "can't find the user id part in password-file "
+                     "'hiddenp' (:0:0)");
+
     // User context must be a map.
     password_cfg = Element::create(string("bar"));
     ctx = Element::createList();
@@ -282,6 +518,18 @@ TEST(BasicHttpAuthConfigTest, parse) {
     client_cfg->set("user", user_cfg);
     client_cfg->set("password", password_cfg);
     client_cfg->set("user-context", ctx);
+    clients_cfg = Element::createList();
+    clients_cfg->add(client_cfg);
+    cfg->set("clients", clients_cfg);
+    EXPECT_NO_THROW(config.parse(cfg));
+    runToElementTest<BasicHttpAuthConfig>(cfg, config);
+
+    // Check a working not empty config with files.
+    config.clear();
+    client_cfg = Element::createMap();
+    user_file_cfg = Element::create(string("hiddenu"));
+    client_cfg->set("user-file", user_file_cfg);
+    client_cfg->set("password-file", password_file_cfg);
     clients_cfg = Element::createList();
     clients_cfg->add(client_cfg);
     cfg->set("clients", clients_cfg);

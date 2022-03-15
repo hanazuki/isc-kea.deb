@@ -36,6 +36,7 @@ extern const isc::log::MessageID DHCP4_CONFIG_OPTION_DUPLICATE = "DHCP4_CONFIG_O
 extern const isc::log::MessageID DHCP4_CONFIG_PACKET_QUEUE = "DHCP4_CONFIG_PACKET_QUEUE";
 extern const isc::log::MessageID DHCP4_CONFIG_RECEIVED = "DHCP4_CONFIG_RECEIVED";
 extern const isc::log::MessageID DHCP4_CONFIG_START = "DHCP4_CONFIG_START";
+extern const isc::log::MessageID DHCP4_CONFIG_SYNTAX_WARNING = "DHCP4_CONFIG_SYNTAX_WARNING";
 extern const isc::log::MessageID DHCP4_CONFIG_UNRECOVERABLE_ERROR = "DHCP4_CONFIG_UNRECOVERABLE_ERROR";
 extern const isc::log::MessageID DHCP4_CONFIG_UNSUPPORTED_OBJECT = "DHCP4_CONFIG_UNSUPPORTED_OBJECT";
 extern const isc::log::MessageID DHCP4_CONFIG_UPDATE = "DHCP4_CONFIG_UPDATE";
@@ -135,6 +136,7 @@ extern const isc::log::MessageID DHCP4_RELEASE_EXCEPTION = "DHCP4_RELEASE_EXCEPT
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL = "DHCP4_RELEASE_FAIL";
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL_NO_LEASE = "DHCP4_RELEASE_FAIL_NO_LEASE";
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL_WRONG_CLIENT = "DHCP4_RELEASE_FAIL_WRONG_CLIENT";
+extern const isc::log::MessageID DHCP4_RESERVATIONS_LOOKUP_FIRST_ENABLED = "DHCP4_RESERVATIONS_LOOKUP_FIRST_ENABLED";
 extern const isc::log::MessageID DHCP4_RESERVED_HOSTNAME_ASSIGNED = "DHCP4_RESERVED_HOSTNAME_ASSIGNED";
 extern const isc::log::MessageID DHCP4_RESPONSE_DATA = "DHCP4_RESPONSE_DATA";
 extern const isc::log::MessageID DHCP4_RESPONSE_FQDN_DATA = "DHCP4_RESPONSE_FQDN_DATA";
@@ -155,6 +157,7 @@ extern const isc::log::MessageID DHCP4_SUBNET_DYNAMICALLY_CHANGED = "DHCP4_SUBNE
 extern const isc::log::MessageID DHCP4_SUBNET_SELECTED = "DHCP4_SUBNET_SELECTED";
 extern const isc::log::MessageID DHCP4_SUBNET_SELECTION_FAILED = "DHCP4_SUBNET_SELECTION_FAILED";
 extern const isc::log::MessageID DHCP4_TESTING_MODE_SEND_TO_SOURCE_ENABLED = "DHCP4_TESTING_MODE_SEND_TO_SOURCE_ENABLED";
+extern const isc::log::MessageID DHCP4_UNKNOWN_ADDRESS_REQUESTED = "DHCP4_UNKNOWN_ADDRESS_REQUESTED";
 extern const isc::log::MessageID DHCP6_DHCP4O6_PACKET_RECEIVED = "DHCP6_DHCP4O6_PACKET_RECEIVED";
 
 } // namespace dhcp
@@ -192,6 +195,7 @@ const char* values[] = {
     "DHCP4_CONFIG_PACKET_QUEUE", "DHCPv4 packet queue info after configuration: %1",
     "DHCP4_CONFIG_RECEIVED", "received configuration %1",
     "DHCP4_CONFIG_START", "DHCPv4 server is processing the following configuration: %1",
+    "DHCP4_CONFIG_SYNTAX_WARNING", "configuration syntax warning: %1",
     "DHCP4_CONFIG_UNRECOVERABLE_ERROR", "DHCPv4 server new configuration failed with an error which cannot be recovered",
     "DHCP4_CONFIG_UNSUPPORTED_OBJECT", "DHCPv4 server configuration includes an unsupported object: %1",
     "DHCP4_CONFIG_UPDATE", "updated configuration received: %1",
@@ -291,6 +295,7 @@ const char* values[] = {
     "DHCP4_RELEASE_FAIL", "%1: failed to remove lease for address %2",
     "DHCP4_RELEASE_FAIL_NO_LEASE", "%1: client is trying to release non-existing lease %2",
     "DHCP4_RELEASE_FAIL_WRONG_CLIENT", "%1: client is trying to release the lease %2 which belongs to a different client",
+    "DHCP4_RESERVATIONS_LOOKUP_FIRST_ENABLED", "Multi-threading is enabled and host reservations lookup is always performed first.",
     "DHCP4_RESERVED_HOSTNAME_ASSIGNED", "%1: server assigned reserved hostname %2",
     "DHCP4_RESPONSE_DATA", "%1: responding with packet %2 (type %3), packet details: %4",
     "DHCP4_RESPONSE_FQDN_DATA", "%1: including FQDN option in the server's response: %2",
@@ -311,6 +316,7 @@ const char* values[] = {
     "DHCP4_SUBNET_SELECTED", "%1: the subnet with ID %2 was selected for client assignments",
     "DHCP4_SUBNET_SELECTION_FAILED", "%1: failed to select subnet for the client",
     "DHCP4_TESTING_MODE_SEND_TO_SOURCE_ENABLED", "All packets will be send to source address of an incoming packet - use only for testing",
+    "DHCP4_UNKNOWN_ADDRESS_REQUESTED", "%1: client requested an unknown address, client sent ciaddr %2, requested-ip-address %3",
     "DHCP6_DHCP4O6_PACKET_RECEIVED", "received DHCPv4o6 packet from DHCPv6 server (type %1) for %2 port %3 on interface %4",
     NULL
 };

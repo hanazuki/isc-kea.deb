@@ -8,10 +8,12 @@
 
 #include <d2/d2_parser.h>
 #include <d2/parser_context.h>
+#include <d2srv/d2_log.h>
 #include <exceptions/exceptions.h>
 #include <cc/data.h>
 #include <boost/lexical_cast.hpp>
 #include <fstream>
+#include <sstream>
 #include <limits>
 
 namespace isc {
@@ -201,5 +203,19 @@ D2ParserContext::contextName()
     }
 }
 
+void
+D2ParserContext::warning(const isc::d2::location& loc,
+                         const std::string& what) {
+    std::ostringstream msg;
+    msg << loc << ": " << what;
+    LOG_WARN(d2_to_dns_logger, DHCP_DDNS_CONFIG_SYNTAX_WARNING)
+        .arg(msg.str());
 }
+
+void
+D2ParserContext::warnAboutExtraCommas(const isc::d2::location& loc) {
+    warning(loc, "Extraneous comma. A piece of configuration may have been omitted.");
 }
+
+}  // namespace d2
+}  // namespace isc

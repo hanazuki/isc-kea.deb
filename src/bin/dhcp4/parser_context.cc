@@ -8,10 +8,12 @@
 
 #include <dhcp4/parser_context.h>
 #include <dhcp4/dhcp4_parser.h>
+#include <dhcp4/dhcp4_log.h>
 #include <exceptions/exceptions.h>
 #include <cc/data.h>
 #include <boost/lexical_cast.hpp>
 #include <fstream>
+#include <sstream>
 #include <limits>
 
 namespace isc {
@@ -222,6 +224,20 @@ Parser4Context::contextName() {
     default:
         return ("__unknown__");
     }
+}
+
+void
+Parser4Context::warning(const isc::dhcp::location& loc,
+                        const std::string& what) {
+    std::ostringstream msg;
+    msg << loc << ": " << what;
+    LOG_WARN(dhcp4_logger, DHCP4_CONFIG_SYNTAX_WARNING)
+        .arg(msg.str());
+}
+
+void
+Parser4Context::warnAboutExtraCommas(const isc::dhcp::location& loc) {
+    warning(loc, "Extraneous comma. A piece of configuration may have been omitted.");
 }
 
 }  // namespace dhcp

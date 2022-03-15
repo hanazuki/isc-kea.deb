@@ -431,9 +431,9 @@ yangmodules_list = ietf-dhcpv6-client@2018-09-04.yang \
 	ietf-dhcpv6-types@2018-09-04.yang \
 	ietf-inet-types@2013-07-15.yang \
 	ietf-yang-types@2013-07-15.yang kea-ctrl-agent@2019-08-12.yang \
-	kea-dhcp-ddns@2019-08-12.yang kea-dhcp-types@2021-08-25.yang \
-	kea-dhcp4-server@2021-08-25.yang \
-	kea-dhcp6-server@2021-08-25.yang kea-types@2019-08-12.yang \
+	kea-dhcp-ddns@2019-08-12.yang kea-dhcp-types@2021-11-24.yang \
+	kea-dhcp4-server@2021-11-24.yang \
+	kea-dhcp6-server@2021-11-24.yang kea-types@2019-08-12.yang \
 	keatest-module@2018-11-20.yang
 EXTRA_DIST = hashes ${yangmodules_list}
 @HAVE_SYSREPO_TRUE@yangmodules_DATA = ${yangmodules_list}

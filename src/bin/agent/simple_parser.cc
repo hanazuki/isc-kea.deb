@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -47,8 +47,9 @@ const SimpleDefaults AgentSimpleParser::AGENT_DEFAULTS = {
 
 /// @brief This table defines default values for authentication.
 const SimpleDefaults AgentSimpleParser::AUTH_DEFAULTS = {
-    { "type",   Element::string,  "basic" },
-    { "realm",  Element::string,  "kea-control-agent" }
+    { "type",       Element::string,  "basic" },
+    { "realm",      Element::string,  "kea-control-agent" },
+    { "directory",  Element::string,  "" }
 };
 
 /// @brief This table defines default values for control sockets.

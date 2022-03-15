@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "KEA-LFC" "8" "Feb 27, 2022" "2.0.2" "Kea"
+.TH "KEA-LFC" "8" "Feb 21, 2022" "2.1.3" "Kea"
 .SH NAME
 kea-lfc \- Lease File Cleanup process in Kea
 .
@@ -52,24 +52,23 @@ Indicates the protocol version of the lease files; must be either 4 or 6.
 Specifies the file with the configuration for the \fBkea\-lfc\fP
 process. It may also contain configuration entries for other Kea
 services. Currently \fBkea\-lfc\fP gets all of its arguments from the
-command line; in the future it will be extended to obtain some arguments
-from the configuration file.
+command line.
 .TP
 .B \fB\-p pid\-file\fP
 Specifies the PID file. When the \fBkea\-lfc\fP process starts, it attempts to
-determine if another instance of the process is already running by
+determine if another instance of the process is already running, by
 examining the PID file. If one is already running, the new process is
 terminated. If one is not running, Kea writes its PID into the PID file.
 .TP
 .B \fB\-x previous\-file\fP
 Specifies the previous or ex\-lease file. When \fBkea\-lfc\fP starts, this is the
 result of any previous run of \fBkea\-lfc\fP; when \fBkea\-lfc\fP finishes,
-it is the result of this run. If \fBkea\-lfc\fP is interrupted before
+it is the result of the current run. If \fBkea\-lfc\fP is interrupted before
 completing, this file may not exist.
 .TP
 .B \fB\-i copy\-file\fP
 Specifies the input or copy of lease file. Before the DHCP server invokes
-\fBkea\-lfc\fP, it will move the current lease file here and then call
+\fBkea\-lfc\fP, it moves the current lease file here and then calls
 \fBkea\-lfc\fP with this file.
 .TP
 .B \fB\-o output\-file\fP
@@ -113,8 +112,8 @@ available in various formats (.txt, .html, .pdf) with the Kea
 distribution. The Kea documentation is available at
 \fI\%https://kea.readthedocs.io\fP\&.
 .sp
-Kea source code is documented in the Kea Developer\(aqs Guide. Its online
-version is available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
+Kea source code is documented in the Kea Developer\(aqs Guide,
+available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
 .sp
 The Kea project website is available at \fI\%https://kea.isc.org\fP\&.
 .SH MAILING LISTS AND SUPPORT

@@ -1,6 +1,6 @@
 .\" Man page generated from reStructuredText.
 .
-.TH "PERFDHCP" "8" "Feb 27, 2022" "2.0.2" "Kea"
+.TH "PERFDHCP" "8" "Feb 21, 2022" "2.1.3" "Kea"
 .SH NAME
 perfdhcp \- DHCP benchmarking tool
 .
@@ -35,34 +35,34 @@ level margin: \\n[rst2man-indent\\n[rst2man-indent-level]]
 \fBperfdhcp\fP [\fB\-1\fP] [\fB\-4\fP | \fB\-6\fP] [\fB\-A\fP encapsulation\-level] [\fB\-b\fP base] [\fB\-B\fP] [\fB\-c\fP] [\fB\-C\fP separator] [\fB\-d\fP drop\-time] [\fB\-D\fP max\-drop] [\-e lease\-type] [\fB\-E\fP time\-offset] [\fB\-f\fP renew\-rate] [\fB\-F\fP release\-rate] [\fB\-g\fP thread\-mode] [\fB\-h\fP] [\fB\-i\fP] [\fB\-I\fP ip\-offset] [\fB\-J\fP remote\-address\-list\-file] [\fB\-l\fP local\-address|interface] [\fB\-L\fP local\-port] [\fB\-M\fP mac\-list\-file] [\fB\-n\fP num\-request] [\fB\-N\fP remote\-port] [\fB\-O\fP random\-offset] [\fB\-o\fP code,hexstring] [\fB\-p\fP test\-period] [\fB\-P\fP preload] [\fB\-r\fP rate] [\fB\-R\fP num\-clients] [\fB\-s\fP seed] [\fB\-S\fP srvid\-offset] [\fB\-\-scenario\fP name] [\fB\-t\fP report] [\fB\-T\fP template\-file] [\fB\-u\fP] [\fB\-v\fP] [\fB\-W\fP exit\-wait\-time] [\fB\-w\fP script_name] [\fB\-x\fP diagnostic\-selector] [\fB\-X\fP xid\-offset] [server]
 .SH DESCRIPTION
 .sp
-\fBperfdhcp\fP is a DHCP benchmarking tool. It provides a way of measuring
+\fBperfdhcp\fP is a DHCP benchmarking tool. It provides a way to measure
 the performance of DHCP servers by generating large amounts of traffic
-from simulated multiple clients. It is able to test both IPv4 and IPv6
+from multiple simulated clients. It is able to test both IPv4 and IPv6
 servers, and provides statistics concerning response times and the
 number of requests that are dropped.
 .sp
-The tool supports scenarios, which offer certain behaviours.
-By default (basic scenario) tests are run using the full four\-packet exchange sequence
+The tool supports two different scenarios, which offer certain behaviors to be tested.
+By default (the basic scenario), tests are run using the full four\-packet exchange sequence
 (DORA for DHCPv4, SARR for DHCPv6). An option is provided to run tests
 using the initial two\-packet exchange (DO and SA) instead. It is also
 possible to configure \fBperfdhcp\fP to send DHCPv6 RENEW and RELEASE messages
-at a specified rate in parallel with the DHCPv6 four\-way exchanges. By
-default, if there is no response received with 1 second, a response is
-considered lost and perfdhcp continues with other transactions.
+at a specified rate, in parallel with the DHCPv6 four\-way exchanges. By
+default, if there is no response received with one second, a response is
+considered lost and \fBperfdhcp\fP continues with other transactions.
 .sp
-Second scenario is called avalanche, which is selected by \fB\-\-scenario avalanche\fP\&.
-It first sends as many Discovery or Solicit messages as request in \-R option then
-a retransmission (with exponential back off mechanism) is used for each simulated client until all requests are
-answered. It will generate report when all clients get their addresses or when
-it will be manually stopped. This scenario attempts to replicate a
+A second scenario, called avalanche, is selected via \fB\-\-scenario avalanche\fP\&.
+It first sends the number of Discovery or Solicit messages specified by the \fB\-R\fP option; then
+a retransmission (with an exponential back\-off mechanism) is used for each simulated client, until all requests are
+answered. It generates a report when all clients receive their addresses, or when
+it is manually stopped. This scenario attempts to replicate a
 case where the server is not able to handle the traffic swiftly
-enough. Real clients will assume the packet or the response was lost
+enough. Real clients will assume the packet or response was lost
 and will retransmit, further increasing DHCP traffic. This is
-sometimes called avalanche effect, thus the scenario name.
-Option \fB\-p\fP is ignored in avalanche scenario.
+sometimes called an avalanche effect, thus the scenario name.
+Option \fB\-p\fP is ignored in the avalanche scenario.
 .sp
-When running a performance test, \fBperfdhcp\fP will exchange packets with
-the server under test as fast as possible unless the \fB\-r\fP parameter is used to
+When running a performance test, \fBperfdhcp\fP exchanges packets with
+the server under test as quickly as possible, unless the \fB\-r\fP parameter is used to
 limit the request rate. The length of the test can be limited by setting
 a threshold on any or all of the number of requests made by
 \fBperfdhcp\fP, the elapsed time, or the number of requests dropped by the
@@ -78,39 +78,39 @@ perform DNS updates. This may be used to discover performance
 bottlenecks for different server configurations (e.g. DDNS enabled or
 disabled).
 .sp
-Up to two template files can be specified on the command line, each file
-representing the contents of a particular type of packet, the type being
+Up to two template files can be specified on the command line, with each file
+representing the contents of a particular type of packet, and the type being
 determined by the test being carried out. For example, if testing
 DHCPv6:
 .INDENT 0.0
 .IP \(bu 2
 With no template files specified on the command line, \fBperfdhcp\fP
-will generate both SOLICIT and REQUEST packets.
+generates both Solicit and Request packets.
 .IP \(bu 2
-With one template file specified, that file will be used as the
-pattern for SOLICIT packets: \fBperfdhcp\fP will generate the REQUEST
+With one template file specified, that file is used as the
+pattern for Solicit packets: \fBperfdhcp\fP generates the Request
 packets.
 .IP \(bu 2
-With two template files given on the command line, the first will be
-used as the pattern for SOLICIT packets, the second as the pattern
-for REQUEST packets.
+With two template files given on the command line, the first is
+used as the pattern for Solicit packets, and the second as the pattern
+for Request packets.
 .UNINDENT
 .sp
-(Similar determination applies to DHCPv4\(aqs DISCOVER and REQUEST
+(A similar determination applies to DHCPv4\(aqs DHCPDISCOVER and DHCPREQUEST
 packets.)
 .sp
-The template file holds the DHCP packet represented as a stream of ASCII
-hexadecimal digits and it excludes any IP/UDP stack headers. The
+The template file holds the DHCP packet, represented as a stream of ASCII
+hexadecimal digits; it excludes any IP/UDP stack headers. The
 template file must not contain any characters other than hexadecimal
 digits and spaces. Spaces are discarded when the template file is parsed;
-in the file, \(aq12B4\(aq is the same as \(aq12 B4\(aq which is the same as \(aq1 2
-B 4\(aq.
+in the file, \fB12B4\fP is the same as \fB12 B4\fP, which is the same as
+\fB1 2 B 4\fP\&.
 .sp
 The template files should be used in conjunction with the command\-line
 parameters which specify offsets of the data fields being modified in
 outbound packets. For example, the \fB\-E time\-offset\fP switch specifies
 the offset of the DHCPv6 Elapsed Time option in the packet template.
-If the offset is specified, \fBperfdhcp\fP will inject the current elapsed\-time
+If the offset is specified, \fBperfdhcp\fP injects the current elapsed\-time
 value into this field before sending the packet to the server.
 .sp
 In many scenarios, \fBperfdhcp\fP needs to simulate multiple clients,
@@ -123,90 +123,90 @@ note that this offset points to the end (not the beginning) of the
 client identifier (or HW address field). The number of bytes being
 randomized depends on the number of simulated clients. If the number of
 simulated clients is between 1 and 255, only one byte (to which the
-randomization offset points) will be randomized. If the number of
-simulated clients is between 256 and 65535, two bytes will be
-randomized. Note that the last two bytes of the client identifier will be
+randomization offset points) is randomized. If the number of
+simulated clients is between 256 and 65535, two bytes are
+randomized. Note that the last two bytes of the client identifier are
 randomized in this case: the byte which the randomization offset parameter
 points to, and the one which precedes it (random\-offset \- 1). If the
-number of simulated clients exceeds 65535, three bytes will be
+number of simulated clients exceeds 65535, three bytes are
 randomized, and so on.
 .sp
-Perfdhcp can now simulate traffic from multiple subnets by enabling option
-\-J and passing path to file that contains v4 or v6 addresses that will be
-used as relay in generated messages. That enable testing of vast numbers
-of Kea shared networks. While testing Kea v4 it should be started with
-KEA_TEST_SEND_RESPONSES_TO_SOURCE environment variable to force Kea
-to send generated messages to source address of incoming packet.
+\fBperfdhcp\fP can simulate traffic from multiple subnets by enabling option
+\fB\-J\fP and passing a path to a file that contains v4 or v6 addresses to be
+used as relays in generated messages. That enables testing of vast numbers
+of Kea shared networks. While testing DHCPv4, Kea should be started with the
+\fBKEA_TEST_SEND_RESPONSES_TO_SOURCE\fP environment variable, to force Kea
+to send generated messages to the source address of the incoming packet.
 .sp
 Templates may currently be used to generate packets being sent to the
-server in 4\-way exchanges, i.e. SOLICIT, REQUEST (DHCPv6) and DISCOVER,
-REQUEST (DHCPv4). They cannot be used when RENEW or RELEASE packets are
+server in 4\-way exchanges, i.e. Solicit, Request (DHCPv6) and DHCPDISCOVER,
+DHCPREQUEST (DHCPv4). They cannot be used when Renew or DHCPRELEASE packets are
 being sent.
 .SH OPTIONS
 .INDENT 0.0
 .TP
 .B \fB\-1\fP
-Takes the server\-ID option from the first received message.
+Takes the \fBserver\-id\fP option from the first received message.
 .TP
 .B \fB\-4\fP
 Establishes DHCPv4 operation; this is the default. It is incompatible with the
 \fB\-6\fP option.
 .TP
 .B \fB\-6\fP
-Establishes DHCPv6 operation. This is incompatible with the \fB\-4\fP option.
+Establishes DHCPv6 operation. It is incompatible with the \fB\-4\fP option.
 .TP
 .B \fB\-b basetype=value\fP
 Indicates the base MAC or DUID used to simulate different clients. The basetype
 may be "mac" or "duid". (The keyword "ether" may alternatively used
 for MAC.) The \fB\-b\fP option can be specified multiple times. The MAC
 address must consist of six octets separated by single (:) or double
-(::) colons, for example: mac=00:0c:01:02:03:04. The DUID value is a
+(::) colons; for example: mac=00:0c:01:02:03:04. The DUID value is a
 hexadecimal string; it must be at least six octets long and not
 longer than 64 bytes, and the length must be less than 128
-hexadecimal digits, for example: duid=0101010101010101010110111F14.
+hexadecimal digits. For example: duid=0101010101010101010110111F14.
 .TP
 .B \fB\-d drop\-time\fP
 Specifies the time after which a request is treated as having been
 lost. The value is given in seconds and may contain a fractional
-component. The default is 1 second.
+component. The default is 1.
 .TP
 .B \fB\-e lease\-type\fP
 Specifies the type of lease being requested from the server. It may
 be one of the following:
 .INDENT 7.0
 .TP
-\fBaddress\-only\fP
-Only regular addresses (v4 or v6) will be requested.
+.B \fBaddress\-only\fP
+Only regular addresses (v4 or v6) are requested.
 .TP
-\fBprefix\-only\fP
-Only IPv6 prefixes will be requested.
+.B \fBprefix\-only\fP
+Only IPv6 prefixes are requested.
 .TP
-\fBaddress\-and\-prefix\fP
-Both IPv6 addresses and prefixes will be requested.
+.B \fBaddress\-and\-prefix\fP
+Both IPv6 addresses and prefixes are requested.
 .UNINDENT
 .sp
 The \fB\-e prefix\-only\fP and \fB\-e address\-and\-prefix\fP forms may not be used
 with the \fB\-4\fP option.
 .TP
 .B \fB\-F release\-rate\fP
-Specifies the rate at which RELEASE requests are sent to a server. This value
+Specifies the rate at which DHCPv4 DHCPRELEASE or DHCPv6 Release requests are sent to a server. This value
 is only valid when used in conjunction with the exchange rate (given
 by \fB\-r rate\fP). Furthermore, the sum of this value and the renew\-rate
 (given by \fB\-f rate\fP) must be equal to or less than the exchange
 rate value.
 .TP
 .B \fB\-f renew\-rate\fP
-Specifies the rate at which DHCPv4 or DHCPv6 renew requests are sent to a server.
+Specifies the rate at which DHCPv4 DHCPREQUEST or DHCPv6 Renew requests are sent to a server.
 This value is only valid when used in conjunction with the exchange
 rate (given by \fB\-r rate\fP). Furthermore, the sum of this value and
 the release\-rate (given by \fB\-F rate\fP) must be equal to or less than the
 exchange rate.
 .TP
 .B \fB\-g thread\-mode\fP
-Allows selection of thread\-mode, which can be either \(aqsingle\(aq or \(aqmulti\(aq. In multi\-thread mode
+Allows selection of thread\-mode, which can be either \fBsingle\fP or \fBmulti\fP\&. In multi\-thread mode,
 packets are received in a separate thread, which allows better
 utilisation of CPUs. In a single\-CPU system it is better to run in one
-thread to avoid threads blocking each other. If more than one CPU is
+thread, to avoid threads blocking each other. If more than one CPU is
 present in the system, multi\-thread mode is the default; otherwise
 single\-thread is the default.
 .TP
@@ -215,18 +215,19 @@ Prints help and exits.
 .TP
 .B \fB\-i\fP
 Performs only the initial part of the exchange: DISCOVER\-OFFER if \fB\-4\fP is
-selected, SOLICIT\-ADVERTISE if \fB\-6\fP is chosen.
+selected, Solicit\-Advertise if \fB\-6\fP is chosen.
 .sp
 \fB\-i\fP is incompatible with the following options: \fB\-1\fP, \fB\-d\fP,
 \fB\-D\fP, \fB\-E\fP, \fB\-S\fP, \fB\-I\fP and \fB\-F\fP\&. In addition, it cannot be
-used with multiple instances of \fB\-O\fP, \fB\-T\fP and \fB\-X\fP\&.
+used with multiple instances of \fB\-O\fP, \fB\-T\fP, and \fB\-X\fP\&.
 .TP
 .B \fB\-J remote\-address\-list\-file\fP
-Text file that include multiple addresses. If provided perfdhcp will choose
-randomly one of addresses for each exchange. This is used to generate traffic
-from multiple subnets. Designed to test shared\-networks. While testing kea v4 it
-should be started with KEA_TEST_SEND_RESPONSES_TO_SOURCE=ENABLE
-env variable otherwise perfdhcp will not be able to receive responses.
+Specifies a text file that includes multiple addresses, and is
+designed to test shared networks. If provided, \fBperfdhcp\fP
+randomly chooses one of the addresses for each exchange, to generate traffic
+from multiple subnets. When testing DHCPv4, it
+should be started with the \fBKEA_TEST_SEND_RESPONSES_TO_SOURCE=ENABLE\fP
+environment variable; otherwise, \fBperfdhcp\fP will not be able to receive responses.
 .TP
 .B \fB\-l local\-addr|interface\fP
 For DHCPv4 operation, specifies the local hostname/address to use when
@@ -242,10 +243,10 @@ to choose its own port.
 .TP
 .B \fB\-M mac\-list\-file\fP
 Specifies a text file containing a list of MAC addresses, one per line. If
-provided, a MAC address will be chosen randomly from this list for
+provided, a MAC address is chosen randomly from this list for
 every new exchange. In DHCPv6, MAC addresses are used to
 generate DUID\-LLs. This parameter must not be used in conjunction
-with the \-b parameter.
+with the \fB\-b\fP parameter.
 .TP
 .B \fB\-N remote\-port\fP
 Specifies the remote port to use. This must be zero or a positive
@@ -260,8 +261,8 @@ defines the content of the option. Care should be taken as \fBperfdhcp\fP
 does not offer any kind of logic behind those options; they are simply
 inserted into packets and sent as is. Be careful not to duplicate
 options that are already inserted. For example, to insert client
-class identifier (option code 60) with a string \(aqdocsis\(aq, use
-\-o 60,646f63736973. The \fB\-o\fP may be used multiple times. It is
+class identifier (option code 60) with a string "docsis", use
+"\-o 60,646f63736973". The \fB\-o\fP may be used multiple times. It is
 necessary to specify the protocol family (either \fB\-4\fP or \fB\-6\fP) before
 using \fB\-o\fP\&.
 .TP
@@ -278,7 +279,7 @@ final report is generated.
 .TP
 .B \fB\-R num\-clients\fP
 Specifies how many different clients are used. With a value of 1 (the
-default), all requests seem to come from the same client.
+default), all requests appear to come from the same client.
 Must be a positive number.
 .TP
 .B \fB\-s seed\fP
@@ -287,7 +288,7 @@ repeatable. This must be 0 or a positive integer. The value 0 means that a
 seed is not used; this is the default.
 .TP
 .B \fB\-\-scenario name\fP
-Specifies type of the scenario, can be \fBbasic\fP (default) or \fBavalanche\fP\&.
+Specifies the type of scenario, and can be \fBbasic\fP (the default) or \fBavalanche\fP\&.
 .TP
 .B \fB\-T template\-file\fP
 Specifies a file containing the template to use as a stream of
@@ -296,16 +297,16 @@ controls the contents of the packets sent (see the "Templates"
 section above).
 .TP
 .B \fB\-u\fP
-Enable checking address uniqueness. Lease valid lifetime should not be shorter
-than test duration and clients should not request address more than once without
-releasing it first.
+Enables checks for address uniqueness. The lease valid\-lifetime should not be shorter
+than the test duration, and clients should not request an address more than once without
+releasing it.
 .TP
 .B \fB\-v\fP
 Prints the version of this program.
 .TP
 .B \fB\-W exit\-wait\-time\fP
 Specifies the exit\-wait\-time parameter, which causes \fBperfdhcp\fP to wait for
-exit\-wait\-time after an exit condition has been met, to receive all
+a certain amount of time after an exit condition has been met, to receive all
 packets without sending any new packets. Expressed in microseconds.
 If not specified, 0 is used (i.e. exit immediately after exit
 conditions are met).
@@ -321,35 +322,35 @@ string of single keywords specifying the operations for which verbose
 output is desired. The selector key letters are:
 .INDENT 7.0
 .TP
-\fBa\fP
-Prints the decoded command line arguments.
+.B \fBa\fP
+Prints the decoded command\-line arguments.
 .TP
-\fBe\fP
+.B \fBe\fP
 Prints the exit reason.
 .TP
-\fBi\fP
-Prints the rate processing details.
+.B \fBi\fP
+Prints the rate\-processing details.
 .TP
-\fBl\fP
+.B \fBl\fP
 Prints the received leases.
 .TP
-\fBs\fP
-Prints the first server\-ID.
+.B \fBs\fP
+Prints the first server ID.
 .TP
-\fBt\fP
+.B \fBt\fP
 When finished, prints timers of all successful exchanges.
 .TP
-\fBT\fP
+.B \fBT\fP
 When finished, prints templates.
 .UNINDENT
 .TP
 .B \fB\-y seconds\fP
-Time in seconds after which perfdhcp will start simulating the client waiting longer for server responses. This increase the
-secs field in DHCPv4 and sends increased values in Elapsed option in DHCPv6. Must be used with \(aq\-Y\(aq.
+Time in seconds after which \fBperfdhcp\fP starts simulating the client waiting longer for server responses. This increases the
+\fBsecs\fP field in DHCPv4 and sends increased values in the \fBElapsed Time\fP option in DHCPv6. Must be used with \fB\-Y\fP\&.
 .TP
 .B \fB\-Y seconds\fP
-Period of time in seconds in which perfdhcp will be simulating the client waiting longer for server responses. This increase
-the secs field in DHCPv4 and sends increased values in Elapsed option in DHCPv6. Must be used with \(aq\-y\(aq.
+Time in seconds during which \fBperfdhcp\fP simulates the client waiting longer for server responses. This increases
+the \fBsecs\fP field in DHCPv4 and sends increased values in the \fBElapsed Time\fP option in DHCPv6. Must be used with \fB\-y\fP\&.
 .UNINDENT
 .SH DHCPV4-ONLY OPTIONS
 .sp
@@ -365,7 +366,7 @@ The following options only apply for DHCPv6 (i.e. when \fB\-6\fP is given).
 .INDENT 0.0
 .TP
 .B \fB\-c\fP
-Adds a rapid\-commit option (exchanges will be SOLICIT\-ADVERTISE).
+Adds a rapid\-commit option (exchanges are Solicit\-Advertise).
 .TP
 .B \fB\-A encapsulation\-level\fP
 Specifies that relayed traffic must be generated. The argument
@@ -383,13 +384,13 @@ the corresponding template file (see "Templates" above).
 .INDENT 0.0
 .TP
 .B \fB\-E time\-offset\fP
-Specifies the offset of the secs field (DHCPv4) or elapsed\-time option (DHCPv6) in the
-second (i.e. REQUEST) template; must be 0 or a positive integer. A
+Specifies the offset of the \fBsecs\fP field (DHCPv4) or \fBElapsed Time\fP option (DHCPv6) in the
+second (i.e. Request) template; must be 0 or a positive integer. A
 value of 0 disables this.
 .TP
 .B \fB\-I ip\-offset\fP
-Specifies the offset of the IP address (DHCPv4) in the requested\-IP
-option or IA_NA option (DHCPv6) in the second (REQUEST) template.
+Specifies the offset of the IP address (DHCPv4) in the \fBrequested\-ip\fP
+option or \fBIA_NA\fP option (DHCPv6) in the second (Request) template.
 .TP
 .B \fB\-O random\-offset\fP
 Specifies the offset of the last octet to randomize in the template. This
@@ -397,7 +398,7 @@ must be an integer greater than 3. The \fB\-T\fP switch must be given to
 use this option.
 .TP
 .B \fB\-S srvid\-offset\fP
-Specifies the offset of the server\-ID option in the second (REQUEST) template.
+Specifies the offset of the \fBserver\-id\fP option in the second (Request) template.
 This must be a positive integer, and the switch can only be used
 when the template option (\fB\-T\fP) is also given.
 .TP
@@ -410,22 +411,22 @@ option (\fB\-T\fP) is also given.
 .INDENT 0.0
 .TP
 .B \fB\-D max\-drop\fP
-Aborts the test immediately if \fBmax\-drop\fP requests have been dropped.
+Aborts the test immediately if "max\-drop" requests have been dropped.
 Use \fB\-D 0\fP to abort if even a single request has
-been dropped. \fBmax\-drop\fP must be a positive integer. If \fBmax\-drop\fP
-includes the suffix \(aq%\(aq, it specifies a maximum percentage of
-requests that may be dropped before abort. In this case, testing of
-the threshold begins after 10 requests have been expected to be
+been dropped. "max\-drop" must be a positive integer. If "max\-drop"
+includes the suffix \fB%\fP, it specifies the maximum percentage of
+requests that may be dropped before aborting. In this case, testing of
+the threshold begins after 10 requests are expected to have been
 received.
 .TP
 .B \fB\-n num\-requests\fP
-Initiates \fBnum\-request\fP transactions. No report is generated until all
+Initiates "num\-request" transactions. No report is generated until all
 transactions have been initiated/waited\-for, after which a report is
 generated and the program terminates.
 .TP
 .B \fB\-p test\-period\fP
-Sends requests for \fBtest\-period\fP, which is specified in the same manner
-as \fB\-d\fP\&. This can be used as an alternative to \fB\-n\fP or both
+Sends requests for "test\-period", which is specified in the same manner
+as \fB\-d\fP\&. This can be used as an alternative to \fB\-n\fP, or both
 options can be given, in which case the testing is completed when
 either limit is reached.
 .TP
@@ -433,21 +434,22 @@ either limit is reached.
 Sets the delay (in seconds) between two successive reports.
 .TP
 .B \fB\-C separator\fP
-Output reduced, an argument is a separator for periodic (\-t) reports
-generated in easy parsable mode. Data output won\(aqt be changed,
-remain identical as in \-t option.
+Suppresses the preliminary output and causes the interim data to
+only contain the values delimited by \fBseparator\fP\&. Used in
+conjunction with \fB\-t\fP to produce easily parsable
+reports at \fB\-t\fP intervals.
 .UNINDENT
 .SH ARGUMENTS
 .INDENT 0.0
 .TP
-.B server
+.B \fBserver\fP
 Indicates the server to test, specified as an IP address. In the DHCPv6 case, the
-special name \(aqall\(aq can be used to refer to
-All_DHCP_Relay_Agents_and_Servers (the multicast address FF02::1:2),
-or the special name \(aqservers\(aq to refer to All_DHCP_Servers (the
+special name \fBall\fP can be used to refer to
+\fBAll_DHCP_Relay_Agents_and_Servers\fP (the multicast address FF02::1:2),
+or the special name \fBservers\fP to refer to \fBAll_DHCP_Servers\fP (the
 multicast address FF05::1:3). The server is mandatory except where
 the \fB\-l\fP option is given to specify an interface, in which case it
-defaults to \(aqall\(aq.
+defaults to \fBall\fP\&.
 .UNINDENT
 .SH ERRORS
 .sp
@@ -467,7 +469,7 @@ Local system limits have been reached when sending a message.
 .UNINDENT
 .SH EXIT STATUS
 .sp
-\fBperfdhcp\fP can exit with one of the following status codes:
+\fBperfdhcp\fP exits with one of the following status codes:
 .INDENT 0.0
 .TP
 .B 0
@@ -485,27 +487,71 @@ unsuccessful.
 .UNINDENT
 .SH USAGE EXAMPLES
 .sp
-Simulate regular DHCPv4 traffic: 100 DHCPv4 devices (\-R 100), 10 packets per second (\-r 10), show the query/response rate details (\-xi),
-the report should be shown every 2 seconds (\-t 2), send the packets to the IP 192.0.2.1:
+Here is an example that simulates regular DHCPv4 traffic of 100 DHCPv4 devices (\-R 100),
+10 packets per second (\-r 10), shows the query/response rate details (\-xi),
+shows a report every 2 seconds (\-t 2), and sends the packets to the IP 192.0.2.1:
+.INDENT 0.0
+.INDENT 3.5
 .sp
+.nf
+.ft C
 sudo perfdhcp \-xi \-t 2 \-r 10 \-R 100 192.0.2.1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .sp
-Here\(aqs a similar case, but for DHCPv6. Note that DHCPv6 protocol uses link\-local addresses, so you need to specify the interface
-(eth0 in this example) to send the traffic. \(aqall\(aq is a convenience alias for All_DHCP_Relay_Agents_and_Servers (the multicast
-address FF02::1:2). Alternatively, you can use \(aqservers\(aq alias to refer to All_DHCP_Servers (the multicast address FF05::1:3),
-or skip it all together and the default value (all) will be used.
+Here\(aqs a similar case, but for DHCPv6. Note that the DHCPv6 protocol uses link\-local
+addresses, so the interface (eth0 in this example) must be specified on which to send the
+traffic. \fBall\fP is a convenience alias for \fBAll_DHCP_Relay_Agents_and_Servers\fP
+(the multicast address FF02::1:2). It is also possible to use the \fBservers\fP alias
+to refer to \fBAll_DHCP_Servers\fP (the multicast address FF05::1:3). The default is \fBall\fP\&.
+.INDENT 0.0
+.INDENT 3.5
 .sp
+.nf
+.ft C
 sudo perfdhcp \-6 \-xi \-t 1 \-r 1 \-R 10 \-l eth0 all
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
 .sp
-The following examples simulate normal DHCPv4 and DHCPv6 traffic that after 3 seconds starts pretending to not receive any
-responses from the server for 10 seconds. DHCPv4 protocol signals this by increased secs field and DHCPv6 uses elapsed option
-for that. In real networks this indicates that the clients are not getting responses in a timely matter. This can be used
-to simulate some HA scenarios, as Kea uses secs field and elapsed option value as one of the indicators that the HA partner
-is not responding. When enabled with \-y and \-Y, the secs and elapsed time value increased steadily.
+The following examples simulate normal DHCPv4 and DHCPv6 traffic that, after 3 seconds,
+starts pretending not to receive any responses from the server for 10 seconds. The
+DHCPv4 protocol signals this by an increased \fBsecs\fP field, while DHCPv6 uses the
+\fBElapsed Time\fP option. In real networks, this indicates that clients are not getting
+responses in a timely matter. This can be used to simulate some HA scenarios, as Kea
+uses the \fBsecs\fP field and \fBElapsed Time\fP option value as one of the indicators
+that the HA partner is not responding. When enabled with \fB\-y\fP and \fB\-Y\fP, the \fBsecs\fP
+and \fBElapsed Time\fP values increase steadily.
+.INDENT 0.0
+.INDENT 3.5
 .sp
+.nf
+.ft C
 sudo perfdhcp \-xi \-t 1 \-r 1 \-y 10 \-Y 3 192.0.2.1
-.sp
+
 sudo perfdhcp \-6 \-xi \-t 1 \-r 1 \-y 10 \-Y 3 2001:db8::1
+.ft P
+.fi
+.UNINDENT
+.UNINDENT
+.SH DOCUMENTATION
+.sp
+Kea comes with an extensive Kea Administrator Reference Manual that covers
+all aspects of running the Kea software \- compilation, installation,
+configuration, configuration examples, and much more. Kea also features a
+Kea Messages Manual, which lists all possible messages Kea can print
+with a brief description for each of them. Both documents are
+available in various formats (.txt, .html, .pdf) with the Kea
+distribution. The Kea documentation is available at
+\fI\%https://kea.readthedocs.io\fP\&.
+.sp
+Kea source code is documented in the Kea Developer\(aqs Guide,
+available at \fI\%https://reports.kea.isc.org/dev_guide/\fP\&.
+.sp
+The Kea project website is available at \fI\%https://kea.isc.org\fP\&.
 .SH MAILING LISTS AND SUPPORT
 .sp
 There are two public mailing lists available for the Kea project. \fBkea\-users\fP

@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -220,16 +220,14 @@ public:
             // dhcp4_subnet_id : INT NULL
             if (host->getIPv4SubnetID() == SUBNET_ID_UNUSED) {
                 bind_array->addNull();
-            }
-            else {
+            } else {
                 bind_array->add(host->getIPv4SubnetID());
             }
 
             // dhcp6_subnet_id : INT NULL
             if (host->getIPv6SubnetID() == SUBNET_ID_UNUSED) {
                 bind_array->addNull();
-            }
-            else {
+            } else {
                 bind_array->add(host->getIPv6SubnetID());
             }
 
@@ -269,7 +267,7 @@ public:
             if (key.empty()) {
                 bind_array->addNull();
             } else {
-                bind_array->add(key);
+                bind_array->addTempString(key);
             }
 
             // When checking whether the IP is unique we need to bind the IPv4 address
@@ -279,7 +277,6 @@ public:
                 bind_array->add(host->getIPv4Reservation()); // ipv4_address
                 bind_array->add(host->getIPv4SubnetID()); // subnet_id
             }
-
 
         } catch (const std::exception& ex) {
             host_.reset();
@@ -2227,9 +2224,31 @@ PgSqlHostDataSourceImpl::PgSqlHostDataSourceImpl(const DatabaseConnection::Param
     timer_name_ += boost::lexical_cast<std::string>(reinterpret_cast<uint64_t>(this));
     timer_name_ += "]DbReconnectTimer";
 
+    // Check TLS support.
+    size_t tls(0);
+    tls += parameters.count("trust-anchor");
+    tls += parameters.count("cert-file");
+    tls += parameters.count("key-file");
+    tls += parameters.count("cipher-list");
+#ifdef HAVE_PGSQL_SSL
+    if ((tls > 0) && !PgSqlConnection::warned_about_tls) {
+        PgSqlConnection::warned_about_tls = true;
+        LOG_INFO(dhcpsrv_logger, DHCPSRV_PGSQL_TLS_SUPPORT)
+            .arg(DatabaseConnection::redactedAccessString(parameters_));
+        PQinitSSL(1);
+    }
+#else
+    if (tls > 0) {
+        LOG_ERROR(dhcpsrv_logger, DHCPSRV_PGSQL_NO_TLS_SUPPORT)
+            .arg(DatabaseConnection::redactedAccessString(parameters_));
+        isc_throw(DbOpenError, "Attempt to configure TLS for PostgreSQL "
+                  << "backend (built with this feature disabled)");
+    }
+#endif
+
     // Validate the schema version first.
-    std::pair<uint32_t, uint32_t> code_version(PG_SCHEMA_VERSION_MAJOR,
-                                               PG_SCHEMA_VERSION_MINOR);
+    std::pair<uint32_t, uint32_t> code_version(PGSQL_SCHEMA_VERSION_MAJOR,
+                                               PGSQL_SCHEMA_VERSION_MINOR);
     std::pair<uint32_t, uint32_t> db_version = getVersion();
     if (code_version != db_version) {
         isc_throw(DbOpenError,
@@ -2654,7 +2673,7 @@ PgSqlHostDataSource::del(const SubnetID& subnet_id,
     }
 
     // v6
-    bind_array->add(addr.toText());
+    bind_array->addTempString(addr.toText());
 
     return (impl_->delStatement(ctx, PgSqlHostDataSourceImpl::DEL_HOST_ADDR6,
                                 bind_array));
@@ -3155,7 +3174,6 @@ PgSqlHostDataSource::getAll6(const SubnetID& subnet_id,
                              bind_array, ctx->host_ipv6_exchange_, collection, false);
     return (collection);
 }
-
 
 // Miscellaneous database methods.
 

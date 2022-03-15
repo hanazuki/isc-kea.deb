@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -34,6 +34,7 @@ using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::stats;
 using namespace isc::test;
+using namespace isc::util;
 
 namespace {
 
@@ -677,7 +678,11 @@ TEST(CfgSubnets6Test, unparseSubnet) {
         "    \"rebind-timer\": 2,\n"
         "    \"relay\": { \"ip-addresses\": [ ] },\n"
         "    \"preferred-lifetime\": 3,\n"
+        "    \"min-preferred-lifetime\": 3,\n"
+        "    \"max-preferred-lifetime\": 3,\n"
         "    \"valid-lifetime\": 4,\n"
+        "    \"min-valid-lifetime\": 4,\n"
+        "    \"max-valid-lifetime\": 4,\n"
         "    \"client-class\": \"foo\",\n"
         "    \"pools\": [ ],\n"
         "    \"pd-pools\": [ ],\n"
@@ -691,7 +696,11 @@ TEST(CfgSubnets6Test, unparseSubnet) {
         "    \"rebind-timer\": 2,\n"
         "    \"relay\": { \"ip-addresses\": [ \"2001:db8:ff::2\" ] },\n"
         "    \"preferred-lifetime\": 100,\n"
+        "    \"min-preferred-lifetime\": 100,\n"
+        "    \"max-preferred-lifetime\": 100,\n"
         "    \"valid-lifetime\": 200,\n"
+        "    \"min-valid-lifetime\": 200,\n"
+        "    \"max-valid-lifetime\": 200,\n"
         "    \"user-context\": { },\n"
         "    \"pools\": [ ],\n"
         "    \"pd-pools\": [ ],\n"
@@ -768,7 +777,11 @@ TEST(CfgSubnets6Test, unparsePool) {
         "    \"rebind-timer\": 2,\n"
         "    \"relay\": { \"ip-addresses\": [ ] },\n"
         "    \"preferred-lifetime\": 3,\n"
+        "    \"min-preferred-lifetime\": 3,\n"
+        "    \"max-preferred-lifetime\": 3,\n"
         "    \"valid-lifetime\": 4,\n"
+        "    \"min-valid-lifetime\": 4,\n"
+        "    \"max-valid-lifetime\": 4,\n"
         "    \"pools\": [\n"
         "        {\n"
         "            \"pool\": \"2001:db8:1::100-2001:db8:1::199\",\n"
@@ -821,7 +834,11 @@ TEST(CfgSubnets6Test, unparsePdPool) {
         "    \"rebind-timer\": 2,\n"
         "    \"relay\": { \"ip-addresses\": [ ] },\n"
         "    \"preferred-lifetime\": 3,\n"
+        "    \"min-preferred-lifetime\": 3,\n"
+        "    \"max-preferred-lifetime\": 3,\n"
         "    \"valid-lifetime\": 4,\n"
+        "    \"min-valid-lifetime\": 4,\n"
+        "    \"max-valid-lifetime\": 4,\n"
         "    \"pools\": [ ],\n"
         "    \"pd-pools\": [\n"
         "        {\n"
@@ -1190,8 +1207,12 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
         data::ConstElementPtr value = repr->get("preferred-lifetime");
         ASSERT_TRUE(value);
         EXPECT_EQ("100", value->str());
-        EXPECT_FALSE(repr->get("min-preferred-lifetime"));
-        EXPECT_FALSE(repr->get("max-preferred-lifetime"));
+        data::ConstElementPtr min_value = repr->get("min-preferred-lifetime");
+        ASSERT_TRUE(min_value);
+        EXPECT_EQ("100", min_value->str());
+        data::ConstElementPtr max_value = repr->get("max-preferred-lifetime");
+        ASSERT_TRUE(max_value);
+        EXPECT_EQ("100", max_value->str());
     }
 
     {
@@ -1210,9 +1231,12 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
         data::ConstElementPtr value = repr->get("preferred-lifetime");
         ASSERT_TRUE(value);
         EXPECT_EQ("100", value->str());
-        // Bound only: forgot it was a bound.
-        EXPECT_FALSE(repr->get("min-preferred-lifetime"));
-        EXPECT_FALSE(repr->get("max-preferred-lifetime"));
+        data::ConstElementPtr min_value = repr->get("min-preferred-lifetime");
+        ASSERT_TRUE(min_value);
+        EXPECT_EQ("100", min_value->str());
+        data::ConstElementPtr max_value = repr->get("max-preferred-lifetime");
+        ASSERT_TRUE(max_value);
+        EXPECT_EQ("100", max_value->str());
     }
 
     {
@@ -1231,9 +1255,12 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
         data::ConstElementPtr value = repr->get("preferred-lifetime");
         ASSERT_TRUE(value);
         EXPECT_EQ("100", value->str());
-        // Bound only: forgot it was a bound.
-        EXPECT_FALSE(repr->get("min-preferred-lifetime"));
-        EXPECT_FALSE(repr->get("max-preferred-lifetime"));
+        data::ConstElementPtr min_value = repr->get("min-preferred-lifetime");
+        ASSERT_TRUE(min_value);
+        EXPECT_EQ("100", min_value->str());
+        data::ConstElementPtr max_value = repr->get("max-preferred-lifetime");
+        ASSERT_TRUE(max_value);
+        EXPECT_EQ("100", max_value->str());
     }
 
     {
@@ -1257,7 +1284,9 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
         data::ConstElementPtr min_value = repr->get("min-preferred-lifetime");
         ASSERT_TRUE(min_value);
         EXPECT_EQ("100", min_value->str());
-        EXPECT_FALSE(repr->get("max-preferred-lifetime"));
+        data::ConstElementPtr max_value = repr->get("max-preferred-lifetime");
+        ASSERT_TRUE(max_value);
+        EXPECT_EQ("200", max_value->str());
     }
 
     {
@@ -1278,10 +1307,12 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
         data::ConstElementPtr value = repr->get("preferred-lifetime");
         ASSERT_TRUE(value);
         EXPECT_EQ("100", value->str());
+        data::ConstElementPtr min_value = repr->get("min-preferred-lifetime");
+        ASSERT_TRUE(min_value);
+        EXPECT_EQ("100", min_value->str());
         data::ConstElementPtr max_value = repr->get("max-preferred-lifetime");
         ASSERT_TRUE(max_value);
         EXPECT_EQ("200", max_value->str());
-        EXPECT_FALSE(repr->get("min-preferred-lifetime"));
     }
 
     {
@@ -1347,7 +1378,7 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
     }
 
     {
-        SCOPED_TRACE("equal bounds are ignored");
+        SCOPED_TRACE("equal bounds are no longer ignored");
         data::ElementPtr copied = data::copy(elems);
         copied->set("min-preferred-lifetime", data::Element::create(100));
         copied->set("preferred-lifetime", data::Element::create(100));
@@ -1364,8 +1395,12 @@ TEST(CfgSubnets6Test, preferredLifetimeValidation) {
         data::ConstElementPtr value = repr->get("preferred-lifetime");
         ASSERT_TRUE(value);
         EXPECT_EQ("100", value->str());
-        EXPECT_FALSE(repr->get("min-preferred-lifetime"));
-        EXPECT_FALSE(repr->get("max-preferred-lifetime"));
+        data::ConstElementPtr min_value = repr->get("min-preferred-lifetime");
+        ASSERT_TRUE(min_value);
+        EXPECT_EQ("100", min_value->str());
+        data::ConstElementPtr max_value = repr->get("max-preferred-lifetime");
+        ASSERT_TRUE(max_value);
+        EXPECT_EQ("100", max_value->str());
     }
 }
 

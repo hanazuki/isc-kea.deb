@@ -12,6 +12,7 @@ libkea_util_la_SOURCES += buffer.h io_utilities.h
 libkea_util_la_SOURCES += chrono_time_utils.h chrono_time_utils.cc
 libkea_util_la_SOURCES += csv_file.h csv_file.cc
 libkea_util_la_SOURCES += doubles.h
+libkea_util_la_SOURCES += file_utilities.h file_utilities.cc
 libkea_util_la_SOURCES += filename.h filename.cc
 libkea_util_la_SOURCES += hash.h
 libkea_util_la_SOURCES += labeled_value.h labeled_value.cc
@@ -30,6 +31,7 @@ libkea_util_la_SOURCES += stopwatch_impl.cc stopwatch_impl.h
 libkea_util_la_SOURCES += strutil.h strutil.cc
 libkea_util_la_SOURCES += thread_pool.h
 libkea_util_la_SOURCES += time_utilities.h time_utilities.cc
+libkea_util_la_SOURCES += triplet.h
 libkea_util_la_SOURCES += unlock_guard.h
 libkea_util_la_SOURCES += versioned_csv_file.h versioned_csv_file.cc
 libkea_util_la_SOURCES += watch_socket.cc watch_socket.h
@@ -44,7 +46,7 @@ libkea_util_la_SOURCES += encode/utf8.cc encode/utf8.h
 
 libkea_util_la_LIBADD = $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 
-libkea_util_la_LDFLAGS  = -no-undefined -version-info 36:0:0
+libkea_util_la_LDFLAGS  = -no-undefined -version-info 48:0:0
 
 EXTRA_DIST = util.dox
 
@@ -57,6 +59,7 @@ libkea_util_include_HEADERS = \
 	buffer.h \
 	csv_file.h \
 	doubles.h \
+	file_utilities.h \
 	filename.h \
 	hash.h \
 	io_utilities.h \
@@ -76,6 +79,7 @@ libkea_util_include_HEADERS = \
 	strutil.h \
 	thread_pool.h \
 	time_utilities.h \
+	triplet.h \
 	unlock_guard.h \
 	versioned_csv_file.h \
 	watch_socket.h \

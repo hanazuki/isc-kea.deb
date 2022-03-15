@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -544,7 +544,11 @@ TEST(DatabaseConnection, toElementDbAccessStringValid) {
         "\"tcp-nodelay\": false, \n"
         "\"type\": \"memfile\", \n"
         "\"user\": \"user_str\", \n"
-        "\"max-row-errors\": 50 \n"
+        "\"max-row-errors\": 50, \n"
+        "\"trust-anchor\": \"my-ca\", \n"
+        "\"cert-file\": \"my-cert.crt\", \n"
+        "\"key-file\": \"my-key.key\", \n"
+        "\"cipher-list\": \"AES\" \n"
         "}\n"
     };
 

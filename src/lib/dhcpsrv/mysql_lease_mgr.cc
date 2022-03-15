@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -559,7 +559,8 @@ public:
             // expiry time (expire).  The relationship is given by:
             //
             // expire = cltt_ + valid_lft_
-            // Avoid overflow
+            // Avoid overflow with infinite valid lifetime by using
+            // expire = cltt_ when valid_lft_ = 0xffffffff
             uint32_t valid_lft = lease_->valid_lft_;
             if (valid_lft == Lease::INFINITY_LFT) {
                 valid_lft = 0;
@@ -766,7 +767,8 @@ public:
     ///         data.
     Lease4Ptr getLeaseData() {
         // Convert times received from the database to times for the lease
-        // structure
+        // structure. See the expire code of createBindForSend for
+        // the infinite valid lifetime special case.
         time_t cltt = 0;
         // Recover from overflow
         uint32_t valid_lft = valid_lifetime_;
@@ -1003,7 +1005,8 @@ public:
             // expiry time (expire).  The relationship is given by:
             //
             // expire = cltt_ + valid_lft_
-            // Avoid overflow
+            // Avoid overflow with infinite valid lifetime by using
+            // expire = cltt_ when valid_lft_ = 0xffffffff
             uint32_t valid_lft = lease_->valid_lft_;
             if (valid_lft == Lease::INFINITY_LFT) {
                 valid_lft = 0;
@@ -1423,7 +1426,7 @@ public:
                                                     hostname, hwaddr,
                                                     prefix_len_));
         time_t cltt = 0;
-        // Recover from overflow
+        // Recover from overflow (see expire code of createBindForSend).
         uint32_t valid_lft = valid_lifetime_;
         if (valid_lft == Lease::INFINITY_LFT) {
             valid_lft = 0;
@@ -1886,6 +1889,18 @@ MySqlLeaseMgr::createContext() const {
 
     // Open the database.
     ctx->conn_.openDatabase();
+
+    // Check if we have TLS when we required it.
+    if (ctx->conn_.getTls()) {
+        std::string cipher = ctx->conn_.getTlsCipher();
+        if (cipher.empty()) {
+            LOG_ERROR(dhcpsrv_logger, DHCPSRV_MYSQL_NO_TLS);
+        } else {
+            LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE,
+                      DHCPSRV_MYSQL_TLS_CIPHER)
+                .arg(cipher);
+        }
+    }
 
     // Prepare all statements likely to be used.
     ctx->conn_.prepareStatements(tagged_statements.begin(),
@@ -2748,7 +2763,7 @@ MySqlLeaseMgr::getExpiredLeasesCommon(LeaseCollection& expired_leases,
 
     // Expiration timestamp.
     MYSQL_TIME expire_time;
-    MySqlConnection::convertToDatabaseTime(time(NULL), expire_time);
+    MySqlConnection::convertToDatabaseTime(time(0), expire_time);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire_time);
     inbind[1].buffer_length = sizeof(expire_time);
@@ -2834,9 +2849,14 @@ MySqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
 
     bind.push_back(inbind[0]);
 
+    // See the expire code of createBindForSend for the
+    // infinite valid lifetime special case.
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
-                                           lease->current_valid_lft_,
+    uint32_t valid_lft = lease->current_valid_lft_;
+    if (valid_lft == Lease::INFINITY_LFT) {
+        valid_lft = 0;
+    }
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_, valid_lft,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);
@@ -2882,9 +2902,14 @@ MySqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
 
     bind.push_back(inbind[0]);
 
+    // See the expire code of createBindForSend for the
+    // infinite valid lifetime special case.
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
-                                           lease->current_valid_lft_,
+    uint32_t valid_lft = lease->current_valid_lft_;
+    if (valid_lft == Lease::INFINITY_LFT) {
+        valid_lft = 0;
+    }
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_, valid_lft,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);
@@ -2941,9 +2966,14 @@ MySqlLeaseMgr::deleteLease(const Lease4Ptr& lease) {
     inbind[0].buffer = reinterpret_cast<char*>(&addr4);
     inbind[0].is_unsigned = MLM_TRUE;
 
+    // See the expire code of createBindForSend for the
+    // infinite valid lifetime special case.
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
-                                           lease->current_valid_lft_,
+    uint32_t valid_lft = lease->current_valid_lft_;
+    if (valid_lft == Lease::INFINITY_LFT) {
+        valid_lft = 0;
+    }
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_, valid_lft,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);
@@ -2988,9 +3018,14 @@ MySqlLeaseMgr::deleteLease(const Lease6Ptr& lease) {
     inbind[0].buffer_length = addr6_length;
     inbind[0].length = &addr6_length;
 
+    // See the expire code of createBindForSend for the
+    // infinite valid lifetime special case.
     MYSQL_TIME expire;
-    MySqlConnection::convertToDatabaseTime(lease->current_cltt_,
-                                           lease->current_valid_lft_,
+    uint32_t valid_lft = lease->current_valid_lft_;
+    if (valid_lft == Lease::INFINITY_LFT) {
+        valid_lft = 0;
+    }
+    MySqlConnection::convertToDatabaseTime(lease->current_cltt_, valid_lft,
                                            expire);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire);
@@ -3043,7 +3078,7 @@ MySqlLeaseMgr::deleteExpiredReclaimedLeasesCommon(const uint32_t secs,
 
     // Expiration timestamp.
     MYSQL_TIME expire_time;
-    MySqlConnection::convertToDatabaseTime(time(NULL) - static_cast<time_t>(secs), expire_time);
+    MySqlConnection::convertToDatabaseTime(time(0) - static_cast<time_t>(secs), expire_time);
     inbind[1].buffer_type = MYSQL_TYPE_TIMESTAMP;
     inbind[1].buffer = reinterpret_cast<char*>(&expire_time);
     inbind[1].buffer_length = sizeof(expire_time);

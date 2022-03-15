@@ -1,12 +1,14 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
+
 #include <dhcpsrv/dhcpsrv_log.h>
 #include <dhcpsrv/csv_lease_file6.h>
+
 #include <ctime>
 
 using namespace isc::asiolink;
@@ -56,9 +58,11 @@ CSVLeaseFile6::append(const Lease6& lease) {
     row.writeAt(getColumnIndex("fqdn_fwd"), lease.fqdn_fwd_);
     row.writeAt(getColumnIndex("fqdn_rev"), lease.fqdn_rev_);
     row.writeAtEscaped(getColumnIndex("hostname"), lease.hostname_);
+    // We may not have hardware information.
     if (lease.hwaddr_) {
-        // We may not have hardware information
         row.writeAt(getColumnIndex("hwaddr"), lease.hwaddr_->toText(false));
+        row.writeAt(getColumnIndex("hwtype"), lease.hwaddr_->htype_);
+        row.writeAt(getColumnIndex("hwaddr_source"), lease.hwaddr_->source_);
     }
     row.writeAt(getColumnIndex("state"), lease.state_);
     // User context is optional.
@@ -109,8 +113,8 @@ CSVLeaseFile6::next(Lease6Ptr& lease) {
         lease->state_ = readState(row);
         if ((*lease->duid_ == DUID::EMPTY())
             && lease->state_ != Lease::STATE_DECLINED) {
-            isc_throw(isc::BadValue, "The Empty DUID is"
-                      "only valid for declined leases");
+            isc_throw(isc::BadValue,
+                      "The Empty DUID is only valid for declined leases");
         }
         ConstElementPtr ctx = readContext(row);
         if (ctx) {
@@ -148,8 +152,16 @@ CSVLeaseFile6::initColumns() {
     addColumn("fqdn_rev", "1.0");
     addColumn("hostname", "1.0");
     addColumn("hwaddr", "2.0");
-    addColumn("state", "3.0", "0");
+    addColumn("state", "3.0", "0" /* == STATE_DEFAULT */);
     addColumn("user_context", "3.1");
+
+    // Default not added for hwtype and hwaddr_source, because they depend on
+    // hwaddr having value. When a CSV lease having a hwaddr is upgraded to 4.0,
+    // hwtype will have value "1" meaning HTYPE_ETHER and
+    // hwaddr_source will have value "0" meaning HWADDR_SOURCE_UNKNOWN.
+    addColumn("hwtype", "4.0");
+    addColumn("hwaddr_source", "4.0");
+
     // Any file with less than hostname is invalid
     setMinimumValidColumns("hostname");
 }
@@ -235,10 +247,14 @@ HWAddrPtr
 CSVLeaseFile6::readHWAddr(const CSVRow& row) {
 
     try {
-        const HWAddr& hwaddr = HWAddr::fromText(row.readAt(getColumnIndex("hwaddr")));
+        uint16_t const hwtype(readHWType(row).valueOr(HTYPE_ETHER));
+        HWAddr hwaddr(
+            HWAddr::fromText(row.readAt(getColumnIndex("hwaddr")), hwtype));
         if (hwaddr.hwaddr_.empty()) {
             return (HWAddrPtr());
         }
+        hwaddr.source_ =
+            readHWAddrSource(row).valueOr(HWAddr::HWADDR_SOURCE_UNKNOWN);
 
         /// @todo: HWAddr returns an object, not a pointer. Without HWAddr
         /// refactoring, at least one copy is unavoidable.
@@ -274,6 +290,24 @@ CSVLeaseFile6::readContext(const util::CSVRow& row) {
                   << "' is not a JSON map");
     }
     return (ctx);
+}
+
+Optional<uint16_t>
+CSVLeaseFile6::readHWType(const CSVRow& row) {
+    size_t const index(getColumnIndex("hwtype"));
+    if (row.readAt(index).empty()) {
+        return Optional<uint16_t>();
+    }
+    return row.readAndConvertAt<uint16_t>(index);
+}
+
+Optional<uint32_t>
+CSVLeaseFile6::readHWAddrSource(const CSVRow& row) {
+    size_t const index(getColumnIndex("hwaddr_source"));
+    if (row.readAt(index).empty()) {
+        return Optional<uint16_t>();
+    }
+    return row.readAndConvertAt<uint32_t>(index);
 }
 
 } // end of namespace isc::dhcp

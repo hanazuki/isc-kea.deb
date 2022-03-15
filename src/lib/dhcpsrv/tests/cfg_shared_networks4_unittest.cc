@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,6 +14,7 @@
 
 using namespace isc;
 using namespace isc::dhcp;
+using namespace isc::util;
 using namespace asiolink;
 
 namespace {
@@ -31,7 +32,7 @@ void checkMergedNetwork(const CfgSharedNetworks4& networks, const std::string& n
     auto network = networks.getByName(name);
     ASSERT_TRUE(network) << "expected network: " << name << " not found";
     ASSERT_EQ(exp_valid, network->getValid()) << " network valid lifetime wrong";
-    const Subnet4Collection* subnets = network->getAllSubnets();
+    const Subnet4SimpleCollection* subnets = network->getAllSubnets();
     ASSERT_EQ(exp_subnets.size(), subnets->size()) << " wrong number of subnets";
     for (auto exp_id : exp_subnets) {
         ASSERT_TRUE(network->getSubnet(exp_id))
@@ -233,7 +234,9 @@ TEST(CfgSharedNetworks4Test, unparse) {
         "    \"option-data\": [ ],\n"
         "    \"relay\": { \"ip-addresses\": [ ] },\n"
         "    \"subnet4\": [ ],\n"
-        "    \"valid-lifetime\": 100\n"
+        "    \"valid-lifetime\": 100,\n"
+        "    \"min-valid-lifetime\": 100,\n"
+        "    \"max-valid-lifetime\": 100\n"
         "  },\n"
         "  {\n"
         "    \"ddns-send-updates\": false,\n"
@@ -353,7 +356,7 @@ TEST(CfgSharedNetworks4Test, mergeNetworks) {
     // Should still have 3 networks.
 
     // Network1 should have doubled its valid lifetime but still only have
-    // the orignal two subnets.  Merge should discard assocations on CB
+    // the orignal two subnets.  Merge should discard associations on CB
     // subnets and preserve the associations from existing config.
     ASSERT_EQ(3, cfg_to.getAll()->size());
     ASSERT_NO_FATAL_FAILURE(checkMergedNetwork(cfg_to, "network1", Triplet<uint32_t>(200),

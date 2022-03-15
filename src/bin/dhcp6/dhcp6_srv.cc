@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -196,7 +196,12 @@ std::set<std::string> dhcp6_statistics = {
     "pkt6-reply-sent",
     "pkt6-dhcpv4-response-sent",
     "pkt6-parse-failed",
-    "pkt6-receive-drop"
+    "pkt6-receive-drop",
+    "v6-allocation-fail",
+    "v6-allocation-fail-shared-network",
+    "v6-allocation-fail-subnet",
+    "v6-allocation-fail-no-pools",
+    "v6-allocation-fail-classes"
 };
 
 }  // namespace
@@ -4102,7 +4107,7 @@ Dhcpv6Srv::getVersion(bool extended) {
 #ifdef HAVE_CQL
         tmp << CqlLeaseMgr::getDBVersion() << endl;
 #endif
-        tmp << Memfile_LeaseMgr::getDBVersion();
+        tmp << Memfile_LeaseMgr::getDBVersion(Memfile_LeaseMgr::V6);
 
         // @todo: more details about database runtime
     }
