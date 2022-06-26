@@ -3,3 +3,4 @@
 0007-keyctrl-colored-ddns-status.patch
 0009-disable-database-tests.patch
 0010-build-libco-when-gtest-is-not-enabled.patch
+0011-sphinx-set-language.patch
