@@ -1,3 +1,16 @@
+isc-kea (2.0.2-2) unstable; urgency=medium
+
+  * d/patches: explicitly set the sphinx doc language.
+    Needed for compatibility with Sphinx 5.0. New patch:
+    - d/p/0011-sphinx-set-language.patch (Closes: #1013407)
+  * d/control: bump Standards-Version to 4.6.1, no changes needed
+  * d/gbp.conf: debian-branch = debian/unstable (DEP-14)
+  * d/gbp.conf: enable use of pristine-tar
+  * d/watch.include-odd-versions: alternative watch file.
+    Also covers the odd-numbered (= devel) upstream releases.
+
+ -- Paride Legovini <paride@debian.org>  Sun, 26 Jun 2022 14:48:25 +0000
+
 isc-kea (2.0.2-1) unstable; urgency=medium
 
   * New upstream version 2.0.2
