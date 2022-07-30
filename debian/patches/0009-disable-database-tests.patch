@@ -13,7 +13,7 @@ Last-Update: 2020-12-03
 +echo "SKIPPING MYSQL TEST"
 +exit 0
  
- # Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+ # Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
  #
 --- a/src/bin/admin/tests/pgsql_tests.sh.in
 +++ b/src/bin/admin/tests/pgsql_tests.sh.in
@@ -22,5 +22,5 @@ Last-Update: 2020-12-03
 +echo "SKIPPING POSTGRESQL TEST"
 +exit 0
  
- # Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+ # Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
  #
