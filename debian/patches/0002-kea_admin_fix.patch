@@ -9,12 +9,12 @@ Removed the fallback to the build version of kea-admin since it will not exist o
 
 --- a/src/bin/admin/kea-admin.in
 +++ b/src/bin/admin/kea-admin.in
-@@ -41,8 +41,6 @@
- # use build version if it isn't.
- if [ -e @datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh ]; then
+@@ -50,8 +50,6 @@
+ # Include the installed admin-utils.sh if available. Fallback to sources otherwise.
+ if test -d "@datarootdir@/@PACKAGE_NAME@"; then
      . "@datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh"
 -else
 -    . "@abs_top_srcdir@/src/bin/admin/admin-utils.sh"
  fi
  
- # Prints out usage version.
+ # Find the installed kea-lfc if available. Fallback to sources otherwise.
