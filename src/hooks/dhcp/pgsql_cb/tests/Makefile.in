@@ -118,9 +118,14 @@ CONFIG_CLEAN_VPATH_FILES =
 am__EXEEXT_2 = $(am__EXEEXT_1)
 PROGRAMS = $(noinst_PROGRAMS)
 am__pgsql_cb_unittests_SOURCES_DIST = pgsql_cb_impl_unittest.cc \
-	pgsql_cb_dhcp4_unittest.cc run_unittests.cc
+	pgsql_cb_dhcp4_unittest.cc pgsql_cb_dhcp4_mgr_unittest.cc \
+	pgsql_cb_dhcp6_unittest.cc pgsql_cb_dhcp6_mgr_unittest.cc \
+	run_unittests.cc
 @HAVE_GTEST_TRUE@am_pgsql_cb_unittests_OBJECTS = pgsql_cb_unittests-pgsql_cb_impl_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	pgsql_cb_unittests-run_unittests.$(OBJEXT)
 pgsql_cb_unittests_OBJECTS = $(am_pgsql_cb_unittests_OBJECTS)
 am__DEPENDENCIES_1 =
@@ -171,7 +176,10 @@ DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade =  \
+	./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Po \
 	./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.Po \
+	./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Po \
+	./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Po \
 	./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_impl_unittest.Po \
 	./$(DEPDIR)/pgsql_cb_unittests-run_unittests.Po
 am__mv = mv -f
@@ -294,11 +302,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -308,8 +311,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -323,7 +324,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -499,16 +499,13 @@ CLEANFILES = *.gcno *.gcda
 TESTS_ENVIRONMENT = \
 	$(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 
-
-# disabled for now, to be added in #95
-#pgsql_cb_unittests_SOURCES += pgsql_cb_dhcp4_mgr_unittest.cc
-
-# disabled for now, to be added in #96
-#pgsql_cb_unittests_SOURCES += pgsql_cb_dhcp6_unittest.cc
-#pgsql_cb_unittests_SOURCES += pgsql_cb_dhcp6_mgr_unittest.cc
 @HAVE_GTEST_TRUE@pgsql_cb_unittests_SOURCES =  \
 @HAVE_GTEST_TRUE@	pgsql_cb_impl_unittest.cc \
-@HAVE_GTEST_TRUE@	pgsql_cb_dhcp4_unittest.cc run_unittests.cc
+@HAVE_GTEST_TRUE@	pgsql_cb_dhcp4_unittest.cc \
+@HAVE_GTEST_TRUE@	pgsql_cb_dhcp4_mgr_unittest.cc \
+@HAVE_GTEST_TRUE@	pgsql_cb_dhcp6_unittest.cc \
+@HAVE_GTEST_TRUE@	pgsql_cb_dhcp6_mgr_unittest.cc \
+@HAVE_GTEST_TRUE@	run_unittests.cc
 @HAVE_GTEST_TRUE@pgsql_cb_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES) $(LOG4CPLUS_INCLUDES)
 @HAVE_GTEST_TRUE@pgsql_cb_unittests_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@pgsql_cb_unittests_CXXFLAGS = $(AM_CXXFLAGS)
@@ -588,7 +585,10 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_impl_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pgsql_cb_unittests-run_unittests.Po@am__quote@ # am--include-marker
 
@@ -646,6 +646,48 @@ pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.obj: pgsql_cb_dhcp4_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp4_unittest.cc' object='pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -c -o pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.obj `if test -f 'pgsql_cb_dhcp4_unittest.cc'; then $(CYGPATH_W) 'pgsql_cb_dhcp4_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_cb_dhcp4_unittest.cc'; fi`
+
+pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.o: pgsql_cb_dhcp4_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -MT pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.o -MD -MP -MF $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Tpo -c -o pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.o `test -f 'pgsql_cb_dhcp4_mgr_unittest.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp4_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Tpo $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp4_mgr_unittest.cc' object='pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -c -o pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.o `test -f 'pgsql_cb_dhcp4_mgr_unittest.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp4_mgr_unittest.cc
+
+pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.obj: pgsql_cb_dhcp4_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -MT pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.obj -MD -MP -MF $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Tpo -c -o pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.obj `if test -f 'pgsql_cb_dhcp4_mgr_unittest.cc'; then $(CYGPATH_W) 'pgsql_cb_dhcp4_mgr_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_cb_dhcp4_mgr_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Tpo $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp4_mgr_unittest.cc' object='pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -c -o pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.obj `if test -f 'pgsql_cb_dhcp4_mgr_unittest.cc'; then $(CYGPATH_W) 'pgsql_cb_dhcp4_mgr_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_cb_dhcp4_mgr_unittest.cc'; fi`
+
+pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.o: pgsql_cb_dhcp6_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -MT pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.o -MD -MP -MF $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Tpo -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.o `test -f 'pgsql_cb_dhcp6_unittest.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp6_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Tpo $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp6_unittest.cc' object='pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.o `test -f 'pgsql_cb_dhcp6_unittest.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp6_unittest.cc
+
+pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.obj: pgsql_cb_dhcp6_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -MT pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.obj -MD -MP -MF $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Tpo -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.obj `if test -f 'pgsql_cb_dhcp6_unittest.cc'; then $(CYGPATH_W) 'pgsql_cb_dhcp6_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_cb_dhcp6_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Tpo $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp6_unittest.cc' object='pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.obj `if test -f 'pgsql_cb_dhcp6_unittest.cc'; then $(CYGPATH_W) 'pgsql_cb_dhcp6_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_cb_dhcp6_unittest.cc'; fi`
+
+pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.o: pgsql_cb_dhcp6_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -MT pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.o -MD -MP -MF $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Tpo -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.o `test -f 'pgsql_cb_dhcp6_mgr_unittest.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp6_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Tpo $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp6_mgr_unittest.cc' object='pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.o `test -f 'pgsql_cb_dhcp6_mgr_unittest.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp6_mgr_unittest.cc
+
+pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.obj: pgsql_cb_dhcp6_mgr_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -MT pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.obj -MD -MP -MF $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Tpo -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.obj `if test -f 'pgsql_cb_dhcp6_mgr_unittest.cc'; then $(CYGPATH_W) 'pgsql_cb_dhcp6_mgr_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_cb_dhcp6_mgr_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Tpo $(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp6_mgr_unittest.cc' object='pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -c -o pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.obj `if test -f 'pgsql_cb_dhcp6_mgr_unittest.cc'; then $(CYGPATH_W) 'pgsql_cb_dhcp6_mgr_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/pgsql_cb_dhcp6_mgr_unittest.cc'; fi`
 
 pgsql_cb_unittests-run_unittests.o: run_unittests.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(pgsql_cb_unittests_CPPFLAGS) $(CPPFLAGS) $(pgsql_cb_unittests_CXXFLAGS) $(CXXFLAGS) -MT pgsql_cb_unittests-run_unittests.o -MD -MP -MF $(DEPDIR)/pgsql_cb_unittests-run_unittests.Tpo -c -o pgsql_cb_unittests-run_unittests.o `test -f 'run_unittests.cc' || echo '$(srcdir)/'`run_unittests.cc
@@ -960,7 +1002,10 @@ clean-am: clean-generic clean-libtool clean-noinstPROGRAMS \
 	mostlyclean-am
 
 distclean: distclean-recursive
-		-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.Po
+		-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Po
+	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.Po
+	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Po
+	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Po
 	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_impl_unittest.Po
 	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-run_unittests.Po
 	-rm -f Makefile
@@ -1008,7 +1053,10 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-recursive
-		-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.Po
+		-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_mgr_unittest.Po
+	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp4_unittest.Po
+	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_mgr_unittest.Po
+	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_dhcp6_unittest.Po
 	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-pgsql_cb_impl_unittest.Po
 	-rm -f ./$(DEPDIR)/pgsql_cb_unittests-run_unittests.Po
 	-rm -f Makefile

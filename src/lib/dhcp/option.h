@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,6 +38,7 @@ typedef boost::shared_ptr<Option> OptionPtr;
 
 /// A collection of DHCP (v4 or v6) options
 typedef std::multimap<unsigned int, OptionPtr> OptionCollection;
+
 /// A pointer to an OptionCollection
 typedef boost::shared_ptr<OptionCollection> OptionCollectionPtr;
 
@@ -229,7 +230,9 @@ public:
     /// @brief returns option universe (V4 or V6)
     ///
     /// @return universe type
-    Universe  getUniverse() const { return universe_; };
+    Universe getUniverse() const {
+        return (universe_);
+    }
 
     /// @brief Writes option in wire-format to a buffer.
     ///
@@ -238,9 +241,11 @@ public:
     /// another).
     ///
     /// @param buf pointer to a buffer
+    /// @param check flag which indicates if checking the option length is
+    /// required (used only in V4)
     ///
     /// @throw BadValue Universe of the option is neither V4 nor V6.
-    virtual void pack(isc::util::OutputBuffer& buf) const;
+    virtual void pack(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// @brief Parses received buffer.
     ///
@@ -285,7 +290,9 @@ public:
     /// Returns option type (0-255 for DHCPv4, 0-65535 for DHCPv6)
     ///
     /// @return option type
-    uint16_t getType() const { return (type_); }
+    uint16_t getType() const {
+        return (type_);
+    }
 
     /// Returns length of the complete option (data length + DHCPv4/DHCPv6
     /// option header)
@@ -307,7 +314,9 @@ public:
     ///
     /// @return pointer to actual data (or reference to an empty vector
     ///         if there is no data)
-    virtual const OptionBuffer& getData() const { return (data_); }
+    virtual const OptionBuffer& getData() const {
+        return (data_);
+    }
 
     /// Adds a sub-option.
     ///
@@ -336,6 +345,16 @@ public:
     /// encapsulated options, which is valid as long as the object which
     /// returned it exists.
     const OptionCollection& getOptions() const {
+        return (options_);
+    }
+
+    /// @brief Returns all encapsulated options.
+    ///
+    /// @warning This function returns a reference to the container holding
+    /// encapsulated options, which is valid as long as the object which
+    /// returned it exists. Any changes to the container will be reflected
+    /// in the option content.
+    OptionCollection& getMutableOptions() {
         return (options_);
     }
 
@@ -497,7 +516,8 @@ protected:
     /// directly by other classes.
     ///
     /// @param [out] buf output buffer.
-    void packHeader(isc::util::OutputBuffer& buf) const;
+    /// @param check if set to false, allows options larger than 255 for v4
+    void packHeader(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// @brief Store sub options in a buffer.
     ///
@@ -507,12 +527,13 @@ protected:
     /// derived classes that override pack.
     ///
     /// @param [out] buf output buffer.
+    /// @param check if set to false, allows options larger than 255 for v4
     ///
     /// @todo The set of exceptions thrown by this function depend on
     /// exceptions thrown by pack methods invoked on objects
     /// representing sub options. We should consider whether to aggregate
     /// those into one exception which can be documented here.
-    void packOptions(isc::util::OutputBuffer& buf) const;
+    void packOptions(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// @brief Builds a collection of sub options from the buffer.
     ///

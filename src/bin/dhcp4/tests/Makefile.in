@@ -93,16 +93,13 @@ host_triplet = @host@
 TESTS = $(SHTESTS) $(am__EXEEXT_2)
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_1 = $(MYSQL_LIBS)
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_2 = $(PGSQL_LIBS)
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_3 = $(CQL_LIBS)
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_4 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la \
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_3 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la \
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@	$(top_builddir)/src/lib/mysql/libkea-mysql.la
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_5 = $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la \
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_4 = $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la \
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@	$(top_builddir)/src/lib/pgsql/libkea-pgsql.la
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_6 = $(top_builddir)/src/lib/cql/testutils/libcqltest.la \
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cql/libkea-cql.la
 
 # Run C++ tests on "make check".
-@HAVE_GTEST_TRUE@am__append_7 = $(PROGRAM_TESTS)
+@HAVE_GTEST_TRUE@am__append_5 = $(PROGRAM_TESTS)
 @HAVE_GTEST_TRUE@noinst_PROGRAMS = $(am__EXEEXT_1)
 subdir = src/bin/dhcp4/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -214,8 +211,7 @@ am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
-@HAVE_GTEST_TRUE@	$(am__append_4) $(am__append_5) \
-@HAVE_GTEST_TRUE@	$(am__append_6) \
+@HAVE_GTEST_TRUE@	$(am__append_3) $(am__append_4) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
@@ -425,11 +421,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -439,8 +430,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -454,7 +443,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -705,8 +693,7 @@ noinst_LTLIBRARIES = libco1.la libco2.la libco3.la
 @HAVE_GTEST_TRUE@dhcp4_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@dhcp4_unittests_LDFLAGS = $(AM_LDFLAGS) \
 @HAVE_GTEST_TRUE@	$(CRYPTO_LDFLAGS) $(am__append_1) \
-@HAVE_GTEST_TRUE@	$(am__append_2) $(am__append_3) \
-@HAVE_GTEST_TRUE@	$(GTEST_LDFLAGS)
+@HAVE_GTEST_TRUE@	$(am__append_2) $(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@dhcp4_unittests_LDADD =  \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/bin/dhcp4/libdhcp4.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
@@ -721,8 +708,7 @@ noinst_LTLIBRARIES = libco1.la libco2.la libco3.la
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
-@HAVE_GTEST_TRUE@	$(am__append_4) $(am__append_5) \
-@HAVE_GTEST_TRUE@	$(am__append_6) \
+@HAVE_GTEST_TRUE@	$(am__append_3) $(am__append_4) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \

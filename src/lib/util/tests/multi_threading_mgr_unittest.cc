@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -322,6 +322,40 @@ TEST(MultiThreadingMgrTest, criticalSection) {
     EXPECT_EQ(MultiThreadingMgr::instance().getPacketQueueSize(), 256);
     // apply multi-threading configuration with 0 threads
     MultiThreadingMgr::instance().apply(false, 0, 0);
+}
+
+/// @brief Checks that the lock works only when multi-threading is enabled and
+/// only during its lifetime.
+TEST(MultiThreadingLockTest, scope) {
+    // Check that the mutex is unlocked by default at first.
+    std::mutex mutex;
+    ASSERT_TRUE(mutex.try_lock());
+    mutex.unlock();
+
+    EXPECT_NO_THROW(MultiThreadingMgr::instance().setMode(false));
+
+    // Check that the lock does not locks the mutex if multi-threading is disabled.
+    {
+        MultiThreadingLock lock(mutex);
+        ASSERT_TRUE(mutex.try_lock());
+        mutex.unlock();
+    }
+
+    // Check that the mutex is still unlocked when the lock goes out of scope.
+    ASSERT_TRUE(mutex.try_lock());
+    mutex.unlock();
+
+    EXPECT_NO_THROW(MultiThreadingMgr::instance().setMode(true));
+
+    // Check that the lock actively locks the mutex if multi-threading is enabled.
+    {
+        MultiThreadingLock lock(mutex);
+        ASSERT_FALSE(mutex.try_lock());
+    }
+
+    // Check that the mutex is unlocked when the lock goes out of scope.
+    ASSERT_TRUE(mutex.try_lock());
+    mutex.unlock();
 }
 
 /// @brief Test fixture for exercised CriticalSection callbacks.

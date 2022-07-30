@@ -183,7 +183,78 @@ configuration. It is not uncommon for a call for ``config-set`` followed by a
 The best way to avoid this problem is simply to abandon JSON comments and
 use user-context.
 
-For a discussion about user-context used in hooks, see :ref:`user-context-hooks`.
+Kea supports user contexts at the following levels: global scope,
+interfaces configuration, shared networks,
+subnets, client classes, option data and definitions, host
+reservations, control socket, DHCP-DDNS, loggers, leases, and server ID. These
+are supported in both DHCPv4 and DHCPv6, with the exception of server ID,
+which is DHCPv6 only.
+
+User context can be added and edited in structures supported by commands.
+
+We encourage Kea users to utilize these functions to store information
+used by other systems and custom hooks.
+
+For example, the `subnet4-update` command can be used to add user context data
+to an existing subnet.
+
+::
+
+   "subnet4": [ {
+      "id": 1,
+      "subnet": "10.20.30.0/24",
+      "user-context": {
+         "building": "Main"
+         "floor": 1
+         }
+    } ]
+
+The same can be done with many other commands like lease6-add etc.
+
+Kea also uses user context to store non-standard data.
+Currently, only :ref:`dhcp4-store-extended-info` uses this feature.
+
+When enabled, it adds the ISC key in `user-context` to differentiate automatically
+added content.
+
+Example of relay information stored in a lease:
+
+::
+
+   {
+   "arguments": {
+      "client-id": "42:42:42:42:42:42:42:42",
+      "cltt": 12345678,
+      "fqdn-fwd": false,
+      "fqdn-rev": true,
+      "hostname": "myhost.example.com.",
+      "hw-address": "08:08:08:08:08:08",
+      "ip-address": "192.0.2.1",
+      "state": 0,
+      "subnet-id": 44,
+      "valid-lft": 3600
+      "user-context": {
+         "ISC": {
+         "relays": [
+         {
+               "hop": 2,
+               "link": "2001:db8::1",
+               "peer": "2001:db8::2"
+         },
+         {
+               "hop": 1,
+               "link": "2001:db8::3",
+               "options": "0x00C800080102030405060708",
+               "peer": "2001:db8::4"
+         }]
+         }
+      }
+   }
+
+
+User context can store configuration for multiple hooks and comments at once.
+
+For a discussion about user context used in hooks, see :ref:`user-context-hooks`.
 
 
 Simplified Notation

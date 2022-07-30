@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -237,7 +237,9 @@ Dhcp4Client::appendExtraOptions() {
     if (!extra_options_.empty()) {
         for (OptionCollection::iterator opt = extra_options_.begin();
              opt != extra_options_.end(); ++opt) {
-            context_.query_->addOption(opt->second);
+            // Call base class function so that unittests can add multiple
+            // options with the same code.
+            context_.query_->Pkt::addOption(opt->second);
         }
     }
 }
@@ -525,18 +527,23 @@ void
 Dhcp4Client::sendMsg(const Pkt4Ptr& msg) {
     srv_->shutdown_ = false;
     if (use_relay_) {
-        msg->setHops(1);
-        msg->setGiaddr(relay_addr_);
-        msg->setLocalAddr(server_facing_relay_addr_);
-        // Insert RAI
-        OptionPtr rai(new Option(Option::V4, DHO_DHCP_AGENT_OPTIONS));
-        // Insert circuit id, if specified.
-        if (!circuit_id_.empty()) {
-            rai->addOption(OptionPtr(new Option(Option::V4, RAI_OPTION_AGENT_CIRCUIT_ID,
-                                                OptionBuffer(circuit_id_.begin(),
-                                                             circuit_id_.end()))));
+        try {
+            msg->setHops(1);
+            msg->setGiaddr(relay_addr_);
+            msg->setLocalAddr(server_facing_relay_addr_);
+            // Insert RAI
+            OptionPtr rai(new Option(Option::V4, DHO_DHCP_AGENT_OPTIONS));
+            // Insert circuit id, if specified.
+            if (!circuit_id_.empty()) {
+                rai->addOption(OptionPtr(new Option(Option::V4, RAI_OPTION_AGENT_CIRCUIT_ID,
+                                                    OptionBuffer(circuit_id_.begin(),
+                                                                 circuit_id_.end()))));
+            }
+            msg->addOption(rai);
+        } catch (...) {
+            // If relay options have already been added in the unittest, ignore
+            // exception on add.
         }
-        msg->addOption(rai);
     }
     // Repack the message to simulate wire-data parsing.
     msg->pack();

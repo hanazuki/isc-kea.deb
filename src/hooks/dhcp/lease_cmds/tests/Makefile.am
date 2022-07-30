@@ -26,7 +26,9 @@ if HAVE_GTEST
 TESTS += lease_cmds_unittests
 
 lease_cmds_unittests_SOURCES = run_unittests.cc
-lease_cmds_unittests_SOURCES += lease_cmds_unittest.cc
+lease_cmds_unittests_SOURCES += lease_cmds_unittest.h lease_cmds_unittest.cc
+lease_cmds_unittests_SOURCES += lease_cmds4_unittest.cc
+lease_cmds_unittests_SOURCES += lease_cmds6_unittest.cc
 
 lease_cmds_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES) $(LOG4CPLUS_INCLUDES)
 
@@ -56,10 +58,6 @@ lease_cmds_unittests_LDADD += $(LOG4CPLUS_LIBS)
 lease_cmds_unittests_LDADD += $(CRYPTO_LIBS)
 lease_cmds_unittests_LDADD += $(BOOST_LIBS)
 lease_cmds_unittests_LDADD += $(GTEST_LDADD)
-
-if HAVE_CQL
-lease_cmds_unittests_LDFLAGS += $(CQL_LIBS)
-endif
 
 endif
 noinst_PROGRAMS = $(TESTS)

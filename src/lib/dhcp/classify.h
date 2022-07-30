@@ -7,10 +7,14 @@
 #ifndef CLASSIFY_H
 #define CLASSIFY_H
 
+#include <cc/data.h>
+
+#include <boost/multi_index_container.hpp>
 #include <boost/multi_index/hashed_index.hpp>
 #include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/ordered_index.hpp>
 #include <boost/multi_index/sequenced_index.hpp>
-#include <boost/multi_index_container.hpp>
+
 #include <string>
 
 /// @file   classify.h
@@ -68,6 +72,7 @@ namespace dhcp {
 
         /// @brief Type of iterators
         typedef ClientClassContainer::const_iterator const_iterator;
+        typedef ClientClassContainer::iterator iterator;
 
         /// @brief Default constructor.
         ClientClasses() : container_() {
@@ -104,15 +109,31 @@ namespace dhcp {
             return (container_.size());
         }
 
-        /// @brief Iterator to the first element.
+        /// @brief Iterators to the first element.
+        /// @{
         const_iterator cbegin() const {
             return (container_.cbegin());
         }
+        const_iterator begin() const {
+            return (container_.begin());
+        }
+        iterator begin() {
+            return (container_.begin());
+        }
+        /// @}
 
-        /// @brief Iterator to the past the end element.
+        /// @brief Iterators to the past the end element.
+        /// @{
         const_iterator cend() const {
             return (container_.cend());
         }
+        const_iterator end() const {
+            return (container_.end());
+        }
+        iterator end() {
+            return (container_.end());
+        }
+        /// @}
 
         /// @brief returns if class x belongs to the defined classes
         ///
@@ -130,7 +151,14 @@ namespace dhcp {
         /// @param separator Separator to be used between class names. The
         /// default separator comprises comma sign followed by space
         /// character.
+        ///
+        /// @return the string representation of all classes
         std::string toText(const std::string& separator = ", ") const;
+
+        /// @brief Returns all class names as an ElementPtr of type ListElement
+        ///
+        /// @return the list
+        isc::data::ElementPtr toElement() const;
 
     private:
         /// @brief container part

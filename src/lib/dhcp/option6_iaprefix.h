@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -85,7 +85,8 @@ public:
     /// @throw BadValue if the address is not IPv6
     ///
     /// @param buf pointer to a buffer
-    void pack(isc::util::OutputBuffer& buf) const;
+    /// @param check if set to false, allows options larger than 255 for v4
+    void pack(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// @brief Parses received buffer.
     ///

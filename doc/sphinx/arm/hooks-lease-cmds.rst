@@ -1,11 +1,11 @@
-.. _lease-cmds:
+.. _hooks-lease-cmds:
 
-``lease_cmds``: Lease Commands
-==============================
+``lease_cmds``: Lease Commands for Easier Lease Management
+==========================================================
 
 Kea allows users to store lease information in several
-backends (memfile, MySQL, PostgreSQL, and Cassandra), and this library
-provides an interface that can manipulate leases in a unified, safe way.
+backends (memfile, MySQL, and PostgreSQL), and the Lease Commands library provides an
+interface that can manipulate leases in a unified, safe way.
 In particular, it allows things that were previously impossible: lease
 manipulation in memfile while Kea is running, sanity check changes,
 lease existence checks, and removal of all leases belonging to a
@@ -16,12 +16,12 @@ of the subnet to which it is supposed to belong. The library also
 provides a non-programmatic way to manage user contexts associated with
 leases.
 
-The lease commands library is part of the open source code and is
+The Lease Commands library is part of the open source code and is
 available to every Kea user.
 
 .. note::
 
-   This library may only be loaded by the ``kea-dhcp4`` or the
+   This library can only be loaded by the ``kea-dhcp4`` or the
    ``kea-dhcp6`` process.
 
 There are many situations where an administrative command may be useful;
@@ -477,8 +477,9 @@ is assumed.
 and lease details, if found. The result has one of the following values: 0
 (success), 1 (error), or 3 (empty). An empty result means that a query
 has been completed properly, but the object (a lease in this case) has
-not been found. The lease parameters, if found, are returned as
-arguments.
+not been found.
+The lease parameters, if found, are returned as arguments.
+``client-id`` is not returned if empty.
 
 An example result returned when the host was found:
 
@@ -698,9 +699,7 @@ brevity.
 
 Generally, the returned list is not sorted in any particular order. Some
 lease database backends may sort leases in ascending order of addresses,
-but the controlling client must not rely on this behavior. In cases of
-highly distributed databases, such as Cassandra (now deprecated), ordering may be
-inefficient or even impossible.
+but the controlling client must not rely on this behavior.
 
 The ``count`` parameter contains the number of returned leases on the
 page.

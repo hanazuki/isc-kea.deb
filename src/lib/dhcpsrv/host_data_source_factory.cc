@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -17,10 +17,6 @@
 
 #ifdef HAVE_PGSQL
 #include <dhcpsrv/pgsql_host_data_source.h>
-#endif
-
-#ifdef HAVE_CQL
-#include <dhcpsrv/cql_host_data_source.h>
 #endif
 
 #include <boost/algorithm/string.hpp>
@@ -62,8 +58,7 @@ HostDataSourceFactory::add(HostDataSourceList& sources,
     // No match?
     if (index == map_.end()) {
         if ((db_type == "mysql") ||
-            (db_type == "postgresql") ||
-            (db_type == "cql")) {
+            (db_type == "postgresql")) {
             string with = (db_type == "postgresql" ? "pgsql" : db_type);
             isc_throw(InvalidType, "The type of host backend: '" << db_type
                       << "' is not compiled in. Did you forget to use --with-"
@@ -239,31 +234,6 @@ struct PgSqlHostDataSourceInit {
 
 // Database backend will be registered at object initialization
 PgSqlHostDataSourceInit pgsql_init_;
-#endif
-
-#ifdef HAVE_CQL
-struct CqlHostDataSourceInit {
-    // Constructor registers
-    CqlHostDataSourceInit() {
-        HostDataSourceFactory::registerFactory("cql", factory, true);
-    }
-
-    // Destructor deregisters
-    ~CqlHostDataSourceInit() {
-        HostDataSourceFactory::deregisterFactory("cql", true);
-    }
-
-    // Factory class method
-    static HostDataSourcePtr
-    factory(const DatabaseConnection::ParameterMap& parameters) {
-        LOG_INFO(hosts_logger, DHCPSRV_CQL_HOST_DB)
-            .arg(DatabaseConnection::redactedAccessString(parameters));
-        return (HostDataSourcePtr(new CqlHostDataSource(parameters)));
-    }
-};
-
-// Database backend will be registered at object initialization
-CqlHostDataSourceInit cql_init_;
 #endif
 
 } // end of anonymous namespace

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <exceptions/exceptions.h>
 #include <hooks/library_handle.h>
 #include <hooks/parking_lots.h>
+#include <util/dhcp_space.h>
 
 #include <boost/any.hpp>
 #include <boost/shared_ptr.hpp>
@@ -489,6 +490,9 @@ public:
     ///
     /// Resets state of the callout handle.
     ~ScopedCalloutHandleState();
+
+    /// @brief Continuation callback.
+    std::function<void()> on_completion_;
 
 private:
 

@@ -287,8 +287,8 @@ Lease Storage
 -------------
 
 All leases issued by the server are stored in the lease database.
-There are four database backends available: memfile
-(the default), MySQL, PostgreSQL, and Cassandra (deprecated).
+There are three database backends available: memfile
+(the default), MySQL, PostgreSQL.
 
 Memfile - Basic Storage for Leases
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -425,7 +425,7 @@ Lease Database Configuration
 
 Lease database configuration is controlled through the
 ``Dhcp4``/``lease-database`` parameters. The database type must be set to
-``memfile``, ``mysql``, ``postgresql``, or ``cql``, e.g.:
+``memfile``, ``mysql`` or ``postgresql``, e.g.:
 
 ::
 
@@ -433,20 +433,13 @@ Lease database configuration is controlled through the
 
 Next, the name of the database to hold the leases must be set; this is
 the name used when the database was created (see
-:ref:`mysql-database-create`, :ref:`pgsql-database-create`, or
-:ref:`cql-database-create`).
+:ref:`mysql-database-create` or :ref:`pgsql-database-create`).
 
 For MySQL or PostgreSQL:
 
 ::
 
    "Dhcp4": { "lease-database": { "name": "database-name" , ... }, ... }
-
-For Cassandra:
-
-::
-
-   "Dhcp4": { "lease-database": { "keyspace": "database-name" , ... }, ... }
 
 If the database is located on a different system from the DHCPv4 server,
 the database host name must also be specified:
@@ -455,24 +448,12 @@ the database host name must also be specified:
 
    "Dhcp4": { "lease-database": { "host": "remote-host-name", ... }, ... }
 
-For Cassandra, multiple contact points can be provided:
-
-::
-
-    "Dhcp4": { "lease-database": { "contact-points": "remote-host-name[, ...]" , ... }, ... }
-
 Normally, the database is on the same machine as the DHCPv4 server.
 In this case, set the value to the empty string:
 
 ::
 
    "Dhcp4": { "lease-database": { "host" : "", ... }, ... }
-
-For Cassandra:
-
-::
-
-    "Dhcp4": { "lease-database": { "contact-points": "", ... }, ... }
 
 Should the database use a port other than the default, it may be
 specified as well:
@@ -504,9 +485,7 @@ If the server is unable to reconnect to the database after making the
 maximum number of attempts, the server will exit. A value of 0 (the
 default) disables automatic recovery and the server will exit
 immediately upon detecting a loss of connectivity (MySQL and PostgreSQL
-only). For Cassandra, Kea uses an interface that connects to
-all nodes in a cluster at the same time. Any connectivity issues should
-be handled by internal Cassandra mechanisms.
+only).
 
 The number of milliseconds the server waits between attempts to
 reconnect to the lease database after connectivity has been lost may
@@ -518,7 +497,7 @@ also be specified:
 
 The default value for MySQL and PostgreSQL is 0, which disables automatic
 recovery and causes the server to exit immediately upon detecting the
-loss of connectivity. The default value for Cassandra is 2000 ms.
+loss of connectivity.
 
 ::
 
@@ -555,13 +534,6 @@ The possible values are:
    exclusively as a configuration tool.
 
 The host parameter is used by the MySQL and PostgreSQL backends.
-Cassandra has a concept of contact points that can be used to
-contact the cluster, instead of a single IP or hostname. It takes a
-list of comma-separated IP addresses, which may be specified as:
-
-::
-
-    "Dhcp4": { "lease-database": { "contact-points" : "192.0.2.1,192.0.2.2", ... }, ... }
 
 Finally, the credentials of the account under which the server will
 access the database should be set:
@@ -576,82 +548,6 @@ access the database should be set:
 If there is no password to the account, set the password to the empty
 string ``""``. (This is the default.)
 
-.. _cassandra-database-configuration4:
-
-Cassandra-Specific Parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The Cassandra backend is configured slightly differently. Cassandra has
-a concept of contact points that can be used to contact the cluster,
-instead of a single IP or hostname. It takes a list of comma-separated
-IP addresses, which may be specified as:
-
-::
-
-   "Dhcp4": {
-       "lease-database": {
-           "type": "cql",
-           "contact-points": "ip-address1, ip-address2 [,...]",
-           ...
-       },
-       ...
-   }
-
-Cassandra also supports a number of optional parameters:
-
--  ``reconnect-wait-time`` - governs how long Kea waits before
-   attempting to reconnect. Expressed in milliseconds. The default is
-   2000 [ms].
-
--  ``connect-timeout`` - sets the timeout for connecting to a node.
-   Expressed in milliseconds. The default is 5000 [ms].
-
--  ``request-timeout`` - sets the timeout for waiting for a response
-   from a node. Expressed in milliseconds. The default is 12000 [ms].
-
--  ``tcp-keepalive`` - governs the TCP keep-alive mechanism. Expressed
-   in seconds of delay. If the parameter is not present, the mechanism
-   is disabled.
-
--  ``tcp-nodelay`` - enables/disables Nagle's algorithm on connections.
-   The default is ``true``.
-
--  ``consistency`` - configures the consistency level. The default is
-   ``quorum``. Supported values are: ``any``, ``one``, ``two``, ``three``, ``quorum``, ``all``,
-   ``local-quorum``, ``each-quorum``, ``serial``, ``local-serial``, and ``local-one``. See
-   `Cassandra
-   consistency <https://docs.datastax.com/en/cassandra/3.0/cassandra/dml/dmlConfigConsistency.html>`__
-   for more details.
-
--  ``serial-consistency`` - configures the serial consistency level, which
-   manages lightweight transaction isolation. The default is ``serial``.
-   Supported values are: ``any``, ``one``, ``two``, ``three``, ``quorum``, ``all``, ``local-quorum``,
-   ``each-quorum``, ``serial``, ``local-serial``, and ``local-one``. See `Cassandra serial
-   consistency <https://docs.datastax.com/en/cassandra/3.0/cassandra/dml/dmlConfigSerialConsistency.html>`__
-   for more details.
-
-For example, a complex Cassandra configuration with most parameters
-specified could look as follows:
-
-::
-
-   "Dhcp4": {
-     "lease-database": {
-         "type": "cql",
-         "keyspace": "keatest",
-         "contact-points": "192.0.2.1, 192.0.2.2, 192.0.2.3",
-         "port": 9042,
-         "reconnect-wait-time": 2000,
-         "connect-timeout": 5000,
-         "request-timeout": 12000,
-         "tcp-keepalive": 1,
-         "tcp-nodelay": true
-       },
-       ...
-   }
-
-Similar parameters can be specified for the hosts database.
-
 .. _hosts4-storage:
 
 Hosts Storage
@@ -663,8 +559,7 @@ lease database. In fact, the Kea server opens independent connections for
 each purpose, be it lease or hosts information, which gives
 the most flexibility. Kea can keep leases and host reservations
 separately, but can also point to the same database. Currently the
-supported hosts database types are MySQL, PostgreSQL, and Cassandra,
-although support for Cassandra has been deprecated.
+supported hosts database types are MySQL and PostgreSQL.
 
 The following configuration can be used to configure a
 connection to MySQL:
@@ -762,9 +657,7 @@ If the server is unable to reconnect to the database after making the
 maximum number of attempts, the server will exit. A value of 0 (the
 default) disables automatic recovery and the server will exit
 immediately upon detecting a loss of connectivity (MySQL and PostgreSQL
-only). For Cassandra, Kea uses an interface that connects to
-all nodes in a cluster at the same time. Any connectivity issues should
-be handled by internal Cassandra mechanisms.
+only).
 
 The number of milliseconds the server waits between attempts to
 reconnect to the host database after connectivity has been lost may also
@@ -776,7 +669,7 @@ be specified:
 
 The default value for MySQL and PostgreSQL is 0, which disables automatic
 recovery and causes the server to exit immediately upon detecting the
-loss of connectivity. The default value for Cassandra is 2000 ms.
+loss of connectivity.
 
 ::
 
@@ -827,8 +720,6 @@ entry, as in:
 ::
 
    "Dhcp4": { "hosts-databases": [ { "type": "mysql", ... }, ... ], ... }
-
-For Cassandra-specific parameters, see :ref:`cassandra-database-configuration4`.
 
 If the same host is configured both in-file and in-database, Kea does not issue a warning,
 as it would if both were specified in the same data source.
@@ -1078,6 +969,50 @@ loopback interface, to service a relayed DHCP request:
        ...
    }
 
+Kea binds the service sockets for each interface on startup. If another
+process is already using a port, then Kea logs the message and suppresses an
+error. DHCP service runs, but it is unavailable on some interfaces.
+
+The "service-sockets-require-all" option makes Kea require all sockets to
+be successfully bound. If any opening fails, Kea interrupts the
+initialization and exits with a non-zero status. (Default is false).
+
+::
+
+   "Dhcp4": {
+       "interfaces-config": {
+           "interfaces": [ "eth1", "eth3" ],
+           "service-sockets-require-all": true
+       },
+       ...
+   }
+
+Sometimes, immediate interruption isn't a good choice. The port can be
+unavailable only temporary. In this case, retrying the opening may resolve
+the problem. Kea provides two options to specify the retrying:
+``service-sockets-max-retries`` and ``service-sockets-retry-wait-time``.
+
+The first defines a maximal number of retries that Kea makes to open a socket.
+The zero value (default) means that the Kea doesn't retry the process.
+
+The second defines a wait time (in milliseconds) between attempts. The default
+value is 5000 (5 seconds).
+
+::
+
+   "Dhcp4": {
+       "interfaces-config": {
+           "interfaces": [ "eth1", "eth3" ],
+           "service-sockets-max-retries": 5,
+           "service-sockets-retry-wait-time": 5000
+       },
+       ...
+   }
+
+If "service-sockets-max-retries" is non-zero and "service-sockets-require-all"
+is false, then Kea retries the opening (if needed) but does not fail if any
+socket is still not opened.
+
 .. _dhcpinform-unicast-issues:
 
 Issues With Unicast Responses to DHCPINFORM
@@ -1295,6 +1230,28 @@ address) address from that pool. In the aforementioned example of pool
 192.0.3.0/24, both the 192.0.3.0 and 192.0.3.255 addresses may be
 assigned as well. This may be invalid in some network configurations. To
 avoid this, use the ``min-max`` notation.
+
+.. note::
+
+    Here are some liberties and limits to the values that subnets and pools can
+    take in Kea configurations that are out of the ordinary:
+
+    +-------------------------------------------------------------+---------+--------------------------------------------------------------------------------------+
+    | Kea configuration case                                      | Allowed | Comment                                                                              |
+    +=============================================================+=========+======================================================================================+
+    | Overlapping subnets                                         | Yes     | Administrator should consider how clients are matched to these subnets.              |
+    +-------------------------------------------------------------+---------+--------------------------------------------------------------------------------------+
+    | Overlapping pools in one subnet                             | No      | Startup error: DHCP4_PARSER_FAIL                                                     |
+    +-------------------------------------------------------------+---------+--------------------------------------------------------------------------------------+
+    | Overlapping address pools in different subnets              | Yes     | Specifying the same address pool in different subnets can be used as an equivalent   |
+    |                                                             |         | of the global address pool. In that case, the server can assign addresses from the   |
+    |                                                             |         | same range regardless of the client's subnet. If an address from such a pool is      |
+    |                                                             |         | assigned to a client in one subnet, the same address will be renewed for this        |
+    |                                                             |         | client if it moves to another subnet. Another client in a different subnet will      |
+    |                                                             |         | not be assigned an address already assigned to the client in any of the subnets.     |
+    +-------------------------------------------------------------+---------+--------------------------------------------------------------------------------------+
+    | Pools not matching the subnet prefix                        | No      | Startup error: DHCP4_PARSER_FAIL                                                     |
+    +-------------------------------------------------------------+---------+--------------------------------------------------------------------------------------+
 
 .. _dhcp4-t1-t2-times:
 
@@ -2718,6 +2675,74 @@ specified:
    assumes that the option data is specified as a list of comma-separated
    values to be assigned to individual fields of the DHCP option.
 
+.. _dhcp4-support-for-long-options:
+
+Support for Long Options
+------------------------
+
+The kea-dhcp4 server partially supports long options (RFC3396).
+Since Kea 2.1.6, the server accepts configuring long options and suboptions
+(longer than 255 bytes). The options and suboptions are stored internally
+in their unwrapped form and they can be processed as usual using the parser
+language. On send, the server splits long options and suboptions into multiple
+options and suboptions, using the respective option code.
+
+::
+
+   "option-def": [
+       {
+           "array": false,
+           "code\": 240,
+           "encapsulate": "",
+           "name": "my-option",
+           "space": "dhcp4",
+           "type": "string"
+       }
+   ],
+   "subnet4": [
+       {
+           "subnet": "192.0.2.0/24",
+           "reservations": [
+               {
+                   "hw-address": "aa:bb:cc:dd:ee:ff",
+                   "option-data": [
+                       {
+                           "always-send": false,
+                           "code": 240,
+                           "name": "my-option",
+                           "csv-format": true,
+                           "data": "data
+                                    -00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809
+                                    -00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809
+                                    -00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809
+                                    -data",
+                           "space": "dhcp4"
+                       }
+                   ]
+               }
+           ]
+       }
+   ]
+
+.. note::
+
+   For this example, the data has been split on several lines, but Kea does not
+   support this in the configuration file.
+
+This example illustrates configuring a custom long option in a reservation.
+The server, when sending a response, will split this option into several options
+with the same code (11 options with option code 240).
+
+.. note::
+
+   Currently the server does not support storing long options in the databases,
+   either host reservations or configuration backend.
+
+The server is also able to receive packets with split options (options using
+the same option code) and to fuse the data chunks into one option. This is
+also supported for suboptions if each suboption data chunk also contains the
+suboption code and suboption length.
+
 .. _dhcp4-stateless-configuration:
 
 Stateless Configuration of DHCPv4 Clients
@@ -2842,6 +2867,17 @@ extracted, and a class name is constructed from it and added to the
 class list for the packet. The second method specifies an expression that is
 evaluated for each packet. If the result is ``true``, the packet is a
 member of the class.
+
+.. note::
+
+   The new ``early-global-reservations-lookup`` global parameter flag
+   enables a lookup for global reservations before the subnet selection
+   phase. This lookup is similar to the general lookup described above
+   with two differences:
+
+   - the lookup is limited to global host reservations
+
+   - the ``UNKNOWN`` class is never set
 
 .. note::
 
@@ -4642,16 +4678,16 @@ reserved class has been also assigned.
    :ref:`subnet-selection-with-class-reservations4`
    for specific use cases.
 
-.. _reservations4-mysql-pgsql-cql:
+.. _reservations4-mysql-pgsql:
 
-Storing Host Reservations in MySQL, PostgreSQL, or Cassandra
-------------------------------------------------------------
+Storing Host Reservations in MySQL or PostgreSQL
+------------------------------------------------
 
-Kea can store host reservations in MySQL, PostgreSQL, or
-Cassandra. See :ref:`hosts4-storage` for information on how to
-configure Kea to use reservations stored in MySQL, PostgreSQL, or
-Cassandra. Kea provides a dedicated hook for managing reservations in a
-database; section :ref:`host-cmds` provides detailed information.
+Kea can store host reservations in MySQL or PostgreSQL.
+See :ref:`hosts4-storage` for information on how to
+configure Kea to use reservations stored in MySQL or PostgreSQL.
+Kea provides a dedicated hook for managing reservations in a
+database; section :ref:`hooks-host-cmds` provides detailed information.
 The `Kea wiki
 <https://gitlab.isc.org/isc-projects/kea/wikis/designs/commands#23-host-reservations-hr-management>`__
 provides some examples of how to conduct common host reservation
@@ -5261,7 +5297,7 @@ reservations for the same IP address within a particular subnet, to avoid
 having two different clients compete for the same address.
 When using the default settings, the server returns a configuration error
 when it finds two or more reservations for the same IP address within
-a subnet in the Kea configuration file. The :ref:`host-cmds` hook
+a subnet in the Kea configuration file. The :ref:`hooks-host-cmds` hook
 library returns an error in response to the ``reservation-add`` command
 when it detects that the reservation exists in the database for the IP
 address for which the new reservation is being added.
@@ -5289,7 +5325,7 @@ for the same IP address within a given subnet. Setting this parameter to
 file and in the host database backend, via the ``host-cmds`` hook library.
 
 This setting is currently supported by the most popular host database
-backends, i.e. MySQL and PostgreSQL. It is not supported for Cassandra,
+backends, i.e. MySQL and PostgreSQL.
 Host Cache (see :ref:`hooks-host-cache`), or the RADIUS backend
 (see :ref:`hooks-radius`). An attempt to set ``ip-reservations-unique``
 to ``false`` when any of these three backends is in use yields a
@@ -6440,13 +6476,13 @@ The DHCPv4 server supports the following statistics:
    |                                              |                | subnet separately.                 |
    +----------------------------------------------+----------------+------------------------------------+
    | v4-allocation-fail-shared-network            | integer        | Number of address allocation       |
-   |                                              |                | failures for a paticular client    |
+   |                                              |                | failures for a particular client   |
    |                                              |                | connected to a shared network.     |
    |                                              |                | This is a global statistic that    |
    |                                              |                | covers all subnets.                |
    +----------------------------------------------+----------------+------------------------------------+
    | subnet[id].v4-allocation-fail-shared-network | integer        | Number of address allocation       |
-   |                                              |                | failures for a paticular client    |
+   |                                              |                | failures for a particular client   |
    |                                              |                | connected to a shared network.     |
    |                                              |                | The *id* is the subnet-id of a     |
    |                                              |                | given subnet. This statistic is    |
@@ -6532,6 +6568,24 @@ The DHCPv4 server supports the following statistics:
    |                                              |                | subnet-id of a given subnet. This  |
    |                                              |                | statistic is exposed for each      |
    |                                              |                | subnet separately.                 |
+   +----------------------------------------------+----------------+------------------------------------+
+   | v4-reservation-conflicts                     | integer        | Number of host reservation         |
+   |                                              |                | allocation conflicts which have    |
+   |                                              |                | occurred across every subnet. When |
+   |                                              |                | a client sends a DHCP Discover and |
+   |                                              |                | is matched to a host reservation   |
+   |                                              |                | which is already leased to another |
+   |                                              |                | client, this counter is increased  |
+   |                                              |                | by 1.                              |
+   +----------------------------------------------+----------------+------------------------------------+
+   | subnet[id].v4-reservation-conflicts          | integer        | Number of host reservation         |
+   |                                              |                | allocation conflicts which have    |
+   |                                              |                | occurred in a specific subnet.     |
+   |                                              |                | When a client sends a DHCP         |
+   |                                              |                | Discover and is matched to a host  |
+   |                                              |                | reservation which is already       |
+   |                                              |                | leased to another client, this     |
+   |                                              |                | counter is increased by 1.         |
    +----------------------------------------------+----------------+------------------------------------+
 
 .. note::
@@ -6849,7 +6903,7 @@ parameters must be specified in the JSON configuration file, if
 required.
 
 All supported parameters can be configured via the ``cb_cmds`` hook library
-described in the :ref:`cb-cmds-library` section. The general rule is that
+described in the :ref:`hooks-cb-cmds` section. The general rule is that
 scalar global parameters are set using
 ``remote-global-parameter4-set``; shared-network-specific parameters
 are set using ``remote-network4-set``; and subnet- and pool-level
@@ -6976,7 +7030,8 @@ at which it is currently supported.
 Enabling the Configuration Backend
 ----------------------------------
 
-Consider the following configuration snippet:
+Consider the following configuration snippet, which uses a MySQL configuration
+database:
 
 ::
 
@@ -7010,6 +7065,30 @@ only one database connection can be specified on the
 during startup or reconfiguration, and fetches the configuration
 available for this server from the database. This configuration is
 merged into the configuration read from the configuration file.
+
+The following snippet illustrates the use of a PostgreSQL database:
+
+::
+
+   "Dhcp4": {
+       "server-tag": "my DHCPv4 server",
+       "config-control": {
+           "config-databases": [{
+               "type": "postgresql",
+               "name": "kea",
+               "user": "kea",
+               "password": "kea",
+               "host": "192.0.2.1",
+               "port": 5432
+           }],
+           "config-fetch-wait-time": 20
+       },
+       "hooks-libraries": [{
+           "library": "/usr/local/lib/kea/hooks/libdhcp_pgsql_cb.so"
+       }, {
+           "library": "/usr/local/lib/kea/hooks/libdhcp_cb_cmds.so"
+       }],
+   }
 
 .. note::
 
@@ -7047,16 +7126,17 @@ The ``config-backend-pull`` command can be used to force the server to
 immediately poll any configuration changes from the database and avoid
 waiting for the next fetch cycle.
 
-Finally, in the configuration example above, two hook libraries are
-loaded. The first, ``libdhcp_mysql_cb.so``, is the implementation of
-the Configuration Backend for MySQL. It must be always present when the
-server uses MySQL as the configuration repository. Failing to load this
-library will result in an error during the server configuration if the
-"mysql" database is selected with the ``config-control`` parameter.
+In the configuration examples above, two hook libraries are loaded. The first
+is a library which implements the Configuration Backend for a specific database
+type: ``libdhcp_mysql_cb.so`` provides support for MySQL and ``libdhcp_pgsql_cb.so``
+provides support for PostgreSQL.  The library loaded must match the database
+``type`` specified within the ``config-control`` parameter or an will error be
+logged when the server attempts to load its configuration and the load will
+fail.
 
 The second hook library, ``libdhcp_cb_cmds.so``, is optional. It should
 be loaded when the Kea server instance is to be used to manage the
-configuration in the database. See the :ref:`cb-cmds-library` section for
+configuration in the database. See the :ref:`hooks-cb-cmds` section for
 details. This hook library is only available to ISC
 customers with a paid support contract.
 

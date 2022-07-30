@@ -1,4 +1,4 @@
-// Copyright (C) 2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,4 +15,3 @@ isc::log::Logger mysql_cb_logger("mysql-cb-hooks");
 
 }  // namespace dhcp
 }  // namespace isc
-

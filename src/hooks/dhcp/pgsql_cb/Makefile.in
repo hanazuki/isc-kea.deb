@@ -171,7 +171,8 @@ libdhcp_pgsql_cb_la_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC \
 	$(LDFLAGS) -o $@
 libpgsqlcb_la_LIBADD =
 am_libpgsqlcb_la_OBJECTS = libpgsqlcb_la-pgsql_cb_callouts.lo \
-	libpgsqlcb_la-pgsql_cb_dhcp4.lo libpgsqlcb_la-pgsql_cb_impl.lo \
+	libpgsqlcb_la-pgsql_cb_dhcp4.lo \
+	libpgsqlcb_la-pgsql_cb_dhcp6.lo libpgsqlcb_la-pgsql_cb_impl.lo \
 	libpgsqlcb_la-pgsql_cb_messages.lo \
 	libpgsqlcb_la-pgsql_cb_log.lo libpgsqlcb_la-version.lo
 libpgsqlcb_la_OBJECTS = $(am_libpgsqlcb_la_OBJECTS)
@@ -196,6 +197,7 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_callouts.Plo \
 	./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp4.Plo \
+	./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp6.Plo \
 	./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_impl.Plo \
 	./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_log.Plo \
 	./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_messages.Plo \
@@ -316,11 +318,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -330,8 +327,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -345,7 +340,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -521,11 +515,11 @@ noinst_LTLIBRARIES = libpgsqlcb.la
 # Commented out for now - see kea#95
 
 # Commented out for now - to be added back in #96
-#libpgsqlcb_la_SOURCES += pgsql_cb_dhcp6.cc pgsql_cb_dhcp6.h
 libpgsqlcb_la_SOURCES = pgsql_cb_callouts.cc pgsql_cb_dhcp4.cc \
-	pgsql_cb_dhcp4.h pgsql_cb_impl.cc pgsql_cb_impl.h \
-	pgsql_cb_messages.cc pgsql_cb_messages.h pgsql_cb_log.cc \
-	pgsql_cb_log.h pgsql_query_macros_dhcp.h version.cc
+	pgsql_cb_dhcp4.h pgsql_cb_dhcp6.cc pgsql_cb_dhcp6.h \
+	pgsql_cb_impl.cc pgsql_cb_impl.h pgsql_cb_messages.cc \
+	pgsql_cb_messages.h pgsql_cb_log.cc pgsql_cb_log.h \
+	pgsql_query_macros_dhcp.h version.cc
 libpgsqlcb_la_CXXFLAGS = $(AM_CXXFLAGS)
 libpgsqlcb_la_CPPFLAGS = $(AM_CPPFLAGS)
 
@@ -648,6 +642,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_callouts.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp4.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp6.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_impl.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_log.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_messages.Plo@am__quote@ # am--include-marker
@@ -693,6 +688,13 @@ libpgsqlcb_la-pgsql_cb_dhcp4.lo: pgsql_cb_dhcp4.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp4.cc' object='libpgsqlcb_la-pgsql_cb_dhcp4.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsqlcb_la_CPPFLAGS) $(CPPFLAGS) $(libpgsqlcb_la_CXXFLAGS) $(CXXFLAGS) -c -o libpgsqlcb_la-pgsql_cb_dhcp4.lo `test -f 'pgsql_cb_dhcp4.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp4.cc
+
+libpgsqlcb_la-pgsql_cb_dhcp6.lo: pgsql_cb_dhcp6.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsqlcb_la_CPPFLAGS) $(CPPFLAGS) $(libpgsqlcb_la_CXXFLAGS) $(CXXFLAGS) -MT libpgsqlcb_la-pgsql_cb_dhcp6.lo -MD -MP -MF $(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp6.Tpo -c -o libpgsqlcb_la-pgsql_cb_dhcp6.lo `test -f 'pgsql_cb_dhcp6.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp6.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp6.Tpo $(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp6.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='pgsql_cb_dhcp6.cc' object='libpgsqlcb_la-pgsql_cb_dhcp6.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsqlcb_la_CPPFLAGS) $(CPPFLAGS) $(libpgsqlcb_la_CXXFLAGS) $(CXXFLAGS) -c -o libpgsqlcb_la-pgsql_cb_dhcp6.lo `test -f 'pgsql_cb_dhcp6.cc' || echo '$(srcdir)/'`pgsql_cb_dhcp6.cc
 
 libpgsqlcb_la-pgsql_cb_impl.lo: pgsql_cb_impl.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libpgsqlcb_la_CPPFLAGS) $(CPPFLAGS) $(libpgsqlcb_la_CXXFLAGS) $(CXXFLAGS) -MT libpgsqlcb_la-pgsql_cb_impl.lo -MD -MP -MF $(DEPDIR)/libpgsqlcb_la-pgsql_cb_impl.Tpo -c -o libpgsqlcb_la-pgsql_cb_impl.lo `test -f 'pgsql_cb_impl.cc' || echo '$(srcdir)/'`pgsql_cb_impl.cc
@@ -932,6 +934,7 @@ clean-am: clean-generic clean-lib_hooksLTLIBRARIES clean-libtool \
 distclean: distclean-recursive
 		-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_callouts.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp4.Plo
+	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp6.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_impl.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_log.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_messages.Plo
@@ -983,6 +986,7 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 		-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_callouts.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp4.Plo
+	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_dhcp6.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_impl.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_log.Plo
 	-rm -f ./$(DEPDIR)/libpgsqlcb_la-pgsql_cb_messages.Plo

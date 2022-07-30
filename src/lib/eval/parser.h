@@ -540,34 +540,35 @@ namespace isc { namespace eval {
     TOKEN_YIADDR = 287,            // "yiaddr"
     TOKEN_SIADDR = 288,            // "siaddr"
     TOKEN_SUBSTRING = 289,         // "substring"
-    TOKEN_ALL = 290,               // "all"
-    TOKEN_COMA = 291,              // ","
-    TOKEN_CONCAT = 292,            // "concat"
-    TOKEN_PLUS = 293,              // "+"
-    TOKEN_IFELSE = 294,            // "ifelse"
-    TOKEN_TOHEXSTRING = 295,       // "hexstring"
-    TOKEN_ADDRTOTEXT = 296,        // "addrtotext"
-    TOKEN_INT8TOTEXT = 297,        // "int8totext"
-    TOKEN_INT16TOTEXT = 298,       // "int16totext"
-    TOKEN_INT32TOTEXT = 299,       // "int32totext"
-    TOKEN_UINT8TOTEXT = 300,       // "uint8totext"
-    TOKEN_UINT16TOTEXT = 301,      // "uint16totext"
-    TOKEN_UINT32TOTEXT = 302,      // "uint32totext"
-    TOKEN_PKT6 = 303,              // "pkt6"
-    TOKEN_MSGTYPE = 304,           // "msgtype"
-    TOKEN_TRANSID = 305,           // "transid"
-    TOKEN_VENDOR_CLASS = 306,      // "vendor-class"
-    TOKEN_VENDOR = 307,            // "vendor"
-    TOKEN_ANY = 308,               // "*"
-    TOKEN_DATA = 309,              // "data"
-    TOKEN_ENTERPRISE = 310,        // "enterprise"
-    TOKEN_TOPLEVEL_BOOL = 311,     // "top-level bool"
-    TOKEN_TOPLEVEL_STRING = 312,   // "top-level string"
-    TOKEN_STRING = 313,            // "constant string"
-    TOKEN_INTEGER = 314,           // "integer"
-    TOKEN_HEXSTRING = 315,         // "constant hexstring"
-    TOKEN_OPTION_NAME = 316,       // "option name"
-    TOKEN_IP_ADDRESS = 317         // "ip address"
+    TOKEN_SPLIT = 290,             // "split"
+    TOKEN_ALL = 291,               // "all"
+    TOKEN_COMA = 292,              // ","
+    TOKEN_CONCAT = 293,            // "concat"
+    TOKEN_PLUS = 294,              // "+"
+    TOKEN_IFELSE = 295,            // "ifelse"
+    TOKEN_TOHEXSTRING = 296,       // "hexstring"
+    TOKEN_ADDRTOTEXT = 297,        // "addrtotext"
+    TOKEN_INT8TOTEXT = 298,        // "int8totext"
+    TOKEN_INT16TOTEXT = 299,       // "int16totext"
+    TOKEN_INT32TOTEXT = 300,       // "int32totext"
+    TOKEN_UINT8TOTEXT = 301,       // "uint8totext"
+    TOKEN_UINT16TOTEXT = 302,      // "uint16totext"
+    TOKEN_UINT32TOTEXT = 303,      // "uint32totext"
+    TOKEN_PKT6 = 304,              // "pkt6"
+    TOKEN_MSGTYPE = 305,           // "msgtype"
+    TOKEN_TRANSID = 306,           // "transid"
+    TOKEN_VENDOR_CLASS = 307,      // "vendor-class"
+    TOKEN_VENDOR = 308,            // "vendor"
+    TOKEN_ANY = 309,               // "*"
+    TOKEN_DATA = 310,              // "data"
+    TOKEN_ENTERPRISE = 311,        // "enterprise"
+    TOKEN_TOPLEVEL_BOOL = 312,     // "top-level bool"
+    TOKEN_TOPLEVEL_STRING = 313,   // "top-level string"
+    TOKEN_STRING = 314,            // "constant string"
+    TOKEN_INTEGER = 315,           // "integer"
+    TOKEN_HEXSTRING = 316,         // "constant hexstring"
+    TOKEN_OPTION_NAME = 317,       // "option name"
+    TOKEN_IP_ADDRESS = 318         // "ip address"
       };
       /// Backward compatibility alias (Bison 3.6).
       typedef token_kind_type yytokentype;
@@ -584,7 +585,7 @@ namespace isc { namespace eval {
     {
       enum symbol_kind_type
       {
-        YYNTOKENS = 63, ///< Number of tokens.
+        YYNTOKENS = 64, ///< Number of tokens.
         S_YYEMPTY = -2,
         S_YYEOF = 0,                             // "end of file"
         S_YYerror = 1,                           // error
@@ -621,51 +622,53 @@ namespace isc { namespace eval {
         S_YIADDR = 32,                           // "yiaddr"
         S_SIADDR = 33,                           // "siaddr"
         S_SUBSTRING = 34,                        // "substring"
-        S_ALL = 35,                              // "all"
-        S_COMA = 36,                             // ","
-        S_CONCAT = 37,                           // "concat"
-        S_PLUS = 38,                             // "+"
-        S_IFELSE = 39,                           // "ifelse"
-        S_TOHEXSTRING = 40,                      // "hexstring"
-        S_ADDRTOTEXT = 41,                       // "addrtotext"
-        S_INT8TOTEXT = 42,                       // "int8totext"
-        S_INT16TOTEXT = 43,                      // "int16totext"
-        S_INT32TOTEXT = 44,                      // "int32totext"
-        S_UINT8TOTEXT = 45,                      // "uint8totext"
-        S_UINT16TOTEXT = 46,                     // "uint16totext"
-        S_UINT32TOTEXT = 47,                     // "uint32totext"
-        S_PKT6 = 48,                             // "pkt6"
-        S_MSGTYPE = 49,                          // "msgtype"
-        S_TRANSID = 50,                          // "transid"
-        S_VENDOR_CLASS = 51,                     // "vendor-class"
-        S_VENDOR = 52,                           // "vendor"
-        S_ANY = 53,                              // "*"
-        S_DATA = 54,                             // "data"
-        S_ENTERPRISE = 55,                       // "enterprise"
-        S_TOPLEVEL_BOOL = 56,                    // "top-level bool"
-        S_TOPLEVEL_STRING = 57,                  // "top-level string"
-        S_STRING = 58,                           // "constant string"
-        S_INTEGER = 59,                          // "integer"
-        S_HEXSTRING = 60,                        // "constant hexstring"
-        S_OPTION_NAME = 61,                      // "option name"
-        S_IP_ADDRESS = 62,                       // "ip address"
-        S_YYACCEPT = 63,                         // $accept
-        S_start = 64,                            // start
-        S_expression = 65,                       // expression
-        S_bool_expr = 66,                        // bool_expr
-        S_string_expr = 67,                      // string_expr
-        S_integer_expr = 68,                     // integer_expr
-        S_option_code = 69,                      // option_code
-        S_sub_option_code = 70,                  // sub_option_code
-        S_option_repr_type = 71,                 // option_repr_type
-        S_nest_level = 72,                       // nest_level
-        S_pkt_metadata = 73,                     // pkt_metadata
-        S_enterprise_id = 74,                    // enterprise_id
-        S_pkt4_field = 75,                       // pkt4_field
-        S_pkt6_field = 76,                       // pkt6_field
-        S_relay6_field = 77,                     // relay6_field
-        S_start_expr = 78,                       // start_expr
-        S_length_expr = 79                       // length_expr
+        S_SPLIT = 35,                            // "split"
+        S_ALL = 36,                              // "all"
+        S_COMA = 37,                             // ","
+        S_CONCAT = 38,                           // "concat"
+        S_PLUS = 39,                             // "+"
+        S_IFELSE = 40,                           // "ifelse"
+        S_TOHEXSTRING = 41,                      // "hexstring"
+        S_ADDRTOTEXT = 42,                       // "addrtotext"
+        S_INT8TOTEXT = 43,                       // "int8totext"
+        S_INT16TOTEXT = 44,                      // "int16totext"
+        S_INT32TOTEXT = 45,                      // "int32totext"
+        S_UINT8TOTEXT = 46,                      // "uint8totext"
+        S_UINT16TOTEXT = 47,                     // "uint16totext"
+        S_UINT32TOTEXT = 48,                     // "uint32totext"
+        S_PKT6 = 49,                             // "pkt6"
+        S_MSGTYPE = 50,                          // "msgtype"
+        S_TRANSID = 51,                          // "transid"
+        S_VENDOR_CLASS = 52,                     // "vendor-class"
+        S_VENDOR = 53,                           // "vendor"
+        S_ANY = 54,                              // "*"
+        S_DATA = 55,                             // "data"
+        S_ENTERPRISE = 56,                       // "enterprise"
+        S_TOPLEVEL_BOOL = 57,                    // "top-level bool"
+        S_TOPLEVEL_STRING = 58,                  // "top-level string"
+        S_STRING = 59,                           // "constant string"
+        S_INTEGER = 60,                          // "integer"
+        S_HEXSTRING = 61,                        // "constant hexstring"
+        S_OPTION_NAME = 62,                      // "option name"
+        S_IP_ADDRESS = 63,                       // "ip address"
+        S_YYACCEPT = 64,                         // $accept
+        S_start = 65,                            // start
+        S_expression = 66,                       // expression
+        S_bool_expr = 67,                        // bool_expr
+        S_string_expr = 68,                      // string_expr
+        S_integer_expr = 69,                     // integer_expr
+        S_option_code = 70,                      // option_code
+        S_sub_option_code = 71,                  // sub_option_code
+        S_option_repr_type = 72,                 // option_repr_type
+        S_nest_level = 73,                       // nest_level
+        S_pkt_metadata = 74,                     // pkt_metadata
+        S_enterprise_id = 75,                    // enterprise_id
+        S_pkt4_field = 76,                       // pkt4_field
+        S_pkt6_field = 77,                       // pkt6_field
+        S_relay6_field = 78,                     // relay6_field
+        S_start_expr = 79,                       // start_expr
+        S_length_expr = 80,                      // length_expr
+        S_int_expr = 81                          // int_expr
       };
     };
 
@@ -1648,6 +1651,21 @@ switch (yykind)
 #if 201103L <= YY_CPLUSPLUS
       static
       symbol_type
+      make_SPLIT (location_type l)
+      {
+        return symbol_type (token::TOKEN_SPLIT, std::move (l));
+      }
+#else
+      static
+      symbol_type
+      make_SPLIT (const location_type& l)
+      {
+        return symbol_type (token::TOKEN_SPLIT, l);
+      }
+#endif
+#if 201103L <= YY_CPLUSPLUS
+      static
+      symbol_type
       make_ALL (location_type l)
       {
         return symbol_type (token::TOKEN_ALL, std::move (l));
@@ -2153,7 +2171,7 @@ switch (yykind)
     // number is the opposite.  If YYTABLE_NINF, syntax error.
     static const unsigned char yytable_[];
 
-    static const unsigned char yycheck_[];
+    static const short yycheck_[];
 
     // YYSTOS[STATE-NUM] -- The symbol kind of the accessing symbol of
     // state STATE-NUM.
@@ -2395,9 +2413,9 @@ switch (yykind)
     /// Constants.
     enum
     {
-      yylast_ = 274,     ///< Last index in yytable_.
-      yynnts_ = 17,  ///< Number of nonterminal symbols.
-      yyfinal_ = 41 ///< Termination state number.
+      yylast_ = 286,     ///< Last index in yytable_.
+      yynnts_ = 18,  ///< Number of nonterminal symbols.
+      yyfinal_ = 42 ///< Termination state number.
     };
 
 
@@ -2447,10 +2465,10 @@ switch (yykind)
       25,    26,    27,    28,    29,    30,    31,    32,    33,    34,
       35,    36,    37,    38,    39,    40,    41,    42,    43,    44,
       45,    46,    47,    48,    49,    50,    51,    52,    53,    54,
-      55,    56,    57,    58,    59,    60,    61,    62
+      55,    56,    57,    58,    59,    60,    61,    62,    63
     };
     // Last valid token kind.
-    const int code_max = 317;
+    const int code_max = 318;
 
     if (t <= 0)
       return symbol_kind::S_YYEOF;
@@ -2651,7 +2669,7 @@ switch (yykind)
 
 #line 14 "parser.yy"
 } } // isc::eval
-#line 2655 "parser.h"
+#line 2673 "parser.h"
 
 
 

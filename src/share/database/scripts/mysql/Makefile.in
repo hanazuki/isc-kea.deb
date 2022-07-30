@@ -121,7 +121,8 @@ CONFIG_CLEAN_FILES = upgrade_001.0_to_002.0.sh \
 	upgrade_009.2_to_009.3.sh upgrade_009.3_to_009.4.sh \
 	upgrade_009.4_to_009.5.sh upgrade_009.5_to_009.6.sh \
 	upgrade_009.6_to_010.0.sh upgrade_010_to_011.sh \
-	upgrade_011_to_012.sh upgrade_012_to_013.sh wipe_data.sh
+	upgrade_011_to_012.sh upgrade_012_to_013.sh \
+	upgrade_013_to_014.sh wipe_data.sh
 CONFIG_CLEAN_VPATH_FILES =
 am__vpath_adj_setup = srcdirstrip=`echo "$(srcdir)" | sed 's|.|.|g'`;
 am__vpath_adj = case $$p in \
@@ -231,7 +232,8 @@ am__DIST_COMMON = $(srcdir)/Makefile.in \
 	$(srcdir)/upgrade_009.6_to_010.0.sh.in \
 	$(srcdir)/upgrade_010_to_011.sh.in \
 	$(srcdir)/upgrade_011_to_012.sh.in \
-	$(srcdir)/upgrade_012_to_013.sh.in $(srcdir)/wipe_data.sh.in
+	$(srcdir)/upgrade_012_to_013.sh.in \
+	$(srcdir)/upgrade_013_to_014.sh.in $(srcdir)/wipe_data.sh.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
   dir0=`pwd`; \
@@ -267,11 +269,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -281,8 +278,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -296,7 +291,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -475,7 +469,7 @@ mysql_SCRIPTS = upgrade_001.0_to_002.0.sh upgrade_002.0_to_003.0.sh \
 	upgrade_009.3_to_009.4.sh upgrade_009.4_to_009.5.sh \
 	upgrade_009.5_to_009.6.sh upgrade_009.6_to_010.0.sh \
 	upgrade_010_to_011.sh upgrade_011_to_012.sh \
-	upgrade_012_to_013.sh wipe_data.sh
+	upgrade_012_to_013.sh upgrade_013_to_014.sh wipe_data.sh
 DISTCLEANFILES = ${mysql_SCRIPTS}
 EXTRA_DIST = ${mysql_DATA}
 all: all-recursive
@@ -555,6 +549,8 @@ upgrade_010_to_011.sh: $(top_builddir)/config.status $(srcdir)/upgrade_010_to_01
 upgrade_011_to_012.sh: $(top_builddir)/config.status $(srcdir)/upgrade_011_to_012.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 upgrade_012_to_013.sh: $(top_builddir)/config.status $(srcdir)/upgrade_012_to_013.sh.in
+	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
+upgrade_013_to_014.sh: $(top_builddir)/config.status $(srcdir)/upgrade_013_to_014.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@
 wipe_data.sh: $(top_builddir)/config.status $(srcdir)/wipe_data.sh.in
 	cd $(top_builddir) && $(SHELL) ./config.status $(subdir)/$@

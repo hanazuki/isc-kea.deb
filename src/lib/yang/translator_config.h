@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -124,6 +124,8 @@ namespace yang {
 /// +--rw ddns-update-on-renew?             boolean
 /// +--rw ddns-use-conflict-resolution?     boolean
 /// +--rw ip-reservations-unique?           boolean
+/// +--rw early-global-reservations-lookup? boolean
+/// +--rw reservations-lookup-first?        boolean
 /// +--rw multi-threading
 /// +--rw parked-packet-limit?              uint32
 /// +--rw reservations-global?              boolean
@@ -289,6 +291,8 @@ namespace yang {
 /// +--rw ddns-update-on-renew?             boolean
 /// +--rw ddns-use-conflict-resolution?     boolean
 /// +--rw ip-reservations-unique?           boolean
+/// +--rw early-global-reservations-lookup? boolean
+/// +--rw reservations-lookup-first?        boolean
 /// +--rw multi-threading
 /// +--rw parked-packet-limit?              uint32
 /// +--rw reservations-global?              boolean
@@ -538,7 +542,7 @@ protected:
     void setServerKeaDhcp6(isc::data::ConstElementPtr elem);
 };
 
-}; // end of namespace isc::yang
-}; // end of namespace isc
+}  // end of namespace isc::yang
+}  // end of namespace isc
 
 #endif // ISC_TRANSLATOR_CONFIG_H

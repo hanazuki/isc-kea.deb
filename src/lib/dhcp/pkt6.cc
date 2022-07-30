@@ -33,8 +33,8 @@ namespace isc {
 namespace dhcp {
 
 Pkt6::RelayInfo::RelayInfo()
-    :msg_type_(0), hop_count_(0), linkaddr_(DEFAULT_ADDRESS6),
-    peeraddr_(DEFAULT_ADDRESS6), relay_msg_len_(0) {
+    : msg_type_(0), hop_count_(0), linkaddr_(DEFAULT_ADDRESS6),
+      peeraddr_(DEFAULT_ADDRESS6), relay_msg_len_(0) {
 }
 
 std::string Pkt6::RelayInfo::toText() const {
@@ -44,20 +44,20 @@ std::string Pkt6::RelayInfo::toText() const {
         << "link-address=" << linkaddr_.toText()
         << ", peer-address=" << peeraddr_.toText() << ", "
         << options_.size() << " option(s)" << endl;
-    for (auto option = options_.cbegin(); option != options_.cend(); ++option) {
-        tmp << option->second->toText() << endl;
+    for (const auto& option : options_) {
+        tmp << option.second->toText() << endl;
     }
     return (tmp.str());
 }
 
 Pkt6::Pkt6(const uint8_t* buf, uint32_t buf_len, DHCPv6Proto proto /* = UDP */)
-   :Pkt(buf, buf_len, DEFAULT_ADDRESS6, DEFAULT_ADDRESS6, 0, 0),
-    proto_(proto), msg_type_(0) {
+    : Pkt(buf, buf_len, DEFAULT_ADDRESS6, DEFAULT_ADDRESS6, 0, 0), proto_(proto),
+      msg_type_(0) {
 }
 
 Pkt6::Pkt6(uint8_t msg_type, uint32_t transid, DHCPv6Proto proto /*= UDP*/)
-:Pkt(transid, DEFAULT_ADDRESS6, DEFAULT_ADDRESS6, 0, 0), proto_(proto),
-    msg_type_(msg_type) {
+    : Pkt(transid, DEFAULT_ADDRESS6, DEFAULT_ADDRESS6, 0, 0), proto_(proto),
+      msg_type_(msg_type) {
 }
 
 size_t Pkt6::len() {
@@ -231,9 +231,8 @@ uint16_t Pkt6::getRelayOverhead(const RelayInfo& relay) const {
     uint16_t len = DHCPV6_RELAY_HDR_LEN // fixed header
         + Option::OPTION6_HDR_LEN; // header of the relay-msg option
 
-    for (OptionCollection::const_iterator opt = relay.options_.begin();
-         opt != relay.options_.end(); ++opt) {
-        len += (opt->second)->len();
+    for (const auto& opt : relay.options_) {
+        len += (opt.second)->len();
     }
 
     return (len);
@@ -254,10 +253,8 @@ uint16_t Pkt6::calculateRelaySizes() {
 uint16_t Pkt6::directLen() const {
     uint16_t length = DHCPV6_PKT_HDR_LEN; // DHCPv6 header
 
-    for (OptionCollection::const_iterator it = options_.begin();
-         it != options_.end();
-         ++it) {
-        length += (*it).second->len();
+    for (const auto& it : options_) {
+        length += it.second->len();
     }
 
     return (length);
@@ -311,10 +308,8 @@ Pkt6::packUDP() {
                 // present here as well (vendor-opts for Cable modems,
                 // subscriber-id, remote-id, options echoed back from Echo
                 // Request Option, etc.)
-                for (OptionCollection::const_iterator opt =
-                         relay->options_.begin();
-                     opt != relay->options_.end(); ++opt) {
-                    (opt->second)->pack(buffer_out_);
+                for (const auto& opt : relay->options_) {
+                    (opt.second)->pack(buffer_out_);
                 }
 
                 // and include header relay-msg option. Its payload will be
@@ -632,18 +627,16 @@ Pkt6::toText() const {
         hex << transid_ << dec << endl;
 
     // Then print the options
-    for (isc::dhcp::OptionCollection::const_iterator opt=options_.begin();
-         opt != options_.end();
-         ++opt) {
-        tmp << opt->second->toText() << std::endl;
+    for (const auto& opt : options_) {
+        tmp << opt.second->toText() << std::endl;
     }
 
     // Finally, print the relay information (if present)
     if (!relay_info_.empty()) {
         tmp << relay_info_.size() << " relay(s):" << endl;
         int cnt = 0;
-        for (auto relay = relay_info_.cbegin(); relay != relay_info_.cend(); ++relay) {
-            tmp << "relay[" << cnt++ << "]: " << relay->toText();
+        for (const auto& relay : relay_info_) {
+            tmp << "relay[" << cnt++ << "]: " << relay.toText();
         }
     } else {
         tmp << "No relays traversed." << endl;
@@ -939,5 +932,5 @@ Pkt6::getMACFromRemoteIdRelayOption() {
     return (mac);
 }
 
-} // end of isc::dhcp namespace
-} // end of isc namespace
+} // end of namespace isc::dhcp
+} // end of namespace isc

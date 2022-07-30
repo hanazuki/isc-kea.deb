@@ -358,6 +358,36 @@ PgSqlTaggedStatement tagged_statements[] = {
       "  FROM lease6_stat "
       "  WHERE subnet_id >= $1 and subnet_id <= $2 "
       "  ORDER BY subnet_id, lease_type, state" },
+
+    // CHECK_LEASE4_LIMITS
+    { 1, { OID_TEXT },
+      "check_lease4_limits",
+      "SELECT checkLease4Limits($1)" },
+
+    // CHECK_LEASE6_LIMITS
+    { 1, { OID_TEXT },
+      "check_lease6_limits",
+      "SELECT checkLease6Limits($1)" },
+
+    // IS_JSON_SUPPORTED
+    { 0, { OID_NONE },
+      "is_json_supported",
+      "SELECT isJsonSupported()" },
+
+    // GET_LEASE4_COUNT_BY_CLASS
+    { 1, { OID_VARCHAR },
+      "get_lease4_count_by_class",
+      "SELECT leases "
+          "FROM lease4_stat_by_client_class "
+          "WHERE client_class = $1"},
+
+    // GET_LEASE6_COUNT_BY_CLASS
+    { 2, { OID_VARCHAR, OID_INT2 },
+      "get_lease6_count_by_class",
+      "SELECT leases "
+          "FROM lease6_stat_by_client_class "
+          "WHERE client_class = $1 AND lease_type = $2"},
+
     // End of list sentinel
     { 0,  { 0 }, NULL, NULL}
 };
@@ -2273,6 +2303,114 @@ PgSqlLeaseMgr::deleteExpiredReclaimedLeasesCommon(const uint32_t secs,
 
     // Delete leases.
     return (deleteLeaseCommon(statement_index, bind_array));
+}
+
+string
+PgSqlLeaseMgr::checkLimits(ConstElementPtr const& user_context, StatementIndex const stindex) const {
+    // No user context means no limits means allocation allowed means empty string.
+    if (!user_context) {
+        return string();
+    }
+
+    // Get a context.
+    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseContextPtr ctx(get_context.ctx_);
+
+    // Create bindings.
+    PsqlBindArray bind_array;
+    std::string const user_context_str(user_context->str());
+    bind_array.add(user_context_str);
+
+    // Execute the select.
+    PgSqlResult r(PQexecPrepared(ctx->conn_,
+                                 tagged_statements[stindex].name,
+                                 tagged_statements[stindex].nbparams,
+                                 &bind_array.values_[0],
+                                 &bind_array.lengths_[0],
+                                 &bind_array.formats_[0], 0));
+    ctx->conn_.checkStatementError(r, tagged_statements[stindex]);
+
+    std::string limits;
+    PgSqlExchange::getColumnValue(r, 0, 0, limits);
+    return limits;
+}
+
+string
+PgSqlLeaseMgr::checkLimits4(ConstElementPtr const& user_context) const {
+    return checkLimits(user_context, CHECK_LEASE4_LIMITS);
+}
+
+string
+PgSqlLeaseMgr::checkLimits6(ConstElementPtr const& user_context) const {
+    return checkLimits(user_context, CHECK_LEASE6_LIMITS);
+}
+
+bool
+PgSqlLeaseMgr::isJsonSupported() const {
+    // Get a context.
+    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseContextPtr ctx(get_context.ctx_);
+
+    // Execute the select.
+    StatementIndex const stindex(IS_JSON_SUPPORTED);
+    PgSqlResult r(PQexecPrepared(ctx->conn_, tagged_statements[stindex].name,
+                                 0, 0, 0, 0, 0));
+    ctx->conn_.checkStatementError(r, tagged_statements[stindex]);
+
+    bool json_supported;
+    PgSqlExchange::getColumnValue(r, 0, 0, json_supported);
+    return json_supported;
+}
+
+size_t
+PgSqlLeaseMgr::getClassLeaseCount(const ClientClass& client_class,
+                                  const Lease::Type& ltype /* = Lease::TYPE_V4*/) const {
+    // Get a context.
+    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseContextPtr ctx(get_context.ctx_);
+
+    // Create bindings.
+    PsqlBindArray bind_array;
+    bind_array.add(client_class);
+    if (ltype != Lease::TYPE_V4) {
+        bind_array.add(ltype);
+    }
+
+    // Execute the select.
+    StatementIndex const stindex(ltype == Lease::TYPE_V4 ? GET_LEASE4_COUNT_BY_CLASS :
+                                                           GET_LEASE6_COUNT_BY_CLASS);
+    PgSqlResult r(PQexecPrepared(ctx->conn_,
+                                 tagged_statements[stindex].name,
+                                 tagged_statements[stindex].nbparams,
+                                 &bind_array.values_[0],
+                                 &bind_array.lengths_[0],
+                                 &bind_array.formats_[0], 0));
+    ctx->conn_.checkStatementError(r, tagged_statements[stindex]);
+
+    int rows = PQntuples(r);
+    if (rows == 0) {
+        // No entries means 0 leases.
+        return 0;
+    }
+
+    size_t count;
+    PgSqlExchange::getColumnValue(r, 0, 0, count);
+    return count;
+}
+
+void
+PgSqlLeaseMgr::recountClassLeases4() {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::recountClassLeases4() not implemented");
+}
+
+void
+PgSqlLeaseMgr::recountClassLeases6() {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::recountClassLeases6() not implemented");
+}
+
+void
+PgSqlLeaseMgr::clearClassLeaseCounts() {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::clearClassLeaseCounts() not implemented");
 }
 
 LeaseStatsQueryPtr

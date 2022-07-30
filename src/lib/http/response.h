@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -181,6 +181,12 @@ public:
     /// @return true if the status code indicates server error.
     static bool isServerError(const HttpStatusCode& status_code);
 
+    /// @brief Convenience method converting status code to numeric value.
+    ///
+    /// @param status_code Status code represented as enum.
+    /// @return Numeric representation of the status code.
+    static uint16_t statusCodeToNumber(const HttpStatusCode& status_code);
+
     /// @brief Converts status code to string.
     ///
     /// @param status_code HTTP status code.
@@ -196,8 +202,6 @@ public:
     /// sure to call @c finalize prior to calling this method.
     virtual std::string toString() const;
 
-protected:
-
     /// @brief Returns current time formatted as required by RFC 1123.
     ///
     /// This method is virtual so as it can be overridden in unit tests
@@ -205,12 +209,6 @@ protected:
     ///
     /// @return Current time formatted as required by RFC 1123.
     virtual std::string getDateHeaderValue() const;
-
-    /// @brief Convenience method converting status code to numeric value.
-    ///
-    /// @param status_code Status code represented as enum.
-    /// @return Numeric representation of the status code.
-    static uint16_t statusCodeToNumber(const HttpStatusCode& status_code);
 
 private:
 

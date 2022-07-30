@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -95,9 +95,9 @@ typedef boost::multi_index_container<
         // Specification of the third index starts here.
         boost::multi_index::ordered_non_unique<
             boost::multi_index::tag<ExpirationIndexTag>,
-            // This is a composite index that will be used to search for
+            // This is a composite index that is used to search for
             // the expired leases. Depending on the value of the first component
-            // of the search key, the reclaimed or not reclaimed leases will can
+            // of the search key, the reclaimed or not reclaimed leases can
             // be searched.
             boost::multi_index::composite_key<
                 Lease6,

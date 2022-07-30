@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -93,7 +93,7 @@ bool LibDHCP::initialized_ = LibDHCP::initOptionDefs();
 
 const OptionDefContainerPtr
 LibDHCP::getOptionDefs(const std::string& space) {
-    OptionDefContainers::const_iterator container = option_defs_.find(space);
+    auto const& container = option_defs_.find(space);
     if (container != option_defs_.end()) {
         return (container->second);
     }
@@ -214,12 +214,10 @@ void
 LibDHCP::setRuntimeOptionDefs(const OptionDefSpaceContainer& defs) {
     OptionDefSpaceContainer defs_copy;
     std::list<std::string> option_space_names = defs.getOptionSpaceNames();
-    for (std::list<std::string>::const_iterator name = option_space_names.begin();
-         name != option_space_names.end(); ++name) {
-        OptionDefContainerPtr container = defs.getItems(*name);
-        for (OptionDefContainer::const_iterator def = container->begin();
-             def != container->end(); ++def) {
-            OptionDefinitionPtr def_copy(new OptionDefinition(**def));
+    for (auto const& name : option_space_names) {
+        OptionDefContainerPtr container = defs.getItems(name);
+        for (auto const& def : *container) {
+            OptionDefinitionPtr def_copy(new OptionDefinition(*def));
             defs_copy.addItem(def_copy);
         }
     }
@@ -460,7 +458,7 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
                         const std::string& option_space,
                         isc::dhcp::OptionCollection& options,
                         std::list<uint16_t>& deferred,
-                        bool flexible_pad_end) {
+                        bool check) {
     size_t offset = 0;
     size_t last_offset = 0;
 
@@ -479,8 +477,8 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
     const OptionDefContainerTypeIndex& runtime_idx = runtime_option_defs->get<1>();
 
     // Flexible PAD and END parsing.
-    bool flex_pad = (flexible_pad_end && (runtime_idx.count(DHO_PAD) == 0));
-    bool flex_end = (flexible_pad_end && (runtime_idx.count(DHO_END) == 0));
+    bool flex_pad = (check && (runtime_idx.count(DHO_PAD) == 0));
+    bool flex_end = (check && (runtime_idx.count(DHO_END) == 0));
 
     // The buffer being read comprises a set of options, each starting with
     // a one-byte type code and a one-byte length field.
@@ -492,7 +490,7 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
         uint8_t opt_type = buf[offset++];
 
         // DHO_END is a special, one octet long option
-        // Valid in dhcp4 space or when flexible_pad_end is true and
+        // Valid in dhcp4 space or when check is true and
         // there is a sub-option configured for this code.
         if ((opt_type == DHO_END) && (space_is_dhcp4 || flex_end)) {
             // just return. Don't need to add DHO_END option
@@ -503,7 +501,7 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
 
         // DHO_PAD is just a padding after DHO_END. Let's continue parsing
         // in case we receive a message without DHO_END.
-        // Valid in dhcp4 space or when flexible_pad_end is true and
+        // Valid in dhcp4 space or when check is true and
         // there is a sub-option configured for this code.
         if ((opt_type == DHO_PAD) && (space_is_dhcp4 || flex_pad)) {
             continue;
@@ -564,7 +562,17 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
         // Check if option unpacking must be deferred
         if (shouldDeferOptionUnpack(option_space, opt_type)) {
             num_defs = 0;
-            deferred.push_back(opt_type);
+            // Store deferred option only once.
+            bool found = false;
+            for (auto const& existing : deferred) {
+                if (existing == opt_type) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                deferred.push_back(opt_type);
+            }
         }
 
         OptionPtr opt;
@@ -605,6 +613,72 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
     }
     last_offset = offset;
     return (last_offset);
+}
+
+bool
+LibDHCP::fuseOptions4(OptionCollection& options) {
+    bool result = false;
+    // We need to loop until all options have been fused.
+    for (;;) {
+        uint32_t found = 0;
+        bool found_suboptions = false;
+        // Iterate over all options in the container.
+        for (auto const& option : options) {
+            OptionPtr candidate = option.second;
+            OptionCollection& sub_options = candidate->getMutableOptions();
+            // Fuse suboptions recursively, if any.
+            if (sub_options.size()) {
+                // Fusing suboptions might result in new options with multiple
+                // options having the same code, so we need to iterate again
+                // until no option needs fusing.
+                found_suboptions = LibDHCP::fuseOptions4(sub_options);
+                if (found_suboptions) {
+                    result = true;
+                }
+            }
+            OptionBuffer data;
+            OptionCollection suboptions;
+            // Make a copy of the options so we can safely iterate over the
+            // old container.
+            OptionCollection copy = options;
+            for (auto const& old_option : copy) {
+                if (old_option.first == option.first) {
+                    // Copy the option data to the buffer.
+                    data.insert(data.end(), old_option.second->getData().begin(),
+                                old_option.second->getData().end());
+                    suboptions.insert(old_option.second->getOptions().begin(),
+                                      old_option.second->getOptions().end());
+                    // Other options might need fusing, so we need to iterate
+                    // again until no options needs fusing.
+                    found++;
+                }
+            }
+            if (found > 1) {
+                result = true;
+                // Erase the old options from the new container so that only the
+                // new option is present.
+                copy.erase(option.first);
+                // Create new option with entire data.
+                OptionPtr new_option(new Option(candidate->getUniverse(),
+                                                candidate->getType(), data));
+                // Recreate suboptions container.
+                new_option->getMutableOptions() = suboptions;
+                // Add the new option to the new container.
+                copy.insert(make_pair(candidate->getType(), new_option));
+                // After all options have been fused and new option added,
+                // update the option container with the new container.
+                options = copy;
+                break;
+            } else {
+                found = 0;
+            }
+        }
+        // No option needs fusing, so we can exit the loop.
+        if ((found <= 1) && !found_suboptions) {
+            break;
+        }
+    }
+    return (result);
 }
 
 size_t
@@ -812,9 +886,9 @@ LibDHCP::unpackVendorOptions4(const uint32_t vendor_id, const OptionBuffer& buf,
 
 void
 LibDHCP::packOptions4(isc::util::OutputBuffer& buf,
-                     const OptionCollection& options,
-                     bool top /* = false */) {
-    OptionPtr agent;
+                      const OptionCollection& options,
+                      bool top, bool check) {
+    OptionCollection agent;
     OptionPtr end;
 
     // We only look for type when we're the top level
@@ -824,46 +898,178 @@ LibDHCP::packOptions4(isc::util::OutputBuffer& buf,
     if (top) {
         auto x = options.find(DHO_DHCP_MESSAGE_TYPE);
         if (x != options.end()) {
-            x->second->pack(buf);
+            x->second->pack(buf, check);
         }
     }
 
-    for (OptionCollection::const_iterator it = options.begin();
-         it != options.end(); ++it) {
-
+    for (auto const& option : options) {
         // TYPE is already done, RAI and END options must be last.
-        switch (it->first) {
+        switch (option.first) {
             case DHO_DHCP_MESSAGE_TYPE:
                 break;
             case DHO_DHCP_AGENT_OPTIONS:
-                agent = it->second;
+                agent.insert(make_pair(DHO_DHCP_AGENT_OPTIONS, option.second));
                 break;
             case DHO_END:
-                end = it->second;
+                end = option.second;
                 break;
             default:
-                it->second->pack(buf);
+                option.second->pack(buf, check);
                 break;
         }
     }
 
     // Add the RAI option if it exists.
-    if (agent) {
-       agent->pack(buf);
+    for (auto const& option : agent) {
+        option.second->pack(buf, check);
     }
 
     // And at the end the END option.
-    if (end)  {
-       end->pack(buf);
+    if (end) {
+        end->pack(buf, check);
     }
+}
+
+bool
+LibDHCP::splitOptions4(OptionCollection& options,
+                       ScopedOptionsCopyContainer& scoped_options,
+                       uint32_t used) {
+    bool result = false;
+    // We need to loop until all options have been split.
+    for (;;) {
+        bool found = false;
+        // Make a copy of the options so we can safely iterate over the
+        // old container.
+        OptionCollection copy = options;
+        // Iterate over all options in the container.
+        for (auto const& option : options) {
+            OptionPtr candidate = option.second;
+            OptionCollection& sub_options = candidate->getMutableOptions();
+            // Split suboptions recursively, if any.
+            OptionCollection distinct_options;
+            bool updated = false;
+            bool found_suboptions = false;
+            if (sub_options.size()) {
+                ScopedOptionsCopyPtr candidate_scoped_options(new ScopedSubOptionsCopy(candidate));
+                found_suboptions = LibDHCP::splitOptions4(sub_options, scoped_options,
+                                                          used + candidate->getHeaderLen());
+                // Also split if the overflow is caused by adding the suboptions
+                // to the option data.
+                if (found_suboptions || candidate->len() > 255) {
+                    updated = true;
+                    scoped_options.push_back(candidate_scoped_options);
+                    // Erase the old options from the new container so that only
+                    // the new options are present.
+                    copy.erase(option.first);
+                    result = true;
+                    // If there are suboptions which have been split, one parent
+                    // option will be created for each of the chunk of the
+                    // suboptions. If the suboptions have not been split,
+                    // but they cause overflow when added to the option data,
+                    // one parent option will contain the option data and one
+                    // parent option will be created for each suboption.
+                    // This will guarantee that none of the options plus
+                    // suboptions will have more than 255 bytes.
+                    for (auto sub_option : candidate->getMutableOptions()) {
+                        OptionPtr data_sub_option(new Option(candidate->getUniverse(),
+                                                             candidate->getType(),
+                                                             OptionBuffer(0)));
+                        data_sub_option->addOption(sub_option.second);
+                        distinct_options.insert(make_pair(candidate->getType(), data_sub_option));
+                    }
+                }
+            }
+            // Create a new option containing only data that needs to be split
+            // and no suboptions (which are inserted in completely separate
+            // options which are added at the end).
+            OptionPtr data_option(new Option(candidate->getUniverse(),
+                                             candidate->getType(),
+                                             OptionBuffer(candidate->getData().begin(),
+                                                          candidate->getData().end())));
+            OutputBuffer buf(0);
+            data_option->pack(buf, false);
+            uint32_t header_len = candidate->getHeaderLen();
+            // At least 1 + header length bytes must be available.
+            if (used >= 255 - header_len) {
+                isc_throw(BadValue, "there is no space left to split option "
+                         << candidate->getType() << " after parent already used "
+                         << used);
+            }
+            // Maximum option buffer size is 255 - header size - buffer size
+            // already used by parent options.
+            uint8_t len = 255 - header_len - used;
+            // Current option size after split is the sum of the data and the
+            // header size. The suboptions are serialized in separate options.
+            // The header is duplicated in all new options, but the rest of the
+            // data must be split and serialized.
+            uint32_t size = buf.getLength() - header_len;
+            // Only split if data does not fit in the current option.
+            if (size > len) {
+                // Erase the old option from the new container so that only new
+                // options are present.
+                if (!updated) {
+                    updated = true;
+                    // Erase the old options from the new container so that only
+                    // the new options are present.
+                    copy.erase(option.first);
+                    result = true;
+                }
+                uint32_t offset = 0;
+                // Drain the option buffer in multiple new options until all
+                // data is serialized.
+                for (; offset != size;) {
+                    // Adjust the data length of the new option if remaining
+                    // data is less than the 255 - header size (for the last
+                    // option).
+                    if (size - offset < len) {
+                        len = size - offset;
+                    }
+                    // Create new option with data starting from offset and
+                    // containing truncated length.
+                    const uint8_t* data = static_cast<const uint8_t*>(buf.getData());
+                    data += header_len;
+                    OptionPtr new_option(new Option(candidate->getUniverse(),
+                                                    candidate->getType(),
+                                                    OptionBuffer(data + offset,
+                                                                 data + offset + len)));
+                    // Adjust the offset for remaining data to be written to the
+                    // next new option.
+                    offset += len;
+                    // Add the new option to the new container.
+                    copy.insert(make_pair(candidate->getType(), new_option));
+                }
+            } else if (candidate->len() > 255 && size) {
+                // Also split if the overflow is caused by adding the suboptions
+                // to the option data (which should be of non zero size).
+                // Add the new option to the new container.
+                copy.insert(make_pair(candidate->getType(), data_option));
+            }
+            if (updated) {
+                // Add the new options containing the split suboptions, if any,
+                // to the new container.
+                copy.insert(distinct_options.begin(), distinct_options.end());
+                // After all new options have been split and added, update the
+                // option container with the new container.
+                options = copy;
+                // Other options might need splitting, so we need to iterate
+                // again until no option needs splitting.
+                found = true;
+                break;
+            }
+        }
+        // No option needs splitting, so we can exit the loop.
+        if (!found) {
+            break;
+        }
+    }
+    return (result);
 }
 
 void
 LibDHCP::packOptions6(isc::util::OutputBuffer& buf,
                       const OptionCollection& options) {
-    for (OptionCollection::const_iterator it = options.begin();
-         it != options.end(); ++it) {
-        it->second->pack(buf);
+    for (auto const& option : options) {
+        option.second->pack(buf);
     }
 }
 

@@ -1,6 +1,6 @@
 AUTOMAKE_OPTIONS = subdir-objects
 
-SUBDIRS = . testutils tests benchmarks
+SUBDIRS = . testutils tests
 
 # DATA_DIR is the directory where to put default CSV files and the DHCPv6
 # server ID file (i.e. the file where the server finds its DUID at startup).
@@ -18,9 +18,6 @@ AM_CPPFLAGS += $(MYSQL_CPPFLAGS)
 endif
 if HAVE_PGSQL
 AM_CPPFLAGS += $(PGSQL_CPPFLAGS)
-endif
-if HAVE_CQL
-AM_CPPFLAGS += $(CQL_CPPFLAGS)
 endif
 
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
@@ -123,6 +120,7 @@ libkea_dhcpsrv_la_SOURCES += lease_file_loader.h
 libkea_dhcpsrv_la_SOURCES += lease_file_stats.h
 libkea_dhcpsrv_la_SOURCES += lease_mgr.cc lease_mgr.h
 libkea_dhcpsrv_la_SOURCES += lease_mgr_factory.cc lease_mgr_factory.h
+libkea_dhcpsrv_la_SOURCES += memfile_lease_limits.cc memfile_lease_limits.h
 libkea_dhcpsrv_la_SOURCES += memfile_lease_mgr.cc memfile_lease_mgr.h
 libkea_dhcpsrv_la_SOURCES += memfile_lease_storage.h
 
@@ -138,11 +136,6 @@ libkea_dhcpsrv_la_SOURCES += network_state.cc network_state.h
 if HAVE_PGSQL
 libkea_dhcpsrv_la_SOURCES += pgsql_host_data_source.cc pgsql_host_data_source.h
 libkea_dhcpsrv_la_SOURCES += pgsql_lease_mgr.cc pgsql_lease_mgr.h
-endif
-
-if HAVE_CQL
-libkea_dhcpsrv_la_SOURCES += cql_host_data_source.cc cql_host_data_source.h
-libkea_dhcpsrv_la_SOURCES += cql_lease_mgr.cc cql_lease_mgr.h
 endif
 
 libkea_dhcpsrv_la_SOURCES += pool.cc pool.h
@@ -211,9 +204,6 @@ endif
 if HAVE_PGSQL
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
 endif
-if HAVE_CQL
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/cql/libkea-cql.la
-endif
 
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/database/libkea-database.la
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
@@ -226,16 +216,13 @@ libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_dhcpsrv_la_LIBADD  += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 
-libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 64:0:0
+libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 69:0:0
 libkea_dhcpsrv_la_LDFLAGS += $(CRYPTO_LDFLAGS)
 if HAVE_MYSQL
 libkea_dhcpsrv_la_LDFLAGS += $(MYSQL_LIBS)
 endif
 if HAVE_PGSQL
 libkea_dhcpsrv_la_LDFLAGS += $(PGSQL_LIBS)
-endif
-if HAVE_CQL
-libkea_dhcpsrv_la_LDFLAGS += $(CQL_LIBS)
 endif
 
 # The message file should be in the distribution
@@ -360,6 +347,7 @@ libkea_dhcpsrv_include_HEADERS = \
 	lease_file_stats.h \
 	lease_mgr.h \
 	lease_mgr_factory.h \
+	memfile_lease_limits.h \
 	memfile_lease_mgr.h \
 	memfile_lease_storage.h \
 	ncr_generator.h \
@@ -376,12 +364,6 @@ libkea_dhcpsrv_include_HEADERS = \
 	timer_mgr.h \
 	utils.h \
 	writable_host_data_source.h
-
-if HAVE_CQL
-libkea_dhcpsrv_include_HEADERS += \
-	cql_host_data_source.h \
-	cql_lease_mgr.h
-endif
 
 if HAVE_MYSQL
 libkea_dhcpsrv_include_HEADERS += \

@@ -73,14 +73,29 @@
 /* Define to 1 if getsockopt(IPV6_USE_MIN_MTU) does not work */
 /* #undef HAVE_BROKEN_GET_IPV6_USE_MIN_MTU */
 
-/* CQL is present */
-/* #undef HAVE_CQL */
-
 /* Define to 1 if gtest defines edit_distance::CreateUnifiedDiff */
 /* #undef HAVE_CREATE_UNIFIED_DIFF */
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #define HAVE_DLFCN_H 1
+
+/* Define to 1 if you have the `EVP_MD_CTX_create' function. */
+/* #undef HAVE_EVP_MD_CTX_CREATE */
+
+/* Define to 1 if you have the `EVP_MD_CTX_destroy' function. */
+/* #undef HAVE_EVP_MD_CTX_DESTROY */
+
+/* Define to 1 if you have the `EVP_MD_CTX_free' function. */
+#define HAVE_EVP_MD_CTX_FREE 1
+
+/* Define to 1 if you have the `EVP_MD_CTX_new' function. */
+#define HAVE_EVP_MD_CTX_NEW 1
+
+/* Define to 1 if you have the `EVP_PKEY_new_mac_key' function. */
+/* #undef HAVE_EVP_PKEY_NEW_MAC_KEY */
+
+/* Define to 1 if you have the `EVP_PKEY_new_raw_private_key' function. */
+#define HAVE_EVP_PKEY_NEW_RAW_PRIVATE_KEY 1
 
 /* Define to 1 if boost::asio::ssl::context::tls is available */
 #define HAVE_GENERIC_TLS_METHOD 1
@@ -225,7 +240,7 @@
 #define PACKAGE_NAME "kea"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kea 2.1.3"
+#define PACKAGE_STRING "kea 2.2.0"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kea"
@@ -234,7 +249,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.1.3"
+#define PACKAGE_VERSION "2.2.0"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
@@ -246,7 +261,7 @@
 /* #undef USE_STATIC_LINK */
 
 /* Version number of package */
-#define VERSION "2.1.3"
+#define VERSION "2.2.0"
 
 /* Compile with Botan crypto */
 /* #undef WITH_BOTAN */

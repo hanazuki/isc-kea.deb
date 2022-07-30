@@ -13,6 +13,7 @@
 #include <dhcp/hwaddr.h>
 #include <dhcpsrv/csv_lease_file4.h>
 #include <dhcpsrv/csv_lease_file6.h>
+#include <dhcpsrv/memfile_lease_limits.h>
 #include <dhcpsrv/memfile_lease_storage.h>
 #include <dhcpsrv/lease_mgr.h>
 
@@ -161,14 +162,14 @@ public:
     /// @param lease lease to be added
     ///
     /// @result true if the lease was added, false if not
-    virtual bool addLease(const Lease4Ptr& lease);
+    virtual bool addLease(const Lease4Ptr& lease) override;
 
     /// @brief Adds an IPv6 lease.
     ///
     /// @param lease lease to be added
     ///
     /// @result true if the lease was added, false if not
-    virtual bool addLease(const Lease6Ptr& lease);
+    virtual bool addLease(const Lease6Ptr& lease) override;
 
     /// @brief Returns existing IPv4 lease for specified IPv4 address.
     ///
@@ -178,7 +179,7 @@ public:
     /// @param addr An address of the searched lease.
     ///
     /// @return a pointer to the lease (or NULL if a lease is not found)
-    virtual Lease4Ptr getLease4(const isc::asiolink::IOAddress& addr) const;
+    virtual Lease4Ptr getLease4(const isc::asiolink::IOAddress& addr) const override;
 
     /// @brief Returns existing IPv4 leases for specified hardware address.
     ///
@@ -190,7 +191,7 @@ public:
     /// @param hwaddr hardware address of the client
     ///
     /// @return lease collection
-    virtual Lease4Collection getLease4(const isc::dhcp::HWAddr& hwaddr) const;
+    virtual Lease4Collection getLease4(const isc::dhcp::HWAddr& hwaddr) const override;
 
     /// @brief Returns existing IPv4 lease for specified hardware address
     ///        and a subnet
@@ -206,14 +207,14 @@ public:
     ///
     /// @return a pointer to the lease (or NULL if a lease is not found)
     virtual Lease4Ptr getLease4(const HWAddr& hwaddr,
-                                SubnetID subnet_id) const;
+                                SubnetID subnet_id) const override;
 
     /// @brief Returns existing IPv4 lease for specified client-id
     ///
     /// @param client_id client identifier
     ///
     /// @return lease collection
-    virtual Lease4Collection getLease4(const ClientId& client_id) const;
+    virtual Lease4Collection getLease4(const ClientId& client_id) const override;
 
     /// @brief Returns existing IPv4 lease for specified client-id
     ///
@@ -228,26 +229,26 @@ public:
     ///
     /// @return a pointer to the lease (or NULL if a lease is not found)
     virtual Lease4Ptr getLease4(const ClientId& clientid,
-                                SubnetID subnet_id) const;
+                                SubnetID subnet_id) const override;
 
     /// @brief Returns all IPv4 leases for the particular subnet identifier.
     ///
     /// @param subnet_id subnet identifier.
     ///
     /// @return Lease collection (may be empty if no IPv4 lease found).
-    virtual Lease4Collection getLeases4(SubnetID subnet_id) const;
+    virtual Lease4Collection getLeases4(SubnetID subnet_id) const override;
 
     /// @brief Returns all IPv4 leases for the particular hostname.
     ///
     /// @param hostname hostname in lower case.
     ///
     /// @return Lease collection (may be empty if no IPv4 lease found).
-    virtual Lease4Collection getLeases4(const std::string& hostname) const;
+    virtual Lease4Collection getLeases4(const std::string& hostname) const override;
 
     /// @brief Returns all IPv4 leases.
     ///
     /// @return Lease collection (may be empty if no IPv4 lease found).
-    virtual Lease4Collection getLeases4() const;
+    virtual Lease4Collection getLeases4() const override;
 
     /// @brief Returns range of IPv4 leases using paging.
     ///
@@ -275,7 +276,7 @@ public:
     /// @return Lease collection (may be empty if no IPv4 lease found).
     virtual Lease4Collection
     getLeases4(const asiolink::IOAddress& lower_bound_address,
-               const LeasePageSize& page_size) const;
+               const LeasePageSize& page_size) const override;
 
     /// @brief Returns existing IPv6 lease for a given IPv6 address.
     ///
@@ -287,7 +288,7 @@ public:
     ///
     /// @return a pointer to the lease (or NULL if a lease is not found)
     virtual Lease6Ptr getLease6(Lease::Type type,
-                                const isc::asiolink::IOAddress& addr) const;
+                                const isc::asiolink::IOAddress& addr) const override;
 
     /// @brief Returns existing IPv6 lease for a given DUID + IA + lease type
     /// combination
@@ -299,7 +300,7 @@ public:
     /// @return collection of IPv6 leases
     virtual Lease6Collection getLeases6(Lease::Type type,
                                         const DUID& duid,
-                                        uint32_t iaid) const;
+                                        uint32_t iaid) const override;
 
     /// @brief Returns existing IPv6 lease for a given DUID + IA + subnet-id +
     /// lease type combination.
@@ -316,31 +317,31 @@ public:
     virtual Lease6Collection getLeases6(Lease::Type type,
                                         const DUID& duid,
                                         uint32_t iaid,
-                                        SubnetID subnet_id) const;
+                                        SubnetID subnet_id) const override;
 
     /// @brief Returns all IPv6 leases for the particular subnet identifier.
     ///
     /// @param subnet_id subnet identifier.
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
-    virtual Lease6Collection getLeases6(SubnetID subnet_id) const;
+    virtual Lease6Collection getLeases6(SubnetID subnet_id) const override;
 
     /// @brief Returns all IPv6 leases for the particular hostname.
     ///
     /// @param hostname hostname in lower case.
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
-    virtual Lease6Collection getLeases6(const std::string& hostname) const;
+    virtual Lease6Collection getLeases6(const std::string& hostname) const override;
 
     /// @brief Returns all IPv6 leases.
     ///
     /// @return Lease collection (may be empty if no IPv6 lease found).
-    virtual Lease6Collection getLeases6() const;
+    virtual Lease6Collection getLeases6() const override;
 
     /// @brief Returns IPv6 leases for the DUID.
     ///
     /// @param duid client DUID
-    virtual Lease6Collection getLeases6(const DUID& duid) const;
+    virtual Lease6Collection getLeases6(const DUID& duid) const override;
 
     /// @brief Returns range of IPv6 leases using paging.
     ///
@@ -368,7 +369,7 @@ public:
     /// @return Lease collection (may be empty if no IPv6 lease found).
     virtual Lease6Collection
     getLeases6(const asiolink::IOAddress& lower_bound_address,
-               const LeasePageSize& page_size) const;
+               const LeasePageSize& page_size) const override;
 
     /// @brief Returns a collection of expired DHCPv4 leases.
     ///
@@ -381,7 +382,7 @@ public:
     /// @param max_leases A maximum number of leases to be returned. If this
     /// value is set to 0, all expired (but not reclaimed) leases are returned.
     virtual void getExpiredLeases4(Lease4Collection& expired_leases,
-                                   const size_t max_leases) const;
+                                   const size_t max_leases) const override;
 
     /// @brief Returns a collection of expired DHCPv6 leases.
     ///
@@ -394,7 +395,7 @@ public:
     /// @param max_leases A maximum number of leases to be returned. If this
     /// value is set to 0, all expired (but not reclaimed) leases are returned.
     virtual void getExpiredLeases6(Lease6Collection& expired_leases,
-                                   const size_t max_leases) const;
+                                   const size_t max_leases) const override;
 
     /// @brief Updates IPv4 lease.
     ///
@@ -413,7 +414,7 @@ public:
     /// of the lease is performed only if the value matches the one received on
     /// the SELECT query, effectively enforcing no update on the lease between
     /// SELECT and UPDATE with different expiration time.
-    virtual void updateLease4(const Lease4Ptr& lease4);
+    virtual void updateLease4(const Lease4Ptr& lease4) override;
 
     /// @brief Updates IPv6 lease.
     ///
@@ -432,7 +433,7 @@ public:
     /// of the lease is performed only if the value matches the one received on
     /// the SELECT query, effectively enforcing no update on the lease between
     /// SELECT and UPDATE with different expiration time.
-    virtual void updateLease6(const Lease6Ptr& lease6);
+    virtual void updateLease6(const Lease6Ptr& lease6) override;
 
     /// @brief Deletes an IPv4 lease.
     ///
@@ -448,7 +449,7 @@ public:
     /// of the lease is performed only if the value matches the one received on
     /// the SELECT query, effectively enforcing no update on the lease between
     /// SELECT and DELETE with different expiration time.
-    virtual bool deleteLease(const Lease4Ptr& lease);
+    virtual bool deleteLease(const Lease4Ptr& lease) override;
 
     /// @brief Deletes an IPv6 lease.
     ///
@@ -464,7 +465,7 @@ public:
     /// of the lease is performed only if the value matches the one received on
     /// the SELECT query, effectively enforcing no update on the lease between
     /// SELECT and DELETE with different expiration time.
-    virtual bool deleteLease(const Lease6Ptr& lease);
+    virtual bool deleteLease(const Lease6Ptr& lease) override;
 
     /// @brief Deletes all expired-reclaimed DHCPv4 leases.
     ///
@@ -473,7 +474,7 @@ public:
     /// time will not be deleted.
     ///
     /// @return Number of leases deleted.
-    virtual uint64_t deleteExpiredReclaimedLeases4(const uint32_t secs);
+    virtual uint64_t deleteExpiredReclaimedLeases4(const uint32_t secs) override;
 
     /// @brief Deletes all expired-reclaimed DHCPv6 leases.
     ///
@@ -482,7 +483,7 @@ public:
     /// time will not be deleted.
     ///
     /// @return Number of leases deleted.
-    virtual uint64_t deleteExpiredReclaimedLeases6(const uint32_t secs);
+    virtual uint64_t deleteExpiredReclaimedLeases6(const uint32_t secs) override;
 
     /// @brief Removes specified IPv4 leases.
     ///
@@ -492,7 +493,7 @@ public:
     /// @param subnet_id identifier of the subnet
     ///
     /// @return number of leases removed.
-    virtual size_t wipeLeases4(const SubnetID& subnet_id);
+    virtual size_t wipeLeases4(const SubnetID& subnet_id) override;
 
     /// @brief Removed specified IPv6 leases.
     ///
@@ -502,7 +503,41 @@ public:
     /// @param subnet_id identifier of the subnet
     ///
     /// @return number of leases removed.
-    virtual size_t wipeLeases6(const SubnetID& subnet_id);
+    virtual size_t wipeLeases6(const SubnetID& subnet_id) override;
+
+    /// @brief Checks if the IPv4 lease limits set in the given user context are exceeded.
+    /// Memfile implementation.
+    ///
+    /// @param user_context all or part of the lease's user context which, for the intents and
+    /// purposes of lease limiting should have the following format
+    /// (not all nodes are mandatory and values are given only as examples):
+    /// { "ISC": { "limits": { "client-classes": [ { "name": "foo", "address-limit": 2 } ],
+    ///                        "subnet": { "id": 1, "address-limit": 2 } } } }
+    ///
+    /// @return a string describing a limit that is being exceeded, or an empty
+    /// string if no limits are exceeded
+    virtual std::string
+    checkLimits4(isc::data::ConstElementPtr const& user_context) const override;
+
+    /// @brief Checks if the IPv6 lease limits set in the given user context are exceeded.
+    /// Memfile implementation.
+    ///
+    /// @param user_context all or part of the lease's user context which, for the intents and
+    /// purposes of lease limiting should have the following format
+    /// (not all nodes are mandatory and values are given only as examples):
+    /// { "ISC": { "limits": { "client-classes": [ { "name": "foo", "address-limit": 2, "prefix-limit": 1 } ],
+    ///                        "subnet": { "id": 1, "address-limit": 2, "prefix-limit": 1 } } } }
+    ///
+    /// @return a string describing a limit that is being exceeded, or an empty
+    /// string if no limits are exceeded
+    virtual std::string
+    checkLimits6(isc::data::ConstElementPtr const& user_context) const override;
+
+    /// @brief Checks if JSON support is enabled in the database.
+    /// Memfile implementation assumes JSON support is always enabled.
+    ///
+    /// @return true if there is JSON support, false otherwise
+    virtual bool isJsonSupported() const override;
 
 private:
 
@@ -805,6 +840,26 @@ private:
                                           StorageType& storage,
                                           LeaseFileType& lease_file) const;
 
+    /// @brief Fetches the most recent value for a subnet statistic
+    ///
+    /// @param subnet_id subnet id of the subnet for which the stat is desired
+    /// @param stat_label name of the statistic desired (e.g. "assigned-addresses")
+    ///
+    /// @return Value of the statistic or zero if there are no entries found.
+    int64_t getSubnetStat(const SubnetID& subnet_id, const std::string& stat_label) const;
+
+    /// @brief Fetches the integer value of lease limit element from a parent element based
+    /// on Lease::Type.
+    ///
+    /// @param parent parent element (e.g. "client-class" or "subnet") in which to look for
+    /// the limit
+    /// @param ltype Lease::Type of the limit for which to look (one of Lease::TYPE_V4,
+    /// Lease::TYPE_NA, or Lease::TYPE_PD)
+    /// @param[out] limit contains the value of the limit if found
+    ///
+    /// @return bool true if a limit for the lease type was found, false otherwise.
+    bool getLeaseLimit(data::ConstElementPtr parent, Lease::Type ltype, size_t& limit) const;
+
 public:
 
     /// @brief Return backend type
@@ -812,7 +867,7 @@ public:
     /// Returns the type of the backend.
     ///
     /// @return Type of the backend.
-    virtual std::string getType() const {
+    virtual std::string getType() const override {
         return (std::string("memfile"));
     }
 
@@ -821,7 +876,7 @@ public:
     /// For now, memfile can only store data in memory.
     ///
     /// @return Name of the backend.
-    virtual std::string getName() const {
+    virtual std::string getName() const override {
         return ("memory");
     }
 
@@ -830,25 +885,25 @@ public:
     /// This description may be multiline text that describes the backend.
     ///
     /// @return Description of the backend.
-    virtual std::string getDescription() const;
+    virtual std::string getDescription() const override;
 
     /// @brief Returns backend version.
     ///
     /// @return Version number as a pair of unsigned integers.  "first" is the
     ///         major version number, "second" the minor number.
-    virtual std::pair<uint32_t, uint32_t> getVersion() const;
+    virtual std::pair<uint32_t, uint32_t> getVersion() const override;
 
     /// @brief Commit Transactions
     ///
     /// Commits all pending database operations.  On databases that don't
     /// support transactions, this is a no-op.
-    virtual void commit();
+    virtual void commit() override;
 
     /// @brief Rollback Transactions
     ///
     /// Rolls back all pending database operations.  On databases that don't
     /// support transactions, this is a no-op.
-    virtual void rollback();
+    virtual void rollback() override;
 
     //@}
 
@@ -1042,7 +1097,7 @@ public:
     /// statistical data result set.  The query object is then returned.
     ///
     /// @return The populated query as a pointer to an LeaseStatsQuery
-    virtual LeaseStatsQueryPtr startLeaseStatsQuery4();
+    virtual LeaseStatsQueryPtr startLeaseStatsQuery4() override;
 
     /// @brief Creates and runs the IPv4 lease stats query for a single subnet
     ///
@@ -1052,7 +1107,7 @@ public:
     ///
     /// @param subnet_id id of the subnet for which stats are desired
     /// @return A populated LeaseStatsQuery
-    virtual LeaseStatsQueryPtr startSubnetLeaseStatsQuery4(const SubnetID& subnet_id);
+    virtual LeaseStatsQueryPtr startSubnetLeaseStatsQuery4(const SubnetID& subnet_id) override;
 
     /// @brief Creates and runs the IPv4 lease stats query for a single subnet
     ///
@@ -1064,7 +1119,7 @@ public:
     /// @param last_subnet_id last subnet in the range of subnets
     /// @return A populated LeaseStatsQuery
     virtual LeaseStatsQueryPtr startSubnetRangeLeaseStatsQuery4(const SubnetID& first_subnet_id,
-                                                                const SubnetID& last_subnet_id);
+                                                                const SubnetID& last_subnet_id) override;
 
     /// @brief Creates and runs the IPv6 lease stats query
     ///
@@ -1073,7 +1128,7 @@ public:
     /// statistical data result set.  The query object is then returned.
     ///
     /// @return The populated query as a pointer to an LeaseStatsQuery.
-    virtual LeaseStatsQueryPtr startLeaseStatsQuery6();
+    virtual LeaseStatsQueryPtr startLeaseStatsQuery6() override;
 
     /// @brief Creates and runs the IPv6 lease stats query for a single subnet
     ///
@@ -1083,7 +1138,7 @@ public:
     ///
     /// @param subnet_id id of the subnet for which stats are desired
     /// @return A populated LeaseStatsQuery
-    virtual LeaseStatsQueryPtr startSubnetLeaseStatsQuery6(const SubnetID& subnet_id);
+    virtual LeaseStatsQueryPtr startSubnetLeaseStatsQuery6(const SubnetID& subnet_id) override;
 
     /// @brief Creates and runs the IPv6 lease stats query for a single subnet
     ///
@@ -1095,7 +1150,7 @@ public:
     /// @param last_subnet_id last subnet in the range of subnets
     /// @return A populated LeaseStatsQuery
     virtual LeaseStatsQueryPtr startSubnetRangeLeaseStatsQuery6(const SubnetID& first_subnet_id,
-                                                                const SubnetID& last_subnet_id);
+                                                                const SubnetID& last_subnet_id) override;
 
     /// @name Protected methods used for %Lease File Cleanup.
     /// The following methods are protected so as they can be accessed and
@@ -1179,6 +1234,43 @@ private:
 
     /// @brief Manager mutex
     boost::scoped_ptr<std::mutex> mutex_;
+
+    /// @brief Class lease counts container
+    ClassLeaseCounter class_lease_counter_;
+
+public:
+    /// @brief Returns the class lease count for a given class and lease type.
+    ///
+    /// @param client_class client class for which the count is desired
+    /// @param ltype type of lease for which the count is desired. Defaults to
+    /// Lease::TYPE_V4.
+    ///
+    /// @return number of leases
+    virtual size_t getClassLeaseCount(const ClientClass& client_class,
+                                      const Lease::Type& ltype = Lease::TYPE_V4) const override;
+
+    /// @brief Recount the leases per class for V4 leases.
+    ///
+    /// Clears the current class-lease count map and then iterates
+    /// over all, retabulating counts based on class lists in each lease
+    /// user-context.
+    ///
+    /// Must be called from a thread-safe context.
+    virtual void recountClassLeases4() override;
+
+    /// @brief Recount the leases per class for V6 leases.
+    ///
+    /// Clears the current class-lease count map and then iterates
+    /// over all, retabulating counts based on class lists in each lease
+    /// user-context.
+    ///
+    /// Must be called from a thread-safe context.
+    virtual void recountClassLeases6() override;
+
+    /// @brief Clears the class-lease count map.
+    ///
+    /// Must be called from a thread-safe context.
+    virtual void clearClassLeaseCounts() override;
 };
 
 }  // namespace dhcp

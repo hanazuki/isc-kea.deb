@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,13 +33,15 @@ OptionOpaqueDataTuples::clone() const {
 }
 
 void
-OptionOpaqueDataTuples::pack(isc::util::OutputBuffer& buf) const {
-    packHeader(buf);
+OptionOpaqueDataTuples::pack(isc::util::OutputBuffer& buf, bool check) const {
+    packHeader(buf, check);
 
     for (TuplesCollection::const_iterator it = tuples_.begin();
          it != tuples_.end(); ++it) {
         it->pack(buf);
     }
+    // That's it. We don't pack any sub-options here, because this option
+    // must not contain sub-options.
 }
 
 void

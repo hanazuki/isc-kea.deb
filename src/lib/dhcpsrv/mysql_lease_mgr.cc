@@ -97,6 +97,9 @@ const size_t ADDRESS6_TEXT_MAX_LEN = 39;
 /// @brief Maximum length of user context.
 const size_t USER_CONTEXT_MAX_LEN = 8192;
 
+/// @brief Maximum length of the text returned by the limit checking functions.
+const size_t LIMITS_TEXT_MAX_LEN = 512;
+
 boost::array<TaggedStatement, MySqlLeaseMgr::NUM_STATEMENTS>
 tagged_statements = { {
     {MySqlLeaseMgr::DELETE_LEASE4,
@@ -325,9 +328,19 @@ tagged_statements = { {
                     "SELECT subnet_id, lease_type, state, leases as state_count "
                         "FROM lease6_stat "
                         "WHERE subnet_id >= ? and subnet_id <= ? "
-                        "ORDER BY subnet_id, lease_type, state"}
-    }
-};
+                        "ORDER BY subnet_id, lease_type, state"},
+    {MySqlLeaseMgr::CHECK_LEASE4_LIMITS, "SELECT checkLease4Limits(?)"},
+    {MySqlLeaseMgr::CHECK_LEASE6_LIMITS, "SELECT checkLease6Limits(?)"},
+    {MySqlLeaseMgr::IS_JSON_SUPPORTED, "SELECT isJsonSupported()"},
+    {MySqlLeaseMgr::GET_LEASE4_COUNT_BY_CLASS,
+                    "SELECT leases "
+                        "FROM lease4_stat_by_client_class "
+                        "WHERE client_class = ?"},
+    {MySqlLeaseMgr::GET_LEASE6_COUNT_BY_CLASS,
+                    "SELECT leases "
+                        "FROM lease6_stat_by_client_class "
+                        "WHERE client_class = ? AND lease_type = ?"},
+} };  // tagged_statements
 
 }  // namespace
 
@@ -3089,6 +3102,112 @@ MySqlLeaseMgr::deleteExpiredReclaimedLeasesCommon(const uint32_t secs,
         .arg(deleted_leases);
 
     return (deleted_leases);
+}
+
+string
+MySqlLeaseMgr::checkLimits(ConstElementPtr const& user_context, StatementIndex const stindex) const {
+    // No user context means no limits means allocation allowed means empty string.
+    if (!user_context) {
+        return string();
+    }
+
+    // Get a context.
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    // Create bindings.
+    MySqlBindingCollection in_bindings({
+        MySqlBinding::createString(user_context->str())
+    });
+    MySqlBindingCollection out_bindings({
+        MySqlBinding::createString(LIMITS_TEXT_MAX_LEN)
+    });
+
+    // Execute the select.
+    std::string limit_text;
+    ctx->conn_.selectQuery(stindex, in_bindings, out_bindings,
+                           [&limit_text] (MySqlBindingCollection const& result) {
+        limit_text = result[0]->getString();
+    });
+
+    return limit_text;
+}
+
+string
+MySqlLeaseMgr::checkLimits4(ConstElementPtr const& user_context) const {
+    return checkLimits(user_context, CHECK_LEASE4_LIMITS);
+}
+
+string
+MySqlLeaseMgr::checkLimits6(ConstElementPtr const& user_context) const {
+    return checkLimits(user_context, CHECK_LEASE6_LIMITS);
+}
+
+bool
+MySqlLeaseMgr::isJsonSupported() const {
+    // Get a context.
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    // Create bindings.
+    MySqlBindingCollection in_bindings;
+    MySqlBindingCollection out_bindings({
+        MySqlBinding::createBool()
+    });
+
+    // Execute the select.
+    bool json_supported(false);
+    ctx->conn_.selectQuery(IS_JSON_SUPPORTED, in_bindings, out_bindings,
+                           [&json_supported] (MySqlBindingCollection const& result) {
+        json_supported = result[0]->getBool();
+    });
+
+    return json_supported;
+}
+
+size_t
+MySqlLeaseMgr::getClassLeaseCount(const ClientClass& client_class,
+                                  const Lease::Type& ltype /* = Lease::TYPE_V4*/) const {
+    // Get a context.
+    MySqlLeaseContextAlloc get_context(*this);
+    MySqlLeaseContextPtr ctx = get_context.ctx_;
+
+    // Create bindings.
+    MySqlBindingCollection in_bindings({
+        MySqlBinding::createString(client_class)
+    });
+    if (ltype != Lease::TYPE_V4) {
+        in_bindings.push_back(MySqlBinding::createInteger<uint8_t>(ltype));
+    }
+    MySqlBindingCollection out_bindings({
+        MySqlBinding::createInteger<int64_t>()
+    });
+
+    // Execute the select.
+    StatementIndex const stindex(ltype == Lease::TYPE_V4 ? GET_LEASE4_COUNT_BY_CLASS :
+                                                           GET_LEASE6_COUNT_BY_CLASS);
+    size_t count(0);
+    ctx->conn_.selectQuery(stindex, in_bindings, out_bindings,
+                           [&count] (MySqlBindingCollection const& result) {
+        count = result[0]->getInteger<int64_t>();
+    });
+
+    return count;
+}
+
+void
+MySqlLeaseMgr::recountClassLeases4() {
+    isc_throw(NotImplemented, "MySqlLeaseMgr::recountClassLeases4() not implemented");
+}
+
+void
+MySqlLeaseMgr::recountClassLeases6() {
+    isc_throw(NotImplemented, "MySqlLeaseMgr::recountClassLeases6() not implemented");
+}
+
+void
+MySqlLeaseMgr::clearClassLeaseCounts() {
+    isc_throw(NotImplemented, "MySqlLeaseMgr::clearClassLeaseCounts() not implemented");
 }
 
 LeaseStatsQueryPtr

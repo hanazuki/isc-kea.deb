@@ -41,7 +41,6 @@ namespace {
     "  ON (a.server_id = s.id) " \
     "WHERE (s.tag = $1 OR s.id = 1) " #__VA_ARGS__ \
     " ORDER BY g.id, s.id"
-
 #endif
 
 #ifndef PGSQL_GET_SUBNET4
@@ -147,7 +146,6 @@ namespace {
     "LEFT JOIN dhcp4_server AS srv " \
     "  ON a.server_id = srv.id ", \
     WHERE a.subnet_id IS NULL __VA_ARGS__)
-
 #endif
 
 #ifndef PGSQL_GET_SUBNET6
@@ -278,7 +276,6 @@ namespace {
     "LEFT JOIN dhcp6_server AS srv " \
     "  ON a.server_id = srv.id ", \
     WHERE a.subnet_id IS NULL __VA_ARGS__)
-
 #endif
 
 #ifndef PGSQL_GET_POOL4_COMMON
@@ -483,7 +480,6 @@ namespace {
     "LEFT JOIN dhcp4_server AS s " \
     "  ON a.server_id = s.id ", \
     WHERE a.shared_network_id IS NULL __VA_ARGS__)
-
 #endif
 
 #ifndef PGSQL_GET_SHARED_NETWORK6
@@ -564,7 +560,6 @@ namespace {
     "LEFT JOIN dhcp6_server AS s " \
     "  ON a.server_id = s.id ", \
     WHERE a.shared_network_id IS NULL __VA_ARGS__)
-
 #endif
 
 #ifndef PGSQL_GET_OPTION_DEF
@@ -617,6 +612,7 @@ namespace {
 
 #define PGSQL_GET_OPTION4(...) \
     PGSQL_GET_OPTION_COMMON(dhcp4, "", __VA_ARGS__)
+
 #define PGSQL_GET_OPTION6(...) \
     PGSQL_GET_OPTION_COMMON(dhcp6, ", o.pd_pool_id ", __VA_ARGS__)
 #endif
@@ -636,7 +632,7 @@ namespace {
     "  ON a.revision_id = r.id " \
     "INNER JOIN " #table_prefix "_server AS s" \
     "  ON r.server_id = s.id " \
-    "WHERE (s.tag = $1 OR s.id = 1) AND ((r.modification_ts, r.id)  > (cast($2 as timestamp), $3))" \
+    "WHERE (s.tag = $1 OR s.id = 1) AND ((r.modification_ts, r.id) > (cast($2 as timestamp), $3))" \
     " ORDER BY r.modification_ts, r.id, a.id"
 #endif
 
@@ -650,11 +646,13 @@ namespace {
     "FROM " #table_prefix "_server AS s " \
     "WHERE s.id > 1 " \
     __VA_ARGS__ \
-    "ORDER BY s.id"
+    " ORDER BY s.id"
+
 #define PGSQL_GET_ALL_SERVERS(table_prefix) \
     PGSQL_GET_SERVERS_COMMON(table_prefix, "")
+
 #define PGSQL_GET_SERVER(table_prefix) \
-    PGSQL_GET_SERVERS_COMMON(table_prefix, "AND s.tag = $1")
+    PGSQL_GET_SERVERS_COMMON(table_prefix, " AND s.tag = $1")
 #endif
 
 #ifndef PGSQL_GET_CLIENT_CLASS4_COMMON
@@ -673,6 +671,7 @@ namespace {
     "  c.depend_on_known_directly," \
     "  o.depend_on_known_indirectly, " \
     "  gmt_epoch(c.modification_ts) as modification_ts, " \
+    "  c.user_context," \
     "  d.id," \
     "  d.code," \
     "  d.name," \
@@ -720,7 +719,6 @@ namespace {
     "LEFT JOIN dhcp4_server AS s " \
     "  ON a.server_id = s.id ", \
     WHERE a.class_id IS NULL __VA_ARGS__)
-
 #endif
 
 #ifndef PGSQL_GET_CLIENT_CLASS6_COMMON
@@ -736,6 +734,7 @@ namespace {
     "  c.depend_on_known_directly," \
     "  o.depend_on_known_indirectly, " \
     "  gmt_epoch(c.modification_ts) as modification_ts, " \
+    "  c.user_context, " \
     "  d.id," \
     "  d.code," \
     "  d.name," \
@@ -786,7 +785,6 @@ namespace {
     "LEFT JOIN dhcp6_server AS s " \
     "  ON a.server_id = s.id ", \
     WHERE a.class_id IS NULL __VA_ARGS__)
-
 #endif
 
 #ifndef PGSQL_INSERT_GLOBAL_PARAMETER
@@ -920,6 +918,7 @@ namespace {
 
 #define PGSQL_INSERT_OPTION4() \
     PGSQL_INSERT_OPTION_COMMON(dhcp4, "", "")
+
 #define PGSQL_INSERT_OPTION6() \
     PGSQL_INSERT_OPTION_COMMON(dhcp6, ", pd_pool_id ", ", $13")
 #endif
@@ -971,8 +970,8 @@ namespace {
     "    modification_ts = $4 " \
     "FROM " #table_prefix "_global_parameter_server as a, " \
     "     " #table_prefix "_server as s " \
-    "WHERE g.id = a.parameter_id and  " \
-    "      a.server_id = s.id and  " \
+    "WHERE g.id = a.parameter_id AND " \
+    "      a.server_id = s.id AND " \
     "      s.tag = $5 AND g.name = $6"
 #endif
 
@@ -994,7 +993,7 @@ namespace {
     "     " #table_prefix "_server as s " \
     "WHERE d.id = a.option_def_id AND" \
     "      a.server_id = s.id AND " \
-    "      s.tag = $11 AND d.code = $12 AND d.space = $13 "
+    "      s.tag = $11 AND d.code = $12 AND d.space = $13"
 #endif
 
 #ifndef PGSQL_UPDATE_OPTION_DEF_CLIENT_CLASS
@@ -1009,14 +1008,14 @@ namespace {
     "  is_array = $6," \
     "  encapsulate = $7," \
     "  record_types = $8," \
-    "  user_context =  cast($9 as json)" \
+    "  user_context = cast($9 as json) " \
     "FROM " #table_prefix "_option_def_server as a, " \
     "     " #table_prefix "_server as s " \
     "WHERE d.id = a.option_def_id AND " \
     "      a.server_id = s.id AND " \
-    "      d.class_id = (SELECT id FROM dhcp4_client_class WHERE name = $10)"
+    "      d.class_id = (SELECT id FROM dhcp4_client_class WHERE name = $10) " \
+    "      AND s.tag = $11 AND d.code = $12 AND d.space = $13"
 #endif
-
 
 #ifndef PGSQL_UPDATE_OPTION_NO_TAG
 #define PGSQL_UPDATE_OPTION_NO_TAG(table_prefix, pd_pool_id, ...) \
@@ -1036,13 +1035,13 @@ namespace {
     "  modification_ts = $12 " \
     pd_pool_id \
     "WHERE " #__VA_ARGS__
-#endif
 
 #define PGSQL_UPDATE_OPTION4_NO_TAG(...) \
-    PGSQL_UPDATE_OPTION_NO_TAG(dhcp4, "",  __VA_ARGS__)
+    PGSQL_UPDATE_OPTION_NO_TAG(dhcp4, "", __VA_ARGS__)
 
 #define PGSQL_UPDATE_OPTION6_NO_TAG(...) \
     PGSQL_UPDATE_OPTION_NO_TAG(dhcp6, ", pd_pool_id = $13 ", __VA_ARGS__)
+#endif
 
 #ifndef PGSQL_UPDATE_OPTION_WITH_TAG
 #define PGSQL_UPDATE_OPTION_WITH_TAG(table_prefix, pd_pool_id, ...) \
@@ -1063,17 +1062,17 @@ namespace {
     pd_pool_id \
     "FROM " #table_prefix "_options_server as a, " \
     "     " #table_prefix "_server as s " \
-    "WHERE  o.option_id = a.option_id AND " \
-    "       a.server_id = s.id " \
+    "WHERE o.option_id = a.option_id AND " \
+    "      a.server_id = s.id " \
     #__VA_ARGS__
-#endif
 
 #define PGSQL_UPDATE_OPTION4_WITH_TAG(...) \
     PGSQL_UPDATE_OPTION_WITH_TAG(dhcp4, "", AND s.tag = $13 __VA_ARGS__)
 
 #define PGSQL_UPDATE_OPTION6_WITH_TAG(...) \
-    PGSQL_UPDATE_OPTION_WITH_TAG(dhcp4, \
+    PGSQL_UPDATE_OPTION_WITH_TAG(dhcp6, \
     ", pd_pool_id = $13 ", AND s.tag = $14 __VA_ARGS__)
+#endif
 
 #ifndef PGSQL_UPDATE_CLIENT_CLASS4
 #define PGSQL_UPDATE_CLIENT_CLASS4(follow_class_name_set) \
@@ -1089,8 +1088,9 @@ namespace {
     "  max_valid_lifetime = $9," \
     "  depend_on_known_directly = $10," \
     follow_class_name_set \
-    "  modification_ts = $11 " \
-    "WHERE name = $12"
+    "  modification_ts = $12, " \
+    "  user_context = cast($13 as json)" \
+    "WHERE name = $14"
 #endif
 
 #ifndef PGSQL_UPDATE_CLIENT_CLASS6
@@ -1104,11 +1104,12 @@ namespace {
     "  max_valid_lifetime = $6," \
     "  depend_on_known_directly = $7," \
     follow_class_name_set \
-    "  modification_ts = $8, " \
     "  preferred_lifetime = $9, " \
     "  min_preferred_lifetime = $10, " \
-    "  max_preferred_lifetime = $11 " \
-    "WHERE name = $12"
+    "  max_preferred_lifetime = $11, " \
+    "  modification_ts = $12, " \
+    "  user_context = cast($13 as json) " \
+    "WHERE name = $14"
 #endif
 
 #ifndef PGSQL_UPDATE_SERVER
@@ -1139,7 +1140,7 @@ namespace {
     "WHERE g.id in ( " \
     "   SELECT g.id FROM " #table_prefix "_global_parameter AS g " \
     "   LEFT JOIN " #table_prefix "_global_parameter_server AS a ON g.id = a.parameter_id " \
-    "   WHERE a.parameter_id IS NULL)  " #__VA_ARGS__
+    "   WHERE a.parameter_id IS NULL) " #__VA_ARGS__
 #endif
 
 #ifndef PGSQL_DELETE_SUBNET_COMMON
@@ -1152,7 +1153,6 @@ namespace {
     "   s.subnet_id = a.subnet_id AND " \
     "   a.server_id = srv.id " \
     #__VA_ARGS__
-#endif
 
 #define PGSQL_DELETE_SUBNET_WITH_TAG(table_prefix, ...) \
     PGSQL_DELETE_SUBNET_COMMON(table_prefix, AND srv.tag = $1 __VA_ARGS__)
@@ -1167,6 +1167,7 @@ namespace {
     "   SELECT s.subnet_id FROM " #table_prefix "_subnet AS s " \
     "   LEFT JOIN " #table_prefix "_subnet_server AS a ON s.subnet_id = a.subnet_id " \
     "   WHERE a.subnet_id IS NULL) " #__VA_ARGS__
+#endif
 
 #ifndef PGSQL_DELETE_SUBNET_SERVER
 #define PGSQL_DELETE_SUBNET_SERVER(table_prefix) \
@@ -1200,7 +1201,6 @@ namespace {
     "   n.id = a.shared_network_id AND " \
     "   a.server_id = s.id " \
     #__VA_ARGS__
-#endif
 
 #define PGSQL_DELETE_SHARED_NETWORK_WITH_TAG(table_prefix, ...) \
     PGSQL_DELETE_SHARED_NETWORK_COMMON(table_prefix, AND s.tag = $1 __VA_ARGS__)
@@ -1216,6 +1216,7 @@ namespace {
     "   LEFT JOIN " #table_prefix "_shared_network_server AS a ON n.id = a.shared_network_id " \
     "   WHERE a.shared_network_id IS NULL) " \
     #__VA_ARGS__
+#endif
 
 #ifndef PGSQL_DELETE_SHARED_NETWORK_SERVER
 #define PGSQL_DELETE_SHARED_NETWORK_SERVER(table_prefix) \
@@ -1242,7 +1243,7 @@ namespace {
     "WHERE d.id in ( " \
     "   SELECT d.id FROM " #table_prefix "_option_def AS d " \
     "   LEFT JOIN " #table_prefix "_option_def_server AS a ON d.id = a.option_def_id " \
-    "   WHERE a.option_def_id IS NULL)  " #__VA_ARGS__
+    "   WHERE a.option_def_id IS NULL) " #__VA_ARGS__
 #endif
 
 #ifndef PGSQL_DELETE_OPTION_DEFS_CLIENT_CLASS
@@ -1285,7 +1286,7 @@ namespace {
     "WHERE o.option_id in ( " \
     "   SELECT o.option_id FROM " #table_prefix "_options AS o " \
     "   LEFT JOIN " #table_prefix "_options_server AS a ON o.option_id = a.option_id " \
-    "   WHERE a.option_id IS NULL)  " #__VA_ARGS__
+    "   WHERE a.option_id IS NULL) " #__VA_ARGS__
 #endif
 
 #ifndef PGSQL_DELETE_OPTION_POOL_RANGE
@@ -1299,7 +1300,7 @@ namespace {
 
 #ifndef PGSQL_DELETE_OPTION_PD_POOL
 #define PGSQL_DELETE_OPTION_PD_POOL(...) \
-    "DELETE o FROM dhcp6_options AS o " \
+    "DELETE FROM dhcp6_options AS o " \
     "WHERE " #__VA_ARGS__ \
     "  AND o.pd_pool_id = " \
     "  (SELECT id FROM dhcp6_pd_pool" \
@@ -1319,7 +1320,7 @@ namespace {
     "(SELECT id FROM " #table_prefix "_client_class WHERE name = $1)"
 #endif
 
-#ifndef PGSQL_DELETE_CLIENT_CLASS
+#ifndef PGSQL_DELETE_CLIENT_CLASS_COMMON
 #define PGSQL_DELETE_CLIENT_CLASS_COMMON(table_prefix, ...) \
     "DELETE FROM " #table_prefix "_client_class AS c " \
     "USING " \
@@ -1342,8 +1343,7 @@ namespace {
     "   SELECT c.id FROM " #table_prefix "_client_class AS c " \
     "   LEFT JOIN " #table_prefix "_client_class_server AS a ON c.id = a.class_id " \
     "   WHERE a.class_id IS NULL) " #__VA_ARGS__
-
-#endif // PGSQL_DELETE_CLIENT_CLASS
+#endif
 
 #ifndef PGSQL_DELETE_SERVER
 #define PGSQL_DELETE_SERVER(table_prefix) \

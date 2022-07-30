@@ -1,4 +1,4 @@
-// Copyright (C) 2018,2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -47,7 +47,8 @@ public:
     /// byte after stored option.
     ///
     /// @param buf buffer (option will be stored here)
-    void pack(isc::util::OutputBuffer& buf) const;
+    /// @param check if set to false, allows options larger than 255 for v4
+    void pack(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// Writes option in wire-format to buf, for computing hash
     /// auth info filled with 0 for a length of 128 bits
@@ -142,4 +143,3 @@ protected:
 
 } // isc::dhcp namespace
 } // isc namespace
-

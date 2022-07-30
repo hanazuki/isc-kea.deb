@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,7 +24,6 @@ class CryptoLinkImpl {
 };
 
 CryptoLink::~CryptoLink() {
-    delete impl_;
 }
 
 /// \brief Botan implementation of RNG.
@@ -56,11 +55,10 @@ private:
 };
 
 void
-CryptoLink::initialize() {
-    CryptoLink& c = getCryptoLinkInternal();
+CryptoLink::initialize(CryptoLink& c) {
     if (!c.impl_) {
         try {
-            c.impl_ = new CryptoLinkImpl();
+            c.impl_.reset(new CryptoLinkImpl());
         } catch (const Botan::Exception& ex) {
             isc_throw(InitializationError, "Botan error: " << ex.what());
         }

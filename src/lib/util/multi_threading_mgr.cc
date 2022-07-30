@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -225,6 +225,12 @@ MultiThreadingCriticalSection::MultiThreadingCriticalSection() {
 
 MultiThreadingCriticalSection::~MultiThreadingCriticalSection() {
     MultiThreadingMgr::instance().exitCriticalSection();
+}
+
+MultiThreadingLock::MultiThreadingLock(std::mutex& mutex) {
+    if (MultiThreadingMgr::instance().getMode()) {
+        lock_ = std::unique_lock<std::mutex>(mutex);
+    }
 }
 
 void

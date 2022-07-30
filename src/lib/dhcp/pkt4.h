@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -55,7 +55,7 @@ public:
 
     /// Constructor, used in replying to a message.
     ///
-    /// @param msg_type type of message (e.g. DHCPDISOVER=1)
+    /// @param msg_type type of message (e.g. DHCPDISCOVER=1)
     /// @param transid transaction-id
     Pkt4(uint8_t msg_type, uint32_t transid);
 
@@ -544,7 +544,6 @@ protected:
 typedef boost::shared_ptr<Pkt4> Pkt4Ptr;
 
 } // isc::dhcp namespace
-
 } // isc namespace
 
 #endif

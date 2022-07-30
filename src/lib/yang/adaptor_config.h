@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -93,7 +93,6 @@ protected:
     /// @param subnets The subnet list.
     /// @param set The reference to the set of assigned IDs.
     /// @param next The next ID.
-    /// @return True if all subnets have an ID, false otherwise.
     static void subnetsAssignID(isc::data::ConstElementPtr subnets,
                                 SubnetIDSet& set, isc::dhcp::SubnetID& next);
 
@@ -106,7 +105,6 @@ protected:
     /// @param set The reference to the set of assigned IDs.
     /// @param next The next ID.
     /// @param subsel The subnet list name.
-    /// @return True if all subnets have an ID, false otherwise.
     static void sharedNetworksAssignID(isc::data::ConstElementPtr networks,
                                        SubnetIDSet& set,
                                        isc::dhcp::SubnetID& next,
@@ -288,7 +286,7 @@ protected:
                            const std::string& space);
 };
 
-}; // end of namespace isc::yang
-}; // end of namespace isc
+}  // end of namespace isc::yang
+}  // end of namespace isc
 
 #endif // ISC_ADAPTOR_CONFIG_H

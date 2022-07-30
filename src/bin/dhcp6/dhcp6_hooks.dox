@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -63,8 +63,12 @@ to the end of this list.
    provides access to the DHCP service state of the server and allows for
    enabling and disabling the DHCP service from the hooks libraries.
 
- - <b>Next step status</b>: Status codes returned by the callouts installed on
-   this hook point are ignored.
+
+ - <b>Next step status</b>: If any callout sets the status to DROP, the server
+   will interrupt the reconfiguration process. The hook callout is expected to
+   have completed the cause of the interruption under the "error" handle argument
+   with a std::string which is then logged. Finally, this leads to the
+   termination of kea-dhcp6.
 
  @subsection dhcpv6HooksCb6Update cb6_updated
  - @b Arguments:
@@ -162,6 +166,9 @@ to the end of this list.
  - <b>Next step status</b>: If a callout installed on the "host6_identifier" hook
    point sets the next step status to value other than NEXT_STEP_CONTINUE, the
    identifier will not be used.
+
+When the "early-global-reservations-lookup" flag is true this callout is
+called before "subnet6_select".
 
 @subsection dhcpv6HooksLease6Select lease6_select
 
@@ -298,12 +305,46 @@ to the end of this list.
    remain in the database until it expires. However, the server will send out
    the response back to the client as if it did.
 
+@subsection dhcpv6HooksDdns6Update ddns6_update
+
+ - @b Arguments:
+   - name: @b query6, type: isc::dhcp::Pkt6Ptr, direction: <b>in</b>
+   - name: @b response6, type: isc::dhcp::Pkt6Ptr, direction: <b>in</b>
+   - name: @b subnet6, type: isc::dhcp::Subnet6Ptr, direction: <b>in</b>
+   - name: @b hostname, type: std::string, direction: <b>in/out</b>
+   - name: @b fwd_update, type: bool, direction: <b>in/out</b>
+   - name: @b rev_update, type: bool, direction: <b>in/out</b>
+   - name: @b ddns_params, type: isc::dhcp::DdnsParamsPtr, direction: <b>in</b>
+
+ - @b Description: this callout is executed after the server has selected
+   a lease and has formed a host name to associate with the lease and/or use
+   as the basis for the FQDN for DNS updates (if enabled), but before the
+   lease has been committed or any NameChangeRequests have been generated to
+   send to <b>kea-dhcp-ddns</b>.  Thus it provides an opportunity to alter the
+   host name as well as whether or not forward and/or reverse updates are
+   enabled.
+
+   Upon entry into the callout, the arguments <b>hostname</b>,<b>fwd_update</b>,
+   and <b>rev_update</b> have been set by the server based on the client packet,
+   and various configuration values (e.g host reservations, DDNS behavioral
+   parameters, etc).  Upon return from the callout, any changes to these
+   values will be applied as follows:
+   - If <b>hostname</b> has changed it will be used to update the outbound
+   FQDN option (option 39) if it exists, and used as the FQDN sent in DNS
+   updates
+   - Forward DNS update(s) will be done if <b>fwd_update</b> is true (and
+   <b>kea-dhcp-ddns</b> connectivity is enabled)
+   - Reverse DNS update(s) will be done if <b>rev_update</b> is true (and
+   <b>kea-dhcp-ddns</b> connectivity is enabled)
+
+ - <b>Next step status</b>: Not applicable, its value will be ignored.
+
 @subsection dhcpv6Leases6Committed leases6_committed
 
  - @b Arguments:
    - name: @b query6, type: isc::dhcp::Pkt6Ptr, direction: <b>in</b>
-   - name: @b leases6, type: isc::dhcp::Leases6CollectionPtr, direction: <b>in</b>
-   - name: @b deleted_leases6, type: isc::dhcp::Leases6CollectionPtr, direction: <b>in</b>
+   - name: @b leases6, type: isc::dhcp::Lease6CollectionPtr, direction: <b>in</b>
+   - name: @b deleted_leases6, type: isc::dhcp::Lease6CollectionPtr, direction: <b>in</b>
 
  - @b Description: this callout is executed when the server has
    applied all lease changes as a result of DHCP message

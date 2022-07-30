@@ -1,2 +1,2 @@
-#define EXTENDED_VERSION "git 22c8ddf7aa35922b9551421f43a787bb62dcf539"
-#define PACKAGE_VERSION_TYPE "development"
+#define EXTENDED_VERSION "git becddc2abdfba6d2ae305768c5ea334d9dede0de"
+#define PACKAGE_VERSION_TYPE "stable"

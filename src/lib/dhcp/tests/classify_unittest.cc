@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -130,6 +130,26 @@ TEST(ClassifyTest, ClientClassesToText) {
 
     // Check non-standard separator.
     EXPECT_EQ("alpha.gamma.beta", classes.toText("."));
+}
+
+// Check that the ClientClasses::toElement function returns
+// correct values.
+TEST(ClassifyTest, ClientClassesToElement) {
+    // No classes.
+    ClientClasses classes;
+    EXPECT_TRUE(classes.toElement()->empty());
+
+    // Insert single class name and see that it's there.
+    classes.insert("alpha");
+    EXPECT_EQ("[ \"alpha\" ]", classes.toElement()->str());
+
+    // Insert next class name and see that both classes are present.
+    classes.insert("gamma");
+    EXPECT_EQ("[ \"alpha\", \"gamma\" ]", classes.toElement()->str());
+
+    // Insert third class and make sure they get ordered in insert order.
+    classes.insert("beta");
+    EXPECT_EQ("[ \"alpha\", \"gamma\", \"beta\" ]", classes.toElement()->str());
 }
 
 // Check that selected class can be erased.

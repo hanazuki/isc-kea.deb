@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -221,10 +221,11 @@ public:
     /// or full.
     DomainNameType getDomainNameType() const;
 
-   /// @brief Writes option in the wire format into a buffer.
+    /// @brief Writes option in the wire format into a buffer.
     ///
     /// @param [out] buf output buffer where option data will be stored.
-    virtual void pack(isc::util::OutputBuffer& buf) const;
+    /// @param check if set to false, allows options larger than 255 for v4
+    virtual void pack(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// @brief Parses option from the received buffer.
     ///

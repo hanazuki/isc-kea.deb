@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,7 +6,7 @@
 
 /// @file   dhcp4_test_utils.h
 ///
-/// @brief  This file contains utility classes used for DHCPv4 server testing
+/// @brief This file contains utility classes used for DHCPv4 server testing
 
 #ifndef DHCP4_TEST_UTILS_H
 #define DHCP4_TEST_UTILS_H
@@ -211,12 +211,23 @@ public:
     virtual ~NakedDhcpv4Srv() {
     }
 
+    /// @brief Runs processing DHCPDISCOVER.
+    ///
+    /// @param discover a message received from client
+    /// @return DHCPOFFER message or null
+    Pkt4Ptr processDiscover(Pkt4Ptr& discover) {
+        AllocEngine::ClientContext4Ptr context(new AllocEngine::ClientContext4());
+        earlyGHRLookup(discover, context);
+        return (processDiscover(discover, context));
+    }
+
     /// @brief Runs processing DHCPREQUEST.
     ///
     /// @param request a message received from client
     /// @return DHCPACK or DHCPNAK message
     Pkt4Ptr processRequest(Pkt4Ptr& request) {
         AllocEngine::ClientContext4Ptr context(new AllocEngine::ClientContext4());
+        earlyGHRLookup(request, context);
         return (processRequest(request, context));
     }
 
@@ -225,6 +236,7 @@ public:
     /// @param release message received from client
     void processRelease(Pkt4Ptr& release) {
         AllocEngine::ClientContext4Ptr context(new AllocEngine::ClientContext4());
+        earlyGHRLookup(release, context);
         processRelease(release, context);
     }
 
@@ -233,7 +245,18 @@ public:
     /// @param decline message received from client
     void processDecline(Pkt4Ptr& decline) {
         AllocEngine::ClientContext4Ptr context(new AllocEngine::ClientContext4());
+        earlyGHRLookup(decline, context);
         processDecline(decline, context);
+    }
+
+    /// @brief Runs processing DHCPINFORM.
+    ///
+    /// @param inform a message received from client
+    /// @return DHCPACK message
+    Pkt4Ptr processInform(Pkt4Ptr& inform) {
+        AllocEngine::ClientContext4Ptr context(new AllocEngine::ClientContext4());
+        earlyGHRLookup(inform, context);
+        return (processInform(inform, context));
     }
 
     /// @brief Dummy server identifier option used by various tests.
@@ -531,11 +554,16 @@ public:
     /// @param config String holding server configuration in JSON format.
     /// @param commit A boolean flag indicating if the new configuration
     /// should be committed (if true), or not (if false).
-    /// @param open_sockets  A boolean flag indicating if sockets should
+    /// @param open_sockets A boolean flag indicating if sockets should
     /// be opened (if true), or not (if false).
+    /// @param create_managers A boolean flag indicating if managers should be
+    /// recreated.
+    /// @param test A boolean flag which indicates if only testing config.
     void configure(const std::string& config,
                    const bool commit = true,
-                   const bool open_sockets = true);
+                   const bool open_sockets = true,
+                   const bool create_managers = true,
+                   const bool test = false);
 
     /// @brief Configure specified DHCP server using JSON string.
     ///
@@ -543,12 +571,17 @@ public:
     /// @param srv Instance of the server to be configured.
     /// @param commit A boolean flag indicating if the new configuration
     /// should be committed (if true), or not (if false).
-    /// @param open_sockets  A boolean flag indicating if sockets should
+    /// @param open_sockets A boolean flag indicating if sockets should
     /// be opened (if true), or not (if false).
+    /// @param create_managers A boolean flag indicating if managers should be
+    /// recreated.
+    /// @param test A boolean flag which indicates if only testing config.
     void configure(const std::string& config,
                    NakedDhcpv4Srv& srv,
                    const bool commit = true,
-                   const bool open_sockets = true);
+                   const bool open_sockets = true,
+                   const bool create_managers = true,
+                   const bool test = false);
 
     /// @brief Configure specified DHCP server using JSON string.
     ///
@@ -614,8 +647,16 @@ public:
     /// @brief Checks if client port can be overridden in packets being sent.
     void portsClientPort();
 
-    /// @brief  Checks if server port can be overridden in packets being sent.
+    /// @brief Checks if server port can be overridden in packets being sent.
     void portsServerPort();
+
+    /// @brief Check if example files contain valid configuration.
+    void checkConfigFiles();
+
+    /// @brief Check if the server configuration stored in file is valid.
+    ///
+    /// @param path The path to the configuration file.
+    void loadConfigFile(const std::string& path);
 
     /// @brief This function cleans up after the test.
     virtual void TearDown();

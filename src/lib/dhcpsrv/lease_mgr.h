@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 
 #include <asiolink/io_address.h>
 #include <asiolink/io_service.h>
+#include <cc/data.h>
 #include <database/db_exceptions.h>
 #include <dhcp/duid.h>
 #include <dhcp/option.h>
@@ -697,6 +698,38 @@ public:
     /// @return number of leases removed.
     virtual size_t wipeLeases6(const SubnetID& subnet_id) = 0;
 
+    /// @brief Checks if the IPv4 lease limits set in the given user context are exceeded.
+    /// Abstract method.
+    ///
+    /// @param user_context all or part of the lease's user context which, for the intents and
+    /// purposes of lease limiting should have the following format
+    /// (not all nodes are mandatory and values are given only as examples):
+    /// { "ISC": { "limits": { "client-classes": [ { "name": "foo", "address-limit": 2 } ],
+    ///                        "subnet": { "id": 1, "address-limit": 2 } } } }
+    ///
+    /// @return a string describing a limit that is being exceeded, or an empty
+    /// string if no limits are exceeded
+    virtual std::string checkLimits4(isc::data::ConstElementPtr const& user_context) const = 0;
+
+    /// @brief Checks if the IPv6 lease limits set in the given user context are exceeded.
+    /// Abstract method.
+    ///
+    /// @param user_context all or part of the lease's user context which, for the intents and
+    /// purposes of lease limiting should have the following format
+    /// (not all nodes are mandatory and values are given only as examples):
+    /// { "ISC": { "limits": { "client-classes": [ { "name": "foo", "address-limit": 2, "prefix-limit": 1 } ],
+    ///                        "subnet": { "id": 1, "address-limit": 2, "prefix-limit": 1 } } } }
+    ///
+    /// @return a string describing a limit that is being exceeded, or an empty
+    /// string if no limits are exceeded
+    virtual std::string checkLimits6(isc::data::ConstElementPtr const& user_context) const = 0;
+
+    /// @brief Checks if JSON support is enabled in the database.
+    /// Abstract method.
+    ///
+    /// @return true if there is JSON support, false otherwise
+    virtual bool isJsonSupported() const = 0;
+
     /// @brief Return backend type
     ///
     /// Returns the type of the backend (e.g. "mysql", "memfile" etc.)
@@ -758,6 +791,27 @@ public:
     static isc::asiolink::IOServicePtr& getIOService() {
         return (io_service_);
     }
+
+    // -- The following are memfile only, but defined in the base LeaseMgr for convenience. --
+
+    /// @brief Returns the class lease count for a given class and lease type.
+    ///
+    /// @param client_class client class for which the count is desired
+    /// @param ltype type of lease for which the count is desired. Defaults to
+    /// Lease::TYPE_V4.
+    ///
+    /// @return number of leases
+    virtual size_t getClassLeaseCount(const ClientClass& client_class,
+                                      const Lease::Type& ltype = Lease::TYPE_V4) const = 0;
+
+    /// @brief Recount the leases per class for V4 leases.
+    virtual void recountClassLeases4() = 0;
+
+    /// @brief Recount the leases per class for V6 leases.
+    virtual void recountClassLeases6() = 0;
+
+    /// @brief Clears the class-lease count map.
+    virtual void clearClassLeaseCounts() = 0;
 
 private:
     /// The IOService object, used for all ASIO operations.

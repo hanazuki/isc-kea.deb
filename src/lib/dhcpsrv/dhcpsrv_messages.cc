@@ -48,46 +48,6 @@ extern const isc::log::MessageID DHCPSRV_CFGMGR_UPDATE_SUBNET6 = "DHCPSRV_CFGMGR
 extern const isc::log::MessageID DHCPSRV_CFGMGR_USE_ADDRESS = "DHCPSRV_CFGMGR_USE_ADDRESS";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_USE_UNICAST = "DHCPSRV_CFGMGR_USE_UNICAST";
 extern const isc::log::MessageID DHCPSRV_CLOSE_DB = "DHCPSRV_CLOSE_DB";
-extern const isc::log::MessageID DHCPSRV_CQL_ADD_ADDR4 = "DHCPSRV_CQL_ADD_ADDR4";
-extern const isc::log::MessageID DHCPSRV_CQL_ADD_ADDR6 = "DHCPSRV_CQL_ADD_ADDR6";
-extern const isc::log::MessageID DHCPSRV_CQL_COMMIT = "DHCPSRV_CQL_COMMIT";
-extern const isc::log::MessageID DHCPSRV_CQL_CONNECTION_BEGIN_TRANSACTION = "DHCPSRV_CQL_CONNECTION_BEGIN_TRANSACTION";
-extern const isc::log::MessageID DHCPSRV_CQL_CONNECTION_COMMIT = "DHCPSRV_CQL_CONNECTION_COMMIT";
-extern const isc::log::MessageID DHCPSRV_CQL_CONNECTION_ROLLBACK = "DHCPSRV_CQL_CONNECTION_ROLLBACK";
-extern const isc::log::MessageID DHCPSRV_CQL_DB = "DHCPSRV_CQL_DB";
-extern const isc::log::MessageID DHCPSRV_CQL_DEALLOC_ERROR = "DHCPSRV_CQL_DEALLOC_ERROR";
-extern const isc::log::MessageID DHCPSRV_CQL_DELETE_ADDR = "DHCPSRV_CQL_DELETE_ADDR";
-extern const isc::log::MessageID DHCPSRV_CQL_DELETE_EXPIRED_RECLAIMED4 = "DHCPSRV_CQL_DELETE_EXPIRED_RECLAIMED4";
-extern const isc::log::MessageID DHCPSRV_CQL_DELETE_EXPIRED_RECLAIMED6 = "DHCPSRV_CQL_DELETE_EXPIRED_RECLAIMED6";
-extern const isc::log::MessageID DHCPSRV_CQL_GET4 = "DHCPSRV_CQL_GET4";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_ADDR4 = "DHCPSRV_CQL_GET_ADDR4";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_ADDR6 = "DHCPSRV_CQL_GET_ADDR6";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_CLIENTID = "DHCPSRV_CQL_GET_CLIENTID";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_CLIENTID_HWADDR_SUBID = "DHCPSRV_CQL_GET_CLIENTID_HWADDR_SUBID";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_EXPIRED4 = "DHCPSRV_CQL_GET_EXPIRED4";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_EXPIRED6 = "DHCPSRV_CQL_GET_EXPIRED6";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_HOSTNAME4 = "DHCPSRV_CQL_GET_HOSTNAME4";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_HOSTNAME6 = "DHCPSRV_CQL_GET_HOSTNAME6";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_HWADDR = "DHCPSRV_CQL_GET_HWADDR";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_IAID_DUID = "DHCPSRV_CQL_GET_IAID_DUID";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_IAID_SUBID_DUID = "DHCPSRV_CQL_GET_IAID_SUBID_DUID";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_PAGE4 = "DHCPSRV_CQL_GET_PAGE4";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_PAGE6 = "DHCPSRV_CQL_GET_PAGE6";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_SUBID4 = "DHCPSRV_CQL_GET_SUBID4";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_SUBID_CLIENTID = "DHCPSRV_CQL_GET_SUBID_CLIENTID";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_SUBID_HWADDR = "DHCPSRV_CQL_GET_SUBID_HWADDR";
-extern const isc::log::MessageID DHCPSRV_CQL_GET_VERSION = "DHCPSRV_CQL_GET_VERSION";
-extern const isc::log::MessageID DHCPSRV_CQL_HOST_ADD = "DHCPSRV_CQL_HOST_ADD";
-extern const isc::log::MessageID DHCPSRV_CQL_HOST_DB = "DHCPSRV_CQL_HOST_DB";
-extern const isc::log::MessageID DHCPSRV_CQL_HOST_DB_GET_VERSION = "DHCPSRV_CQL_HOST_DB_GET_VERSION";
-extern const isc::log::MessageID DHCPSRV_CQL_HOST_GET4 = "DHCPSRV_CQL_HOST_GET4";
-extern const isc::log::MessageID DHCPSRV_CQL_HOST_GET6 = "DHCPSRV_CQL_HOST_GET6";
-extern const isc::log::MessageID DHCPSRV_CQL_HOST_GET_ALL = "DHCPSRV_CQL_HOST_GET_ALL";
-extern const isc::log::MessageID DHCPSRV_CQL_LEASE_EXCEPTION_THROWN = "DHCPSRV_CQL_LEASE_EXCEPTION_THROWN";
-extern const isc::log::MessageID DHCPSRV_CQL_NO_TLS_SUPPORT = "DHCPSRV_CQL_NO_TLS_SUPPORT";
-extern const isc::log::MessageID DHCPSRV_CQL_ROLLBACK = "DHCPSRV_CQL_ROLLBACK";
-extern const isc::log::MessageID DHCPSRV_CQL_UPDATE_ADDR4 = "DHCPSRV_CQL_UPDATE_ADDR4";
-extern const isc::log::MessageID DHCPSRV_CQL_UPDATE_ADDR6 = "DHCPSRV_CQL_UPDATE_ADDR6";
 extern const isc::log::MessageID DHCPSRV_DEPRECATED = "DHCPSRV_DEPRECATED";
 extern const isc::log::MessageID DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET = "DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET";
 extern const isc::log::MessageID DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION = "DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION";
@@ -257,6 +217,16 @@ extern const isc::log::MessageID DHCPSRV_PGSQL_UPDATE_ADDR6 = "DHCPSRV_PGSQL_UPD
 extern const isc::log::MessageID DHCPSRV_QUEUE_NCR = "DHCPSRV_QUEUE_NCR";
 extern const isc::log::MessageID DHCPSRV_QUEUE_NCR_FAILED = "DHCPSRV_QUEUE_NCR_FAILED";
 extern const isc::log::MessageID DHCPSRV_QUEUE_NCR_SKIP = "DHCPSRV_QUEUE_NCR_SKIP";
+extern const isc::log::MessageID DHCPSRV_SUBNET4O6_SELECT_FAILED = "DHCPSRV_SUBNET4O6_SELECT_FAILED";
+extern const isc::log::MessageID DHCPSRV_SUBNET4_SELECT_BY_ADDRESS_NO_MATCH = "DHCPSRV_SUBNET4_SELECT_BY_ADDRESS_NO_MATCH";
+extern const isc::log::MessageID DHCPSRV_SUBNET4_SELECT_BY_INTERFACE_NO_MATCH = "DHCPSRV_SUBNET4_SELECT_BY_INTERFACE_NO_MATCH";
+extern const isc::log::MessageID DHCPSRV_SUBNET4_SELECT_BY_RELAY_ADDRESS_NO_MATCH = "DHCPSRV_SUBNET4_SELECT_BY_RELAY_ADDRESS_NO_MATCH";
+extern const isc::log::MessageID DHCPSRV_SUBNET4_SELECT_NO_RAI_OPTIONS = "DHCPSRV_SUBNET4_SELECT_NO_RAI_OPTIONS";
+extern const isc::log::MessageID DHCPSRV_SUBNET4_SELECT_NO_RELAY_ADDRESS = "DHCPSRV_SUBNET4_SELECT_NO_RELAY_ADDRESS";
+extern const isc::log::MessageID DHCPSRV_SUBNET4_SELECT_NO_USABLE_ADDRESS = "DHCPSRV_SUBNET4_SELECT_NO_USABLE_ADDRESS";
+extern const isc::log::MessageID DHCPSRV_SUBNET6_SELECT_BY_ADDRESS_NO_MATCH = "DHCPSRV_SUBNET6_SELECT_BY_ADDRESS_NO_MATCH";
+extern const isc::log::MessageID DHCPSRV_SUBNET6_SELECT_BY_INTERFACE_ID_NO_MATCH = "DHCPSRV_SUBNET6_SELECT_BY_INTERFACE_ID_NO_MATCH";
+extern const isc::log::MessageID DHCPSRV_SUBNET6_SELECT_BY_INTERFACE_NO_MATCH = "DHCPSRV_SUBNET6_SELECT_BY_INTERFACE_NO_MATCH";
 extern const isc::log::MessageID DHCPSRV_TIMERMGR_CALLBACK_FAILED = "DHCPSRV_TIMERMGR_CALLBACK_FAILED";
 extern const isc::log::MessageID DHCPSRV_TIMERMGR_REGISTER_TIMER = "DHCPSRV_TIMERMGR_REGISTER_TIMER";
 extern const isc::log::MessageID DHCPSRV_TIMERMGR_RUN_TIMER_OPERATION = "DHCPSRV_TIMERMGR_RUN_TIMER_OPERATION";
@@ -314,46 +284,6 @@ const char* values[] = {
     "DHCPSRV_CFGMGR_USE_ADDRESS", "listening on address %1, on interface %2",
     "DHCPSRV_CFGMGR_USE_UNICAST", "listening on unicast address %1, on interface %2",
     "DHCPSRV_CLOSE_DB", "closing currently open %1 database",
-    "DHCPSRV_CQL_ADD_ADDR4", "adding IPv4 lease with address %1",
-    "DHCPSRV_CQL_ADD_ADDR6", "adding IPv6 lease with address %1",
-    "DHCPSRV_CQL_COMMIT", "committing to Cassandra database.",
-    "DHCPSRV_CQL_CONNECTION_BEGIN_TRANSACTION", "begin transaction on current connection.",
-    "DHCPSRV_CQL_CONNECTION_COMMIT", "committing to Cassandra database on current connection.",
-    "DHCPSRV_CQL_CONNECTION_ROLLBACK", "rolling back Cassandra database on current connection.",
-    "DHCPSRV_CQL_DB", "opening Cassandra lease database: %1",
-    "DHCPSRV_CQL_DEALLOC_ERROR", "An error occurred while closing the CQL connection: %1",
-    "DHCPSRV_CQL_DELETE_ADDR", "deleting lease for address %1",
-    "DHCPSRV_CQL_DELETE_EXPIRED_RECLAIMED4", "deleting reclaimed IPv4 leases that expired more than %1 seconds ago",
-    "DHCPSRV_CQL_DELETE_EXPIRED_RECLAIMED6", "deleting reclaimed IPv6 leases that expired more than %1 seconds ago",
-    "DHCPSRV_CQL_GET4", "obtaining all IPv4 leases",
-    "DHCPSRV_CQL_GET_ADDR4", "obtaining IPv4 lease for address %1",
-    "DHCPSRV_CQL_GET_ADDR6", "obtaining IPv6 lease for address %1 and lease type %2",
-    "DHCPSRV_CQL_GET_CLIENTID", "obtaining IPv4 leases for client ID %1",
-    "DHCPSRV_CQL_GET_CLIENTID_HWADDR_SUBID", "obtaining IPv4 lease for client ID %1, hardware address %2 and subnet ID %3",
-    "DHCPSRV_CQL_GET_EXPIRED4", "obtaining maximum %1 of expired IPv4 leases",
-    "DHCPSRV_CQL_GET_EXPIRED6", "obtaining maximum %1 of expired IPv6 leases",
-    "DHCPSRV_CQL_GET_HOSTNAME4", "obtaining IPv4 leases for hostname %1",
-    "DHCPSRV_CQL_GET_HOSTNAME6", "obtaining IPv6 leases for hostname %1",
-    "DHCPSRV_CQL_GET_HWADDR", "obtaining IPv4 leases for hardware address %1",
-    "DHCPSRV_CQL_GET_IAID_DUID", "obtaining IPv6 leases for IAID %1 and DUID %2 and lease type %3",
-    "DHCPSRV_CQL_GET_IAID_SUBID_DUID", "obtaining IPv6 leases for IAID %1, Subnet ID %2, DUID %3 and lease type %4",
-    "DHCPSRV_CQL_GET_PAGE4", "obtaining at most %1 IPv4 leases starting from address %2",
-    "DHCPSRV_CQL_GET_PAGE6", "obtaining at most %1 IPv6 leases starting from address %2",
-    "DHCPSRV_CQL_GET_SUBID4", "obtaining IPv4 leases for subnet ID %1",
-    "DHCPSRV_CQL_GET_SUBID_CLIENTID", "obtaining IPv4 lease for subnet ID %1 and client ID %2",
-    "DHCPSRV_CQL_GET_SUBID_HWADDR", "obtaining IPv4 lease for subnet ID %1 and hardware address %2",
-    "DHCPSRV_CQL_GET_VERSION", "obtaining schema version information",
-    "DHCPSRV_CQL_HOST_ADD", "Adding host information to the database",
-    "DHCPSRV_CQL_HOST_DB", "Connecting to CQL hosts database: %1",
-    "DHCPSRV_CQL_HOST_DB_GET_VERSION", "obtaining schema version information for the CQL hosts database",
-    "DHCPSRV_CQL_HOST_GET4", "Retrieving one DHCPv4 host from a CQL database",
-    "DHCPSRV_CQL_HOST_GET6", "Retrieving one DHCPv6 host from a CQL database",
-    "DHCPSRV_CQL_HOST_GET_ALL", "Retrieving multiple hosts from a CQL database",
-    "DHCPSRV_CQL_LEASE_EXCEPTION_THROWN", "Exception thrown during Cassandra operation: %1",
-    "DHCPSRV_CQL_NO_TLS_SUPPORT", "Attempt to configure TLS (unsupported for CQL): %1",
-    "DHCPSRV_CQL_ROLLBACK", "rolling back Cassandra database.",
-    "DHCPSRV_CQL_UPDATE_ADDR4", "updating IPv4 lease for address %1",
-    "DHCPSRV_CQL_UPDATE_ADDR6", "updating IPv6 lease for address %1",
     "DHCPSRV_DEPRECATED", "This configuration is using a deprecated feature: %1",
     "DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET", "received bad DHCPv4o6 packet: %1",
     "DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION", "error handler for DHCP_DDNS IO generated an expected exception: %1",
@@ -523,6 +453,16 @@ const char* values[] = {
     "DHCPSRV_QUEUE_NCR", "%1: Name change request to %2 DNS entry queued: %3",
     "DHCPSRV_QUEUE_NCR_FAILED", "%1: queuing %2 name change request failed for lease %3: %4",
     "DHCPSRV_QUEUE_NCR_SKIP", "%1: skip queuing name change request for lease: %2",
+    "DHCPSRV_SUBNET4O6_SELECT_FAILED", "Failed to select any subnet for the DHCPv4o6 packet",
+    "DHCPSRV_SUBNET4_SELECT_BY_ADDRESS_NO_MATCH", "No subnet matches address: %1",
+    "DHCPSRV_SUBNET4_SELECT_BY_INTERFACE_NO_MATCH", "No subnet matches interface: %1",
+    "DHCPSRV_SUBNET4_SELECT_BY_RELAY_ADDRESS_NO_MATCH", "No subnet matches relay address: %1",
+    "DHCPSRV_SUBNET4_SELECT_NO_RAI_OPTIONS", "No RAI options found to use for subnet selection.",
+    "DHCPSRV_SUBNET4_SELECT_NO_RELAY_ADDRESS", "Relay address (giaddr) in client packet is empty.",
+    "DHCPSRV_SUBNET4_SELECT_NO_USABLE_ADDRESS", "No subnet selected because no suitable address to use for subnet selection was found.",
+    "DHCPSRV_SUBNET6_SELECT_BY_ADDRESS_NO_MATCH", "No subnet matches address: %1",
+    "DHCPSRV_SUBNET6_SELECT_BY_INTERFACE_ID_NO_MATCH", "No subnet matches interface id: %1",
+    "DHCPSRV_SUBNET6_SELECT_BY_INTERFACE_NO_MATCH", "No subnet matches interface: %1",
     "DHCPSRV_TIMERMGR_CALLBACK_FAILED", "running handler for timer %1 caused exception: %2",
     "DHCPSRV_TIMERMGR_REGISTER_TIMER", "registering timer: %1, using interval: %2 ms",
     "DHCPSRV_TIMERMGR_RUN_TIMER_OPERATION", "running operation for timer: %1",

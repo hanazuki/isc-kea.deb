@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2021-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -486,7 +486,7 @@ DROP PROCEDURE IF EXISTS checkDHCPv4ClientClassKnownDependencyChange;
 -- -----------------------------------------------------------------------
 -- Stored procedure to be executed before committing a transaction
 -- updating a DHCPv4 client class. It verifies if the class dependency on
--- KNOWN or UNKNOWN built-in classes has changed as a a result of the
+-- KNOWN or UNKNOWN built-in classes has changed as a result of the
 -- update. It signals an error if it has changed and there is at least
 -- one class depending on this class.
 -- -----------------------------------------------------------------------
@@ -946,7 +946,7 @@ DROP PROCEDURE IF EXISTS checkDHCPv6ClientClassKnownDependencyChange;
 -- -----------------------------------------------------------------------
 -- Stored procedure to be executed before committing a transaction
 -- updating a DHCPv6 client class. It verifies if the class dependency on
--- KNOWN or UNKNOWN built-in classes has changed as a a result of the
+-- KNOWN or UNKNOWN built-in classes has changed as a result of the
 -- update. It signals an error if it has changed and there is at least
 -- one class depending on this class.
 -- -----------------------------------------------------------------------

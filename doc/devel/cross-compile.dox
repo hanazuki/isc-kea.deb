@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2020-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -102,7 +102,6 @@ a native (i.e. not cross-compiled) Kea build.
 
 Required and optional Kea dependencies, usually available as packages:
  - Python (built-in)
- - Cassandra (skipped here)
  - libssl-dev (built-in in the full image)
  - liblog4cplus-dev (in liblog4cplus package, load both the library and
   the development part)

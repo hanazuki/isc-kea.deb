@@ -18,6 +18,7 @@
 #include <boost/foreach.hpp>
 #include <vector>
 
+using namespace isc::util;
 using namespace std;
 
 namespace isc {
@@ -226,8 +227,6 @@ DatabaseConnection::toElement(const ParameterMap& params) {
             (keyword == "connect-timeout") ||
             (keyword == "reconnect-wait-time") ||
             (keyword == "max-reconnect-tries") ||
-            (keyword == "request-timeout") ||
-            (keyword == "tcp-keepalive") ||
             (keyword == "port") ||
             (keyword == "max-row-errors")) {
             // integer parameters
@@ -240,7 +239,6 @@ DatabaseConnection::toElement(const ParameterMap& params) {
                     .arg("integer").arg(keyword).arg(value);
             }
         } else if ((keyword == "persist") ||
-                   (keyword == "tcp-nodelay") ||
                    (keyword == "readonly")) {
             if (value == "true") {
                 result->set(keyword, isc::data::Element::create(true));
@@ -255,10 +253,6 @@ DatabaseConnection::toElement(const ParameterMap& params) {
                    (keyword == "password") ||
                    (keyword == "host") ||
                    (keyword == "name") ||
-                   (keyword == "contact-points") ||
-                   (keyword == "consistency") ||
-                   (keyword == "serial-consistency") ||
-                   (keyword == "keyspace") ||
                    (keyword == "on-fail") ||
                    (keyword == "trust-anchor") ||
                    (keyword == "cert-file") ||
@@ -278,32 +272,6 @@ isc::data::ElementPtr
 DatabaseConnection::toElementDbAccessString(const std::string& dbaccess) {
     ParameterMap params = parse(dbaccess);
     return (toElement(params));
-}
-
-std::string
-ReconnectCtl::onFailActionToText(OnFailAction action) {
-    switch (action) {
-    case OnFailAction::STOP_RETRY_EXIT:
-        return ("stop-retry-exit");
-    case OnFailAction::SERVE_RETRY_EXIT:
-        return ("serve-retry-exit");
-    case OnFailAction::SERVE_RETRY_CONTINUE:
-        return ("serve-retry-continue");
-    }
-    return ("invalid-action-type");
-}
-
-OnFailAction
-ReconnectCtl::onFailActionFromText(const std::string& text) {
-    if (text == "stop-retry-exit") {
-        return (OnFailAction::STOP_RETRY_EXIT);
-    } else if (text == "serve-retry-exit") {
-        return (OnFailAction::SERVE_RETRY_EXIT);
-    } else if (text == "serve-retry-continue") {
-        return (OnFailAction::SERVE_RETRY_CONTINUE);
-    } else {
-        isc_throw(BadValue, "Invalid action on connection loss: " << text);
-    }
 }
 
 DbCallback DatabaseConnection::db_lost_callback_ = 0;

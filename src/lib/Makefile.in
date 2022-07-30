@@ -89,8 +89,7 @@ build_triplet = @build@
 host_triplet = @host@
 @HAVE_MYSQL_TRUE@am__append_1 = mysql
 @HAVE_PGSQL_TRUE@am__append_2 = pgsql
-@HAVE_CQL_TRUE@am__append_3 = cql
-@HAVE_SYSREPO_TRUE@am__append_4 = yang
+@HAVE_SYSREPO_TRUE@am__append_3 = yang
 subdir = src/lib
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
@@ -169,8 +168,8 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = exceptions util log cryptolink dns asiolink cc \
-	testutils database mysql pgsql cql config_backend hooks dhcp \
-	http config stats yang asiodns dhcp_ddns eval cfgrpt process \
+	testutils database mysql pgsql config_backend hooks dhcp http \
+	config stats yang asiodns dhcp_ddns eval cfgrpt process \
 	dhcpsrv d2srv
 am__DIST_COMMON = $(srcdir)/Makefile.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
@@ -208,11 +207,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -222,8 +216,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -237,7 +229,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -401,9 +392,9 @@ top_srcdir = @top_srcdir@
 
 # The following build order must be maintained.
 SUBDIRS = exceptions util log cryptolink dns asiolink cc testutils \
-	database $(am__append_1) $(am__append_2) $(am__append_3) \
-	config_backend hooks dhcp http config stats $(am__append_4) \
-	asiodns dhcp_ddns eval cfgrpt process dhcpsrv d2srv
+	database $(am__append_1) $(am__append_2) config_backend hooks \
+	dhcp http config stats $(am__append_3) asiodns dhcp_ddns eval \
+	cfgrpt process dhcpsrv d2srv
 all: all-recursive
 
 .SUFFIXES:

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -49,7 +49,7 @@ Option6StatusCode::clone() const {
 }
 
 void
-Option6StatusCode::pack(isc::util::OutputBuffer& buf) const {
+Option6StatusCode::pack(isc::util::OutputBuffer& buf, bool) const {
     // Pack option header.
     packHeader(buf);
     // Write numeric status code.
@@ -159,9 +159,9 @@ Option4SlpServiceScope::clone() const {
 }
 
 void
-Option4SlpServiceScope::pack(isc::util::OutputBuffer& buf) const {
+Option4SlpServiceScope::pack(isc::util::OutputBuffer& buf, bool check) const {
     // Pack option header.
-    packHeader(buf);
+    packHeader(buf, check);
     // Write mandatory flag.
     buf.writeUint8(static_cast<uint8_t>(getMandatoryFlag() ? 1 : 0));
     // If there is any scope list, write it.

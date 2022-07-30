@@ -4,14 +4,13 @@
 // - memfile
 // - MySQL
 // - PostgreSQL
-// - CQL (Cassandra) backend
 
 { "Dhcp6":
 
 {
-// Kea is told to listen on ethX interface only.
+// Kea is told to listen on eth0 interface only.
   "interfaces-config": {
-    "interfaces": [ "ethX" ]
+    "interfaces": [ "eth0" ]
   },
 
 // We need to specify lease type. Exactly one lease-database section
@@ -66,21 +65,6 @@
 //      "connect-timeout": 3
 //  },
 
-// 4. CQL (Cassandra) backend. Leases will be stored in Cassandra
-// database. Make sure it is up, running and properly initialized. See
-// kea-admin documentation for details on how to initialize the
-// database. The only strictly required parameters are type, keyspace
-// and contact-points. At least one contact point must be specified, but
-// more than one is required for redundancy. Make sure you specify the
-// contact points without spaces. Kea must be compiled with --with-cql
-// option to use this backend.
-//  "lease-database": {
-//      "type": "cql",
-//      "keyspace": "keatest",
-//      "contact-points": "192.0.2.1,192.0.2.2,192.0.2.3",
-//      "port": 9042
-//  },
-
 // Addresses will be assigned with preferred and valid lifetimes
 // being 3000 and 4000, respectively. Client is told to start
 // renewing after 1000 seconds. If the server does not respond
@@ -98,7 +82,7 @@
     {
       "pools": [ { "pool": "2001:db8:1::/80" } ],
       "subnet": "2001:db8:1::/64",
-      "interface": "ethX"
+      "interface": "eth0"
     }
   ],
 

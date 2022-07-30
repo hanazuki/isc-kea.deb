@@ -15,7 +15,9 @@
 #include <dhcpsrv/network.h>
 #include <dhcpsrv/pool.h>
 #include <dhcpsrv/subnet_id.h>
+#include <util/dhcp_space.h>
 #include <util/triplet.h>
+
 #include <boost/multi_index/mem_fun.hpp>
 #include <boost/multi_index/indexed_by.hpp>
 #include <boost/multi_index/ordered_index.hpp>
@@ -25,6 +27,7 @@
 #include <boost/pointer_cast.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
+
 #include <cstdint>
 #include <map>
 #include <mutex>
@@ -146,10 +149,9 @@ public:
     ///
     /// @param pool pool to be added
     ///
-    /// @throw isc::BadValue if the pool type is invalid, the pool
-    /// is not an IA_PD pool and the address range of this pool does not
-    /// match the subnet prefix, or the pool overlaps with an existing pool
-    /// within the subnet.
+    /// @throw isc::BadValue if the pool type is invalid, in the case of address
+    /// pools if the address range of the pool does not match the subnet prefix,
+    /// or if the pool overlaps with an existing pool within the subnet.
     void addPool(const PoolPtr& pool);
 
     /// @brief Deletes all pools of specified type.
@@ -996,9 +998,33 @@ using SubnetFetcher4 = SubnetFetcher<Subnet4Ptr, Subnet4Collection>;
 
 /// @brief Type of the @c SubnetFetcher used for IPv6.
 using SubnetFetcher6 = SubnetFetcher<Subnet6Ptr, Subnet6Collection>;
-
-
 //@}
+
+/// @brief adapters for linking templates to qualified names
+/// @{
+namespace {
+
+template <isc::util::DhcpSpace D>
+struct AdapterSubnet {};
+
+template <>
+struct AdapterSubnet<isc::util::DHCPv4> {
+    using type = Subnet4;
+};
+
+template <>
+struct AdapterSubnet<isc::util::DHCPv6> {
+    using type = Subnet6;
+};
+
+}  // namespace
+
+template <isc::util::DhcpSpace D>
+using SubnetT = typename AdapterSubnet<D>::type;
+
+template <isc::util::DhcpSpace D>
+using SubnetTPtr = boost::shared_ptr<SubnetT<D>>;
+/// @}
 
 } // end of isc::dhcp namespace
 } // end of isc namespace

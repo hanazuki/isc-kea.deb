@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -127,11 +127,13 @@ public:
     /// @param address - IPv4 address for the lease
     /// @param subnet_id - subnet ID to which the lease belongs
     /// @param state - the state of the lease
+    /// @param user_context - the lease's user context
     ///
     /// @return pointer to created Lease4
     Lease4Ptr makeLease4(const std::string& address,
                          const SubnetID& subnet_id,
-                         const uint32_t state = Lease::STATE_DEFAULT);
+                         const uint32_t state = Lease::STATE_DEFAULT,
+                         const data::ConstElementPtr user_context = data::ConstElementPtr());
 
     /// @brief Constructs a minimal IPv6 lease and adds it to the lease storage
     ///
@@ -142,13 +144,15 @@ public:
     /// @param prefix_len = length of the prefix (should be 0 for TYPE_NA)
     /// @param subnet_id - subnet ID to which the lease belongs
     /// @param state - the state of the lease
+    /// @param user_context - the lease's user context
     ///
     /// @return pointer to created Lease6
     Lease6Ptr makeLease6(const Lease::Type& type,
                          const std::string& address,
                          uint8_t prefix_len,
                          const SubnetID& subnet_id,
-                         const uint32_t state = Lease::STATE_DEFAULT);
+                         const uint32_t state = Lease::STATE_DEFAULT,
+                         const data::ConstElementPtr user_context = data::ConstElementPtr());
 
     /// @brief checks that addLease, getLease4(addr) and deleteLease() works
     void testBasicLease4();
@@ -502,6 +506,36 @@ public:
     void checkLeaseRange(const Lease4Collection& returned,
                          const std::vector<std::string>& expected_addresses);
 
+    /// @brief Create a user-context with a given list of classes
+    ///
+    /// Creates an Element::map with the following content:
+    ///
+    /// {
+    ///     "ISC": {
+    ///         "classes": [ "class0", "class1", ... ]
+    ///     }
+    /// }
+    ///
+    /// @param classes  list of classes to include in the context
+    /// @return ElementPtr containing the user-context
+    data::ElementPtr makeContextWithClasses(const std::list<ClientClass>& classes);
+
+    /// @brief Tests class lease counts when adding, updating, and deleting
+    /// leases with class lists.
+    void testClassLeaseCount4();
+
+    /// @brief Tests class lease counts when adding, updating, and deleting
+    /// leases with class lists.
+    ///
+    /// @param ltype type of lease, either Lease::TYPE_NA or Lease::TYPE_PD
+    void testClassLeaseCount6(Lease::Type ltype);
+
+    /// @brief Checks a few v4 lease limit checking scenarios.
+    void testLeaseLimits4();
+
+    /// @brief Checks a few v6 lease limit checking scenarios.
+    void testLeaseLimits6();
+
     /// @brief String forms of IPv4 addresses
     std::vector<std::string> straddress4_;
 
@@ -626,7 +660,7 @@ public:
     void testDbLostAndFailedAfterTimeoutCallback();
 
     /// @brief Callback function registered with the lease manager
-    bool db_lost_callback(db::ReconnectCtlPtr /* not_used */) {
+    bool db_lost_callback(util::ReconnectCtlPtr /* not_used */) {
         return (++db_lost_callback_called_);
     }
 
@@ -634,7 +668,7 @@ public:
     uint32_t db_lost_callback_called_;
 
     /// @brief Callback function registered with the lease manager
-    bool db_recovered_callback(db::ReconnectCtlPtr /* not_used */) {
+    bool db_recovered_callback(util::ReconnectCtlPtr /* not_used */) {
         return (++db_recovered_callback_called_);
     }
 
@@ -642,7 +676,7 @@ public:
     uint32_t db_recovered_callback_called_;
 
     /// @brief Callback function registered with the lease manager
-    bool db_failed_callback(db::ReconnectCtlPtr /* not_used */) {
+    bool db_failed_callback(util::ReconnectCtlPtr /* not_used */) {
         return (++db_failed_callback_called_);
     }
 

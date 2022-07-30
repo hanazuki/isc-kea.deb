@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -46,7 +46,8 @@ public:
     /// byte after stored option.
     ///
     /// @param buf buffer (option will be stored here)
-    void pack(isc::util::OutputBuffer& buf) const;
+    /// @param check if set to false, allows options larger than 255 for v4
+    void pack(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// @brief Parses received buffer
     ///

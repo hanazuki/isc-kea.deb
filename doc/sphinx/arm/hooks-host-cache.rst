@@ -1,7 +1,7 @@
 .. _hooks-host-cache:
 
-``host_cache``: Caching Host Reservations
-=========================================
+``host_cache``: Host Cache Reservations for Improved Performance
+================================================================
 
 Some database backends, such as RADIUS, are slow and may take
 a long time to respond. Since Kea in general is synchronous, backend
@@ -17,9 +17,8 @@ information in the database.
    ``kea-dhcp6`` process.
 
 In principle, this hook library can be used with any backend that may
-introduce performance degradation (MySQL, PostgreSQL, Cassandra, or
-RADIUS). Host Cache must be loaded for the RADIUS accounting mechanism
-to work.
+introduce performance degradation (MySQL, PostgreSQL or RADIUS). Host Cache
+must be loaded for the RADIUS accounting mechanism to work.
 
 The Host Cache hook library is very simple. It takes only one
 optional parameter (``maximum``), which defines the maximum number of hosts

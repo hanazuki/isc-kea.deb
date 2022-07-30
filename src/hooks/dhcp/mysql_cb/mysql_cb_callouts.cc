@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,9 +9,13 @@
 // issues related to namespaces.
 
 #include <config.h>
+
 #include <hooks/hooks.h>
+#include <mysql_cb_impl.h>
+
 #include <mysql_cb_dhcp4.h>
 #include <mysql_cb_dhcp6.h>
+#include <mysql_cb_log.h>
 
 using namespace isc::cb;
 using namespace isc::dhcp;

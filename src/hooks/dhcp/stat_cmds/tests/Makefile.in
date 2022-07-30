@@ -90,12 +90,10 @@ build_triplet = @build@
 host_triplet = @host@
 @HAVE_MYSQL_TRUE@am__append_1 = $(MYSQL_CPPFLAGS)
 @HAVE_PGSQL_TRUE@am__append_2 = $(PGSQL_CPPFLAGS)
-@HAVE_CQL_TRUE@am__append_3 = $(CQL_CPPFLAGS)
 TESTS = $(am__EXEEXT_1)
-@HAVE_GTEST_TRUE@am__append_4 = stat_cmds_unittests
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_5 = $(MYSQL_LIBS)
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_6 = $(PGSQL_LIBS)
-@HAVE_CQL_TRUE@@HAVE_GTEST_TRUE@am__append_7 = $(CQL_LIBS)
+@HAVE_GTEST_TRUE@am__append_3 = stat_cmds_unittests
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_4 = $(MYSQL_LIBS)
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_5 = $(PGSQL_LIBS)
 noinst_PROGRAMS = $(am__EXEEXT_2)
 subdir = src/hooks/dhcp/stat_cmds/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -295,11 +293,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -309,8 +302,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -324,7 +315,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -491,7 +481,7 @@ AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 	-I$(top_srcdir)/src/hooks/dhcp/stat_cmds $(BOOST_INCLUDES) \
 	-DSTAT_CMDS_LIB_SO=\"$(abs_top_builddir)/src/hooks/dhcp/stat_cmds/.libs/libdhcp_stat_cmds.so\" \
 	-DINSTALL_PROG=\"$(abs_top_srcdir)/install-sh\" \
-	$(am__append_1) $(am__append_2) $(am__append_3)
+	$(am__append_1) $(am__append_2)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 @USE_STATIC_LINK_TRUE@AM_LDFLAGS = -static
 
@@ -507,8 +497,7 @@ AM_LOG_FLAGS = --mode=execute
 @HAVE_GTEST_TRUE@stat_cmds_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES) $(LOG4CPLUS_INCLUDES)
 @HAVE_GTEST_TRUE@stat_cmds_unittests_LDFLAGS = $(AM_LDFLAGS) \
 @HAVE_GTEST_TRUE@	$(CRYPTO_LDFLAGS) $(GTEST_LDFLAGS) \
-@HAVE_GTEST_TRUE@	$(am__append_5) $(am__append_6) \
-@HAVE_GTEST_TRUE@	$(am__append_7)
+@HAVE_GTEST_TRUE@	$(am__append_4) $(am__append_5)
 @HAVE_GTEST_TRUE@stat_cmds_unittests_CXXFLAGS = $(AM_CXXFLAGS)
 @HAVE_GTEST_TRUE@stat_cmds_unittests_LDADD = $(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \

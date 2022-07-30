@@ -72,14 +72,29 @@
 /* Define to 1 if getsockopt(IPV6_USE_MIN_MTU) does not work */
 #undef HAVE_BROKEN_GET_IPV6_USE_MIN_MTU
 
-/* CQL is present */
-#undef HAVE_CQL
-
 /* Define to 1 if gtest defines edit_distance::CreateUnifiedDiff */
 #undef HAVE_CREATE_UNIFIED_DIFF
 
 /* Define to 1 if you have the <dlfcn.h> header file. */
 #undef HAVE_DLFCN_H
+
+/* Define to 1 if you have the `EVP_MD_CTX_create' function. */
+#undef HAVE_EVP_MD_CTX_CREATE
+
+/* Define to 1 if you have the `EVP_MD_CTX_destroy' function. */
+#undef HAVE_EVP_MD_CTX_DESTROY
+
+/* Define to 1 if you have the `EVP_MD_CTX_free' function. */
+#undef HAVE_EVP_MD_CTX_FREE
+
+/* Define to 1 if you have the `EVP_MD_CTX_new' function. */
+#undef HAVE_EVP_MD_CTX_NEW
+
+/* Define to 1 if you have the `EVP_PKEY_new_mac_key' function. */
+#undef HAVE_EVP_PKEY_NEW_MAC_KEY
+
+/* Define to 1 if you have the `EVP_PKEY_new_raw_private_key' function. */
+#undef HAVE_EVP_PKEY_NEW_RAW_PRIVATE_KEY
 
 /* Define to 1 if boost::asio::ssl::context::tls is available */
 #undef HAVE_GENERIC_TLS_METHOD

@@ -244,8 +244,8 @@ Lease Storage
 -------------
 
 All leases issued by the server are stored in the lease database.
-There are four database backends available: memfile
-(the default), MySQL, PostgreSQL, and Cassandra (deprecated).
+There are three database backends available: memfile
+(the default), MySQL, PostgreSQL.
 
 Memfile - Basic Storage for Leases
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -382,7 +382,7 @@ Lease Database Configuration
 
 Lease database configuration is controlled through the
 ``Dhcp6``/``lease-database`` parameters. The database type must be set to
-``memfile``, ``mysql``, or ``postgresql``, or ``cql``, e.g.:
+``memfile``, ``mysql`` or ``postgresql``, e.g.:
 
 ::
 
@@ -390,20 +390,13 @@ Lease database configuration is controlled through the
 
 Next, the name of the database to hold the leases must be set; this is
 the name used when the database was created (see
-:ref:`mysql-database-create`, :ref:`pgsql-database-create`, or
-:ref:`cql-database-create`).
+:ref:`mysql-database-create` or :ref:`pgsql-database-create`).
 
 For MySQL or PostgreSQL:
 
 ::
 
    "Dhcp6": { "lease-database": { "name": "database-name" , ... }, ... }
-
-For Cassandra:
-
-::
-
-   "Dhcp6": { "lease-database": { "keyspace": "database-name" , ... }, ... }
 
 If the database is located on a different system from the DHCPv6 server,
 the database host name must also be specified:
@@ -412,24 +405,12 @@ the database host name must also be specified:
 
    "Dhcp6": { "lease-database": { "host": "remote-host-name", ... }, ... }
 
-For Cassandra, multiple contact points can be provided:
-
-::
-
-   "Dhcp6": { "lease-database": { "contact-points": "remote-host-name[, ...]" , ... }, ... }
-
 Normally, the database is on the same machine as the DHCPv6 server.
 In this case, set the value to the empty string:
 
 ::
 
    "Dhcp6": { "lease-database": { "host" : "", ... }, ... }
-
-For Cassandra:
-
-::
-
-   "Dhcp6": { "lease-database": { "contact-points": "", ... }, ... }
 
 Should the database use a port other than the default, it may be
 specified as well:
@@ -461,9 +442,7 @@ If the server is unable to reconnect to the database after making the
 maximum number of attempts, the server will exit. A value of 0 (the
 default) disables automatic recovery and the server will exit
 immediately upon detecting a loss of connectivity (MySQL and PostgreSQL
-only). For Cassandra, Kea uses an interface that connects to
-all nodes in a cluster at the same time. Any connectivity issues should
-be handled by internal Cassandra mechanisms.
+only).
 
 The number of milliseconds the server waits between attempts to
 reconnect to the lease database after connectivity has been lost may
@@ -475,7 +454,7 @@ also be specified:
 
 The default value for MySQL and PostgreSQL is 0, which disables automatic
 recovery and causes the server to exit immediately upon detecting the
-loss of connectivity. The default value for Cassandra is 2000 ms.
+loss of connectivity.
 
 ::
 
@@ -512,13 +491,6 @@ The possible values are:
    exclusively as a configuration tool.
 
 The host parameter is used by the MySQL and PostgreSQL backends.
-Cassandra has a concept of contact points that can be used to
-contact the cluster, instead of a single IP or hostname. It takes a
-list of comma-separated IP addresses, which may be specified as:
-
-::
-
-    "Dhcp6": { "lease-database": { "contact-points" : "192.0.2.1,192.0.2.2", ... }, ... }
 
 Finally, the credentials of the account under which the server will
 access the database should be set:
@@ -533,14 +505,6 @@ access the database should be set:
 If there is no password to the account, set the password to the empty
 string ``""``. (This is the default.)
 
-.. _cassandra-database-configuration6:
-
-Cassandra-Specific Parameters
-~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-The parameters are the same for both DHCPv4 and DHCPv6. See
-:ref:`cassandra-database-configuration4` for details.
-
 .. _hosts6-storage:
 
 Hosts Storage
@@ -552,7 +516,7 @@ lease database. In fact, the Kea server opens independent connections for
 each purpose, be it lease or hosts information, which gives
 the most flexibility. Kea can keep leases and host reservations
 separately, but can also point to the same database. Currently the
-supported hosts database types are MySQL, PostgreSQL, and Cassandra.
+supported hosts database types are MySQL and PostgreSQL.
 
 The following configuration can be used to configure a
 connection to MySQL:
@@ -650,9 +614,7 @@ If the server is unable to reconnect to the database after making the
 maximum number of attempts, the server will exit. A value of 0 (the
 default) disables automatic recovery and the server will exit
 immediately upon detecting a loss of connectivity (MySQL and PostgreSQL
-only). For Cassandra, Kea uses an interface that connects to
-all nodes in a cluster at the same time. Any connectivity issues should
-be handled by internal Cassandra mechanisms.
+only).
 
 The number of milliseconds the server waits between attempts to
 reconnect to the host database after connectivity has been lost may also
@@ -664,7 +626,7 @@ be specified:
 
 The default value for MySQL and PostgreSQL is 0, which disables automatic
 recovery and causes the server to exit immediately upon detecting the
-loss of connectivity. The default value for Cassandra is 2000 ms.
+loss of connectivity.
 
 ::
 
@@ -715,8 +677,6 @@ entry, as in:
 ::
 
    "Dhcp6": { "hosts-databases": [ { "type": "mysql", ... }, ... ], ... }
-
-For Cassandra-specific parameters, see :ref:`cassandra-database-configuration4`.
 
 If the same host is configured both in-file and in-database, Kea does not issue a warning,
 as it would if both were specified in the same data source.
@@ -838,6 +798,49 @@ not exist on all systems) or a specified unicast address, as in:
        ...
    }
 
+Kea binds the service sockets for each interface on startup. If another
+process is already using a port, then Kea logs the message and suppresses an
+error. DHCP service runs, but it is unavailable on some interfaces.
+
+The "service-sockets-require-all" option makes Kea require all sockets to
+be successfully bound. If any opening fails, Kea interrupts the
+initialization and exits with a non-zero status. (Default is false).
+
+::
+
+   "Dhcp6": {
+       "interfaces-config": {
+           "interfaces": [ "eth1", "eth3" ],
+           "service-sockets-require-all": true
+       },
+       ...
+   }
+
+Sometimes, immediate interruption isn't a good choice. The port can be
+unavailable only temporary. In this case, retrying the opening may resolve
+the problem. Kea provides two options to specify the retrying:
+``service-sockets-max-retries`` and ``service-sockets-retry-wait-time``.
+
+The first defines a maximal number of retries that Kea makes to open a socket.
+The zero value (default) means that the Kea doesn't retry the process.
+
+The second defines a wait time (in milliseconds) between attempts. The default
+value is 5000 (5 seconds).
+
+::
+
+   "Dhcp6": {
+       "interfaces-config": {
+           "interfaces": [ "eth1", "eth3" ],
+           "service-sockets-max-retries": 5,
+           "service-sockets-retry-wait-time": 5000
+       },
+       ...
+   }
+
+If "service-sockets-max-retries" is non-zero and "service-sockets-require-all"
+is false, then Kea retries the opening (if needed) but does not fail if any
+socket is still not opened.
 
 .. _ipv6-subnet-id:
 
@@ -1138,6 +1141,42 @@ and which is delegated a prefix from this pool.
            }
        ]
    }
+
+.. note::
+
+    Here are some liberties and limits to the values that subnets and pools can
+    take in Kea configurations that are out of the ordinary:
+
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
+    | Kea configuration case                                                        | Allowed | Comment                                                                            |
+    +===============================================================================+=========+====================================================================================+
+    | Overlapping subnets                                                           | Yes     | Administrator consideration needs to be given to how clients are matched to        |
+    |                                                                               |         | these subnets.                                                                     |
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
+    | Overlapping address pools in one subnet                                       | No      | Startup error: DHCP6_PARSER_FAIL                                                   |
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
+    | Overlapping address pools in different subnets                                | Yes     | Specifying the same address pool in different subnets can be used as an equivalent |
+    |                                                                               |         | of the global address pool. In that case, the server can assign addresses from the |
+    |                                                                               |         | same range regardless of the client's subnet. If an address from such a pool is    |
+    |                                                                               |         | assigned to a client in one subnet, the same address will be renewed for this      |
+    |                                                                               |         | client if it moves to another subnet. Another client in a different subnet will    |
+    |                                                                               |         | not be assigned an address already assigned to the client in any of the subnets.   |
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
+    | Address pools that are outside the subnet they are configured under           | No      | Startup error: DHCP6_PARSER_FAIL                                                   |
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
+    | Overlapping prefix delegation pools in one subnet                             | No      | Startup error: DHCP6_PARSER_FAIL                                                   |
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
+    | Overlapping prefix delegation pools in different subnets                      | Yes     | Specifying the same prefix delegation pool in different subnets can be used as an  |
+    |                                                                               |         | equivalent of the global pool. In that case, the server can delegate the same      |
+    |                                                                               |         | prefixes regardless of the client's subnet. If a prefix from such a pool is        |
+    |                                                                               |         | delegated to a client in one subnet, the same prefix will be renewed for this      |
+    |                                                                               |         | client if it moves to another subnet. Another client in a different subnet will    |
+    |                                                                               |         | not be delegated a prefix already delegated to the client in any of the subnets.   |
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
+    | Prefix delegation pools not matching the subnet prefix                        | Yes     | It is common in many deployments to configure the prefix delegation pools not      |
+    |                                                                               |         | matching the subnet prefix, e.g. a prefix pool of 3000::/96 within the             |
+    |                                                                               |         | 2001:db8:1::/64 subnet. Such use cases are supported by Kea DHCPv6 server.         |
+    +-------------------------------------------------------------------------------+---------+------------------------------------------------------------------------------------+
 
 .. _dhcp6-std-options:
 
@@ -2566,6 +2605,17 @@ extracted, and a class name is constructed from it and added to the
 class list for the packet. The second method specifies an expression that is
 evaluated for each packet. If the result is ``true``, the packet is a
 member of the class.
+
+.. note::
+
+   The new ``early-global-reservations-lookup`` global parameter flag
+   enables a lookup for global reservations before the subnet selection
+   phase. This lookup is similar to the general lookup described above
+   with two differences:
+
+   - the lookup is limited to global host reservations
+
+   - the ``UNKNOWN`` class is never set
 
 .. note::
 
@@ -4021,16 +4071,16 @@ reserved class has been also assigned.
    :ref:`subnet-selection-with-class-reservations6`
    for specific use cases.
 
-.. _reservations6-mysql-pgsql-cql:
+.. _reservations6-mysql-pgsql:
 
-Storing Host Reservations in MySQL, PostgreSQL, or Cassandra
-------------------------------------------------------------
+Storing Host Reservations in MySQL or PostgreSQL
+------------------------------------------------
 
-Kea can store host reservations in MySQL, PostgreSQL, or
-Cassandra. See :ref:`hosts6-storage` for information on
-how to configure Kea to use reservations stored in MySQL, PostgreSQL, or
-Cassandra. Kea provides a dedicated hook for managing reservations in a
-database; section :ref:`host-cmds` provides detailed information.
+Kea can store host reservations in MySQL or PostgreSQL.
+See :ref:`hosts6-storage` for information on how to
+configure Kea to use reservations stored in MySQL or PostgreSQL.
+Kea provides a dedicated hook for managing reservations in a
+database; section :ref:`hooks-host-cmds` provides detailed information.
 The `Kea wiki
 <https://gitlab.isc.org/isc-projects/kea/wikis/designs/commands#23-host-reservations-hr-management>`__
 provides some examples of how to conduct common host reservation
@@ -4636,7 +4686,7 @@ particular subnet, to avoid having two different clients
 compete for the same lease. When using the default settings, the server
 returns a configuration error when it finds two or more reservations for
 the same lease within a subnet in the Kea configuration file. The
-:ref:`host-cmds` hook library returns an error in response to the
+:ref:`hooks-host-cmds` hook library returns an error in response to the
 ``reservation-add`` command when it detects that the reservation exists
 in the database for the lease for which the new reservation is being added.
 
@@ -4653,7 +4703,7 @@ allows such reservations to be created both in the Kea configuration
 file and in the host database backend, via the ``host-cmds`` hook library.
 
 This setting is currently supported by the most popular host database
-backends, i.e. MySQL and PostgreSQL. It is not supported for Cassandra,
+backends, i.e. MySQL and PostgreSQL.
 Host Cache (see :ref:`hooks-host-cache`), or the RADIUS backend
 (see :ref:`hooks-radius`). An attempt to set ``ip-reservations-unique``
 to ``false`` when any of these three backends is in use yields a
@@ -6293,13 +6343,13 @@ The DHCPv6 server supports the following statistics:
    |                                              |                | subnet separately.                 |
    +----------------------------------------------+----------------+------------------------------------+
    | v6-allocation-fail-shared-network            | integer        | Number of address allocation       |
-   |                                              |                | failures for a paticular client    |
+   |                                              |                | failures for a particular client   |
    |                                              |                | connected to a shared network.     |
    |                                              |                | This is a global statistic that    |
    |                                              |                | covers all subnets.                |
    +----------------------------------------------+----------------+------------------------------------+
    | subnet[id].v6-allocation-fail-shared-network | integer        | Number of address allocation       |
-   |                                              |                | failures for a paticular client    |
+   |                                              |                | failures for a particular client   |
    |                                              |                | connected to a shared network.     |
    |                                              |                | The *id* is the subnet-id of a     |
    |                                              |                | given subnet. This statistic is    |
@@ -6551,7 +6601,7 @@ option is actually needed. An example configuration looks as follows:
                "comment": "Those v4-v6 migration technologies are tricky.",
                "experimental": true,
                "billing-department": 42,
-               "contact-points": [ "Alice", "Bob" ]
+               "contacts": [ "Alice", "Bob" ]
            }
        } ]
    }
@@ -6710,7 +6760,7 @@ parameters must be specified in the JSON configuration file, if
 required.
 
 All supported parameters can be configured via ``cb_cmds`` hook library
-described in the :ref:`cb-cmds-library` section. The general rule is that
+described in the :ref:`hooks-cb-cmds` section. The general rule is that
 scalar global parameters are set using
 ``remote-global-parameter6-set``; shared-network-specific parameters
 are set using ``remote-network6-set``; and subnet- and pool-level

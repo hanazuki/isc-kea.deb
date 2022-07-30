@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -172,7 +172,7 @@ TEST(ConfigControlInfo, copyAndEquality) {
 
     // Make a third instance with a different db.
     ConfigControlInfo ctl3;
-    ASSERT_NO_THROW(ctl1.addConfigDatabase("type=cql host=other.org"));
+    ASSERT_NO_THROW(ctl1.addConfigDatabase("type=mysql host=other.org"));
 
     // They should not equal.
     EXPECT_FALSE(ctl3.equals(ctl1));

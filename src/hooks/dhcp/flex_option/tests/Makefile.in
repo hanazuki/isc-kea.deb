@@ -118,9 +118,11 @@ CONFIG_CLEAN_VPATH_FILES =
 am__EXEEXT_2 = $(am__EXEEXT_1)
 PROGRAMS = $(noinst_PROGRAMS)
 am__flex_option_unittests_SOURCES_DIST = run_unittests.cc \
-	flex_option_unittests.cc
+	test_flex_option.h flex_option_unittests.cc \
+	sub_option_unittests.cc
 @HAVE_GTEST_TRUE@am_flex_option_unittests_OBJECTS = flex_option_unittests-run_unittests.$(OBJEXT) \
-@HAVE_GTEST_TRUE@	flex_option_unittests-flex_option_unittests.$(OBJEXT)
+@HAVE_GTEST_TRUE@	flex_option_unittests-flex_option_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	flex_option_unittests-sub_option_unittests.$(OBJEXT)
 flex_option_unittests_OBJECTS = $(am_flex_option_unittests_OBJECTS)
 am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@flex_option_unittests_DEPENDENCIES = $(top_builddir)/src/hooks/dhcp/flex_option/libflex_option.la \
@@ -168,7 +170,8 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade =  \
 	./$(DEPDIR)/flex_option_unittests-flex_option_unittests.Po \
-	./$(DEPDIR)/flex_option_unittests-run_unittests.Po
+	./$(DEPDIR)/flex_option_unittests-run_unittests.Po \
+	./$(DEPDIR)/flex_option_unittests-sub_option_unittests.Po
 am__mv = mv -f
 CXXCOMPILE = $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) \
 	$(AM_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS)
@@ -188,6 +191,24 @@ AM_V_CXXLD = $(am__v_CXXLD_@AM_V@)
 am__v_CXXLD_ = $(am__v_CXXLD_@AM_DEFAULT_V@)
 am__v_CXXLD_0 = @echo "  CXXLD   " $@;
 am__v_CXXLD_1 = 
+COMPILE = $(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) \
+	$(CPPFLAGS) $(AM_CFLAGS) $(CFLAGS)
+LTCOMPILE = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=compile $(CC) $(DEFS) \
+	$(DEFAULT_INCLUDES) $(INCLUDES) $(AM_CPPFLAGS) $(CPPFLAGS) \
+	$(AM_CFLAGS) $(CFLAGS)
+AM_V_CC = $(am__v_CC_@AM_V@)
+am__v_CC_ = $(am__v_CC_@AM_DEFAULT_V@)
+am__v_CC_0 = @echo "  CC      " $@;
+am__v_CC_1 = 
+CCLD = $(CC)
+LINK = $(LIBTOOL) $(AM_V_lt) --tag=CC $(AM_LIBTOOLFLAGS) \
+	$(LIBTOOLFLAGS) --mode=link $(CCLD) $(AM_CFLAGS) $(CFLAGS) \
+	$(AM_LDFLAGS) $(LDFLAGS) -o $@
+AM_V_CCLD = $(am__v_CCLD_@AM_V@)
+am__v_CCLD_ = $(am__v_CCLD_@AM_DEFAULT_V@)
+am__v_CCLD_0 = @echo "  CCLD    " $@;
+am__v_CCLD_1 = 
 SOURCES = $(flex_option_unittests_SOURCES)
 DIST_SOURCES = $(am__flex_option_unittests_SOURCES_DIST)
 RECURSIVE_TARGETS = all-recursive check-recursive cscopelist-recursive \
@@ -289,11 +310,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -303,8 +319,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -318,7 +332,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -496,7 +509,8 @@ CLEANFILES = *.gcno *.gcda
 LOG_COMPILER = $(LIBTOOL)
 AM_LOG_FLAGS = --mode=execute
 @HAVE_GTEST_TRUE@flex_option_unittests_SOURCES = run_unittests.cc \
-@HAVE_GTEST_TRUE@	flex_option_unittests.cc
+@HAVE_GTEST_TRUE@	test_flex_option.h flex_option_unittests.cc \
+@HAVE_GTEST_TRUE@	sub_option_unittests.cc
 @HAVE_GTEST_TRUE@flex_option_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES) $(LOG4CPLUS_INCLUDES)
 @HAVE_GTEST_TRUE@flex_option_unittests_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@flex_option_unittests_CXXFLAGS = $(AM_CXXFLAGS)
@@ -575,6 +589,7 @@ distclean-compile:
 
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/flex_option_unittests-flex_option_unittests.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/flex_option_unittests-run_unittests.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/flex_option_unittests-sub_option_unittests.Po@am__quote@ # am--include-marker
 
 $(am__depfiles_remade):
 	@$(MKDIR_P) $(@D)
@@ -630,6 +645,20 @@ flex_option_unittests-flex_option_unittests.obj: flex_option_unittests.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='flex_option_unittests.cc' object='flex_option_unittests-flex_option_unittests.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(flex_option_unittests_CPPFLAGS) $(CPPFLAGS) $(flex_option_unittests_CXXFLAGS) $(CXXFLAGS) -c -o flex_option_unittests-flex_option_unittests.obj `if test -f 'flex_option_unittests.cc'; then $(CYGPATH_W) 'flex_option_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/flex_option_unittests.cc'; fi`
+
+flex_option_unittests-sub_option_unittests.o: sub_option_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(flex_option_unittests_CPPFLAGS) $(CPPFLAGS) $(flex_option_unittests_CXXFLAGS) $(CXXFLAGS) -MT flex_option_unittests-sub_option_unittests.o -MD -MP -MF $(DEPDIR)/flex_option_unittests-sub_option_unittests.Tpo -c -o flex_option_unittests-sub_option_unittests.o `test -f 'sub_option_unittests.cc' || echo '$(srcdir)/'`sub_option_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/flex_option_unittests-sub_option_unittests.Tpo $(DEPDIR)/flex_option_unittests-sub_option_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='sub_option_unittests.cc' object='flex_option_unittests-sub_option_unittests.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(flex_option_unittests_CPPFLAGS) $(CPPFLAGS) $(flex_option_unittests_CXXFLAGS) $(CXXFLAGS) -c -o flex_option_unittests-sub_option_unittests.o `test -f 'sub_option_unittests.cc' || echo '$(srcdir)/'`sub_option_unittests.cc
+
+flex_option_unittests-sub_option_unittests.obj: sub_option_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(flex_option_unittests_CPPFLAGS) $(CPPFLAGS) $(flex_option_unittests_CXXFLAGS) $(CXXFLAGS) -MT flex_option_unittests-sub_option_unittests.obj -MD -MP -MF $(DEPDIR)/flex_option_unittests-sub_option_unittests.Tpo -c -o flex_option_unittests-sub_option_unittests.obj `if test -f 'sub_option_unittests.cc'; then $(CYGPATH_W) 'sub_option_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/sub_option_unittests.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/flex_option_unittests-sub_option_unittests.Tpo $(DEPDIR)/flex_option_unittests-sub_option_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='sub_option_unittests.cc' object='flex_option_unittests-sub_option_unittests.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(flex_option_unittests_CPPFLAGS) $(CPPFLAGS) $(flex_option_unittests_CXXFLAGS) $(CXXFLAGS) -c -o flex_option_unittests-sub_option_unittests.obj `if test -f 'sub_option_unittests.cc'; then $(CYGPATH_W) 'sub_option_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/sub_option_unittests.cc'; fi`
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -932,6 +961,7 @@ clean-am: clean-generic clean-libtool clean-noinstPROGRAMS \
 distclean: distclean-recursive
 		-rm -f ./$(DEPDIR)/flex_option_unittests-flex_option_unittests.Po
 	-rm -f ./$(DEPDIR)/flex_option_unittests-run_unittests.Po
+	-rm -f ./$(DEPDIR)/flex_option_unittests-sub_option_unittests.Po
 	-rm -f Makefile
 distclean-am: clean-am distclean-compile distclean-generic \
 	distclean-tags
@@ -979,6 +1009,7 @@ installcheck-am:
 maintainer-clean: maintainer-clean-recursive
 		-rm -f ./$(DEPDIR)/flex_option_unittests-flex_option_unittests.Po
 	-rm -f ./$(DEPDIR)/flex_option_unittests-run_unittests.Po
+	-rm -f ./$(DEPDIR)/flex_option_unittests-sub_option_unittests.Po
 	-rm -f Makefile
 maintainer-clean-am: distclean-am maintainer-clean-generic
 

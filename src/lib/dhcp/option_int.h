@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -44,7 +44,7 @@ typedef boost::shared_ptr<OptionUint32> OptionUint32Ptr;
 /// - int16_t,
 /// - int32_t.
 ///
-/// @param T data field type (see above).
+/// @tparam T data field type (see above).
 template<typename T>
 class OptionInt: public Option {
 private:
@@ -104,13 +104,14 @@ public:
     /// byte after stored option.
     ///
     /// @param [out] buf buffer (option will be stored here)
+    /// @param check if set to false, allows options larger than 255 for v4
     ///
     /// @throw isc::dhcp::InvalidDataType if size of a data field type is not
     /// equal to 1, 2 or 4 bytes. The data type is not checked in this function
     /// because it is checked in a constructor.
-    void pack(isc::util::OutputBuffer& buf) const {
+    virtual void pack(isc::util::OutputBuffer& buf, bool check = true) const {
         // Pack option header.
-        packHeader(buf);
+        packHeader(buf, check);
         // Depending on the data type length we use different utility functions
         // writeUint16 or writeUint32 which write the data in the network byte
         // order to the provided buffer. The same functions can be safely used
@@ -129,7 +130,7 @@ public:
         default:
             isc_throw(dhcp::InvalidDataType, "non-integer type");
         }
-        packOptions(buf);
+        packOptions(buf, check);
     }
 
     /// @brief Parses received buffer

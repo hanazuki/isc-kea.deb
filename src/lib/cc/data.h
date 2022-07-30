@@ -1,4 +1,4 @@
-// Copyright (C) 2010-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2010-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -379,6 +379,8 @@ public:
     static ElementPtr create(const int i,
                              const Position& pos = ZERO_POSITION());
     static ElementPtr create(const long int i,
+                             const Position& pos = ZERO_POSITION());
+    static ElementPtr create(const uint32_t i,
                              const Position& pos = ZERO_POSITION());
     static ElementPtr create(const double d,
                              const Position& pos = ZERO_POSITION());
@@ -799,19 +801,124 @@ void removeIdentical(ElementPtr a, ConstElementPtr b);
 /// Raises a TypeError if a or b are not MapElements
 ConstElementPtr removeIdentical(ConstElementPtr a, ConstElementPtr b);
 
-/// @brief Merges the data from other into element.
-/// (on the first level). Both elements must be
-/// MapElements.
-/// Every string,value pair in other is copied into element
-/// (the ElementPtr of value is copied, this is not a new object)
-/// Unless the value is a NullElement, in which case the
-/// key is removed from element, rather than setting the value to
-/// the given NullElement.
-/// This way, we can remove values from for instance maps with
-/// configuration data (which would then result in reverting back
-/// to the default).
+/// @brief Merges the data from other into element. (on the first level). Both
+/// elements must be MapElements. Every string, value pair in other is copied
+/// into element (the ElementPtr of value is copied, this is not a new object)
+/// Unless the value is a NullElement, in which case the key is removed from
+/// element, rather than setting the value to the given NullElement.
+/// This way, we can remove values from for instance maps with configuration
+/// data (which would then result in reverting back to the default).
 /// Raises a TypeError if either ElementPtr is not a MapElement
 void merge(ElementPtr element, ConstElementPtr other);
+
+/// @brief Function used to check if two MapElements refer to the same
+/// configuration data. It can check if the two MapElements have the same or
+/// have equivalent value for some members.
+/// e.g.
+/// (
+///  left->get("prefix")->stringValue() == right->get("prefix")->stringValue() &&
+///  left->get("prefix-len")->intValue() == right->get("prefix-len")->intValue() &&
+///  left->get("delegated-len")->intValue() == right->get("delegated-len")->intValue()
+/// )
+typedef std::function<bool (ElementPtr&, ElementPtr&)> MatchTestFunc;
+
+/// @brief Function used to check if the data provided for the element contains
+/// only information used for identification, or it contains extra useful data.
+typedef std::function<bool (ElementPtr&)> NoDataTestFunc;
+
+/// @brief Function used to check if the key is used for identification
+typedef std::function<bool (const std::string&)> IsKeyTestFunc;
+
+/// @brief Structure holding the test functions used to traverse the element
+/// hierarchy.
+struct HierarchyTraversalTest {
+    MatchTestFunc match_;
+    NoDataTestFunc no_data_;
+    IsKeyTestFunc is_key_;
+};
+
+/// @brief Mapping between a container name and functions used to match elements
+/// inside the container.
+typedef std::map<std::string, HierarchyTraversalTest> FunctionMap;
+
+/// @brief Hierarchy descriptor of the containers in a specific Element
+/// hierarchy tree. The position inside the vector indicates the level at which
+/// the respective containers are located.
+///
+/// e.g.
+/// {
+///   { { "pools", { ... , ... } }, { "pd-pools", { ... , ... } }, { "option-data", { ... , ... } } },
+///   { { "option-data", { ... , ... } } }
+/// }
+/// At first subnet level the 'pools', 'pd-pools' and 'option-data' containers
+/// can be found.
+/// At second subnet level the 'option-data' container can be found
+/// (obviously only inside 'pools' and 'pd-pools' containers).
+typedef std::vector<FunctionMap> HierarchyDescriptor;
+
+/// @brief Merges the diff data by adding the missing elements from 'other'
+/// to 'element' (recursively). Both elements must be the same Element type.
+/// Raises a TypeError if elements are not the same Element type.
+/// @note
+/// for non map and list elements the values are updated with the new values
+/// for maps:
+///     - non map and list elements are added/updated with the new values
+///     - list and map elements are processed recursively
+/// for lists:
+///     - regardless of the element type, all elements from 'other' are added to
+///       'element'
+///
+/// @param element The element to which new data is added.
+/// @param other The element containing the data which needs to be added.
+/// @param hierarchy The hierarchy describing the elements relations and
+/// identification keys.
+/// @param key The container holding the current element.
+/// @param idx The level inside the hierarchy the current element is located.
+void mergeDiffAdd(ElementPtr& element, ElementPtr& other,
+                  HierarchyDescriptor& hierarchy, std::string key,
+                  size_t idx = 0);
+
+/// @brief Merges the diff data by removing the data present in 'other' from
+/// 'element' (recursively). Both elements must be the same Element type.
+/// Raises a TypeError if elements are not the same Element type.
+/// for non map and list elements the values are set to NullElement
+/// for maps:
+///     - non map and list elements are removed from the map
+///     - list and map elements are processed recursively
+/// for lists:
+///     - regardless of the element type, all elements from 'other' matching
+///       elements in 'element' are removed
+///
+/// @param element The element from which new data is removed.
+/// @param other The element containing the data which needs to be removed.
+/// @param hierarchy The hierarchy describing the elements relations and
+/// identification keys.
+/// @param key The container holding the current element.
+/// @param idx The level inside the hierarchy the current element is located.
+void mergeDiffDel(ElementPtr& element, ElementPtr& other,
+                  HierarchyDescriptor& hierarchy, std::string key,
+                  size_t idx = 0);
+
+/// @brief Extends data by adding the specified 'extension' elements from
+/// 'other' inside the 'container' element (recursively). Both elements must be
+/// the same Element type.
+/// Raises a TypeError if elements are not the same Element type.
+///
+/// @param container The container holding the data that must be extended.
+/// @param extension The name of the element that contains the data that must be
+/// added (if not already present) in order to extend the initial data.
+/// @param element The element from which new data is added.
+/// @param other The element containing the data which needs to be added.
+/// @param hierarchy The hierarchy describing the elements relations and
+/// identification keys.
+/// @param key The container holding the current element.
+/// @param idx The level inside the hierarchy the current element is located.
+/// @param alter The flag which indicates if the current element should be
+/// updated.
+void extend(const std::string& container, const std::string& extension,
+            ElementPtr& element, ElementPtr& other,
+            HierarchyDescriptor& hierarchy, std::string key, size_t idx = 0,
+            bool alter = false);
 
 /// @brief Copy the data up to a nesting level.
 ///

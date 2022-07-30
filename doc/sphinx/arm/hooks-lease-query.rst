@@ -1,7 +1,7 @@
-.. _lease-query:
+.. _hooks-lease-query:
 
-``lease_query``: Leasequery
-===========================
+``lease_query``: Leasequery Support
+===================================
 
 This library provides support for DHCPv4 Leasequery as described in
 `RFC 4388 <https://tools.ietf.org/html/rfc4388>`__; and for DHCPv6

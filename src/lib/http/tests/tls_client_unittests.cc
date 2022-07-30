@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -138,6 +138,15 @@ private:
     /// @return Pointer to the generated HTTP OK response with no content.
     virtual HttpResponsePtr
     createDynamicHttpResponse(HttpRequestPtr request) {
+        // Check access parameters.
+        if (HttpRequest::recordSubject_) {
+            EXPECT_TRUE(request->getTls());
+            EXPECT_EQ("kea-client", request->getSubject());
+        }
+        if (HttpRequest::recordIssuer_) {
+            EXPECT_TRUE(request->getTls());
+            EXPECT_EQ("kea-ca", request->getIssuer());
+        }
         // Request must always be JSON.
         PostHttpRequestJsonPtr request_json =
             boost::dynamic_pointer_cast<PostHttpRequestJson>(request);
@@ -308,6 +317,8 @@ public:
         listener3_->stop();
         io_service_.poll();
         MultiThreadingMgr::instance().setMode(false);
+        HttpRequest::recordSubject_ = false;
+        HttpRequest::recordIssuer_ = false;
     }
 
     /// @brief Creates HTTP request with JSON body.
@@ -512,6 +523,10 @@ public:
                 ADD_FAILURE() << "asyncSendRequest failed: " << ec.message();
             }
         }));
+
+        // Record subject and issuer: they will be checked during response creation.
+        HttpRequest::recordSubject_ = true;
+        HttpRequest::recordIssuer_ = true;
 
         // Actually trigger the requests.
         ASSERT_NO_THROW(runIOService());
@@ -1123,7 +1138,7 @@ public:
 
     /// @brief Simulates external registry of Connection TCP sockets
     ///
-    /// Provides methods compatible with Connection callbacks for connnect
+    /// Provides methods compatible with Connection callbacks for connect
     /// and close operations.
     class ExternalMonitor {
     public:

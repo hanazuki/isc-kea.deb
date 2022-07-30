@@ -1,0 +1,24 @@
+{
+    "access": "write",
+    "avail": "2.0.0",
+    "brief": [ "The command unconditionally creates new GSS-TSIG keys for (rekeys) a specified DNS server."
+    ],
+    "cmd-syntax": [
+        "{",
+        "    \"command\": \"gss-tsig-rekey\",",
+        "    \"arguments\": {",
+        "        \"server-id\": \"foo\"",
+        "    }",
+        "}"
+    ],
+    "description": [ "See <xref linkend=\"command-gss-tsig-rekey\"/>" ],
+    "hook": "gss_tsig",
+    "name": "gss-tsig-rekey",
+    "support": [ "kea-dhcp-ddns" ],
+    "resp-syntax": [
+        "{",
+        "    \"result\": 0,",
+        "    \"text\": \"GSS-TSIG server[foo] rekeyed\"",
+        "}"
+    ]
+}

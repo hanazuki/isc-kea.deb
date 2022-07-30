@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -75,7 +75,7 @@ TEST(StdoutControlSocketTest, createControlSocket) {
                                      "",
                                      Url("http://127.0.0.1:8000/")));
     ASSERT_TRUE(cfg);
-    ControlSocketBasePtr cs = createControlSocket(cfg);
+    ControlSocketBasePtr cs = controlSocketFactory(cfg);
     ASSERT_TRUE(cs);
     StdoutControlSocketPtr scs =
         boost::dynamic_pointer_cast<StdoutControlSocket>(cs);
@@ -301,7 +301,7 @@ UnixControlSocketTest::reflectServer() {
 TEST_F(UnixControlSocketTest, createControlSocket) {
     CfgControlSocketPtr cfg = createCfgControlSocket();
     ASSERT_TRUE(cfg);
-    ControlSocketBasePtr cs = createControlSocket(cfg);
+    ControlSocketBasePtr cs = controlSocketFactory(cfg);
     ASSERT_TRUE(cs);
     UnixControlSocketPtr ucs =
         boost::dynamic_pointer_cast<UnixControlSocket>(cs);
@@ -627,7 +627,7 @@ HttpControlSocketTest::createReflectListener() {
 TEST_F(HttpControlSocketTest, createControlSocket) {
     CfgControlSocketPtr cfg = createCfgControlSocket();
     ASSERT_TRUE(cfg);
-    ControlSocketBasePtr cs = createControlSocket(cfg);
+    ControlSocketBasePtr cs = controlSocketFactory(cfg);
     ASSERT_TRUE(cs);
     HttpControlSocketPtr hcs =
         boost::dynamic_pointer_cast<HttpControlSocket>(cs);
@@ -657,7 +657,7 @@ TEST_F(HttpControlSocketTest, configGet) {
     ASSERT_TRUE(command);
     ASSERT_EQ(Element::string, command->getType());
     string expected = "{ \"command\": \"config-get\", "
-        "\"service\": [ \"foo\" ] }";
+        "\"remote-address\": \"127.0.0.1\", \"service\": [ \"foo\" ] }";
     EXPECT_EQ(expected, command->stringValue());
 }
 
@@ -684,7 +684,7 @@ TEST_F(HttpControlSocketTest, configGetCA) {
     ConstElementPtr command = reflected->get("received");
     ASSERT_TRUE(command);
     ASSERT_EQ(Element::string, command->getType());
-    string expected = "{ \"command\": \"config-get\" }";
+    string expected = "{ \"command\": \"config-get\", \"remote-address\": \"127.0.0.1\" }";
     EXPECT_EQ(expected, command->stringValue());
 }
 
@@ -715,7 +715,7 @@ TEST_F(HttpControlSocketTest, configTest) {
     ASSERT_EQ(Element::string, command->getType());
     string expected = "{ \"arguments\": { \"bar\": 1 }, "
         "\"command\": \"config-test\", "
-        "\"service\": [ \"foo\" ] }";
+        "\"remote-address\": \"127.0.0.1\", \"service\": [ \"foo\" ] }";
     EXPECT_EQ(expected, command->stringValue());
 }
 
@@ -746,7 +746,7 @@ TEST_F(HttpControlSocketTest, configTestCA) {
     ASSERT_TRUE(command);
     ASSERT_EQ(Element::string, command->getType());
     string expected = "{ \"arguments\": { \"bar\": 1 }, "
-        "\"command\": \"config-test\" }";
+        "\"command\": \"config-test\", \"remote-address\": \"127.0.0.1\" }";
     EXPECT_EQ(expected, command->stringValue());
 }
 
@@ -777,7 +777,7 @@ TEST_F(HttpControlSocketTest, configSet) {
     ASSERT_EQ(Element::string, command->getType());
     string expected = "{ \"arguments\": { \"bar\": 1 }, "
         "\"command\": \"config-set\", "
-        "\"service\": [ \"foo\" ] }";
+        "\"remote-address\": \"127.0.0.1\", \"service\": [ \"foo\" ] }";
     EXPECT_EQ(expected, command->stringValue());
 }
 
@@ -808,7 +808,7 @@ TEST_F(HttpControlSocketTest, configSetCA) {
     ASSERT_TRUE(command);
     ASSERT_EQ(Element::string, command->getType());
     string expected = "{ \"arguments\": { \"bar\": 1 }, "
-        "\"command\": \"config-set\" }";
+        "\"command\": \"config-set\", \"remote-address\": \"127.0.0.1\" }";
     EXPECT_EQ(expected, command->stringValue());
 }
 
