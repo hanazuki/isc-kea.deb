@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -30,18 +30,10 @@ namespace isc {
 namespace dhcp {
 
 Pkt4::Pkt4(uint8_t msg_type, uint32_t transid)
-     :Pkt(transid, DEFAULT_ADDRESS, DEFAULT_ADDRESS, DHCP4_SERVER_PORT,
-          DHCP4_CLIENT_PORT),
-      op_(DHCPTypeToBootpType(msg_type)),
-      hwaddr_(new HWAddr()),
-      hops_(0),
-      secs_(0),
-      flags_(0),
-      ciaddr_(DEFAULT_ADDRESS),
-      yiaddr_(DEFAULT_ADDRESS),
-      siaddr_(DEFAULT_ADDRESS),
-      giaddr_(DEFAULT_ADDRESS)
-{
+    : Pkt(transid, DEFAULT_ADDRESS, DEFAULT_ADDRESS, DHCP4_SERVER_PORT, DHCP4_CLIENT_PORT),
+      op_(DHCPTypeToBootpType(msg_type)), hwaddr_(new HWAddr()), hops_(0), secs_(0), flags_(0),
+      ciaddr_(DEFAULT_ADDRESS), yiaddr_(DEFAULT_ADDRESS), siaddr_(DEFAULT_ADDRESS),
+      giaddr_(DEFAULT_ADDRESS) {
     memset(sname_, 0, MAX_SNAME_LEN);
     memset(file_, 0, MAX_FILE_LEN);
 
@@ -49,18 +41,10 @@ Pkt4::Pkt4(uint8_t msg_type, uint32_t transid)
 }
 
 Pkt4::Pkt4(const uint8_t* data, size_t len)
-     :Pkt(data, len, DEFAULT_ADDRESS, DEFAULT_ADDRESS, DHCP4_SERVER_PORT,
-          DHCP4_CLIENT_PORT),
-      op_(BOOTREQUEST),
-      hwaddr_(new HWAddr()),
-      hops_(0),
-      secs_(0),
-      flags_(0),
-      ciaddr_(DEFAULT_ADDRESS),
-      yiaddr_(DEFAULT_ADDRESS),
-      siaddr_(DEFAULT_ADDRESS),
-      giaddr_(DEFAULT_ADDRESS)
-{
+    : Pkt(data, len, DEFAULT_ADDRESS, DEFAULT_ADDRESS, DHCP4_SERVER_PORT, DHCP4_CLIENT_PORT),
+      op_(BOOTREQUEST), hwaddr_(new HWAddr()), hops_(0), secs_(0), flags_(0),
+      ciaddr_(DEFAULT_ADDRESS), yiaddr_(DEFAULT_ADDRESS), siaddr_(DEFAULT_ADDRESS),
+      giaddr_(DEFAULT_ADDRESS) {
 
     if (len < DHCPV4_PKT_HDR_LEN) {
         isc_throw(OutOfRange, "Truncated DHCPv4 packet (len=" << len
@@ -76,10 +60,8 @@ Pkt4::len() {
     size_t length = DHCPV4_PKT_HDR_LEN; // DHCPv4 header
 
     // ... and sum of lengths of all options
-    for (OptionCollection::const_iterator it = options_.begin();
-         it != options_.end();
-         ++it) {
-        length += (*it).second->len();
+    for (const auto& it : options_) {
+        length += it.second->len();
     }
 
     return (length);
@@ -87,6 +69,7 @@ Pkt4::len() {
 
 void
 Pkt4::pack() {
+    ScopedPkt4OptionsCopy scoped_options(*this);
     if (!hwaddr_) {
         isc_throw(InvalidOperation, "Can't build Pkt4 packet. HWAddr not set.");
     }
@@ -101,7 +84,7 @@ Pkt4::pack() {
         buffer_out_.writeUint8(op_);
         buffer_out_.writeUint8(hwaddr_->htype_);
         buffer_out_.writeUint8(hw_len < MAX_CHADDR_LEN ?
-                              hw_len : MAX_CHADDR_LEN);
+                               hw_len : MAX_CHADDR_LEN);
         buffer_out_.writeUint8(hops_);
         buffer_out_.writeUint32(transid_);
         buffer_out_.writeUint16(secs_);
@@ -135,22 +118,34 @@ Pkt4::pack() {
         // write DHCP magic cookie
         buffer_out_.writeUint32(DHCP_OPTIONS_COOKIE);
 
+        /// Create a ManagedScopedOptionsCopyContainer to handle storing and
+        /// restoration of copied options.
+        ManagedScopedOptionsCopyContainer scoped_options;
+
+        // The RFC3396 adds support for long options split over multiple options
+        // using the same code.
+        // The long options are split in multiple CustomOption instances which
+        // hold the data. As a result, the option type of the newly created
+        // options will differ from the ones instantiated by the
+        // @ref OptionDefinition::optionFactory. At this stage the server should
+        // not do anything useful with the options beside packing.
+        LibDHCP::splitOptions4(options_, scoped_options.scoped_options_);
+
         // Call packOptions4() with parameter,"top", true. This invokes
         // logic to emit the message type option first.
         LibDHCP::packOptions4(buffer_out_, options_, true);
 
         // add END option that indicates end of options
         // (End option is very simple, just a 255 octet)
-         buffer_out_.writeUint8(DHO_END);
-     } catch(const Exception& e) {
+        buffer_out_.writeUint8(DHO_END);
+    } catch(const Exception& e) {
         // An exception is thrown and message will be written to Logger
-         isc_throw(InvalidOperation, e.what());
+        isc_throw(InvalidOperation, e.what());
     }
 }
 
 void
 Pkt4::unpack() {
-
     // input buffer (used during message reception)
     isc::util::InputBuffer buffer_in(&data_[0], data_.size());
 
@@ -223,6 +218,14 @@ Pkt4::unpack() {
     //                  << ", were able to parse " << offset << " bytes.");
     // }
     (void)offset;
+
+    // The RFC3396 adds support for multiple options using the same code fused
+    // into long options.
+    // All instances of the same option are fused together, including merging
+    // the suboption lists and fusing suboptions. As a result, the options will
+    // store more than 255 bytes of data and the regex parsers can effectively
+    // access the entire data.
+    LibDHCP::fuseOptions4(options_);
 
     // No need to call check() here. There are thorough tests for this
     // later (see Dhcp4Srv::accept()). We want to drop the packet later,
@@ -433,10 +436,9 @@ Pkt4::toText() const {
 
     if (!options_.empty()) {
         output << "," << std::endl << "options:";
-        for (isc::dhcp::OptionCollection::const_iterator opt = options_.begin();
-             opt != options_.end(); ++opt) {
+        for (const auto& opt : options_) {
             try {
-                output << std::endl << opt->second->toText(2);
+                output << std::endl << opt.second->toText(2);
             } catch (...) {
                 output << "(unknown)" << std::endl;
             }
@@ -597,5 +599,4 @@ Pkt4::isRelayed() const {
 }
 
 } // end of namespace isc::dhcp
-
 } // end of namespace isc

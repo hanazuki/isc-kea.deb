@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,6 +15,11 @@
 namespace isc {
 namespace dhcp {
 namespace test {
+
+/// @brief An open socket callback that can be use for a testing purposes.
+///
+/// @param port Port number to bind socket to.
+typedef std::function<void(uint16_t port)> PktFilterOpenSocketCallback;
 
 /// @brief A stub implementation of the PktFilter class.
 ///
@@ -89,7 +94,19 @@ public:
     // Change the scope of the protected function so as they can be unit tested.
     using PktFilter::openFallbackSocket;
 
+    /// @brief Set an open socket callback. Use it for testing
+    /// purposes, e.g. counting the number of calls or throwing an exception.
+    void setOpenSocketCallback(PktFilterOpenSocketCallback callback) {
+        open_socket_callback_ = callback;
+    }
+
+    /// @brief Flag which indicates if direct response capability is supported.
     bool direct_response_supported_;
+
+private:
+
+    /// @brief The callback used when opening socket.
+    PktFilterOpenSocketCallback open_socket_callback_;
 };
 
 } // namespace isc::dhcp::test

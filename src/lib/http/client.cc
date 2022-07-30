@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1680,8 +1680,9 @@ Connection::receiveCallback(const uint64_t transid,
 
         // EAGAIN and EWOULDBLOCK don't indicate an error in this case. All
         // other errors should terminate the transaction.
-        } if ((ec.value() != boost::asio::error::try_again) &&
-              (ec.value() != boost::asio::error::would_block)) {
+        }
+        if ((ec.value() != boost::asio::error::try_again) &&
+            (ec.value() != boost::asio::error::would_block)) {
             terminate(ec);
             return;
 

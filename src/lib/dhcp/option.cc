@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,23 +33,22 @@ OptionPtr
 Option::factory(Option::Universe u,
         uint16_t type,
         const OptionBuffer& buf) {
-    return(LibDHCP::optionFactory(u, type, buf));
+    return (LibDHCP::optionFactory(u, type, buf));
 }
 
-
 Option::Option(Universe u, uint16_t type)
-    :universe_(u), type_(type) {
+    : universe_(u), type_(type) {
     check();
 }
 
 Option::Option(Universe u, uint16_t type, const OptionBuffer& data)
-    :universe_(u), type_(type), data_(data) {
+    : universe_(u), type_(type), data_(data) {
     check();
 }
 
 Option::Option(Universe u, uint16_t type, OptionBufferConstIter first,
                OptionBufferConstIter last)
-    :universe_(u), type_(type), data_(first, last) {
+    : universe_(u), type_(type), data_(first, last) {
     check();
 }
 
@@ -89,21 +88,15 @@ Option::clone() const {
 
 void
 Option::check() const {
-    if ( (universe_ != V4) && (universe_ != V6) ) {
+    if ((universe_ != V4) && (universe_ != V6)) {
         isc_throw(BadValue, "Invalid universe type specified. "
                   << "Only V4 and V6 are allowed.");
     }
 
     if (universe_ == V4) {
-
         if (type_ > 255) {
             isc_throw(OutOfRange, "DHCPv4 Option type " << type_ << " is too big. "
                       << "For DHCPv4 allowed type range is 0..255");
-        } else if (data_.size() > 255) {
-            isc_throw(OutOfRange, "DHCPv4 Option " << type_ << " is too big.");
-            /// TODO Larger options can be stored as separate instances
-            /// of DHCPv4 options. Clients MUST concatenate them.
-            /// Fortunately, there are no such large options used today.
         }
     }
 
@@ -111,26 +104,23 @@ Option::check() const {
     // both types and data size.
 }
 
-void Option::pack(isc::util::OutputBuffer& buf) const {
+void Option::pack(isc::util::OutputBuffer& buf, bool check) const {
     // Write a header.
-    packHeader(buf);
+    packHeader(buf, check);
     // Write data.
     if (!data_.empty()) {
         buf.writeData(&data_[0], data_.size());
     }
     // Write sub-options.
-    packOptions(buf);
+    packOptions(buf, check);
 }
 
 void
-Option::packHeader(isc::util::OutputBuffer& buf) const {
+Option::packHeader(isc::util::OutputBuffer& buf, bool check) const {
     if (universe_ == V4) {
-        if (len() > 255) {
+        if (check && len() > 255) {
             isc_throw(OutOfRange, "DHCPv4 Option " << type_ << " is too big. "
                       << "At most 255 bytes are supported.");
-            /// TODO Larger options can be stored as separate instances
-            /// of DHCPv4 options. Clients MUST concatenate them.
-            /// Fortunately, there are no such large options used today.
         }
 
         buf.writeUint8(type_);
@@ -143,10 +133,10 @@ Option::packHeader(isc::util::OutputBuffer& buf) const {
 }
 
 void
-Option::packOptions(isc::util::OutputBuffer& buf) const {
+Option::packOptions(isc::util::OutputBuffer& buf, bool check) const {
     switch (universe_) {
     case V4:
-        LibDHCP::packOptions4(buf, options_);
+        LibDHCP::packOptions4(buf, options_, false, check);
         return;
     case V6:
         LibDHCP::packOptions6(buf, options_);
@@ -186,10 +176,8 @@ uint16_t Option::len() const {
     size_t length = getHeaderLen() + data_.size();
 
     // ... and sum of lengths of all suboptions
-    for (OptionCollection::const_iterator it = options_.begin();
-         it != options_.end();
-         ++it) {
-        length += (*it).second->len();
+    for (auto const& option : options_) {
+        length += option.second->len();
     }
 
     // note that this is not equal to length field. This value denotes
@@ -209,10 +197,9 @@ Option::valid() const {
 }
 
 OptionPtr Option::getOption(uint16_t opt_type) const {
-    isc::dhcp::OptionCollection::const_iterator x =
-        options_.find(opt_type);
-    if ( x != options_.end() ) {
-        return (*x).second;
+    auto const& x = options_.find(opt_type);
+    if (x != options_.end()) {
+        return (x->second);
     }
     return OptionPtr(); // NULL
 }
@@ -220,11 +207,9 @@ OptionPtr Option::getOption(uint16_t opt_type) const {
 void
 Option::getOptionsCopy(OptionCollection& options_copy) const {
     OptionCollection local_options;
-    for (OptionCollection::const_iterator it = options_.begin();
-         it != options_.end(); ++it) {
-        OptionPtr copy = it->second->clone();
-        local_options.insert(std::make_pair(it->second->getType(),
-                                            copy));
+    for (auto const& option : options_) {
+        OptionPtr copy = option.second->clone();
+        local_options.insert(std::make_pair(option.second->getType(), copy));
     }
     // All options copied successfully, so assign them to the output
     // parameter.
@@ -232,14 +217,13 @@ Option::getOptionsCopy(OptionCollection& options_copy) const {
 }
 
 bool Option::delOption(uint16_t opt_type) {
-    isc::dhcp::OptionCollection::iterator x = options_.find(opt_type);
-    if ( x != options_.end() ) {
+    auto const& x = options_.find(opt_type);
+    if (x != options_.end()) {
         options_.erase(x);
-        return true; // delete successful
+        return (true); // delete successful
     }
     return (false); // option not found, can't delete
 }
-
 
 std::string Option::toText(int indent) const {
     std::stringstream output;
@@ -250,7 +234,7 @@ std::string Option::toText(int indent) const {
             output << ":";
         }
         output << setfill('0') << setw(2) << hex
-            << static_cast<unsigned short>(data_[i]);
+               << static_cast<unsigned short>(data_[i]);
     }
 
     // Append suboptions.
@@ -269,9 +253,9 @@ std::vector<uint8_t>
 Option::toBinary(const bool include_header) const {
     OutputBuffer buf(len());
     try {
-        // If the option is too long, exception will be thrown. We allow
-        // for this exception to propagate to not mask this error.
-        pack(buf);
+        // The RFC3396 adds support for long options split over multiple options
+        // using the same code.
+        pack(buf, false);
 
     } catch (const std::exception &ex) {
         isc_throw(OutOfRange, "unable to obtain hexadecimal representation"
@@ -315,7 +299,7 @@ Option::headerToText(const int indent, const std::string& type_name) const {
     }
 
     output << ", len=" << std::setw(field_len) << std::setfill('0')
-           << len()-getHeaderLen();
+           << len() - getHeaderLen();
     return (output.str());
 }
 
@@ -325,9 +309,8 @@ Option::suboptionsToText(const int indent) const {
 
     if (!options_.empty()) {
         output << "," << std::endl << "options:";
-        for (OptionCollection::const_iterator opt = options_.begin();
-             opt != options_.end(); ++opt) {
-            output << std::endl << (*opt).second->toText(indent);
+        for (auto const& opt : options_) {
+            output << std::endl << opt.second->toText(indent);
         }
     }
 
@@ -346,13 +329,6 @@ Option::getHeaderLen() const {
 }
 
 void Option::addOption(OptionPtr opt) {
-    if (universe_ == V4) {
-        // check for uniqueness (DHCPv4 options must be unique)
-        if (getOption(opt->getType())) {
-            isc_throw(BadValue, "Option " << opt->getType()
-                      << " already present in this message.");
-        }
-    }
     options_.insert(make_pair(opt->getType(), opt));
 }
 
@@ -394,12 +370,11 @@ bool Option::equals(const OptionPtr& other) const {
 }
 
 bool Option::equals(const Option& other) const {
-    return ( (getType() == other.getType()) &&
-             (getData() == other.getData()) );
+    return ((getType() == other.getType()) &&
+            (getData() == other.getData()));
 }
 
 Option::~Option() {
-
 }
 
 bool Option::lenient_parsing_;

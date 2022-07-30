@@ -28,9 +28,6 @@
 #include <string>
 #include <vector>
 
-// Convenience string for emitting location info NotImplemented exceptions.
-#define NOT_IMPL_STR __FILE__ << ":" << __LINE__  << " - " << __FUNCTION__
-
 namespace isc {
 namespace dhcp {
 
@@ -121,8 +118,6 @@ public:
     /// @brief Destructor.
     virtual ~PgSqlConfigBackendImpl();
 
-    /// @todo: implement condCreateInteger(const util::Optional<T>& value)
-
     /// @brief Returns server tag associated with the particular selector.
     ///
     /// This method expects that there is exactly one server tag associated with
@@ -207,8 +202,6 @@ public:
                                const boost::posix_time::ptime& modification_time,
                                const uint64_t& modification_id,
                                db::AuditEntryCollection& audit_entries);
-
-    /// @todo: implement uint64_t deleteFromTable(const int index, ...)
 
     /// @brief Sends query to delete rows from a table.
     ///
@@ -351,6 +344,7 @@ public:
     /// @brief Creates or updates an option definition.
     ///
     /// @param server_selector Server selector.
+    /// @param universe Option universe, i.e. V4 or V6.
     /// @param option_def Option definition to be added or updated.
     /// @param space Default option space
     /// @param get_option_def_code_space Statement getting option
@@ -365,6 +359,7 @@ public:
     /// it is a global option definition.
     /// @throw NotImplemented if server selector is "unassigned".
     void createUpdateOptionDef(const db::ServerSelector& server_selector,
+                               const Option::Universe& universe,
                                const OptionDefinitionPtr& option_def,
                                const std::string& space,
                                const int& get_option_def_code_space,
@@ -553,6 +548,17 @@ public:
                                 const db::ServerSelector& server_selector,
                                 const db::PsqlBindArray& in_bindings);
 
+    /// @brief Adds network ddns-replace-client-name mode to a bind array.
+    ///
+    /// If network's value of ddns-replace-client-name mode has been specified
+    /// it is added to the binding, otherwise a null is added to the binding.
+    ///
+    /// @param bindings PsqlBindArray to which the mode should be added.
+    /// @param network Pointer to shared network or subnet for which mode binding
+    /// should be created.
+    void addDdnsReplaceClientNameBinding(db::PsqlBindArray& bindings,
+                                         const NetworkPtr& network);
+
     /// @brief Adds network relays addresses to a bind array.
     ///
     /// Creates an Element tree of relay addresses add adds that to the end
@@ -638,7 +644,6 @@ public:
     /// will be inserted.
     void getAllServers(const int index, db::ServerCollection& servers);
 
-    /// @todo implement
     /// @brief Sends query to retrieve servers.
     ///
     /// @param index Index of the query to be used.
@@ -890,7 +895,7 @@ private:
     size_t last_insert_id_index_;
 };
 
-}  // namespace dhcp
-}  // end of namespace isc
+} // end of namespace isc::dhcp
+} // end of namespace isc
 
 #endif

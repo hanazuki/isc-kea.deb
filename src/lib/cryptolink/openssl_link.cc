@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -22,7 +22,6 @@ class CryptoLinkImpl {
 };
 
 CryptoLink::~CryptoLink() {
-    delete impl_;
 }
 
 /// \brief OpenSSL implementation of RNG.
@@ -47,11 +46,10 @@ private:
 };
 
 void
-CryptoLink::initialize() {
-    CryptoLink& c = getCryptoLinkInternal();
+CryptoLink::initialize(CryptoLink& c) {
     if (!c.impl_) {
         try {
-            c.impl_ = new CryptoLinkImpl();
+            c.impl_.reset(new CryptoLinkImpl());
         } catch (const std::exception &ex) {
             // Should never happen
             isc_throw(InitializationError,

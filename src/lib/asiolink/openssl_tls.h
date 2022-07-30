@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2021-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -58,6 +58,15 @@ public:
     /// @return True if peer certificates are required, false if they
     /// are optional.
     virtual bool getCertRequired() const;
+
+    /// @brief Get the error message.
+    ///
+    /// @note Wrapper against OpenSSL 3.x not returning error messages
+    /// from system errors.
+    ///
+    /// @param ec The Boost error code.
+    /// @return The error message.
+    static std::string getErrMsg(boost::system::error_code ec);
 
 protected:
     /// @brief Set the peer certificate requirement mode.

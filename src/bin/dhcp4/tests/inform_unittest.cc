@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 #include <asiolink/io_address.h>
 #include <cc/data.h>
 #include <dhcp/dhcp4.h>
+#include <dhcp/libdhcp++.h>
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcp4/tests/dhcp4_test_utils.h>
 #include <dhcp4/tests/dhcp4_client.h>
@@ -49,6 +50,18 @@ namespace {
 ///     - next-server = 10.0.0.7
 ///     - server name = "some-name.example.org"
 ///     - boot-file-name = "bootfile.efi"
+///
+/// - Configuration 3:
+///   - This configuration provides reservations for big options
+///     server-hostname and boot-file-name value.
+///   - 1 subnet: 192.0.2.0/24
+///   - 1 reservation for this subnet:
+///     - Client's HW address: aa:bb:cc:dd:ee:ff
+///     - option 240 = data
+///            -00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809
+///            -00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809
+///            -00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809
+///            -data
 const char* INFORM_CONFIGS[] = {
 // Configuration 0
     "{ \"interfaces-config\": {"
@@ -119,6 +132,48 @@ const char* INFORM_CONFIGS[] = {
         "         \"next-server\": \"10.0.0.7\","
         "         \"server-hostname\": \"some-name.example.org\","
         "         \"boot-file-name\": \"bootfile.efi\""
+        "       }"
+        "    ]"
+        "} ]"
+    "}",
+
+// Configuration 3
+    "{ \"interfaces-config\": {"
+        "      \"interfaces\": [ \"*\" ]"
+        "},"
+        "\"valid-lifetime\": 600,"
+        "\"next-server\": \"10.0.0.1\","
+        "\"server-hostname\": \"nohost\","
+        "\"boot-file-name\": \"nofile\","
+        "\"option-def\": ["
+        "    {"
+        "        \"array\": false,"
+        "        \"code\": 240,"
+        "        \"encapsulate\": \"\","
+        "        \"name\": \"my-option\","
+        "        \"space\": \"dhcp4\","
+        "        \"type\": \"string\""
+        "    }"
+        "],"
+        "\"subnet4\": [ { "
+        "    \"subnet\": \"192.0.2.0/24\", "
+        "    \"reservations\": [ "
+        "       {"
+        "         \"hw-address\": \"aa:bb:cc:dd:ee:ff\","
+        "         \"option-data\": ["
+        "            {"
+        "              \"always-send\": false,"
+        "              \"code\": 240,"
+        "              \"name\": \"my-option\","
+        "              \"csv-format\": true,"
+        "              \"data\": \"data"
+        "-00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809"
+        "-00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809"
+        "-00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809"
+        "-data\","
+        "              \"space\": \"dhcp4\""
+        "    }"
+        "],"
         "       }"
         "    ]"
         "} ]"
@@ -427,6 +482,118 @@ TEST_F(InformTest, messageFieldsReservations) {
     EXPECT_EQ("10.0.0.7", client.config_.siaddr_.toText());
     EXPECT_EQ("some-name.example.org", client.config_.sname_);
     EXPECT_EQ("bootfile.efi", client.config_.boot_file_name_);
+}
+
+// This test verifies that the server assigns and splits long options within
+// DHCPv4 message.
+TEST_F(InformTest, messageFieldsLongOptions) {
+    // Client has a reservation.
+    Dhcp4Client client(Dhcp4Client::SELECTING);
+    // Message is relayed.
+    client.useRelay();
+    // Set explicit HW address so as it matches the reservation in the
+    // configuration used below.
+    client.setHWAddress("aa:bb:cc:dd:ee:ff");
+    // Configure DHCP server.
+    configure(INFORM_CONFIGS[3], *client.getServer());
+    // Client requests big option.
+    client.requestOption(240);
+    // Client also sends multiple options with the same code.
+    OptionDefinitionPtr rai_def = LibDHCP::getOptionDef(DHCP4_OPTION_SPACE,
+                                                        DHO_DHCP_AGENT_OPTIONS);
+    ASSERT_TRUE(rai_def);
+    // Create RAI options which should be fused by the server.
+    OptionCustomPtr rai(new OptionCustom(*rai_def, Option::V4));
+    for (uint8_t i = 0; i < 4; ++i) {
+        // Create a buffer holding some binary data. This data will be
+        // used as reference when we read back the data from a created
+        // option.
+        OptionBuffer buf_in(16);
+        for (uint8_t j = 0; j < 16; ++j) {
+            buf_in[j] = i * 16 + j;
+        }
+
+        OptionPtr circuit_id_opt(new Option(Option::V4,
+                                            RAI_OPTION_AGENT_CIRCUIT_ID, buf_in));
+        ASSERT_TRUE(circuit_id_opt);
+        rai->addOption(circuit_id_opt);
+    }
+    client.addExtraOption(rai);
+
+    // Client sends large options which should be split by the client.
+    OptionDefinition opt_def_bar("option-foo", 231, "my-space", "binary",
+                                 "option-foo-space");
+    // Create a buffer holding some binary data. This data will be
+    // used as reference when we read back the data from a created
+    // option.
+    OptionBuffer buf_in(2560);
+    for (uint32_t i = 0; i < 2560; ++i) {
+        buf_in[i] = i;
+    }
+
+    boost::shared_ptr<OptionCustom> option;
+    ASSERT_NO_THROW(option.reset(new OptionCustom(opt_def_bar, Option::V4, buf_in)));
+    ASSERT_TRUE(option);
+    client.addExtraOption(option);
+    // Client sends DHCPINFORM and should receive reserved fields.
+    ASSERT_NO_THROW(client.doInform());
+    // Make sure that the server responded.
+    ASSERT_TRUE(client.getContext().response_);
+    Pkt4Ptr resp = client.getContext().response_;
+    // Make sure that the server has responded with DHCPACK.
+    ASSERT_EQ(DHCPACK, static_cast<int>(resp->getType()));
+
+    // Long option should have been split by the client on pack, serialized and
+    // then restored.
+    uint32_t count = 0;
+    uint8_t index = 0;
+    for (auto const& option : client.getContext().query_->options_) {
+        if (option.first == 231) {
+            for (auto const& value : option.second->getData()) {
+                ASSERT_EQ(value, index);
+                index++;
+            }
+            count++;
+        }
+    }
+    ASSERT_EQ(1, count);
+
+    count = 0;
+    for (auto const& option : resp->options_) {
+        if (option.first == DHO_DHCP_AGENT_OPTIONS) {
+            for (auto const& suboption: option.second->getOptions()) {
+                if (suboption.first == RAI_OPTION_AGENT_CIRCUIT_ID) {
+                    uint8_t index = 0;
+                    for (auto const& value : suboption.second->getData()) {
+                        ASSERT_EQ(value, index);
+                        index++;
+                    }
+                    count++;
+                }
+            }
+        }
+    }
+    // Multiple options should have been fused by the server on unpack.
+    ASSERT_EQ(count, 1);
+
+    // Check that the reserved and requested values have been assigned.
+    string expected =
+        "-00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809"
+        "-00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809"
+        "-00010203040506070809-00010203040506070809-00010203040506070809-00010203040506070809";
+
+    count = 0;
+    string value = "";
+    for (auto const& option : resp->options_) {
+        if (option.second->getType() == 240) {
+            value += string(reinterpret_cast<const char*>(&option.second->getData()[0]),
+                            option.second->getData().size());
+            count++;
+        }
+    }
+    // Multiple options should have been fused by the server on unpack.
+    ASSERT_EQ(count, 1);
+    ASSERT_EQ(value, string("data") + expected + string("-data"));
 }
 
 /// This test verifies that after a client completes its INFORM exchange,

@@ -4,14 +4,14 @@
 { "Dhcp6":
 
 {
-// Kea is told to listen on ethX interface only.
+// Kea is told to listen on eth0 interface only.
   "interfaces-config": {
-    "interfaces": [ "ethX" ]
+    "interfaces": [ "eth0" ]
   },
 
 // We need to specify the database used to store leases. As of
-// September 2016, four database backends are supported: MySQL,
-// PostgreSQL, Cassandra, and the in-memory database, Memfile.
+// June 2022, three database backends are supported: MySQL,
+// PostgreSQL and the in-memory database, Memfile.
 // We'll use memfile  because it doesn't require any prior set up.
   "lease-database": {
     "type": "memfile"
@@ -159,7 +159,7 @@
          }
       ],
       "subnet": "2001:db8:1::/64",
-      "interface": "ethX"
+      "interface": "eth0"
     }
   ],
 

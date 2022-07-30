@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,7 +16,7 @@ namespace dhcp {
 namespace test {
 
 PktFilterTestStub::PktFilterTestStub()
-    : direct_response_supported_(true) {
+    : direct_response_supported_(true), open_socket_callback_() {
 }
 
 bool
@@ -33,6 +33,10 @@ PktFilterTestStub::openSocket(Iface&,
         const char* errmsg = strerror(errno);
         isc_throw(Unexpected,
                   "PktFilterTestStub: cannot open /dev/null:" << errmsg);
+    }
+
+    if (open_socket_callback_) {
+        open_socket_callback_(port);
     }
 
     return (SocketInfo(addr, port, fd));

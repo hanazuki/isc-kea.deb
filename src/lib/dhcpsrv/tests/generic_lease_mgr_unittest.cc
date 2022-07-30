@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -16,6 +16,7 @@
 #include <dhcpsrv/testutils/test_utils.h>
 #include <exceptions/exceptions.h>
 #include <stats/stats_mgr.h>
+#include <testutils/gtest_utils.h>
 
 #include <boost/foreach.hpp>
 #include <boost/scoped_ptr.hpp>
@@ -2893,7 +2894,8 @@ GenericLeaseMgrTest::checkLeaseStats(const StatValMapList& expectedStats) {
 Lease4Ptr
 GenericLeaseMgrTest::makeLease4(const std::string& address,
                                 const SubnetID& subnet_id,
-                                const uint32_t state) {
+                                const uint32_t state,
+                                const ConstElementPtr user_context /* = ConstElementPtr() */) {
     Lease4Ptr lease(new Lease4());
 
     // set the address
@@ -2909,6 +2911,10 @@ GenericLeaseMgrTest::makeLease4(const std::string& address,
     lease->cltt_ = 168256;
     lease->subnet_id_ = subnet_id;
     lease->state_ = state;
+    if (user_context) {
+        lease->setContext(user_context);
+    }
+
     EXPECT_TRUE(lmptr_->addLease(lease));
     return lease;
 }
@@ -2918,7 +2924,8 @@ GenericLeaseMgrTest::makeLease6(const Lease::Type& type,
                                 const std::string& address,
                                 uint8_t prefix_len,
                                 const SubnetID& subnet_id,
-                                const uint32_t state) {
+                                const uint32_t state,
+                                const ConstElementPtr user_context /* = ConstElementPtr() */) {
     IOAddress addr(address);
 
     // make a DUID from the address
@@ -2929,6 +2936,10 @@ GenericLeaseMgrTest::makeLease6(const Lease::Type& type,
                                16000, 24000, subnet_id, HWAddrPtr(),
                                prefix_len));
     lease->state_ = state;
+    if (user_context) {
+        lease->setContext(user_context);
+    }
+
     EXPECT_TRUE(lmptr_->addLease(lease));
     return lease;
 }
@@ -3891,6 +3902,242 @@ GenericLeaseMgrTest::testLeaseStatsQueryAttribution6() {
 
     // Verify contents
     checkQueryAgainstRowSet(query, expected_rows);
+}
+
+void
+GenericLeaseMgrTest::testLeaseLimits4() {
+    std::string text;
+    ElementPtr user_context;
+
+    // -- A limit of 0 always denies a lease. --
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "client-classes": [ { "name": "foo", "address-limit": 0 } ] } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits4(user_context));
+    EXPECT_EQ(text, "address limit 0 for client class \"foo\", current lease count 0");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "subnet": { "id": 1, "address-limit": 0 } } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits4(user_context));
+    EXPECT_EQ(text, "address limit 0 for subnet ID 1, current lease count 0");
+
+    // -- A limit of 1 with no leases should allow a lease. --
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "client-classes": [ { "name": "foo", "address-limit": 1 } ] } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits4(user_context));
+    EXPECT_EQ(text, "");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "subnet": { "id": 1, "address-limit": 1 } } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits4(user_context));
+    EXPECT_EQ(text, "");
+
+    // -- A limit of 1 with 1 current lease should deny further leases. --
+
+    makeLease4("192.0.1.1", 1, Lease::STATE_DEFAULT, Element::fromJSON(
+        R"({ "ISC": { "client-classes": [ "foo" ] } })"));
+
+    // Since we did not go through allocation engine stats won't be altered.
+    ASSERT_NO_THROW(lmptr_->recountLeaseStats4());
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "client-classes": [ { "name": "foo", "address-limit": 1 } ] } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits4(user_context));
+    EXPECT_EQ(text, "address limit 1 for client class \"foo\", current lease count 1");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "subnet": { "id": 1, "address-limit": 1 } } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits4(user_context));
+    EXPECT_EQ(text, "address limit 1 for subnet ID 1, current lease count 1");
+}
+
+void
+GenericLeaseMgrTest::testLeaseLimits6() {
+    std::string text;
+    ElementPtr user_context;
+
+    // -- A limit of 0 always denies a lease. --
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "client-classes": [ { "name": "foo", "address-limit": 0 } ] } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "address limit 0 for client class \"foo\", current lease count 0");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "subnet": { "id": 1, "address-limit": 0 } } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "address limit 0 for subnet ID 1, current lease count 0");
+
+    // -- A limit of 1 with no leases should allow a lease. --
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "client-classes": [ { "name": "foo", "address-limit": 1 } ] } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "subnet": { "id": 1, "address-limit": 1 } } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "");
+
+    // -- A limit of 1 with 1 current lease should deny further leases. --
+    makeLease6(Lease::TYPE_NA, "2001:db8::", 0, 1, Lease::STATE_DEFAULT, Element::fromJSON(
+        R"({ "ISC": { "client-classes": [ "foo" ] } })"));
+
+    makeLease6(Lease::TYPE_PD, "2001:db8:1::", 64, 1, Lease::STATE_DEFAULT, Element::fromJSON(
+        R"({ "ISC": { "client-classes": [ "foo" ] } })"));
+
+    // Since we did not go through allocation engine stats won't be altered.
+    ASSERT_NO_THROW(lmptr_->recountLeaseStats6());
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "client-classes": [ { "name": "foo", "address-limit": 1 } ] } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "address limit 1 for client class \"foo\", current lease count 1");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "client-classes": [ { "name": "foo", "prefix-limit": 1 } ] } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "prefix limit 1 for client class \"foo\", current lease count 1");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "subnet": { "id": 1, "address-limit": 1 } } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "address limit 1 for subnet ID 1, current lease count 1");
+
+    user_context = Element::fromJSON(R"({ "ISC": { "limits": {
+        "subnet": { "id": 1, "prefix-limit": 1 } } } })");
+    ASSERT_NO_THROW_LOG(text = LeaseMgrFactory::instance().checkLimits6(user_context));
+    EXPECT_EQ(text, "prefix limit 1 for subnet ID 1, current lease count 1");
+}
+
+ElementPtr
+GenericLeaseMgrTest::makeContextWithClasses(const std::list<ClientClass>& classes) {
+    ElementPtr ctx = Element::createMap();
+    if (classes.size()) {
+        ElementPtr clist = Element::createList();
+        for (auto client_class : classes ) {
+            clist->add(Element::create(client_class));
+        }
+
+        ElementPtr client_classes = Element::createMap();
+        client_classes->set("client-classes", clist);
+        ctx->set("ISC", client_classes);
+    }
+
+    return (ctx);
+}
+
+void
+GenericLeaseMgrTest::testClassLeaseCount4() {
+    // Make user-contexts with different class lists.
+    std::list<ClientClass> classes1{"water"};
+    ElementPtr ctx1 = makeContextWithClasses(classes1);
+
+    std::list<ClientClass> classes2{"melon"};
+    ElementPtr ctx2 = makeContextWithClasses(classes2);
+
+    // Counts should be 0.
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("water"));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("melon"));
+
+    // Create a lease to add to the lease store.
+    vector<Lease4Ptr> leases = createLeases4();
+    Lease4Ptr lease = leases[1];
+
+    // Set the lease state to STATE_DEFAULT so it classes should be counted.
+    lease->state_ = Lease::STATE_DEFAULT;
+
+    // Add class list 1 to the lease.
+    lease->setContext(ctx1);
+
+    // Add the lease to the lease store and verify class lease counts.
+    ASSERT_NO_THROW_LOG(lmptr_->addLease(lease));
+    EXPECT_EQ(1, lmptr_->getClassLeaseCount("water"));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("melon"));
+
+    // Re-fetch lease. This returns a copy of the persisted lease, which is
+    // what Kea logic always does. Fetches a copy.  Otherwise we're changing
+    // the persisted lease which would make old and new the same thing.
+    lease = lmptr_->getLease4(lease->addr_);
+    ASSERT_TRUE(lease);
+
+    // Change the class list.
+    lease->setContext(ctx2);
+
+    // Update the lease in the lease store and verify class lease counts.
+    ASSERT_NO_THROW_LOG(lmptr_->updateLease4(lease));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("water"));
+    EXPECT_EQ(1, lmptr_->getClassLeaseCount("melon"));
+
+    lease = lmptr_->getLease4(lease->addr_);
+    ASSERT_TRUE(lease);
+
+    // Now delete the lease from the store and verify counts.
+    ASSERT_NO_THROW_LOG(lmptr_->deleteLease(lease));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("water"));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("melon"));
+
+    lease = lmptr_->getLease4(lease->addr_);
+    ASSERT_FALSE(lease);
+}
+
+void
+GenericLeaseMgrTest::testClassLeaseCount6(Lease::Type ltype) {
+    ASSERT_TRUE(ltype == Lease::TYPE_NA || ltype == Lease::TYPE_PD);
+
+    // Make user-contexts with different class lists.
+    std::list<ClientClass> classes1{"water"};
+    ElementPtr ctx1 = makeContextWithClasses(classes1);
+
+    std::list<ClientClass> classes2{"melon"};
+    ElementPtr ctx2 = makeContextWithClasses(classes2);
+
+    // Counts should be 0.
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("water", ltype));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("melon", ltype));
+
+    // Create a lease to add to the lease store.
+    vector<Lease6Ptr> leases = createLeases6();
+    Lease6Ptr lease = leases[1];
+    lease->type_ = ltype;
+
+    // Set the lease state to STATE_DEFAULT so it classes should be counted.
+    lease->state_ = Lease::STATE_DEFAULT;
+
+    // Add class list 1 to the lease.
+    lease->setContext(ctx1);
+
+    // Add the lease to the lease store and verify class lease counts.
+    ASSERT_NO_THROW_LOG(lmptr_->addLease(lease));
+    EXPECT_EQ(1, lmptr_->getClassLeaseCount("water", ltype));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("melon", ltype));
+
+    // Re-fetch lease. This returns a copy of the persisted lease, which is
+    // what Kea logic always does. Fetches a copy.  Otherwise we're changing
+    // the persisted lease which would make old and new the same thing.
+    lease = lmptr_->getLease6(ltype, lease->addr_);
+    ASSERT_TRUE(lease);
+
+    // Change the class list.
+    lease->setContext(ctx2);
+
+    // Update the lease in the lease store and verify class lease counts.
+    ASSERT_NO_THROW_LOG(lmptr_->updateLease6(lease));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("water", ltype));
+    EXPECT_EQ(1, lmptr_->getClassLeaseCount("melon", ltype));
+
+    lease = lmptr_->getLease6(ltype, lease->addr_);
+    ASSERT_TRUE(lease);
+
+    // Now delete the lease from the store and verify counts.
+    ASSERT_NO_THROW_LOG(lmptr_->deleteLease(lease));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("water", ltype));
+    EXPECT_EQ(0, lmptr_->getClassLeaseCount("melon", ltype));
+
+    lease = lmptr_->getLease6(ltype, lease->addr_);
+    ASSERT_FALSE(lease);
 }
 
 }  // namespace test

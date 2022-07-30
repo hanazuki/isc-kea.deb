@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -64,6 +64,16 @@ ConstElementPtr
 CtrlAgentCommandMgr::handleCommand(const std::string& cmd_name,
                                    const isc::data::ConstElementPtr& params,
                                    const isc::data::ConstElementPtr& original_cmd) {
+
+    ConstElementPtr raddr_ptr = original_cmd->get("remote-address");
+    if (raddr_ptr && (raddr_ptr->getType() == Element::string)) {
+        remote_addr_ = raddr_ptr->stringValue();
+    } else {
+        remote_addr_ = "(unknown)";
+    }
+    LOG_INFO(agent_logger, CTRL_AGENT_COMMAND_RECEIVED)
+        .arg(cmd_name)
+        .arg(remote_addr_);
 
     ConstElementPtr services = Element::createList();
 
@@ -251,7 +261,9 @@ CtrlAgentCommandMgr::forwardCommand(const std::string& service,
         answer = received_feed->toElement();
 
         LOG_INFO(agent_logger, CTRL_AGENT_COMMAND_FORWARDED)
-            .arg(cmd_name).arg(service);
+            .arg(cmd_name)
+            .arg(service)
+            .arg(remote_addr_);
 
     } catch (const std::exception& ex) {
         isc_throw(CommandForwardingError, "internal server error: unable to parse"

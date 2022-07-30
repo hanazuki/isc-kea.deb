@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -464,11 +464,11 @@ public:
     std::string httpOk(const HttpVersion& http_version) {
         std::ostringstream s;
         s << "HTTP/" << http_version.major_ << "." << http_version.minor_ << " 200 OK\r\n"
-            "Content-Length: 4\r\n"
+            "Content-Length: 33\r\n"
             "Content-Type: application/json\r\n"
             "Date: Tue, 19 Dec 2016 18:53:35 GMT\r\n"
             "\r\n"
-            "{  }";
+            "{ \"remote-address\": \"127.0.0.1\" }";
         return (s.str());
     }
 
@@ -1799,7 +1799,7 @@ public:
 
     /// @brief Simulates external registery of Connection TCP sockets
     ///
-    /// Provides methods compatible with Connection callbacks for connnect
+    /// Provides methods compatible with Connection callbacks for connect
     /// and close operations.
     class ExternalMonitor {
     public:

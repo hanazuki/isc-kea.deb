@@ -6,7 +6,7 @@ AC_PREREQ([2.69])
 # For released versions, this is in x.y.z format.
 # For GIT versions, this is x.y.z-git, where x.y.z denotes the next development
 # version that is worked on and that is to be released.
-AC_INIT(kea,2.1.3, kea-dev@lists.isc.org)
+AC_INIT(kea,2.2.0, kea-dev@lists.isc.org)
 AC_CONFIG_SRCDIR(README)
 
 # serial-tests is not available in automake version before 1.13, so
@@ -639,19 +639,6 @@ fi
 # variables.
 AX_ISC_GTEST
 
-enable_benchmark="no"
-BENCHMARK_INCLUDES=
-
-AC_ARG_WITH([benchmark-source],
-            [AS_HELP_STRING([--with-benchmark-source[[=PATH]]],
-                            [location of the benchmark source])],
-            [enable_benchmark="yes" ; BENCHMARK_SOURCE="$withval"])
-
-AC_ARG_WITH([benchmark],
-            [AS_HELP_STRING([--with-benchmark[[=PATH]]],
-                            [specify a path to benchmark header files (PATH/include) and library (PATH/lib)])],
-        [benchmark_path="$withval"; enable_benchmark="yes"], [benchmark_path="no"])
-
 # Sets up for use of botan unless openssl is specified
 # sets variables CRYPTO_*
 AX_CRYPTO
@@ -824,75 +811,15 @@ if test "${pgsql_ssl}" = "yes"; then
     AC_DEFINE([HAVE_PGSQL_SSL], [1], [PostgreSQL was built with OpenSSL support])
 fi
 
-# allow building kea programs with static link to cassandra cpp-driver.
-AC_ARG_ENABLE([cql-static-lib],
-  [AS_HELP_STRING([--enable-cql-static-lib],
-    [build programs with cassandra cpp driver static library [[default=no]]])],
-    [enable_cql_static_lib=yes], [enable_cql_static_lib=no])
-AM_CONDITIONAL(USE_CQL_STATIC_LIB, test "$enable_cql_static_lib" = yes)
-#AC_DEFINE USE_CQL_STATIC_LIB? (unused)
-
-cql_lib="cassandra"
-if test "${enable_cql_static_lib}" = "yes" ; then
-    cql_lib="${cql_lib}_static"
-fi
-
 cql_config="no"
 AC_ARG_WITH([cql],
   [AS_HELP_STRING([--with-cql[[=PATH]]],
     [path to pkg-config or the Cassandra CQL 'cql_config' script (deprecated)])],
   [cql_config="$withval"])
 
-if test "${cql_config}" = "yes" ; then
-    CQL_CONFIG="$PKG_CONFIG"
-elif test "${cql_config}" != "no" ; then
-    CQL_CONFIG="${cql_config}"
+if test "${cql_config}" != "no" ; then
+    AC_MSG_ERROR([$CQL_CONFIG Cassandra is no longer supported])
 fi
-
-if test "$CQL_CONFIG" != "" ; then
-    if test -d "$CQL_CONFIG" -o ! -x "$CQL_CONFIG" ; then
-        AC_MSG_ERROR([--with-cql should point to a pkg-config or cql_config program])
-    fi
-
-    $CQL_CONFIG --print-errors $cql_lib
-    if test $? -ne 0; then
-        AC_MSG_ERROR([$CQL_CONFIG $cql_lib failed])
-    fi
-
-    CQL_INCLUDEDIR=`$CQL_CONFIG --cflags-only-I $cql_lib`
-    CQL_CPPFLAGS=`$CQL_CONFIG --cflags-only-other $cql_lib`
-    CQL_LIBS=`$CQL_CONFIG --libs $cql_lib`
-    CQL_LIBS="$CQL_LIBS $CRYPTO_LIBS"
-    CQL_VERSION=`$CQL_CONFIG --modversion $cql_lib`
-
-    CQL_CPPFLAGS="${CQL_CPPFLAGS} ${CQL_INCLUDEDIR}"
-    AC_SUBST(CQL_CPPFLAGS)
-    AC_SUBST(CQL_LIBS)
-
-    # Check that a simple program using CQL functions can compile and link.
-    CPPFLAGS_SAVED="$CPPFLAGS"
-    LIBS_SAVED="$LIBS"
-
-    CPPFLAGS="$CQL_CPPFLAGS $CPPFLAGS"
-    LIBS="$CQL_LIBS $LIBS"
-
-    AC_LINK_IFELSE(
-            [AC_LANG_PROGRAM([#include <cassandra.h>],
-                             [CassCluster* cluster = cass_cluster_new();
-                              cass_cluster_free(cluster);])],
-            [AC_MSG_RESULT([checking for Cassandra CQL headers and library... yes])],
-            [AC_MSG_RESULT([checking for Cassandra CQL headers and library... no])
-             AC_MSG_ERROR([Needs Cassandra CQL library])]
-    )
-    CPPFLAGS=$CPPFLAGS_SAVED
-    LIBS=$LIBS_SAVED
-
-    # Note that CQL is present in the config.h file
-    AC_DEFINE([HAVE_CQL], [1], [CQL is present])
-fi
-
-# ... and at the shell level, so Makefile.am can take action depending on this.
-AM_CONDITIONAL(HAVE_CQL, test "$CQL_CONFIG" != "")
 
 # Check for sysrepo.
 AX_SYSREPO
@@ -1016,98 +943,6 @@ AC_CHECK_LIB(pthread, pthread_create,[ LDFLAGS="$LDFLAGS -lpthread" ], [])
 
 # Now that Crypto backend and Boost were done we can address TLS.
 AX_TLS
-
-#
-# Check availability of benchmark.
-#
-BENCHMARK_CPPFLAGS=
-BENCHMARK_LDFLAGS=
-BENCHMARK_LDADD=
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG=
-BENCHMARK_VERSION="unknown"
-
-if test "x$enable_benchmark" = "xyes" ; then
-
-    DISTCHECK_BENCHMARK_CONFIGURE_FLAG="--with-benchmark=$benchmark_path"
-
-    if test -n "$with_benchmark_source" ; then
-
-        if test "x$BENCHMARK_SOURCE" = "xyes" ; then
-
-            AC_MSG_CHECKING([for benchmark source])
-            # If not specified, try some common paths.
-            BENCHMARK_SOURCE=
-            for d in /usr/src/benchmark /usr/local /usr/pkg /opt /opt/local ; do
-                if test -f $d/src/benchmark.cc; then
-                    BENCHMARK_SOURCE=$d
-                    AC_MSG_RESULT([$BENCHMARK_SOURCE])
-                    break
-                fi
-            done
-            if test -z $BENCHMARK_SOURCE ; then
-                AC_MSG_ERROR([no benchmark source but it was selected])
-            fi
-        else
-            if test ! -d $BENCHMARK_SOURCE/src; then
-                BENCHMARK_SOURCE=$BENCHMARK_SOURCE/benchmark
-            fi
-            if test -f $BENCHMARK_SOURCE/src/benchmark.cc; then
-                have_benchmark_source=yes
-            else
-                AC_MSG_ERROR([no benchmark source at $BENCHMARK_SOURCE])
-            fi
-        fi
-        have_benchmark_source=yes
-        BENCHMARK_CPPFLAGS=`cat \${BENCHMARK_SOURCE}/build/src/CMakeFiles/benchmark.dir/flags.make | grep CXX_DEFINES | cut -d "=" -f 2`
-        BENCHMARK_LDADD="\$(BENCHMARK_SOURCE)/build/src/libbenchmark.a"
-        DISTCHECK_BENCHMARK_CONFIGURE_FLAG="--with-benchmark-source=$BENCHMARK_SOURCE"
-        BENCHMARK_INCLUDES="-I$BENCHMARK_SOURCE \
-                            -I$BENCHMARK_SOURCE/src \
-                            -I$BENCHMARK_SOURCE/include \
-                            -I$BENCHMARK_SOURCE/include/benchmark"
-        BENCHMARK_VERSION="$(basename $BENCHMARK_SOURCE)"
-    fi
-
-    if test "$benchmark_path" != "no" ; then
-        if test "$benchmark_path" != "yes"; then
-            BENCHMARK_PATHS=$benchmark_path
-        fi
-        if test -z "${BENCHMARK_PATHS}" ; then
-            BENCHMARK_PATHS="/usr /usr/local"
-        fi
-        BENCHMARK_FOUND="false"
-        for dir in ${BENCHMARK_PATHS}; do
-            if test -f "$dir/include/benchmark/benchmark.h"; then
-                if ! test -f "$dir/lib/libbenchmark.a"; then
-                    AC_MSG_WARN([Found Google Benchmark include but not the library in $dir.])
-                    continue
-                fi
-                BENCHMARK_INCLUDES="-I$dir/include"
-                BENCHMARK_LDFLAGS="-L$dir/lib"
-                BENCHMARK_LDADD="$dir/lib/libbenchmark.a "
-                BENCHMARK_FOUND="true"
-                break
-            fi
-        done
-        if test "${BENCHMARK_FOUND}" != "true"; then
-            AC_MSG_ERROR([Cannot find benchmark in: $BENCHMARK_PATHS])
-        fi
-
-    fi
-
-    if test $enable_gtest = no; then
-        AC_MSG_ERROR([--with-benchmark and --with-benchmark-source require --with-gtest or --with-gtest-source])
-    fi
-
-fi
-AM_CONDITIONAL(HAVE_BENCHMARK, test $enable_benchmark != "no")
-AM_CONDITIONAL(HAVE_BENCHMARK_SOURCE, test "X$have_benchmark_source" = "Xyes")
-AC_SUBST(DISTCHECK_BENCHMARK_CONFIGURE_FLAG)
-AC_SUBST(BENCHMARK_CPPFLAGS)
-AC_SUBST(BENCHMARK_INCLUDES)
-AC_SUBST(BENCHMARK_LDFLAGS)
-AC_SUBST(BENCHMARK_LDADD)
-AC_SUBST(BENCHMARK_SOURCE)
 
 #
 # Some Googletest versions bug with C++11 compilers
@@ -1554,8 +1389,6 @@ AC_CONFIG_FILES([src/bin/admin/Makefile])
 AC_CONFIG_FILES([src/bin/admin/kea-admin],
                 [chmod +x src/bin/admin/kea-admin])
 AC_CONFIG_FILES([src/bin/admin/tests/Makefile])
-AC_CONFIG_FILES([src/bin/admin/tests/cql_tests.sh],
-                [chmod +x src/bin/admin/tests/cql_tests.sh])
 AC_CONFIG_FILES([src/bin/admin/tests/data/Makefile])
 AC_CONFIG_FILES([src/bin/admin/tests/admin_tests.sh],
                 [chmod +x src/bin/admin/tests/admin_tests.sh])
@@ -1681,7 +1514,6 @@ AC_CONFIG_FILES([src/lib/dhcp/tests/Makefile])
 AC_CONFIG_FILES([src/lib/dhcp_ddns/Makefile])
 AC_CONFIG_FILES([src/lib/dhcp_ddns/tests/Makefile])
 AC_CONFIG_FILES([src/lib/dhcpsrv/Makefile])
-AC_CONFIG_FILES([src/lib/dhcpsrv/benchmarks/Makefile])
 AC_CONFIG_FILES([src/lib/dhcpsrv/tests/Makefile])
 AC_CONFIG_FILES([src/lib/dhcpsrv/tests/test_libraries.h])
 AC_CONFIG_FILES([src/lib/dhcpsrv/testutils/Makefile])
@@ -1726,9 +1558,6 @@ AC_CONFIG_FILES([src/lib/mysql/tests/Makefile])
 AC_CONFIG_FILES([src/lib/pgsql/Makefile])
 AC_CONFIG_FILES([src/lib/pgsql/tests/Makefile])
 AC_CONFIG_FILES([src/lib/pgsql/testutils/Makefile])
-AC_CONFIG_FILES([src/lib/cql/Makefile])
-AC_CONFIG_FILES([src/lib/cql/tests/Makefile])
-AC_CONFIG_FILES([src/lib/cql/testutils/Makefile])
 AC_CONFIG_FILES([src/lib/process/Makefile])
 AC_CONFIG_FILES([src/lib/process/tests/Makefile])
 AC_CONFIG_FILES([src/lib/process/testutils/Makefile])
@@ -1755,17 +1584,6 @@ AC_CONFIG_FILES([src/share/Makefile])
 AC_CONFIG_FILES([src/share/api/Makefile])
 AC_CONFIG_FILES([src/share/database/Makefile])
 AC_CONFIG_FILES([src/share/database/scripts/Makefile])
-AC_CONFIG_FILES([src/share/database/scripts/cql/Makefile])
-AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_1.0_to_2.0.sh],
-                [chmod +x src/share/database/scripts/cql/upgrade_1.0_to_2.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_2.0_to_3.0.sh],
-                [chmod +x src/share/database/scripts/cql/upgrade_2.0_to_3.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_3.0_to_4.0.sh],
-                [chmod +x src/share/database/scripts/cql/upgrade_3.0_to_4.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/cql/upgrade_4.0_to_5.0.sh],
-                [chmod +x src/share/database/scripts/cql/upgrade_4.0_to_5.0.sh])
-AC_CONFIG_FILES([src/share/database/scripts/cql/wipe_data.sh],
-                [chmod +x src/share/database/scripts/cql/wipe_data.sh])
 AC_CONFIG_FILES([src/share/database/scripts/mysql/Makefile])
 AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_001.0_to_002.0.sh],
                 [chmod +x src/share/database/scripts/mysql/upgrade_001.0_to_002.0.sh])
@@ -1813,6 +1631,8 @@ AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_011_to_012.sh],
                 [chmod +x src/share/database/scripts/mysql/upgrade_011_to_012.sh])
 AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_012_to_013.sh],
                 [chmod +x src/share/database/scripts/mysql/upgrade_012_to_013.sh])
+AC_CONFIG_FILES([src/share/database/scripts/mysql/upgrade_013_to_014.sh],
+                [chmod +x src/share/database/scripts/mysql/upgrade_013_to_014.sh])
 AC_CONFIG_FILES([src/share/database/scripts/mysql/wipe_data.sh],
                 [chmod +x src/share/database/scripts/mysql/wipe_data.sh])
 AC_CONFIG_FILES([src/share/database/scripts/pgsql/Makefile])
@@ -1844,6 +1664,14 @@ AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_007_to_008.sh],
                 [chmod +x src/share/database/scripts/pgsql/upgrade_007_to_008.sh])
 AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_008_to_009.sh],
                 [chmod +x src/share/database/scripts/pgsql/upgrade_008_to_009.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_009_to_010.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_009_to_010.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_010_to_011.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_010_to_011.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_011_to_012.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_011_to_012.sh])
+AC_CONFIG_FILES([src/share/database/scripts/pgsql/upgrade_012_to_013.sh],
+                [chmod +x src/share/database/scripts/pgsql/upgrade_012_to_013.sh])
 AC_CONFIG_FILES([src/share/database/scripts/pgsql/wipe_data.sh],
                 [chmod +x src/share/database/scripts/pgsql/wipe_data.sh])
 AC_CONFIG_FILES([src/share/yang/Makefile])
@@ -2018,22 +1846,6 @@ PostgreSQL:
 END
 fi
 
-if test "$CQL_CPPFLAGS" != "" ; then
-cat >> config.report << END
-
-Cassandra CQL (deprecated):
-  CQL_VERSION:     ${CQL_VERSION}
-  CQL_CPPFLAGS:    ${CQL_CPPFLAGS}
-  CQL_LIBS:        ${CQL_LIBS}
-END
-else
-cat >> config.report << END
-
-Cassandra CQL:
-  no
-END
-fi
-
 if "${HAVE_SYSREPO}"; then
   cat >> config.report << END
 
@@ -2087,25 +1899,6 @@ Google Test:
 END
 fi
 
-if test "$enable_benchmark" != "no"; then
-cat >> config.report << END
-
-Google Benchmark:
-  BENCHMARK_VERSION:   ${BENCHMARK_VERSION}
-  BENCHMARK_CPPFLAGS:  ${BENCHMARK_CPPFLAGS}
-  BENCHMARK_INCLUDES:  ${BENCHMARK_INCLUDES}
-  BENCHMARK_LDFLAGS:   ${BENCHMARK_LDFLAGS}
-  BENCHMARK_LDADD:     ${BENCHMARK_LDADD}
-  BENCHMARK_SOURCE:    ${BENCHMARK_SOURCE}
-END
-else
-cat >> config.report << END
-
-Google Benchmark:
-  no
-END
-fi
-
 if test "$FREERADIUS_INCLUDE" != ""; then
 cat >> config.report << END
 
@@ -2130,7 +1923,6 @@ cat >> config.report << END
 Developer:
   Enable Debugging:          $debug_enabled
   Google Tests:              $enable_gtest
-  Google Benchmark:          $enable_benchmark
   Valgrind:                  $found_valgrind
   C++ Code Coverage:         $USE_LCOV
   Logger checks:             $enable_logger_checks

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,12 +8,16 @@
 #include <dhcp/iface_mgr.h>
 #include <dhcpsrv/dhcpsrv_log.h>
 #include <dhcpsrv/cfg_iface.h>
+#include <dhcpsrv/timer_mgr.h>
+#include <util/reconnect_ctl.h>
+#include <util/multi_threading_mgr.h>
 #include <util/strutil.h>
 #include <algorithm>
 #include <functional>
 
 using namespace isc::asiolink;
 using namespace isc::data;
+using namespace isc::util;
 namespace ph = std::placeholders;
 
 namespace isc {
@@ -21,8 +25,12 @@ namespace dhcp {
 
 const char* CfgIface::ALL_IFACES_KEYWORD = "*";
 
+CfgIface::OpenSocketsFailedCallback CfgIface::open_sockets_failed_callback_ = 0;
+
 CfgIface::CfgIface()
     : wildcard_used_(false), socket_type_(SOCKET_RAW), re_detect_(false),
+      service_socket_require_all_(false), service_sockets_retry_wait_time_(5000),
+      service_sockets_max_retries_(0),
       outbound_iface_(SAME_AS_INBOUND) {
 }
 
@@ -40,7 +48,7 @@ CfgIface::equals(const CfgIface& other) const {
 }
 
 bool
-CfgIface::multipleAddressesPerInterfaceActive() const {
+CfgIface::multipleAddressesPerInterfaceActive() {
     for (IfacePtr iface : IfaceMgr::instance().getIfaces()) {
         if (iface->countActive4() > 1) {
             return (true);
@@ -51,7 +59,7 @@ CfgIface::multipleAddressesPerInterfaceActive() const {
 
 void
 CfgIface::openSockets(const uint16_t family, const uint16_t port,
-                      const bool use_bcast) const {
+                      const bool use_bcast) {
     // Close any open sockets because we're going to modify some properties
     // of the IfaceMgr. Those modifications require that sockets are closed.
     closeSockets();
@@ -148,35 +156,121 @@ CfgIface::openSockets(const uint16_t family, const uint16_t port,
         }
     }
 
-    // Set the callback which is called when the socket fails to open
-    // for some specific interface. This callback will simply log a
-    // warning message.
-    IfaceMgrErrorMsgCallback error_callback =
-        std::bind(&CfgIface::socketOpenErrorHandler, ph::_1);
-    bool sopen;
-    if (family == AF_INET) {
-        // Use broadcast only if we're using raw sockets. For the UDP sockets,
-        // we only handle the relayed (unicast) traffic.
-        const bool can_use_bcast = use_bcast && (socket_type_ == SOCKET_RAW);
-        // Opening multiple raw sockets handling brodcast traffic on the single
-        // interface may lead to processing the same message multiple times.
-        // We don't prohibit such configuration because raw sockets can as well
-        // handle the relayed traffic. We have to issue a warning, however, to
-        // draw administrator's attention.
-        if (can_use_bcast && multipleAddressesPerInterfaceActive()) {
-            LOG_WARN(dhcpsrv_logger, DHCPSRV_MULTIPLE_RAW_SOCKETS_PER_IFACE);
-        }
-        sopen = IfaceMgr::instance().openSockets4(port, can_use_bcast, error_callback);
-    } else {
-        // use_bcast is ignored for V6.
-        sopen = IfaceMgr::instance().openSockets6(port, error_callback);
+    // Use broadcast only if we're using raw sockets. For the UDP sockets,
+    // we only handle the relayed (unicast) traffic.
+    const bool can_use_bcast = use_bcast && (socket_type_ == SOCKET_RAW);
+
+    // Opening multiple raw sockets handling brodcast traffic on the single
+    // interface may lead to processing the same message multiple times.
+    // We don't prohibit such configuration because raw sockets can as well
+    // handle the relayed traffic. We have to issue a warning, however, to
+    // draw administrator's attention.
+    if (family == AF_INET && can_use_bcast && multipleAddressesPerInterfaceActive()) {
+        LOG_WARN(dhcpsrv_logger, DHCPSRV_MULTIPLE_RAW_SOCKETS_PER_IFACE);
     }
+
+    reconnect_ctl_ = makeReconnectCtl();
+    auto sopen = openSocketsWithRetry(reconnect_ctl_, family, port, can_use_bcast);
 
     if (!sopen) {
         // If no socket were opened, log a warning because the server will
         // not respond to any queries.
         LOG_WARN(dhcpsrv_logger, DHCPSRV_NO_SOCKETS_OPEN);
     }
+}
+
+std::pair<bool, bool>
+CfgIface::openSocketsForFamily(const uint16_t family, const uint16_t port,
+                               const bool can_use_bcast, const bool skip_opened) {
+    bool no_errors = true;
+
+    // Set the callbacks which are called when the socket fails to open
+    // for some specific interface.
+    auto error_callback = [&no_errors](const std::string& errmsg) {
+        socketOpenErrorHandler(errmsg);
+        no_errors = false;
+    };
+
+    IfaceMgr::instance().detectIfaces(true);
+
+    bool sopen = false;
+    if (family == AF_INET) {
+        sopen = IfaceMgr::instance().openSockets4(port, can_use_bcast,
+                                                  error_callback, skip_opened);
+    } else {
+        // use_bcast is ignored for V6.
+        sopen = IfaceMgr::instance().openSockets6(port, error_callback,
+                                                  skip_opened);
+    }
+
+    return (std::make_pair(sopen, no_errors));
+}
+
+ReconnectCtlPtr CfgIface::makeReconnectCtl() const {
+    // Create unique timer name per instance.
+    std::string timer_name = "SocketReopenTimer";
+
+    auto on_fail_action = OnFailAction::SERVE_RETRY_CONTINUE;
+    if (CfgIface::getServiceSocketsRequireAll()) {
+        on_fail_action = OnFailAction::SERVE_RETRY_EXIT;
+    }
+
+    // Add one attempt for an initial call.
+    auto reconnect_ctl = boost::make_shared<ReconnectCtl>("Socket", timer_name,
+                                                          CfgIface::getServiceSocketsMaxRetries(),
+                                                          CfgIface::getServiceSocketsRetryWaitTime(),
+                                                          on_fail_action);
+
+    return (reconnect_ctl);
+}
+
+bool
+CfgIface::openSocketsWithRetry(ReconnectCtlPtr reconnect_ctl,
+                               const uint16_t family, const uint16_t port,
+                               const bool can_use_bcast) {
+    MultiThreadingCriticalSection cs;
+
+    // Skip opened sockets in the retry calls.
+    bool is_initial_call = (reconnect_ctl->retriesLeft() == reconnect_ctl->maxRetries());
+    auto result_pair = openSocketsForFamily(family, port, can_use_bcast, !is_initial_call);
+    bool sopen = result_pair.first;
+    bool has_errors = !result_pair.second;
+
+    auto timer_name = reconnect_ctl->timerName();
+
+    // On the initial call, unregister the previous, pending timer.
+    if (is_initial_call && TimerMgr::instance()->isTimerRegistered(timer_name)) {
+        TimerMgr::instance()->unregisterTimer(timer_name);
+    }
+
+    // Has errors and can retry
+    if (has_errors && reconnect_ctl->retriesLeft() > 0) {
+        // Initial call is excluded from retries counter.
+        reconnect_ctl->checkRetries();
+        // Start the timer.
+        if (!TimerMgr::instance()->isTimerRegistered(timer_name)) {
+            TimerMgr::instance()->registerTimer(timer_name,
+                                                std::bind(&CfgIface::openSocketsWithRetry,
+                                                          reconnect_ctl, family,
+                                                          port, can_use_bcast),
+                                                reconnect_ctl->retryInterval(),
+                                                asiolink::IntervalTimer::ONE_SHOT);
+        }
+        TimerMgr::instance()->setup(timer_name);
+    } else {
+        // Cancel the timer.
+        if (TimerMgr::instance()->isTimerRegistered(timer_name)) {
+            TimerMgr::instance()->unregisterTimer(timer_name);
+        }
+        // Has errors but retries exceed
+        if (has_errors) {
+            if (open_sockets_failed_callback_) {
+                open_sockets_failed_callback_(reconnect_ctl);
+            }
+        }
+    }
+
+    return (sopen);
 }
 
 void
@@ -494,6 +588,17 @@ CfgIface::toElement() const {
 
     // Set re-detect
     result->set("re-detect", Element::create(re_detect_));
+
+    // Set server socket binding
+    if (service_socket_require_all_) {
+        result->set("service-sockets-require-all", Element::create(service_socket_require_all_));
+    }
+
+    if (service_sockets_max_retries_ != 0) {
+        result->set("service-sockets-max-retries", Element::create(static_cast<int>(service_sockets_max_retries_)));
+        // If the max retries parameter is zero, the wait time is not used.
+        result->set("service-sockets-retry-wait-time", Element::create(static_cast<int>(service_sockets_retry_wait_time_)));
+    }
 
     return (result);
 }

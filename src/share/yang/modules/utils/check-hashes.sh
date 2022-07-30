@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -29,7 +29,7 @@ fi
 exit_code=0
 for m in *.yang
 do
-    hash1=$(yanglint -f yin "${m}" | openssl dgst -sha256 | sed 's/(stdin)= //')
+    hash1=$(yanglint -f yin "${m}" | openssl dgst -sha256 | sed 's/(stdin)= //' | sed 's/SHA2-256//')
     h="hashes/$(basename "${m}" .yang).hash"
     if test -f "${h}"
     then

@@ -61,9 +61,6 @@
 #ifdef HAVE_PGSQL
 #include <dhcpsrv/pgsql_lease_mgr.h>
 #endif
-#ifdef HAVE_CQL
-#include <dhcpsrv/cql_lease_mgr.h>
-#endif
 #include <dhcpsrv/memfile_lease_mgr.h>
 
 #include <boost/foreach.hpp>
@@ -106,6 +103,7 @@ struct Dhcp6Hooks {
     int hook_index_buffer6_send_;     ///< index for "buffer6_send" hook point
     int hook_index_lease6_decline_;   ///< index for "lease6_decline" hook point
     int hook_index_host6_identifier_; ///< index for "host6_identifier" hook point
+    int hook_index_ddns6_update_;     ///< index for "ddns6_update" hook point
 
     /// Constructor that registers hook points for DHCPv6 engine
     Dhcp6Hooks() {
@@ -118,6 +116,7 @@ struct Dhcp6Hooks {
         hook_index_buffer6_send_      = HooksManager::registerHook("buffer6_send");
         hook_index_lease6_decline_    = HooksManager::registerHook("lease6_decline");
         hook_index_host6_identifier_  = HooksManager::registerHook("host6_identifier");
+        hook_index_ddns6_update_      = HooksManager::registerHook("ddns6_update");
     }
 };
 
@@ -359,17 +358,146 @@ Dhcpv6Srv::testUnicast(const Pkt6Ptr& pkt) const {
 }
 
 void
+Dhcpv6Srv::setHostIdentifiers(AllocEngine::ClientContext6& ctx) {
+    const ConstCfgHostOperationsPtr cfg =
+        CfgMgr::instance().getCurrentCfg()->getCfgHostOperations6();
+    BOOST_FOREACH(const Host::IdentifierType& id_type,
+                  cfg->getIdentifierTypes()) {
+        switch (id_type) {
+        case Host::IDENT_DUID:
+            if (ctx.duid_) {
+                ctx.addHostIdentifier(id_type, ctx.duid_->getDuid());
+            }
+            break;
+
+        case Host::IDENT_HWADDR:
+            if (ctx.hwaddr_) {
+                ctx.addHostIdentifier(id_type, ctx.hwaddr_->hwaddr_);
+            }
+            break;
+        case Host::IDENT_FLEX:
+            // At this point the information in the packet has been unpacked into
+            // the various packet fields and option objects has been created.
+            // Execute callouts registered for host6_identifier.
+            if (HooksManager::calloutsPresent(Hooks.hook_index_host6_identifier_)) {
+                CalloutHandlePtr callout_handle = getCalloutHandle(ctx.query_);
+
+                Host::IdentifierType type = Host::IDENT_FLEX;
+                std::vector<uint8_t> id;
+
+                // Use the RAII wrapper to make sure that the callout handle state is
+                // reset when this object goes out of scope. All hook points must do
+                // it to prevent possible circular dependency between the callout
+                // handle and its arguments.
+                ScopedCalloutHandleState callout_handle_state(callout_handle);
+
+                // Pass incoming packet as argument
+                callout_handle->setArgument("query6", ctx.query_);
+                callout_handle->setArgument("id_type", type);
+                callout_handle->setArgument("id_value", id);
+
+                // Call callouts
+                HooksManager::callCallouts(Hooks.hook_index_host6_identifier_,
+                                           *callout_handle);
+
+                callout_handle->getArgument("id_type", type);
+                callout_handle->getArgument("id_value", id);
+
+                if ((callout_handle->getStatus() == CalloutHandle::NEXT_STEP_CONTINUE) &&
+                    !id.empty()) {
+
+                    LOG_DEBUG(packet6_logger, DBGLVL_TRACE_BASIC, DHCP6_FLEX_ID)
+                        .arg(Host::getIdentifierAsText(type, &id[0], id.size()));
+
+                    ctx.addHostIdentifier(type, id);
+                }
+            }
+            break;
+        default:
+            ;
+        }
+    }
+}
+
+bool
+Dhcpv6Srv::earlyGHRLookup(const Pkt6Ptr& query,
+                          AllocEngine::ClientContext6& ctx) {
+    // Pointer to client's query.
+    ctx.query_ = query;
+
+    // DUID.
+    ctx.duid_ = query->getClientId();
+
+    // Hardware address.
+    ctx.hwaddr_ = getMAC(query);
+
+    // Get the early-global-reservations-lookup flag value.
+    data::ConstElementPtr egrl = CfgMgr::instance().getCurrentCfg()->
+         getConfiguredGlobal(CfgGlobals::EARLY_GLOBAL_RESERVATIONS_LOOKUP);
+    if (egrl) {
+        ctx.early_global_reservations_lookup_ = egrl->boolValue();
+    }
+
+    // Perform early global reservations lookup when wanted.
+    if (ctx.early_global_reservations_lookup_) {
+        // Get the host identifiers.
+        setHostIdentifiers(ctx);
+
+        // Check for global host reservations.
+        ConstHostPtr global_host = alloc_engine_->findGlobalReservation(ctx);
+
+        if (global_host && !global_host->getClientClasses6().empty()) {
+            // Remove dependent evaluated classes.
+            removeDependentEvaluatedClasses(query);
+
+            // Add classes from the global reservations.
+            const ClientClasses& classes = global_host->getClientClasses6();
+            for (ClientClasses::const_iterator cclass = classes.cbegin();
+                 cclass != classes.cend(); ++cclass) {
+                query->addClass(*cclass);
+            }
+
+            // Evaluate classes before KNOWN.
+            evaluateClasses(query, false);
+        }
+
+        if (global_host) {
+            // Add the KNOWN class;
+            query->addClass("KNOWN");
+            LOG_DEBUG(dhcp6_logger, DBG_DHCP6_BASIC, DHCP6_CLASS_ASSIGNED)
+                .arg(query->getLabel())
+                .arg("KNOWN");
+
+            // Evaluate classes after KNOWN.
+            evaluateClasses(query, true);
+
+            // Check the DROP special class.
+            if (query->inClass("DROP")) {
+                LOG_DEBUG(packet6_logger, DBGLVL_PKT_HANDLING,
+                          DHCP6_PACKET_DROP_DROP_CLASS_EARLY)
+                    .arg(query->toText());
+                StatsMgr::instance().addValue("pkt6-receive-drop",
+                                              static_cast<int64_t>(1));
+                return (false);
+            }
+
+            // Store the reservation.
+            ctx.hosts_[SUBNET_ID_GLOBAL] = global_host;
+        }
+    }
+
+    return (true);
+}
+
+void
 Dhcpv6Srv::initContext(const Pkt6Ptr& pkt,
                        AllocEngine::ClientContext6& ctx,
                        bool& drop) {
     ctx.subnet_ = selectSubnet(pkt, drop);
-    ctx.duid_ = pkt->getClientId(),
     ctx.fwd_dns_update_ = false;
     ctx.rev_dns_update_ = false;
     ctx.hostname_ = "";
-    ctx.query_ = pkt;
     ctx.callout_handle_ = getCalloutHandle(pkt);
-    ctx.hwaddr_ = getMAC(pkt);
 
     if (drop) {
         // Caller will immediately drop the packet so simply return now.
@@ -381,63 +509,10 @@ Dhcpv6Srv::initContext(const Pkt6Ptr& pkt,
     // order to search for host reservations.
     SharedNetwork6Ptr sn;
     if (ctx.subnet_) {
-        const ConstCfgHostOperationsPtr cfg =
-            CfgMgr::instance().getCurrentCfg()->getCfgHostOperations6();
-        BOOST_FOREACH(const Host::IdentifierType& id_type,
-                      cfg->getIdentifierTypes()) {
-            switch (id_type) {
-            case Host::IDENT_DUID:
-                if (ctx.duid_) {
-                    ctx.addHostIdentifier(id_type, ctx.duid_->getDuid());
-                }
-                break;
-
-            case Host::IDENT_HWADDR:
-                if (ctx.hwaddr_) {
-                    ctx.addHostIdentifier(id_type, ctx.hwaddr_->hwaddr_);
-                }
-                break;
-            case Host::IDENT_FLEX:
-                // At this point the information in the packet has been unpacked into
-                // the various packet fields and option objects has been created.
-                // Execute callouts registered for host6_identifier.
-                if (HooksManager::calloutsPresent(Hooks.hook_index_host6_identifier_)) {
-                    CalloutHandlePtr callout_handle = getCalloutHandle(pkt);
-
-                    Host::IdentifierType type = Host::IDENT_FLEX;
-                    std::vector<uint8_t> id;
-
-                    // Use the RAII wrapper to make sure that the callout handle state is
-                    // reset when this object goes out of scope. All hook points must do
-                    // it to prevent possible circular dependency between the callout
-                    // handle and its arguments.
-                    ScopedCalloutHandleState callout_handle_state(callout_handle);
-
-                    // Pass incoming packet as argument
-                    callout_handle->setArgument("query6", pkt);
-                    callout_handle->setArgument("id_type", type);
-                    callout_handle->setArgument("id_value", id);
-
-                    // Call callouts
-                    HooksManager::callCallouts(Hooks.hook_index_host6_identifier_,
-                                               *callout_handle);
-
-                    callout_handle->getArgument("id_type", type);
-                    callout_handle->getArgument("id_value", id);
-
-                    if ((callout_handle->getStatus() == CalloutHandle::NEXT_STEP_CONTINUE) &&
-                        !id.empty()) {
-
-                        LOG_DEBUG(packet6_logger, DBGLVL_TRACE_BASIC, DHCP6_FLEX_ID)
-                            .arg(Host::getIdentifierAsText(type, &id[0], id.size()));
-
-                        ctx.addHostIdentifier(type, id);
-                    }
-                }
-                break;
-            default:
-                ;
-            }
+        // Before we can check for static reservations, we need to prepare
+        // a set of identifiers to be used for this.
+        if (!ctx.early_global_reservations_lookup_) {
+            setHostIdentifiers(ctx);
         }
 
         // Find host reservations using specified identifiers.
@@ -455,7 +530,8 @@ Dhcpv6Srv::initContext(const Pkt6Ptr& pkt,
     // affect selection of a pool within the selected subnet.
     auto global_host = ctx.globalHost();
     auto current_host = ctx.currentHost();
-    if ((global_host && !global_host->getClientClasses6().empty()) ||
+    if ((!ctx.early_global_reservations_lookup_ &&
+         global_host && !global_host->getClientClasses6().empty()) ||
         (!sn && current_host && !current_host->getClientClasses6().empty())) {
         // We have already evaluated client classes and some of them may
         // be in conflict with the reserved classes. Suppose there are
@@ -471,19 +547,9 @@ Dhcpv6Srv::initContext(const Pkt6Ptr& pkt,
         // a result, the first_class set via the host reservation will
         // replace the second_class because the second_class will this
         // time evaluate to false as desired.
-        const ClientClassDictionaryPtr& dict =
-            CfgMgr::instance().getCurrentCfg()->getClientClassDictionary();
-        const ClientClassDefListPtr& defs_ptr = dict->getClasses();
-        for (auto def : *defs_ptr) {
-            // Only remove evaluated classes. Other classes can be
-            // assigned via hooks libraries and we should not remove
-            // them because there is no way they can be added back.
-            if (def->getMatchExpr()) {
-                ctx.query_->classes_.erase(def->getName());
-            }
-        }
+        removeDependentEvaluatedClasses(pkt);
         setReservedClientClasses(pkt, ctx);
-        evaluateClasses(pkt,  false);
+        evaluateClasses(pkt, false);
     }
 
     // Set KNOWN builtin class if something was found, UNKNOWN if not.
@@ -823,13 +889,6 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
         return;
     }
 
-    if (query->getType() == DHCPV6_DHCPV4_QUERY) {
-        // This call never throws. Should this change, this section must be
-        // enclosed in try-catch.
-        processDhcp4Query(query);
-        return;
-    }
-
     processDhcp6Query(query, rsp);
 }
 
@@ -874,6 +933,18 @@ Dhcpv6Srv::processDhcp6Query(Pkt6Ptr& query, Pkt6Ptr& rsp) {
 
     // Let's create a simplified client context here.
     AllocEngine::ClientContext6 ctx;
+    if (!earlyGHRLookup(query, ctx)) {
+        return;
+    }
+
+    if (query->getType() == DHCPV6_DHCPV4_QUERY) {
+        // This call never throws. Should this change, this section must be
+        // enclosed in try-catch.
+        processDhcp4Query(query);
+        return;
+    }
+
+    // Complete the client context initialization.
     bool drop = false;
     initContext(query, ctx, drop);
 
@@ -983,12 +1054,31 @@ Dhcpv6Srv::processDhcp6Query(Pkt6Ptr& query, Pkt6Ptr& rsp) {
     if (!ctx.fake_allocation_ && (ctx.query_->getType() != DHCPV6_CONFIRM) &&
         (ctx.query_->getType() != DHCPV6_INFORMATION_REQUEST) &&
         HooksManager::calloutsPresent(Hooks.hook_index_leases6_committed_)) {
-
+        // The ScopedCalloutHandleState class which guarantees that the task
+        // is added to the thread pool after the response is reset (if needed)
+        // and CalloutHandle state is reset. In ST it does nothing.
+        // A smart pointer is used to store the ScopedCalloutHandleState so that
+        // a copy of the pointer is created by the lambda and only on the
+        // destruction of the last reference the task is added.
+        // In MT there are 2 cases:
+        // 1. packet is unparked before current thread smart pointer to
+        //    ScopedCalloutHandleState is destroyed:
+        //  - the lambda uses the smart pointer to set the callout which adds the
+        //    task, but the task is added after ScopedCalloutHandleState is
+        //    destroyed, on the destruction of the last reference which is held
+        //    by the current thread.
+        // 2. packet is unparked after the current thread smart pointer to
+        //    ScopedCalloutHandleState is destroyed:
+        //  - the current thread reference to ScopedCalloutHandleState is
+        //    destroyed, but the reference in the lambda keeps it alive until
+        //    the lambda is called and the last reference is released, at which
+        //    time the task is actually added.
         // Use the RAII wrapper to make sure that the callout handle state is
         // reset when this object goes out of scope. All hook points must do
         // it to prevent possible circular dependency between the callout
         // handle and its arguments.
-        ScopedCalloutHandleState callout_handle_state(callout_handle);
+        std::shared_ptr<ScopedCalloutHandleState> callout_handle_state =
+                std::make_shared<ScopedCalloutHandleState>(callout_handle);
 
         ScopedEnableOptionsCopy<Pkt6> query6_options_copy(query);
 
@@ -1034,8 +1124,8 @@ Dhcpv6Srv::processDhcp6Query(Pkt6Ptr& query, Pkt6Ptr& rsp) {
 
         // Get the parking limit. Parsing should ensure the value is present.
         uint32_t parked_packet_limit = 0;
-        data::ConstElementPtr ppl = CfgMgr::instance().
-            getCurrentCfg()->getConfiguredGlobal("parked-packet-limit");
+        data::ConstElementPtr ppl = CfgMgr::instance().getCurrentCfg()->
+            getConfiguredGlobal(CfgGlobals::PARKED_PACKET_LIMIT);
         if (ppl) {
             parked_packet_limit = ppl->intValue();
         }
@@ -1061,13 +1151,15 @@ Dhcpv6Srv::processDhcp6Query(Pkt6Ptr& query, Pkt6Ptr& rsp) {
         // NEXT_STEP_PARK.  Otherwise the callback we bind here will be
         // executed when the hook library unparks the packet.
         HooksManager::park("leases6_committed", query,
-        [this, callout_handle, query, rsp]() mutable {
+        [this, callout_handle, query, rsp, callout_handle_state]() mutable {
             if (MultiThreadingMgr::instance().getMode()) {
                 typedef function<void()> CallBack;
                 boost::shared_ptr<CallBack> call_back =
                     boost::make_shared<CallBack>(std::bind(&Dhcpv6Srv::sendResponseNoThrow,
                                                            this, callout_handle, query, rsp));
-                MultiThreadingMgr::instance().getThreadPool().add(call_back);
+                callout_handle_state->on_completion_ = [call_back]() {
+                    MultiThreadingMgr::instance().getThreadPool().add(call_back);
+                };
             } else {
                 processPacketPktSend(callout_handle, query, rsp);
                 processPacketBufferSend(callout_handle, rsp);
@@ -1080,7 +1172,7 @@ Dhcpv6Srv::processDhcp6Query(Pkt6Ptr& query, Pkt6Ptr& rsp) {
                                        *callout_handle);
         } catch (...) {
             // Make sure we don't orphan a parked packet.
-            HooksManager::drop("leases4_committed", query);
+            HooksManager::drop("leases6_committed", query);
             throw;
         }
 
@@ -1764,13 +1856,12 @@ Dhcpv6Srv::assignLeases(const Pkt6Ptr& question, Pkt6Ptr& answer,
     // responses in answer message (ADVERTISE or REPLY).
     //
     // @todo: IA_TA once we implement support for temporary addresses.
-    for (OptionCollection::iterator opt = question->options_.begin();
-         opt != question->options_.end(); ++opt) {
-        switch (opt->second->getType()) {
+    for (const auto& opt : question->options_) {
+        switch (opt.second->getType()) {
         case D6O_IA_NA: {
             OptionPtr answer_opt = assignIA_NA(question, ctx,
                                                boost::dynamic_pointer_cast<
-                                               Option6IA>(opt->second));
+                                               Option6IA>(opt.second));
             if (answer_opt) {
                 answer->addOption(answer_opt);
             }
@@ -1779,7 +1870,7 @@ Dhcpv6Srv::assignLeases(const Pkt6Ptr& question, Pkt6Ptr& answer,
         case D6O_IA_PD: {
             OptionPtr answer_opt = assignIA_PD(question, ctx,
                                                boost::dynamic_pointer_cast<
-                                               Option6IA>(opt->second));
+                                               Option6IA>(opt.second));
             if (answer_opt) {
                 answer->addOption(answer_opt);
             }
@@ -1869,6 +1960,63 @@ Dhcpv6Srv::processClientFqdn(const Pkt6Ptr& question, const Pkt6Ptr& answer,
         .arg(question->getLabel())
         .arg(fqdn_resp->toText());
     answer->addOption(fqdn_resp);
+
+    // Optionally, call a hook that may override the decisions made
+    // earlier.
+    if (HooksManager::calloutsPresent(Hooks.hook_index_ddns6_update_)) {
+        CalloutHandlePtr callout_handle = getCalloutHandle(question);
+
+        // Use the RAII wrapper to make sure that the callout handle state is
+        // reset when this object goes out of scope. All hook points must do
+        // it to prevent possible circular dependency between the callout
+        // handle and its arguments.
+        ScopedCalloutHandleState callout_handle_state(callout_handle);
+
+        // Setup the callout arguments.
+        Subnet6Ptr subnet = ctx.subnet_;
+        callout_handle->setArgument("query6", question);
+        callout_handle->setArgument("response6", answer);
+        callout_handle->setArgument("subnet6", subnet);
+        callout_handle->setArgument("hostname", ctx.hostname_);
+        callout_handle->setArgument("fwd-update", ctx.fwd_dns_update_);
+        callout_handle->setArgument("rev-update", ctx.rev_dns_update_);
+        callout_handle->setArgument("ddns-params", ddns_params);
+
+        // Call callouts
+        HooksManager::callCallouts(Hooks.hook_index_ddns6_update_, *callout_handle);
+
+        // Let's get the parameters returned by hook.
+        string hook_hostname;
+        bool hook_fwd_dns_update;
+        bool hook_rev_dns_update;
+        callout_handle->getArgument("hostname", hook_hostname);
+        callout_handle->getArgument("fwd-update", hook_fwd_dns_update);
+        callout_handle->getArgument("rev-update", hook_rev_dns_update);
+
+        // If there's anything changed by the hook, log it and then update the parameters
+        if ((ctx.hostname_ != hook_hostname) || (ctx.fwd_dns_update_!= hook_fwd_dns_update) ||
+            (ctx.rev_dns_update_ != hook_rev_dns_update)) {
+            LOG_DEBUG(hooks_logger, DBGLVL_PKT_HANDLING, DHCP6_HOOK_DDNS_UPDATE)
+                      .arg(ctx.hostname_).arg(hook_hostname)
+                      .arg(ctx.fwd_dns_update_).arg(hook_fwd_dns_update)
+                      .arg(ctx.rev_dns_update_).arg(hook_rev_dns_update);
+
+            // Update the FQDN option in the response.
+            fqdn_resp = boost::dynamic_pointer_cast<Option6ClientFqdn>(answer->getOption(D6O_CLIENT_FQDN));
+            if (fqdn) {
+                fqdn_resp->setDomainName(hook_hostname, Option6ClientFqdn::FULL);
+                if (!(hook_fwd_dns_update || hook_rev_dns_update)) {
+                    // Hook disabled updates, Set flags back to client accordingly.
+                    fqdn_resp->setFlag(Option6ClientFqdn::FLAG_S, 0);
+                    fqdn_resp->setFlag(Option6ClientFqdn::FLAG_N, 1);
+                }
+            }
+
+            ctx.hostname_ = hook_hostname;
+            ctx.fwd_dns_update_ = hook_fwd_dns_update;
+            ctx.rev_dns_update_ = hook_rev_dns_update;
+        }
+    }
 }
 
 void
@@ -2657,13 +2805,12 @@ Dhcpv6Srv::extendLeases(const Pkt6Ptr& query, Pkt6Ptr& reply,
     // Save the originally selected subnet.
     Subnet6Ptr orig_subnet = ctx.subnet_;
 
-    for (OptionCollection::iterator opt = query->options_.begin();
-         opt != query->options_.end(); ++opt) {
-        switch (opt->second->getType()) {
+    for (const auto& opt : query->options_) {
+        switch (opt.second->getType()) {
         case D6O_IA_NA: {
             OptionPtr answer_opt = extendIA_NA(query, ctx,
                                                boost::dynamic_pointer_cast<
-                                                   Option6IA>(opt->second));
+                                                   Option6IA>(opt.second));
             if (answer_opt) {
                 reply->addOption(answer_opt);
             }
@@ -2673,7 +2820,7 @@ Dhcpv6Srv::extendLeases(const Pkt6Ptr& query, Pkt6Ptr& reply,
         case D6O_IA_PD: {
             OptionPtr answer_opt = extendIA_PD(query, ctx,
                                                boost::dynamic_pointer_cast<
-                                                   Option6IA>(opt->second));
+                                                   Option6IA>(opt.second));
             if (answer_opt) {
                 reply->addOption(answer_opt);
             }
@@ -2710,13 +2857,12 @@ Dhcpv6Srv::releaseLeases(const Pkt6Ptr& release, Pkt6Ptr& reply,
     // handled properly. Therefore the releaseIA_NA and releaseIA_PD options
     // may turn the status code to some error, but can't turn it back to success.
     int general_status = STATUS_Success;
-    for (OptionCollection::iterator opt = release->options_.begin();
-         opt != release->options_.end(); ++opt) {
+    for (const auto& opt : release->options_) {
         Lease6Ptr old_lease;
-        switch (opt->second->getType()) {
+        switch (opt.second->getType()) {
         case D6O_IA_NA: {
             OptionPtr answer_opt = releaseIA_NA(ctx.duid_, release, general_status,
-                                                boost::dynamic_pointer_cast<Option6IA>(opt->second),
+                                                boost::dynamic_pointer_cast<Option6IA>(opt.second),
                                                 old_lease);
             if (answer_opt) {
                 reply->addOption(answer_opt);
@@ -2725,7 +2871,7 @@ Dhcpv6Srv::releaseLeases(const Pkt6Ptr& release, Pkt6Ptr& reply,
         }
         case D6O_IA_PD: {
             OptionPtr answer_opt = releaseIA_PD(ctx.duid_, release, general_status,
-                                                boost::dynamic_pointer_cast<Option6IA>(opt->second),
+                                                boost::dynamic_pointer_cast<Option6IA>(opt.second),
                                                 old_lease);
             if (answer_opt) {
                 reply->addOption(answer_opt);
@@ -3409,12 +3555,11 @@ Dhcpv6Srv::declineLeases(const Pkt6Ptr& decline, Pkt6Ptr& reply,
     // may turn the status code to some error, but can't turn it back to success.
     int general_status = STATUS_Success;
 
-    for (OptionCollection::iterator opt = decline->options_.begin();
-         opt != decline->options_.end(); ++opt) {
-        switch (opt->second->getType()) {
+    for (const auto& opt : decline->options_) {
+        switch (opt.second->getType()) {
         case D6O_IA_NA: {
             OptionPtr answer_opt = declineIA(decline, ctx.duid_, general_status,
-                                             boost::dynamic_pointer_cast<Option6IA>(opt->second),
+                                             boost::dynamic_pointer_cast<Option6IA>(opt.second),
                                              ctx.new_leases_);
             if (answer_opt) {
 
@@ -3808,6 +3953,21 @@ void Dhcpv6Srv::evaluateClasses(const Pkt6Ptr& pkt, bool depend_on_known) {
 }
 
 void
+Dhcpv6Srv::removeDependentEvaluatedClasses(const Pkt6Ptr& pkt) {
+    const ClientClassDictionaryPtr& dict =
+        CfgMgr::instance().getCurrentCfg()->getClientClassDictionary();
+    const ClientClassDefListPtr& defs_ptr = dict->getClasses();
+    for (auto def : *defs_ptr) {
+        // Only remove evaluated classes. Other classes can be
+        // assigned via hooks libraries and we should not remove
+        // them because there is no way they can be added back.
+        if (def->getMatchExpr()) {
+            pkt->classes_.erase(def->getName());
+        }
+    }
+}
+
+void
 Dhcpv6Srv::setReservedClientClasses(const Pkt6Ptr& pkt,
                                     const AllocEngine::ClientContext6& ctx) {
     if (ctx.currentHost() && pkt) {
@@ -3862,7 +4022,7 @@ Dhcpv6Srv::requiredClassify(const Pkt6Ptr& pkt, AllocEngine::ClientContext6& ctx
         // Followed by the subnet
         const ClientClasses& to_add = subnet->getRequiredClasses();
         for (ClientClasses::const_iterator cclass = to_add.cbegin();
-            cclass != to_add.cend(); ++cclass) {
+             cclass != to_add.cend(); ++cclass) {
             classes.insert(*cclass);
         }
 
@@ -4103,9 +4263,6 @@ Dhcpv6Srv::getVersion(bool extended) {
 #endif
 #ifdef HAVE_PGSQL
         tmp << PgSqlLeaseMgr::getDBVersion() << endl;
-#endif
-#ifdef HAVE_CQL
-        tmp << CqlLeaseMgr::getDBVersion() << endl;
 #endif
         tmp << Memfile_LeaseMgr::getDBVersion(Memfile_LeaseMgr::V6);
 

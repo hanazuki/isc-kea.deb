@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -126,7 +126,7 @@ Option6PDExclude::clone() const {
 }
 
 void
-Option6PDExclude::pack(isc::util::OutputBuffer& buf) const {
+Option6PDExclude::pack(isc::util::OutputBuffer& buf, bool) const {
     // Make sure that the subnet identifier is valid. It should never
     // be empty.
     if ((excluded_prefix_length_ == 0) || subnet_id_.empty()) {

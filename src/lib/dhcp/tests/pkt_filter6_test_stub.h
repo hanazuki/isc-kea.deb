@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2015 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,6 +15,11 @@
 namespace isc {
 namespace dhcp {
 namespace test {
+
+/// @brief An open socket callback that can be use for a testing purposes.
+///
+/// @param port Port number to bind socket to.
+typedef std::function<void(uint16_t port)> PktFilter6OpenSocketCallback;
 
 /// @brief A stub implementation of the PktFilter6 class.
 ///
@@ -82,6 +87,17 @@ public:
     /// @return true if multicast join was successful
     static bool joinMulticast(int sock, const std::string& ifname,
                               const std::string & mcast);
+
+    /// @brief Set an open socket callback. Use it for testing
+    /// purposes, e.g. counting the number of calls or throwing an exception.
+    void setOpenSocketCallback(PktFilter6OpenSocketCallback callback) {
+        open_socket_callback_ = callback;
+    }
+
+private:
+
+    /// @brief The callback used when opening socket.
+    PktFilter6OpenSocketCallback open_socket_callback_;
 };
 
 } // namespace isc::dhcp::test

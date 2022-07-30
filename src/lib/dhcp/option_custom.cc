@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -455,10 +455,10 @@ OptionCustom::dataFieldToText(const OptionDataType data_type,
 }
 
 void
-OptionCustom::pack(isc::util::OutputBuffer& buf) const {
+OptionCustom::pack(isc::util::OutputBuffer& buf, bool check) const {
 
     // Pack DHCP header (V4 or V6).
-    packHeader(buf);
+    packHeader(buf, check);
 
     // Write data from buffers.
     for (std::vector<OptionBuffer>::const_iterator it = buffers_.begin();
@@ -472,7 +472,7 @@ OptionCustom::pack(isc::util::OutputBuffer& buf) const {
     }
 
     // Write suboptions.
-    packOptions(buf);
+    packOptions(buf, check);
 }
 
 

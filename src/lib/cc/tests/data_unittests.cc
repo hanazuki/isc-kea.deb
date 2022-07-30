@@ -1,4 +1,4 @@
-// Copyright (C) 2009-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2009-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -212,6 +212,7 @@ testGetValueInt() {
     T el;
     int64_t i;
     int32_t i32;
+    uint32_t ui32;
     long l;
     long long ll;
     double d;
@@ -259,6 +260,14 @@ testGetValueInt() {
     });
     EXPECT_TRUE(el->getValue(i));
     EXPECT_EQ(i32, i);
+
+    ui32 = 4294967295L;
+    el = Element::create(ui32);
+    EXPECT_NO_THROW({
+       EXPECT_EQ(ui32, el->intValue());
+    });
+    EXPECT_TRUE(el->getValue(i));
+    EXPECT_EQ(ui32, i);
 
     l = 2147483647L;
     el = Element::create(l);
@@ -1143,7 +1152,6 @@ TEST(Element, isEquivalent) {
     }
 }
 
-
 // This test checks the pretty print function.
 TEST(Element, prettyPrint) {
 
@@ -1524,6 +1532,699 @@ TEST(Element, removeEmptyContainersRecursively) {
   }
 }
 )"));
+}
+
+/// @brief Function which creates an imaginary configuration hierarchy used to
+/// test mergeDiffAdd, mergeDiffDel and extend.
+///
+/// @param any Flag which indicates if traversing the hierarchy should use exact
+/// element match or not.
+isc::data::HierarchyDescriptor createHierarchy(bool any = false) {
+    auto const& element_empty = [](ElementPtr& element) {
+        for (auto const& kv : element->mapValue()) {
+            auto const& key = kv.first;
+            if (key != "id") {
+                return (false);
+            }
+        }
+        return (true);
+    };
+    auto const& element_match = [](ElementPtr& left, ElementPtr& right) -> bool {
+        return (left->get("id")->intValue() == right->get("id")->intValue());
+    };
+    auto const& element_any_match = [](ElementPtr&, ElementPtr&) -> bool {
+        return (true);
+    };
+    auto const& element_is_key = [](const std::string& key) -> bool {
+        return (key == "id");
+    };
+    isc::data::HierarchyDescriptor hierarchy = {
+        { { "root", { element_match, element_empty, element_is_key } } },
+        { { "elements", { element_match, element_empty, element_is_key } },
+          { "elements-other", { element_match, element_empty, element_is_key } } }
+    };
+    if (any) {
+        hierarchy = {
+            { { "root", { element_any_match, element_empty, element_is_key } } },
+            { { "elements", { element_any_match, element_empty, element_is_key } },
+              { "elements-other", { element_any_match, element_empty, element_is_key } } }
+        };
+    }
+    return (hierarchy);
+}
+
+/// @brief Test which checks that mergeDiffAdd throws if called with wrong
+/// element types.
+TEST(Element, mergeDiffAddBadParams) {
+    {
+        SCOPED_TRACE("root bad scalars");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(true);
+        ElementPtr right = Element::create("false");
+        ASSERT_THROW(mergeDiffAdd(left, right, hierarchy, ""), TypeError);
+    }
+    {
+        SCOPED_TRACE("map bad elements");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        left->set("elements", Element::createList());
+        right->set("elements", Element::createMap());
+        ASSERT_THROW(mergeDiffAdd(left, right, hierarchy, "root"), TypeError);
+    }
+    {
+        SCOPED_TRACE("list bad elements");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::createMap());
+        right_right->set("id", Element::create(0));
+        right_right->set("elements", Element::createList());
+        left->add(left_left);
+        right->add(right_right);
+        ASSERT_THROW(mergeDiffAdd(left, right, hierarchy, "root"), TypeError);
+    }
+}
+
+/// @brief Test which checks that mergeDiffAdd works as expected.
+TEST(Element, mergeDiffAdd) {
+    {
+        SCOPED_TRACE("scalar bool");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(true);
+        ElementPtr right = Element::create(false);
+        EXPECT_NE(left->boolValue(), right->boolValue());
+        mergeDiffAdd(left, right, hierarchy, "");
+        EXPECT_EQ(left->boolValue(), right->boolValue());
+        std::string expected_str("false");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar int");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(1);
+        ElementPtr right = Element::create(2);
+        EXPECT_NE(left->intValue(), right->intValue());
+        mergeDiffAdd(left, right, hierarchy, "");
+        EXPECT_EQ(left->intValue(), right->intValue());
+        std::string expected_str("2");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar double");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(0.1);
+        ElementPtr right = Element::create(0.2);
+        EXPECT_NE(left->doubleValue(), right->doubleValue());
+        mergeDiffAdd(left, right, hierarchy, "");
+        EXPECT_EQ(left->doubleValue(), right->doubleValue());
+        std::string expected_str("0.2");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar string");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create("left");
+        ElementPtr right = Element::create("right");
+        EXPECT_NE(left->stringValue(), right->stringValue());
+        mergeDiffAdd(left, right, hierarchy, "");
+        EXPECT_EQ(left->stringValue(), right->stringValue());
+        std::string expected_str("\"right\"");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar in map");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        left->set("elements", Element::create("left"));
+        left->set("other-elements", Element::create("other"));
+        // scalar element which is updated
+        right->set("elements", Element::create("right"));
+        // scalar element which is added
+        right->set("new-elements", Element::create("new"));
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffAdd(left, right, hierarchy, "");
+        std::string expected_str("{ \"elements\": \"right\", \"new-elements\": \"new\", \"other-elements\": \"other\" }");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar in list");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        left->add(Element::create("left"));
+        left->add(Element::create("other"));
+        left->add(Element::create("test"));
+        // scalar element which is added
+        right->add(Element::create("right"));
+        // scalar element which is added
+        right->add(Element::create("new"));
+        // scalar element which already exists but is still added
+        right->add(Element::create("test"));
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffAdd(left, right, hierarchy, "");
+        std::string expected_str("[ \"left\", \"other\", \"test\", \"right\", \"new\", \"test\" ]");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar and list and map in map");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::create("left"));
+        left_left->set("other-elements", Element::create("other"));
+        // scalar element used as key
+        right_right->set("id", Element::create(0));
+        // scalar element which is updated
+        right_right->set("elements", Element::create("right"));
+        // scalar element which is added
+        right_right->set("new-elements", Element::create("new"));
+        ElementPtr left_other_left = Element::createMap();
+        ElementPtr right_other_right = Element::createMap();
+        left_other_left->set("id", Element::create(1));
+        left_other_left->set("elements", Element::create("other-left"));
+        // scalar element used as key
+        right_other_right->set("id", Element::create(2));
+        // scalar element which is added
+        right_other_right->set("elements", Element::create("other-right"));
+        left->set("elements", left_left);
+        left->set("left-other-elements", left_other_left);
+        // map element which is added
+        right->set("right-other-elements", right_other_right);
+        // map element which is updated
+        right->set("elements", right_right);
+        left_other_left = Element::createList();
+        right_other_right = Element::createList();
+        left_other_left->add(Element::create("left-other-left"));
+        left_other_left->add(Element::create("left-other-left-other"));
+        left_other_left->add(Element::create("other-other"));
+        // scalar element which is added
+        right_other_right->add(Element::create("right-other-right"));
+        // scalar element which is added
+        right_other_right->add(Element::create("right-other-right-other"));
+        // scalar element which already exists but is still added
+        right_other_right->add(Element::create("other-other"));
+        left->set("other", left_other_left);
+        // list element which is updated
+        right->set("other", right_other_right);
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffAdd(left, right, hierarchy, "root");
+        std::string expected_str("{ \"elements\": { \"elements\": \"right\", \"id\": 0, \"new-elements\": \"new\", \"other-elements\": \"other\" }, "
+                                   "\"left-other-elements\": { \"elements\": \"other-left\", \"id\": 1 }, "
+                                   "\"other\": [ \"left-other-left\", \"left-other-left-other\", \"other-other\", \"right-other-right\", \"right-other-right-other\", \"other-other\" ], "
+                                   "\"right-other-elements\": { \"elements\": \"other-right\", \"id\": 2 } }");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar and list and map in list");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::create("left"));
+        left_left->set("other-elements", Element::create("other"));
+        // scalar element used as key
+        right_right->set("id", Element::create(0));
+        // scalar element which is updated
+        right_right->set("elements", Element::create("right"));
+        // scalar element which is added
+        right_right->set("new-elements", Element::create("new"));
+        ElementPtr left_other_left = Element::createMap();
+        ElementPtr right_other_right = Element::createMap();
+        left_other_left->set("id", Element::create(1));
+        left_other_left->set("elements", Element::create("other-left"));
+        // scalar element used as key
+        right_other_right->set("id", Element::create(2));
+        // scalar element which is added
+        right_other_right->set("elements", Element::create("other-right"));
+        left->add(left_left);
+        left->add(left_other_left);
+        // map element which is added
+        right->add(right_other_right);
+        // map element which is updated
+        right->add(right_right);
+        left_other_left = Element::createList();
+        right_other_right = Element::createList();
+        left_other_left->add(Element::create("left-other-left"));
+        left_other_left->add(Element::create("left-other-left-other"));
+        left_other_left->add(Element::create("other-other"));
+        // scalar element which is added
+        right_other_right->add(Element::create("right-other-right"));
+        // scalar element which is added
+        right_other_right->add(Element::create("right-other-right-other"));
+        // scalar element which already exists but is still added
+        right_other_right->add(Element::create("other-other"));
+        left_left->set("other", left_other_left);
+        // list element which is updated
+        right_right->set("other", right_other_right);
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffAdd(left, right, hierarchy, "root");
+        std::string expected_str("[ { \"elements\": \"right\", \"id\": 0, \"new-elements\": \"new\", "
+                                     "\"other\": [ \"left-other-left\", \"left-other-left-other\", \"other-other\", \"right-other-right\", \"right-other-right-other\", \"other-other\" ], "
+                                     "\"other-elements\": \"other\" }, "
+                                   "{ \"elements\": \"other-left\", \"id\": 1 }, "
+                                   "{ \"elements\": \"other-right\", \"id\": 2 } ]");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+}
+
+/// @brief Test which checks that mergeDiffDel throws if called with wrong
+/// element types.
+TEST(Element, mergeDiffDelBadParams) {
+    {
+        SCOPED_TRACE("root bad scalars");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(true);
+        ElementPtr right = Element::create("false");
+        ASSERT_THROW(mergeDiffDel(left, right, hierarchy, ""), TypeError);
+    }
+    {
+        SCOPED_TRACE("map bad elements");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        left->set("elements", Element::createList());
+        right->set("elements", Element::createMap());
+        ASSERT_THROW(mergeDiffDel(left, right, hierarchy, "root"), TypeError);
+    }
+    {
+        SCOPED_TRACE("list bad elements");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::createMap());
+        right_right->set("id", Element::create(0));
+        right_right->set("elements", Element::createList());
+        left->add(left_left);
+        right->add(right_right);
+        ASSERT_THROW(mergeDiffDel(left, right, hierarchy, "root"), TypeError);
+    }
+}
+
+/// @brief Test which checks that mergeDiffDel works as expected.
+TEST(Element, mergeDiffDel) {
+    {
+        SCOPED_TRACE("scalar bool");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(true);
+        ElementPtr right = Element::create(false);
+        EXPECT_NE(left->boolValue(), right->boolValue());
+        mergeDiffDel(left, right, hierarchy, "");
+        EXPECT_EQ(left->getType(), Element::null);
+    }
+    {
+        SCOPED_TRACE("scalar int");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(1);
+        ElementPtr right = Element::create(2);
+        EXPECT_NE(left->intValue(), right->intValue());
+        mergeDiffDel(left, right, hierarchy, "");
+        EXPECT_EQ(left->getType(), Element::null);
+    }
+    {
+        SCOPED_TRACE("scalar double");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(0.1);
+        ElementPtr right = Element::create(0.2);
+        EXPECT_NE(left->doubleValue(), right->doubleValue());
+        mergeDiffDel(left, right, hierarchy, "");
+        EXPECT_EQ(left->getType(), Element::null);
+    }
+    {
+        SCOPED_TRACE("scalar string");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create("left");
+        ElementPtr right = Element::create("right");
+        EXPECT_NE(left->stringValue(), right->stringValue());
+        mergeDiffDel(left, right, hierarchy, "");
+        EXPECT_EQ(left->getType(), Element::null);
+    }
+    {
+        SCOPED_TRACE("scalar in map");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        left->set("elements", Element::create("left"));
+        left->set("other-elements", Element::create("other"));
+        // scalar element which is removed
+        right->set("elements", Element::create("right"));
+        // scalar element which does not exist and does nothing
+        right->set("new-elements", Element::create("new"));
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffDel(left, right, hierarchy, "root");
+        std::string expected_str("{ \"other-elements\": \"other\" }");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar in list");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        left->add(Element::create("left"));
+        left->add(Element::create("other"));
+        left->add(Element::create("other-left"));
+        left->add(Element::create("new"));
+        // scalar element which does not exist and does nothing
+        right->add(Element::create("right"));
+        // scalar element which is removed
+        right->add(Element::create("other"));
+        // scalar element which does not exist and does nothing
+        right->add(Element::create("other-right"));
+        // scalar element which is removed
+        right->add(Element::create("new"));
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffDel(left, right, hierarchy, "");
+        std::string expected_str("[ \"left\", \"other-left\" ]");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar and list and map in map");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::create("left"));
+        left_left->set("other-elements", Element::create("other"));
+        // scalar element used as key
+        right_right->set("id", Element::create(0));
+        // scalar element which is removed
+        right_right->set("elements", Element::create("right"));
+        // scalar element which does not exist and does nothing
+        right_right->set("new-elements", Element::create("new"));
+        ElementPtr left_other_left = Element::createMap();
+        ElementPtr right_other_right = Element::createMap();
+        left_other_left->set("id", Element::create(1));
+        left_other_left->set("elements", Element::create("other-left"));
+        // scalar element used as key
+        right_other_right->set("id", Element::create(2));
+        // scalar element which does not exist and does nothing
+        right_other_right->set("elements", Element::create("other-right"));
+        left->set("elements", left_left);
+        left->set("left-other-elements", left_other_left);
+        // map element which does not exist and does nothing
+        right->set("right-other-elements", right_other_right);
+        // map element which is updated
+        right->set("elements", right_right);
+        left_other_left = Element::createList();
+        right_other_right = Element::createList();
+        left_other_left->add(Element::create("left-other-left"));
+        left_other_left->add(Element::create("other"));
+        left_other_left->add(Element::create("left-other-left-other"));
+        left_other_left->add(Element::create("new"));
+        // scalar element which does not exist and does nothing
+        right_other_right->add(Element::create("right-other-right"));
+        // scalar element which is removed
+        right_other_right->add(Element::create("other"));
+        // scalar element which does not exist and does nothing
+        right_other_right->add(Element::create("right-other-right-other"));
+        // scalar element which is removed
+        right_other_right->add(Element::create("new"));
+        left->set("other", left_other_left);
+        // list element which is updated
+        right->set("other", right_other_right);
+        left_left = Element::createMap();
+        right_right = Element::createMap();
+        left_left->set("id", Element::create(3));
+        left_left->set("elements", Element::create("new-left"));
+        left_left->set("other-elements", Element::create("new-other"));
+        left->set("elements-other", left_left);
+        // scalar element used as key
+        right_right->set("id", Element::create(3));
+        // map element which is not removed because it is contained in a map and
+        // the key can not be removed
+        right->set("elements-other", right_right);
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffDel(left, right, hierarchy, "root");
+        std::string expected_str("{ \"elements\": { \"id\": 0, \"other-elements\": \"other\" }, "
+                                   "\"elements-other\": { \"elements\": \"new-left\", \"id\": 3, \"other-elements\": \"new-other\" }, "
+                                   "\"left-other-elements\": { \"elements\": \"other-left\", \"id\": 1 }, "
+                                   "\"other\": [ \"left-other-left\", \"left-other-left-other\" ] }");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar and list and map in list");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::create("left"));
+        left_left->set("other-elements", Element::create("other"));
+        // scalar element used as key
+        right_right->set("id", Element::create(0));
+        // scalar element which is removed
+        right_right->set("elements", Element::create("right"));
+        // scalar element which does not exist and does nothing
+        right_right->set("new-elements", Element::create("new"));
+        ElementPtr left_other_left = Element::createMap();
+        ElementPtr right_other_right = Element::createMap();
+        left_other_left->set("id", Element::create(1));
+        left_other_left->set("elements", Element::create("other-left"));
+        // scalar element used as key
+        right_other_right->set("id", Element::create(2));
+        // scalar element which does not exist and does nothing
+        right_other_right->set("elements", Element::create("other-right"));
+        left->add(left_left);
+        left->add(left_other_left);
+        // map element which does not exist and does nothing
+        right->add(right_other_right);
+        // map element which is updated
+        right->add(right_right);
+        left_other_left = Element::createList();
+        right_other_right = Element::createList();
+        left_other_left->add(Element::create("left-other-left"));
+        left_other_left->add(Element::create("other"));
+        left_other_left->add(Element::create("left-other-left-other"));
+        left_other_left->add(Element::create("new"));
+        // scalar element which does not exist and does nothing
+        right_other_right->add(Element::create("right-other-right"));
+        // scalar element which is removed
+        right_other_right->add(Element::create("other"));
+        // scalar element which does not exist and does nothing
+        right_other_right->add(Element::create("right-other-right-other"));
+        // scalar element which is removed
+        right_other_right->add(Element::create("new"));
+        left_left->set("other", left_other_left);
+        // list element which is updated
+        right_right->set("other", right_other_right);
+        left_left = Element::createMap();
+        right_right = Element::createMap();
+        left_left->set("id", Element::create(3));
+        left_left->set("elements", Element::create("new-left"));
+        left_left->set("other-elements", Element::create("new-other"));
+        left->add(left_left);
+        // scalar element used as key
+        right_right->set("id", Element::create(3));
+        // map element which is removed by key
+        // the key can not be removed
+        right->add(right_right);
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        mergeDiffDel(left, right, hierarchy, "root");
+        std::string expected_str("[ { \"id\": 0, \"other\": [ \"left-other-left\", \"left-other-left-other\" ], \"other-elements\": \"other\" }, "
+                                   "{ \"elements\": \"other-left\", \"id\": 1 } ]");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+}
+
+/// @brief Test which checks that extend throws if called with wrong element
+/// types.
+TEST(Element, extendBadParam) {
+    {
+        SCOPED_TRACE("root bad scalars");
+        isc::data::HierarchyDescriptor hierarchy;
+        ElementPtr left = Element::create(true);
+        ElementPtr right = Element::create("false");
+        ASSERT_THROW(extend("elements", "", left, right, hierarchy, ""), TypeError);
+    }
+    {
+        SCOPED_TRACE("map bad elements");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        left->set("elements", Element::createList());
+        right->set("elements", Element::createMap());
+        ASSERT_THROW(extend("elements", "", left, right, hierarchy, "root"), TypeError);
+    }
+    {
+        SCOPED_TRACE("list bad elements");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy();
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::createMap());
+        right_right->set("id", Element::create(0));
+        right_right->set("elements", Element::createList());
+        left->add(left_left);
+        right->add(right_right);
+        ASSERT_THROW(extend("elements", "", left, right, hierarchy, "root"), TypeError);
+    }
+}
+
+/// @brief Test which checks that extend works as expected.
+TEST(Element, extend) {
+    {
+        SCOPED_TRACE("scalar in map but alter flag is not set");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy(true);
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        left->set("elements", Element::create("left"));
+        left->set("other-elements", Element::create("other"));
+        // scalar element which is not updated
+        right->set("elements", Element::create("right"));
+        // scalar element which is extended
+        right->set("new-elements", Element::create("new"));
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        extend("root", "new-elements", left, right, hierarchy, "root", 0, false);
+        std::string expected_str("{ \"elements\": \"left\", \"other-elements\": \"other\" }");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar in map");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy(true);
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        left->set("elements", Element::create("left"));
+        left->set("other-elements", Element::create("other"));
+        // scalar element which is not updated
+        right->set("elements", Element::create("right"));
+        // scalar element which is extended
+        right->set("new-elements", Element::create("new"));
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        extend("root", "new-elements", left, right, hierarchy, "root", 0, true);
+        std::string expected_str("{ \"elements\": \"left\", \"new-elements\": \"new\", \"other-elements\": \"other\" }");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar in map in map");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy(true);
+        ElementPtr left = Element::createMap();
+        ElementPtr right = Element::createMap();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::create("left"));
+        left_left->set("other-elements", Element::create("other"));
+        // scalar element used as key
+        right_right->set("id", Element::create(1));
+        // scalar element which is not updated
+        right_right->set("elements", Element::create("right"));
+        // scalar element which is extended
+        right_right->set("new-elements", Element::create("new"));
+        left->set("elements", left_left);
+        // map element which is used for extension
+        right->set("elements", right_right);
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        extend("root", "new-elements", left, right, hierarchy, "root");
+        std::string expected_str("{ \"elements\": { \"elements\": \"left\", \"id\": 0, \"new-elements\": \"new\", \"other-elements\": \"other\" } }");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
+    {
+        SCOPED_TRACE("scalar in map in list");
+        isc::data::HierarchyDescriptor hierarchy;
+        hierarchy = createHierarchy(true);
+        ElementPtr left = Element::createList();
+        ElementPtr right = Element::createList();
+        ElementPtr left_left = Element::createMap();
+        ElementPtr right_right = Element::createMap();
+        left_left->set("id", Element::create(0));
+        left_left->set("elements", Element::create("left"));
+        left_left->set("other-elements", Element::create("other"));
+        // scalar element used as key
+        right_right->set("id", Element::create(1));
+        // scalar element which is not updated
+        right_right->set("elements", Element::create("right"));
+        // scalar element which is extended
+        right_right->set("new-elements", Element::create("new"));
+        left->add(left_left);
+        // map element which is used for extension
+        right->add(right_right);
+        ASSERT_FALSE(isc::data::isEquivalent(left, right));
+        extend("root", "new-elements", left, right, hierarchy, "root");
+        std::string expected_str("[ { \"elements\": \"left\", \"id\": 0, \"new-elements\": \"new\", \"other-elements\": \"other\" } ]");
+        ElementPtr expected = Element::fromJSON(expected_str);
+        EXPECT_TRUE(isc::data::isEquivalent(left, expected))
+            << "Actual: " << left->str()
+            << "\nExpected: " << expected->str();
+    }
 }
 
 }  // namespace

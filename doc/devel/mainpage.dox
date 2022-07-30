@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -45,7 +45,7 @@
  *   - @subpage writingShellScriptsAndTests
  *
  * @section performance Performance
- * - @subpage benchmarks
+ * - @subpage perfdhcpInternals
  *
  * @section hooksFramework Hooks Framework
  * - @subpage hooksdgDevelopersGuide
@@ -107,7 +107,6 @@
  * - @subpage dhcpDatabaseBackends
  * - @subpage configBackend
  *   - @subpage configBackendJSONDesign
- * - @subpage perfdhcpInternals
  *
  * @section libraries Kea libraries
  * - @subpage libutil

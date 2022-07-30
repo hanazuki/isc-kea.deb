@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -50,7 +50,7 @@ Option6IAPrefix::clone() const {
     return (cloneInternal<Option6IAPrefix>());
 }
 
-void Option6IAPrefix::pack(isc::util::OutputBuffer& buf) const {
+void Option6IAPrefix::pack(isc::util::OutputBuffer& buf, bool) const {
     if (!addr_.isV6()) {
         isc_throw(isc::BadValue, addr_ << " is not an IPv6 address");
     }

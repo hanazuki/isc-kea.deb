@@ -873,7 +873,6 @@ INPUT                  = ../../src/bin/agent \
                          ../../src/lib/cfgrpt \
                          ../../src/lib/config \
                          ../../src/lib/config_backend \
-                         ../../src/lib/cql \
                          ../../src/lib/cryptolink \
                          ../../src/lib/d2srv \
                          ../../src/lib/database \
@@ -881,7 +880,6 @@ INPUT                  = ../../src/bin/agent \
                          ../../src/lib/dhcp_ddns \
                          ../../src/lib/dhcpsrv \
                          ../../src/lib/dhcpsrv/parsers \
-                         ../../src/lib/dhcpsrv/benchmarks \
                          ../../src/lib/dns \
                          ../../src/lib/eval \
                          ../../src/lib/exceptions \

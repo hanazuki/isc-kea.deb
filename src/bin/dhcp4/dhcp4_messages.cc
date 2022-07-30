@@ -72,6 +72,7 @@ extern const isc::log::MessageID DHCP4_HOOKS_LIBS_RELOAD_FAIL = "DHCP4_HOOKS_LIB
 extern const isc::log::MessageID DHCP4_HOOK_BUFFER_RCVD_DROP = "DHCP4_HOOK_BUFFER_RCVD_DROP";
 extern const isc::log::MessageID DHCP4_HOOK_BUFFER_RCVD_SKIP = "DHCP4_HOOK_BUFFER_RCVD_SKIP";
 extern const isc::log::MessageID DHCP4_HOOK_BUFFER_SEND_SKIP = "DHCP4_HOOK_BUFFER_SEND_SKIP";
+extern const isc::log::MessageID DHCP4_HOOK_DDNS_UPDATE = "DHCP4_HOOK_DDNS_UPDATE";
 extern const isc::log::MessageID DHCP4_HOOK_DECLINE_SKIP = "DHCP4_HOOK_DECLINE_SKIP";
 extern const isc::log::MessageID DHCP4_HOOK_LEASE4_RELEASE_SKIP = "DHCP4_HOOK_LEASE4_RELEASE_SKIP";
 extern const isc::log::MessageID DHCP4_HOOK_LEASES4_COMMITTED_DROP = "DHCP4_HOOK_LEASES4_COMMITTED_DROP";
@@ -89,13 +90,14 @@ extern const isc::log::MessageID DHCP4_LEASE_ADVERT = "DHCP4_LEASE_ADVERT";
 extern const isc::log::MessageID DHCP4_LEASE_ALLOC = "DHCP4_LEASE_ALLOC";
 extern const isc::log::MessageID DHCP4_LEASE_REUSE = "DHCP4_LEASE_REUSE";
 extern const isc::log::MessageID DHCP4_MULTI_THREADING_INFO = "DHCP4_MULTI_THREADING_INFO";
-extern const isc::log::MessageID DHCP4_NCR_CREATE = "DHCP4_NCR_CREATE";
 extern const isc::log::MessageID DHCP4_NCR_CREATION_FAILED = "DHCP4_NCR_CREATION_FAILED";
 extern const isc::log::MessageID DHCP4_NOT_RUNNING = "DHCP4_NOT_RUNNING";
 extern const isc::log::MessageID DHCP4_NO_LEASE_INIT_REBOOT = "DHCP4_NO_LEASE_INIT_REBOOT";
 extern const isc::log::MessageID DHCP4_NO_SOCKETS_OPEN = "DHCP4_NO_SOCKETS_OPEN";
 extern const isc::log::MessageID DHCP4_OPEN_CONFIG_DB = "DHCP4_OPEN_CONFIG_DB";
 extern const isc::log::MessageID DHCP4_OPEN_SOCKET = "DHCP4_OPEN_SOCKET";
+extern const isc::log::MessageID DHCP4_OPEN_SOCKETS_FAILED = "DHCP4_OPEN_SOCKETS_FAILED";
+extern const isc::log::MessageID DHCP4_OPEN_SOCKETS_NO_RECONNECT_CTL = "DHCP4_OPEN_SOCKETS_NO_RECONNECT_CTL";
 extern const isc::log::MessageID DHCP4_OPEN_SOCKET_FAIL = "DHCP4_OPEN_SOCKET_FAIL";
 extern const isc::log::MessageID DHCP4_PACKET_DROP_0001 = "DHCP4_PACKET_DROP_0001";
 extern const isc::log::MessageID DHCP4_PACKET_DROP_0002 = "DHCP4_PACKET_DROP_0002";
@@ -110,6 +112,7 @@ extern const isc::log::MessageID DHCP4_PACKET_DROP_0010 = "DHCP4_PACKET_DROP_001
 extern const isc::log::MessageID DHCP4_PACKET_DROP_0011 = "DHCP4_PACKET_DROP_0011";
 extern const isc::log::MessageID DHCP4_PACKET_DROP_0012 = "DHCP4_PACKET_DROP_0012";
 extern const isc::log::MessageID DHCP4_PACKET_DROP_0013 = "DHCP4_PACKET_DROP_0013";
+extern const isc::log::MessageID DHCP4_PACKET_DROP_0014 = "DHCP4_PACKET_DROP_0014";
 extern const isc::log::MessageID DHCP4_PACKET_NAK_0001 = "DHCP4_PACKET_NAK_0001";
 extern const isc::log::MessageID DHCP4_PACKET_NAK_0002 = "DHCP4_PACKET_NAK_0002";
 extern const isc::log::MessageID DHCP4_PACKET_NAK_0003 = "DHCP4_PACKET_NAK_0003";
@@ -231,6 +234,7 @@ const char* values[] = {
     "DHCP4_HOOK_BUFFER_RCVD_DROP", "received buffer from %1 to %2 over interface %3 was dropped because a callout set the drop flag",
     "DHCP4_HOOK_BUFFER_RCVD_SKIP", "received buffer from %1 to %2 over interface %3 is not parsed because a callout set the next step to SKIP.",
     "DHCP4_HOOK_BUFFER_SEND_SKIP", "%1: prepared response is dropped because a callout set the next step to SKIP.",
+    "DHCP4_HOOK_DDNS_UPDATE", "A hook has updated the DDNS parameters: hostname %1=>%2, forward update %3=>%4, reverse update %5=>%6",
     "DHCP4_HOOK_DECLINE_SKIP", "Decline4 hook callouts set status to DROP, ignoring packet.",
     "DHCP4_HOOK_LEASE4_RELEASE_SKIP", "%1: lease was not released because a callout set the next step to SKIP",
     "DHCP4_HOOK_LEASES4_COMMITTED_DROP", "%1: packet is dropped, because a callout set the next step to DROP",
@@ -248,13 +252,14 @@ const char* values[] = {
     "DHCP4_LEASE_ALLOC", "%1: lease %2 has been allocated for %3 seconds",
     "DHCP4_LEASE_REUSE", "%1: lease %2 has been reused for %3 seconds",
     "DHCP4_MULTI_THREADING_INFO", "enabled: %1, number of threads: %2, queue size: %3",
-    "DHCP4_NCR_CREATE", "%1: DDNS updates enabled, therefore sending name change requests",
     "DHCP4_NCR_CREATION_FAILED", "%1: failed to generate name change requests for DNS: %2",
     "DHCP4_NOT_RUNNING", "DHCPv4 server is not running",
     "DHCP4_NO_LEASE_INIT_REBOOT", "%1: no lease for address %2 requested by INIT-REBOOT client",
     "DHCP4_NO_SOCKETS_OPEN", "no interface configured to listen to DHCP traffic",
     "DHCP4_OPEN_CONFIG_DB", "Opening configuration database: %1",
     "DHCP4_OPEN_SOCKET", "opening service sockets on port %1",
+    "DHCP4_OPEN_SOCKETS_FAILED", "maximum number of open service sockets attempts: %1, has been exhausted without success",
+    "DHCP4_OPEN_SOCKETS_NO_RECONNECT_CTL", "unexpected error in bind service sockets.",
     "DHCP4_OPEN_SOCKET_FAIL", "failed to open socket: %1",
     "DHCP4_PACKET_DROP_0001", "failed to parse packet from %1 to %2, received over interface %3, reason: %4",
     "DHCP4_PACKET_DROP_0002", "%1, from interface %2: no suitable subnet configured for a direct client",
@@ -269,6 +274,7 @@ const char* values[] = {
     "DHCP4_PACKET_DROP_0011", "dropped as sent by the same client than a packet being processed by another thread: dropped %1 by thread %2 as duplicate of %3 processed by %4",
     "DHCP4_PACKET_DROP_0012", "dropped as sent by the same client than a packet being processed by another thread: dropped %1 by thread %2 as duplicate of %3 processed by %4",
     "DHCP4_PACKET_DROP_0013", "dropped as member of the special class 'DROP' after host reservation lookup: %1",
+    "DHCP4_PACKET_DROP_0014", "dropped as member of the special class 'DROP' after early global host reservations lookup: %1",
     "DHCP4_PACKET_NAK_0001", "%1: failed to select a subnet for incoming packet, src %2, type %3",
     "DHCP4_PACKET_NAK_0002", "%1: invalid address %2 requested by INIT-REBOOT",
     "DHCP4_PACKET_NAK_0003", "%1: failed to advertise a lease, client sent ciaddr %2, requested-ip-address %3",

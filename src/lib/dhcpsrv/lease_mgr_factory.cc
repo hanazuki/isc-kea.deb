@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -14,9 +14,6 @@
 #endif
 #ifdef HAVE_PGSQL
 #include <dhcpsrv/pgsql_lease_mgr.h>
-#endif
-#ifdef HAVE_CQL
-#include <dhcpsrv/cql_lease_mgr.h>
 #endif
 
 #include <boost/algorithm/string.hpp>
@@ -79,17 +76,6 @@ LeaseMgrFactory::create(const std::string& dbaccess) {
         LOG_ERROR(dhcpsrv_logger, DHCPSRV_UNKNOWN_DB).arg("postgresql");
         isc_throw(InvalidType, "The Kea server has not been compiled with "
                   "support for database type: postgresql");
-#endif
-    }
-    if (parameters[type] == string("cql")) {
-#ifdef HAVE_CQL
-        LOG_INFO(dhcpsrv_logger, DHCPSRV_CQL_DB).arg(redacted);
-        getLeaseMgrPtr().reset(new CqlLeaseMgr(parameters));
-        return;
-#else
-        LOG_ERROR(dhcpsrv_logger, DHCPSRV_UNKNOWN_DB).arg("cql");
-        isc_throw(InvalidType, "The Kea server has not been compiled with "
-                  "support for database type: cql");
 #endif
     }
     if (parameters[type] == string("memfile")) {

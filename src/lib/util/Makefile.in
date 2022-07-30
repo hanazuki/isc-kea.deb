@@ -151,8 +151,9 @@ libkea_util_la_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 am__dirstamp = $(am__leading_dot)dirstamp
 am_libkea_util_la_OBJECTS = boost_time_utils.lo chrono_time_utils.lo \
-	csv_file.lo file_utilities.lo filename.lo labeled_value.lo \
-	memory_segment_local.lo multi_threading_mgr.lo pid_file.lo \
+	csv_file.lo dhcp_space.lo file_utilities.lo filename.lo \
+	labeled_value.lo memory_segment_local.lo \
+	multi_threading_mgr.lo pid_file.lo reconnect_ctl.lo \
 	state_model.lo stopwatch.lo stopwatch_impl.lo strutil.lo \
 	time_utilities.lo versioned_csv_file.lo watch_socket.lo \
 	watched_thread.lo encode/base_n.lo encode/utf8.lo
@@ -182,13 +183,13 @@ depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade = ./$(DEPDIR)/boost_time_utils.Plo \
 	./$(DEPDIR)/chrono_time_utils.Plo ./$(DEPDIR)/csv_file.Plo \
-	./$(DEPDIR)/file_utilities.Plo ./$(DEPDIR)/filename.Plo \
-	./$(DEPDIR)/labeled_value.Plo \
+	./$(DEPDIR)/dhcp_space.Plo ./$(DEPDIR)/file_utilities.Plo \
+	./$(DEPDIR)/filename.Plo ./$(DEPDIR)/labeled_value.Plo \
 	./$(DEPDIR)/memory_segment_local.Plo \
 	./$(DEPDIR)/multi_threading_mgr.Plo ./$(DEPDIR)/pid_file.Plo \
-	./$(DEPDIR)/state_model.Plo ./$(DEPDIR)/stopwatch.Plo \
-	./$(DEPDIR)/stopwatch_impl.Plo ./$(DEPDIR)/strutil.Plo \
-	./$(DEPDIR)/time_utilities.Plo \
+	./$(DEPDIR)/reconnect_ctl.Plo ./$(DEPDIR)/state_model.Plo \
+	./$(DEPDIR)/stopwatch.Plo ./$(DEPDIR)/stopwatch_impl.Plo \
+	./$(DEPDIR)/strutil.Plo ./$(DEPDIR)/time_utilities.Plo \
 	./$(DEPDIR)/versioned_csv_file.Plo \
 	./$(DEPDIR)/watch_socket.Plo ./$(DEPDIR)/watched_thread.Plo \
 	encode/$(DEPDIR)/base_n.Plo encode/$(DEPDIR)/utf8.Plo
@@ -311,11 +312,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -325,8 +321,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -340,7 +334,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -509,16 +502,17 @@ AM_CXXFLAGS = $(KEA_CXXFLAGS)
 lib_LTLIBRARIES = libkea-util.la
 libkea_util_la_SOURCES = boost_time_utils.h boost_time_utils.cc \
 	buffer.h io_utilities.h chrono_time_utils.h \
-	chrono_time_utils.cc csv_file.h csv_file.cc doubles.h \
-	file_utilities.h file_utilities.cc filename.h filename.cc \
-	hash.h labeled_value.h labeled_value.cc memory_segment.h \
-	memory_segment_local.h memory_segment_local.cc \
-	multi_threading_mgr.h multi_threading_mgr.cc optional.h \
-	pid_file.h pid_file.cc pointer_util.h range_utilities.h \
-	readwrite_mutex.h staged_value.h state_model.cc state_model.h \
-	stopwatch.cc stopwatch.h stopwatch_impl.cc stopwatch_impl.h \
-	strutil.h strutil.cc thread_pool.h time_utilities.h \
-	time_utilities.cc triplet.h unlock_guard.h \
+	chrono_time_utils.cc csv_file.h csv_file.cc dhcp_space.h \
+	dhcp_space.cc doubles.h file_utilities.h file_utilities.cc \
+	filename.h filename.cc hash.h labeled_value.h labeled_value.cc \
+	memory_segment.h memory_segment_local.h \
+	memory_segment_local.cc multi_threading_mgr.h \
+	multi_threading_mgr.cc optional.h pid_file.h pid_file.cc \
+	pointer_util.h range_utilities.h readwrite_mutex.h \
+	reconnect_ctl.h reconnect_ctl.cc staged_value.h state_model.cc \
+	state_model.h stopwatch.cc stopwatch.h stopwatch_impl.cc \
+	stopwatch_impl.h strutil.h strutil.cc thread_pool.h \
+	time_utilities.h time_utilities.cc triplet.h unlock_guard.h \
 	versioned_csv_file.h versioned_csv_file.cc watch_socket.cc \
 	watch_socket.h watched_thread.cc watched_thread.h \
 	encode/base16_from_binary.h encode/base32hex.h encode/base64.h \
@@ -526,7 +520,7 @@ libkea_util_la_SOURCES = boost_time_utils.h boost_time_utils.cc \
 	encode/binary_from_base32hex.h encode/binary_from_base16.h \
 	encode/utf8.cc encode/utf8.h
 libkea_util_la_LIBADD = $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
-libkea_util_la_LDFLAGS = -no-undefined -version-info 48:0:0
+libkea_util_la_LDFLAGS = -no-undefined -version-info 52:0:0
 EXTRA_DIST = util.dox
 CLEANFILES = *.gcno *.gcda
 
@@ -536,6 +530,7 @@ libkea_util_include_HEADERS = \
 	boost_time_utils.h \
 	buffer.h \
 	csv_file.h \
+	dhcp_space.h \
 	doubles.h \
 	file_utilities.h \
 	filename.h \
@@ -550,6 +545,7 @@ libkea_util_include_HEADERS = \
 	pointer_util.h \
 	range_utilities.h \
 	readwrite_mutex.h \
+	reconnect_ctl.h \
 	staged_value.h \
 	state_model.h \
 	stopwatch.h \
@@ -674,12 +670,14 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/boost_time_utils.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/chrono_time_utils.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/csv_file.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/dhcp_space.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/file_utilities.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/filename.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/labeled_value.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/memory_segment_local.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/multi_threading_mgr.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/pid_file.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/reconnect_ctl.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/state_model.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stopwatch.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/stopwatch_impl.Plo@am__quote@ # am--include-marker
@@ -998,12 +996,14 @@ distclean: distclean-recursive
 		-rm -f ./$(DEPDIR)/boost_time_utils.Plo
 	-rm -f ./$(DEPDIR)/chrono_time_utils.Plo
 	-rm -f ./$(DEPDIR)/csv_file.Plo
+	-rm -f ./$(DEPDIR)/dhcp_space.Plo
 	-rm -f ./$(DEPDIR)/file_utilities.Plo
 	-rm -f ./$(DEPDIR)/filename.Plo
 	-rm -f ./$(DEPDIR)/labeled_value.Plo
 	-rm -f ./$(DEPDIR)/memory_segment_local.Plo
 	-rm -f ./$(DEPDIR)/multi_threading_mgr.Plo
 	-rm -f ./$(DEPDIR)/pid_file.Plo
+	-rm -f ./$(DEPDIR)/reconnect_ctl.Plo
 	-rm -f ./$(DEPDIR)/state_model.Plo
 	-rm -f ./$(DEPDIR)/stopwatch.Plo
 	-rm -f ./$(DEPDIR)/stopwatch_impl.Plo
@@ -1064,12 +1064,14 @@ maintainer-clean: maintainer-clean-recursive
 		-rm -f ./$(DEPDIR)/boost_time_utils.Plo
 	-rm -f ./$(DEPDIR)/chrono_time_utils.Plo
 	-rm -f ./$(DEPDIR)/csv_file.Plo
+	-rm -f ./$(DEPDIR)/dhcp_space.Plo
 	-rm -f ./$(DEPDIR)/file_utilities.Plo
 	-rm -f ./$(DEPDIR)/filename.Plo
 	-rm -f ./$(DEPDIR)/labeled_value.Plo
 	-rm -f ./$(DEPDIR)/memory_segment_local.Plo
 	-rm -f ./$(DEPDIR)/multi_threading_mgr.Plo
 	-rm -f ./$(DEPDIR)/pid_file.Plo
+	-rm -f ./$(DEPDIR)/reconnect_ctl.Plo
 	-rm -f ./$(DEPDIR)/state_model.Plo
 	-rm -f ./$(DEPDIR)/stopwatch.Plo
 	-rm -f ./$(DEPDIR)/stopwatch_impl.Plo

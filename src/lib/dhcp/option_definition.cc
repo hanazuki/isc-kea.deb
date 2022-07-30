@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -195,10 +195,10 @@ OptionDefinition::optionFactory(Option::Universe u, uint16_t type,
             return (option);
         }
 
-        switch(type_) {
+        switch (type_) {
         case OPT_EMPTY_TYPE:
             if (getEncapsulatedSpace().empty()) {
-                    return (factoryEmpty(u, type));
+                return (factoryEmpty(u, type));
             } else {
                 return (OptionPtr(new OptionCustom(*this, u, begin, end)));
             }
@@ -458,7 +458,7 @@ OptionDefinition::convertToBool(const std::string& value_str) const {
     // if it is not an integer wrapped in a string.
     int result;
     try {
-       result = boost::lexical_cast<int>(value_str);
+        result = boost::lexical_cast<int>(value_str);
 
     } catch (const boost::bad_lexical_cast&) {
         isc_throw(BadDataTypeCast, "unable to covert the value '"

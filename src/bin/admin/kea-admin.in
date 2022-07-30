@@ -31,24 +31,34 @@
 # used.
 set -eu
 
-# Get the location of the kea-admin scripts
+# Shell ${variables} derived from autoconf @variables@. Some depend on others, so mind the order.
 prefix="@prefix@"
 export prefix
+exec_prefix="@exec_prefix@"
+export exec_prefix
 SCRIPTS_DIR_DEFAULT="@datarootdir@/@PACKAGE@/scripts"
 scripts_dir="${SCRIPTS_DIR_DEFAULT}"
 VERSION="@PACKAGE_VERSION@"
+
+assume_yes=0
 
 # lease dump parameters
 dhcp_version=0
 dump_file=""
 dump_qry=""
 
-# Include utilities. Use installed version if available and
-# use build version if it isn't.
-if [ -e @datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh ]; then
+# Include the installed admin-utils.sh if available. Fallback to sources otherwise.
+if test -d "@datarootdir@/@PACKAGE_NAME@"; then
     . "@datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh"
 else
     . "@abs_top_srcdir@/src/bin/admin/admin-utils.sh"
+fi
+
+# Find the installed kea-lfc if available. Fallback to sources otherwise.
+if test -d "@sbindir@"; then
+    kea_lfc="@sbindir@/kea-lfc"
+else
+    kea_lfc="@abs_top_srcdir@/src/bin/lfc/kea-lfc"
 fi
 
 # Prints out usage version.
@@ -72,7 +82,7 @@ COMMAND: Currently supported operations are:
  - lease-upload: Uploads leases from a CSV file to the database.
  - stats-recount: Recounts lease statistics.
 
-BACKEND - one of the supported backends: memfile|mysql|pgsql|cql
+BACKEND - one of the supported backends: memfile|mysql|pgsql
 
 PARAMETERS: Parameters are optional in general, but may be required
             for specific operations.
@@ -91,7 +101,8 @@ PARAMETERS: Parameters are optional in general, but may be required
      -4 to dump IPv4 leases to file
      -6 to dump IPv6 leases to file
      -i or --input to specify the name of file from which leases will be uploaded
-     -o or --output to specify the  name of file to which leases will be dumped
+     -o or --output to specify the name of file to which leases will be dumped
+     -y or --yes - assume yes on overwriting temporary files
 ' "${VERSION}" "${0}" "${SCRIPTS_DIR_DEFAULT}"
 }
 
@@ -307,30 +318,6 @@ pgsql_init() {
     exit 0
 }
 
-cql_init() {
-    printf 'Checking if there is a database initialized already...\n'
-
-    run_command \
-        cql_execute "DESCRIBE tables;"
-
-    # Shellcheck complaints about missing quotes and word splitting here. There
-    # is no problem here as wc -w always returns a single number.
-    # shellcheck disable=SC2046
-    if test "$(printf '%s' "${OUTPUT}" | grep -c '<empty>')" -gt 0; then
-        printf 'Creating and initializing tables using script %s...\n' "${scripts_dir}/cql/dhcpdb_create.cql"
-        cql_execute_script "${scripts_dir}/cql/dhcpdb_create.cql"
-    else
-        log_error "Expected empty database ${db_name}. Aborting, the following tables are present:
-        ${OUTPUT}"
-        exit 2
-    fi
-
-    version=$(cql_version)
-    printf "Database version reported after initialization: %s\n" "$version"
-
-    exit 0
-}
-
 ### Functions that implement database version checking commands
 memfile_version() {
     # @todo Implement this?
@@ -421,39 +408,14 @@ pgsql_upgrade() {
     exit 0
 }
 
-cql_upgrade() {
-    version=$(cql_version)
-    printf "Database version reported before upgrade: %s\n" "$version"
-
-    # Check if the scripts directory exists at all.
-    if [ ! -d ${scripts_dir}/cql ]; then
-        log_error "Invalid scripts directory: ${scripts_dir}/cql"
-        exit 1
+# Remove a file if it exists
+remove_file () {
+    local file="${1}"
+    if [ -e "${file}" ]
+    then
+        log_info "Removing file ${file}..."
+        rm -f "${file}"
     fi
-
-    # Check if directory is readable.
-    if [ ! -r ${scripts_dir}/cql ]; then
-        log_error "Directory is not readable: ${scripts_dir}/cql"
-        exit 1
-    fi
-
-    # Check if there are upgrade scripts.
-    run_command \
-        find "${scripts_dir}/cql" -name 'upgrade*.sh' -type f
-    if [ "${EXIT_CODE}" -eq 0 ]; then # Upgrade scripts are present.
-        for script in "${scripts_dir}"/cql/upgrade*.sh
-        do
-            echo "Processing $script file..."
-            "${script}" -u "${db_user}" -p "${db_password}" \
-            -k "${db_name}" ${extra_arguments}
-        done
-    else
-        echo "No upgrade script available."
-    fi
-
-    version=$(cql_version)
-    printf "Database version reported after upgrade: %s\n" "$version"
-    exit 0
 }
 
 # Utility function which tests if the given file exists and
@@ -461,11 +423,23 @@ cql_upgrade() {
 # to abort the current command.
 check_file_overwrite () {
     local file="${1}"
-    if [ -e "${file}" ]
+    if [ $assume_yes -eq 1 ]
+    then
+        remove_file "${file}"
+    elif [ -e "${file}" ]
     then
         echo "Output file, $file, exists and will be overwritten."
-        echo "Do you wish to continue? (y/n)"
-        read -r ans
+        echo "Do you wish to continue? (y/N)"
+
+        # Ask for an answer only on an interactive shell to prevent blocking in
+        # automated or non-interactive scenarios where the answer defaults to no.
+        if test -t 0; then
+            read -r ans
+        else
+            log_warning 'Non-interactive tty detected. Assuming no.'
+            ans='N'
+        fi
+
         if [ "${ans}" != "y" ]
         then
             echo "$command aborted by user."
@@ -539,7 +513,7 @@ mysql_dump() {
     check_file_overwrite "$dump_file"
 
     # Check the temp file too
-    tmp_file="$dump_file.tmp"
+    tmp_file="/tmp/$(basename "${dump_file}").tmp"
     check_file_overwrite $tmp_file
 
     # Run the sql to output tab-delimited lease data to a temp file.
@@ -558,9 +532,11 @@ mysql_dump() {
         exit 1
     fi
 
-    # delete the tmp file on success
-    rm $tmp_file
-    echo lease${dhcp_version} successfully dumped to "${dump_file}"
+    # Clean up the temporary file.
+    rm -f "${tmp_file}"
+    log_info "Removed temporary file ${tmp_file}."
+
+    log_info "Successfully dumped lease${dhcp_version} to ${dump_file}."
     exit 0
 }
 
@@ -603,48 +579,6 @@ pgsql_dump() {
     fi
 
     echo lease${dhcp_version} successfully dumped to "${dump_file}"
-    exit 0
-}
-
-cql_dump() {
-    # Get the query appropriate to lease version. Explicitly specify all columns
-    # so that they are returned in expected order.
-    if [ ${dhcp_version} -eq 4 ]; then
-        dump_query="SELECT address,hwaddr,client_id,valid_lifetime,expire,subnet_id,fqdn_fwd,fqdn_rev,hostname,state,user_context FROM lease4"
-    elif [ ${dhcp_version} -eq 6 ]; then
-        dump_query="SELECT address,duid,valid_lifetime,expire,subnet_id,pref_lifetime,lease_type,iaid,prefix_len,fqdn_fwd,fqdn_rev,hostname,hwaddr,hwtype,hwaddr_source,state,user_context FROM lease6"
-    else
-        log_error "lease-dump: lease type ( -4 or -6 ) needs to be specified"
-        usage
-        exit 1
-    fi
-
-    # Check if file was specified.
-    if [ "$dump_file" = "" ]; then
-        log_error "lease-dump: output file needs to be specified with -o"
-        usage
-        exit 1
-    fi
-
-    # If output file exists, notify user, allow them a chance to bail.
-    check_file_overwrite "$dump_file"
-
-    # Run query, check for failure.
-    run_command \
-        cql_execute "${dump_query}"
-    if [ "${EXIT_CODE}" -ne 0 ]; then
-        log_error "lease-dump: cql_execute failed, exit code ${EXIT_CODE}"
-        exit 1
-    fi
-
-    # Parse and display header.
-    echo "${OUTPUT}" | head -n 2 | tail -n 1 | sed -e 's/[[:space:]]*//g' | sed -e 's/|/,/g' > "$dump_file"
-
-    # Parse and display contents - done separately from header to allow sorting
-    # by address. awk script replaces head -n -2 which is not portable.
-    echo "${OUTPUT}" | tail -n +4 | awk 'n>=2 { print a[n%2] } { a[n%2]=$0; n=n+1 }' | sed -e 's/[[:space:]]*//g' | sed -e 's/|/,/g' | sort -r >> "$dump_file"
-
-    echo "lease${dhcp_version} successfully dumped to ${dump_file}"
     exit 0
 }
 
@@ -733,10 +667,23 @@ lease_upload() {
     fi
 
     # Check that the input file has at least one row of values.
-    if test "$(wc -l < "${input_file}")" -le 1; then
+    input_file_line_length=$(wc -l < "${input_file}")
+    if test "${input_file_line_length}" -le 1; then
         log_error 'CSV file has no leases'
         exit 1
     fi
+
+    # Invoke LFC on the input file.
+    log_info "Looking at ${input_file_line_length} lines of CSV in ${input_file}..."
+    cleaned_up_csv="/tmp/$(basename "${input_file}").tmp"
+    check_file_overwrite "${cleaned_up_csv}"
+    cp "${input_file}" "${cleaned_up_csv}"
+    "${kea_lfc}" "-${dhcp_version}" -x "${cleaned_up_csv}" \
+        -i "${cleaned_up_csv}.1" -o "${cleaned_up_csv}.output" \
+        -f "${cleaned_up_csv}.completed" -p "${cleaned_up_csv}.pid" \
+        -cignored-path
+    cleaned_up_csv_line_length=$(wc -l < "${cleaned_up_csv}")
+    log_info "Reduced to ${cleaned_up_csv_line_length} lines in ${cleaned_up_csv}."
 
     # Determine the columns whose values need to be stringified to avoid syntax
     # errors in the MySQL client. These are columns which are VARCHARs or need
@@ -774,7 +721,7 @@ lease_upload() {
         else
             header_parsed=true
         fi
-    done < "${input_file}"
+    done < "${cleaned_up_csv}"
     sql_statement="${sql_statement} COMMIT;"
 
     # Execute the SQL insert statements.
@@ -787,8 +734,12 @@ lease_upload() {
         exit 1
     fi
 
+    # Clean up the temporary CSV.
+    rm -f "${cleaned_up_csv}"
+    log_info "Removed temporary file ${cleaned_up_csv}."
+
     # Print a confirmation message.
-    printf 'lease%s successfully updated.\n' "${dhcp_version}"
+    log_info "Successfully updated table lease${dhcp_version}."
 }
 
 ### Functions used for recounting statistics
@@ -863,7 +814,7 @@ if [ -z "${backend}" ]; then
     usage
     exit 1
 fi
-is_in_list "${backend}" "memfile mysql pgsql cql"
+is_in_list "${backend}" "memfile mysql pgsql"
 if [ "${_inlist}" -eq 0 ]; then
     log_error "invalid backend: ${backend}"
     exit 1
@@ -915,13 +866,18 @@ do
                 shift
                 db_password=${1}
             else
-                # Otherwise read from standard input while hiding feedback to
-                # the terminal.
-                printf 'Password: '
-                stty -echo
-                read -r db_password
-                stty echo
-                printf '\n'
+                # If it's an interactive shell...
+                if test -t 0; then
+                    # Read from standard input while hiding feedback to the terminal.
+                    printf 'Password: '
+                    stty -echo
+                    read -r db_password
+                    stty echo
+                    printf '\n'
+                else
+                    log_warning 'Non-interactive tty detected. Assuming empty password.'
+                    db_password=''
+                fi
             fi
             ;;
         # Specify database name
@@ -995,6 +951,9 @@ do
                 extra_arguments="${extra_arguments} ${1}"
             fi
             ;;
+        -y|--yes)
+            assume_yes=1
+            ;;
         *)
             log_error "invalid option: ${option}"
             usage
@@ -1024,9 +983,6 @@ case ${command} in
             pgsql)
                 pgsql_init
                 ;;
-            cql)
-                cql_init
-                ;;
             esac
         ;;
     db-version)
@@ -1041,9 +997,6 @@ case ${command} in
             pgsql)
                 checked_pgsql_version
                 ;;
-            cql)
-                cql_version
-                ;;
             esac
         ;;
     db-upgrade)
@@ -1057,9 +1010,6 @@ case ${command} in
             pgsql)
                 pgsql_upgrade
                 ;;
-            cql)
-                cql_upgrade
-                ;;
             esac
         ;;
     lease-dump)
@@ -1072,9 +1022,6 @@ case ${command} in
                 ;;
             pgsql)
                 pgsql_dump
-                ;;
-            cql)
-                cql_dump
                 ;;
             esac
         ;;
@@ -1090,10 +1037,6 @@ case ${command} in
             pgsql)
                 lease_upload
                 ;;
-            cql)
-                log_error 'lease-export cql is deprecated'
-                exit 1
-                ;;
             esac
         ;;
     stats-recount)
@@ -1106,9 +1049,6 @@ case ${command} in
                 ;;
             pgsql)
                 pgsql_recount
-                ;;
-            cql)
-                log_info "cql does not keep lease statistics"
                 ;;
             esac
         ;;

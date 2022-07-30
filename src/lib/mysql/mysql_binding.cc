@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -129,6 +129,11 @@ MySqlBinding::createFloat(const float value) {
     // method instead of createInteger. However, we already have createInteger
     // used in many places so we should stick to it.
     return (createInteger<float>(value));
+}
+
+MySqlBindingPtr
+MySqlBinding::createBool() {
+    return (createInteger<uint8_t>(static_cast<uint8_t>(false)));
 }
 
 MySqlBindingPtr

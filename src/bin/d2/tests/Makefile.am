@@ -68,9 +68,6 @@ endif
 if HAVE_PGSQL
 d2_unittests_LDFLAGS += $(PGSQL_LIBS)
 endif
-if HAVE_CQL
-d2_unittests_LDFLAGS += $(CQL_LIBS)
-endif
 d2_unittests_LDFLAGS += $(GTEST_LDFLAGS)
 
 d2_unittests_LDADD  = $(top_builddir)/src/bin/d2/libd2.la
@@ -79,7 +76,6 @@ d2_unittests_LDADD += $(top_builddir)/src/lib/d2srv/libkea-d2srv.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/process/testutils/libprocesstest.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/process/libkea-process.la
-d2_unittests_LDADD += $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/testutils/libkea-testutils.la
 d2_unittests_LDADD += $(top_builddir)/src/lib/asiodns/libkea-asiodns.la

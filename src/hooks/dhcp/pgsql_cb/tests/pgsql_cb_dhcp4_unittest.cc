@@ -25,7 +25,6 @@
 #include <sstream>
 
 using namespace isc;
-using namespace isc::util;
 using namespace isc::asiolink;
 using namespace isc::db;
 using namespace isc::db::test;
@@ -34,6 +33,7 @@ using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::process;
 using namespace isc::test;
+using namespace isc::util;
 namespace ph = std::placeholders;
 
 namespace {
@@ -361,6 +361,38 @@ TEST_F(PgSqlConfigBackendDHCPv4Test, sharedNetworkOptionIdOrderTest) {
     sharedNetworkOptionIdOrderTest();
 }
 
+TEST_F(PgSqlConfigBackendDHCPv4Test, setAndGetAllClientClasses4Test) {
+    setAndGetAllClientClasses4Test();
+}
+
+TEST_F(PgSqlConfigBackendDHCPv4Test, getClientClass4Test) {
+    getClientClass4Test();
+}
+
+TEST_F(PgSqlConfigBackendDHCPv4Test, createUpdateClientClass4OptionsTest) {
+    createUpdateClientClass4OptionsTest();
+}
+
+TEST_F(PgSqlConfigBackendDHCPv4Test, getModifiedClientClasses4Test) {
+    getModifiedClientClasses4Test();
+}
+
+TEST_F(PgSqlConfigBackendDHCPv4Test, deleteClientClass4Test) {
+    deleteClientClass4Test();
+}
+
+TEST_F(PgSqlConfigBackendDHCPv4Test, deleteAllClientClasses4Test) {
+    deleteAllClientClasses4Test();
+}
+
+TEST_F(PgSqlConfigBackendDHCPv4Test, clientClassDependencies4Test) {
+    clientClassDependencies4Test();
+}
+
+TEST_F(PgSqlConfigBackendDHCPv4Test, multipleAuditEntriesTest) {
+    multipleAuditEntriesTest();
+}
+
 /// @brief Test fixture for verifying database connection loss-recovery
 /// behavior.
 class PgSqlConfigBackendDHCPv4DbLostCallbackTest : public GenericConfigBackendDbLostCallbackTest {
@@ -415,7 +447,7 @@ public:
     /// @brief  Attempts to add a backend instance to the CB manager.
     ///
     /// @param access Connection access string containing the database
-    /// connetion parameters.
+    /// connection parameters.
     virtual void addBackend(const std::string& access) {
         ConfigBackendDHCPv4Mgr::instance().addBackend(access);
     }

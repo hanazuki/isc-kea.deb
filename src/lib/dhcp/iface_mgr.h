@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -137,6 +137,9 @@ public:
     ///
     /// @todo: Add SocketCollectionConstIter type
     typedef std::list<SocketInfo> SocketCollection;
+
+    /// @brief Type definition for a list of error messages
+    using ErrorBuffer = std::vector<std::string>;
 
     /// @brief Iface constructor.
     ///
@@ -392,6 +395,19 @@ public:
         read_buffer_.resize(new_size);
     }
 
+    /// @brief Add an error to the list of messages.
+    ///
+    /// @param message the error message
+    void addError(std::string const& message);
+
+    /// @brief Clears all errors.
+    void clearErrors();
+
+    /// @brief Get the consistent list of error messages.
+    ///
+    /// @return the list of messages
+    ErrorBuffer const& getErrors() const;
+
 protected:
     /// Socket used to send data.
     SocketCollection sockets_;
@@ -457,6 +473,14 @@ private:
     ///
     /// See @c Iface manager description for details.
     std::vector<uint8_t> read_buffer_;
+
+    /// @brief List of errors that occurred since the last attempt to open sockets
+    ///
+    /// This list needs to always have a consistent view of the errors. They should all belong to
+    /// the same session of socket opening i.e. the same call to openSockets[46]. This is currently
+    /// ensured by openSockets[46] and all the places where these errors are being used i.e. the
+    /// status-get handler, being sequential.
+    ErrorBuffer errors_;
 };
 
 /// @brief Type definition for the pointer to an @c Iface object.
@@ -769,7 +793,10 @@ public:
     /// This method will eventually detect available interfaces. For now
     /// it offers stub implementation. First interface name and link-local
     /// IPv6 address is read from interfaces.txt file.
-    void detectIfaces();
+    ///
+    /// @param update_only Only add interfaces that do not exist and update
+    /// existing interfaces.
+    void detectIfaces(bool update_only = false);
 
     /// @brief Clears unicast addresses on all interfaces.
     void clearUnicasts();
@@ -844,7 +871,7 @@ public:
     /// @brief Receive IPv4 packets or data from external sockets
     ///
     /// Wrapper around calls to either @c receive4Direct or @c
-    /// receive4Indirect.  The former is called when packet queuing is
+    /// receive4Indirect.  The former is called when packet queueing is
     /// disabled, the latter when it is enabled.
     ///
     /// @param timeout_sec specifies integral part of the timeout (in seconds)
@@ -857,7 +884,7 @@ public:
     /// @brief Receive IPv4 packets or data from external sockets
     ///
     /// Wrapper around calls to either @c receive4Direct or @c
-    /// receive4Indirect.  The former is called when packet queuing is
+    /// receive4Indirect.  The former is called when packet queueing is
     /// disabled, the latter when it is enabled.
     ///
     /// @param timeout_sec specifies integral part of the timeout (in seconds)
@@ -986,14 +1013,16 @@ public:
     /// to the same address and port.
     ///
     /// @param port specifies port number (usually DHCP6_SERVER_PORT)
-    /// @param error_handler A pointer to an error handler function which is
+    /// @param error_handler a pointer to an error handler function which is
     /// called by the openSockets6 when it fails to open a socket. This
     /// parameter can be null to indicate that the callback should not be used.
+    /// @param skip_opened skip the addresses that already have the opened port
     ///
     /// @throw SocketOpenFailure if tried and failed to open socket.
     /// @return true if any sockets were open
     bool openSockets6(const uint16_t port = DHCP6_SERVER_PORT,
-                      IfaceMgrErrorMsgCallback error_handler = 0);
+                      IfaceMgrErrorMsgCallback error_handler = 0,
+                      const bool skip_opened = false);
 
     /// @brief Opens IPv4 sockets on detected interfaces.
     ///
@@ -1056,16 +1085,18 @@ public:
     ///
     /// @param port specifies port number (usually DHCP4_SERVER_PORT)
     /// @param use_bcast configure sockets to support broadcast messages.
-    /// @param error_handler A pointer to an error handler function which is
+    /// @param error_handler a pointer to an error handler function which is
     /// called by the openSockets4 when it fails to open a socket. This
     /// parameter can be null to indicate that the callback should not be used.
+    /// @param skip_opened skip the addresses that already have the opened port
     ///
     /// @throw SocketOpenFailure if tried and failed to open socket and callback
     /// function hasn't been specified.
     /// @return true if any sockets were open
     bool openSockets4(const uint16_t port = DHCP4_SERVER_PORT,
                       const bool use_bcast = true,
-                      IfaceMgrErrorMsgCallback error_handler = 0);
+                      IfaceMgrErrorMsgCallback error_handler = 0,
+                      const bool skip_opened = false);
 
     /// @brief Closes all open sockets.
     ///
@@ -1118,7 +1149,7 @@ public:
     /// function is called. Call closeSockets(AF_INET) to close all hanging IPv4
     /// sockets opened by the current packet filter object.
     ///
-    /// @param packet_filter A pointer to the new packet filter object to be
+    /// @param packet_filter a pointer to the new packet filter object to be
     /// used by @c IfaceMgr.
     ///
     /// @throw InvalidPacketFilter if provided packet filter object is null.
@@ -1139,7 +1170,7 @@ public:
     /// function. Call closeSockets(AF_INET6) to close all hanging IPv6 sockets
     /// opened by the current packet filter object.
     ///
-    /// @param packet_filter A pointer to the new packet filter object to be
+    /// @param packet_filter a pointer to the new packet filter object to be
     /// used by @c IfaceMgr.
     ///
     /// @throw isc::dhcp::InvalidPacketFilter if specified object is null.
@@ -1188,6 +1219,11 @@ public:
     /// socket is bound to the port (and address is unspecified), the
     /// method will check if the address passed in the argument is configured
     /// on an interface.
+    /// Note: On BSD and Solaris the socket is opened for "::" address instead
+    /// of the link-local address or the "ff02::1:2" address. If there are
+    /// multiple interfaces joining the multicast group, this function matches
+    /// the "::" address bound by any interface, not necessary the one with the
+    /// specified link-local address and returns true.
     ///
     /// @param addr Address of the socket being searched.
     ///
@@ -1263,7 +1299,7 @@ public:
     /// (AF_INET or AF_INET6)
     /// @param queue_control configuration containing "dhcp-queue-control"
     /// content
-    /// @return true if packet queueuing has been enabled, false otherwise
+    /// @return true if packet queueing has been enabled, false otherwise
     /// @throw InvalidOperation if the receiver thread is currently running.
     bool configureDHCPPacketQueue(const uint16_t family,
                                   data::ConstElementPtr queue_control);
@@ -1559,11 +1595,11 @@ private:
     /// @brief Manager for DHCPv6 packet implementations and queues
     PacketQueueMgr6Ptr packet_queue_mgr6_;
 
-    /// DHCP packet receiver.
+    /// @brief DHCP packet receiver.
     isc::util::WatchedThreadPtr dhcp_receiver_;
 };
 
-}; // namespace isc::dhcp
-}; // namespace isc
+}  // namespace isc::dhcp
+}  // namespace isc
 
 #endif // IFACE_MGR_H

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -106,6 +106,9 @@ private:
     /// The instance should be created using @ref CtrlAgentCommandMgr::instance,
     /// thus the constructor is private.
     CtrlAgentCommandMgr();
+
+    /// @brief Remote address of HTTP endpoint.
+    std::string remote_addr_;
 
 };
 

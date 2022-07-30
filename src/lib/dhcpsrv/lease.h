@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,17 +11,13 @@
 #include <dhcp/duid.h>
 #include <dhcp/option.h>
 #include <dhcp/hwaddr.h>
+#include <dhcpsrv/subnet_id.h>
 #include <cc/user_context.h>
 #include <cc/cfg_to_element.h>
+#include <util/dhcp_space.h>
 
 namespace isc {
 namespace dhcp {
-
-/// @brief Unique identifier for a subnet (both v4 and v6)
-///
-/// Let's copy SubnetID definition from subnet.h. We can't include it directly,
-/// because subnet.h needs Lease::Type, so it includes lease.h
-typedef uint32_t SubnetID;
 
 struct Lease;
 
@@ -112,6 +108,11 @@ struct Lease : public isc::data::UserContext, public isc::data::CfgToElement {
 
     /// @brief Destructor
     virtual ~Lease() {}
+
+    /// @brief Returns Lease type
+    ///
+    /// One of normal address, temporary address, or prefix, or V4
+    virtual Lease::Type getType() const = 0;
 
     /// @brief IPv4 ot IPv6 address
     ///
@@ -357,6 +358,16 @@ struct Lease4 : public Lease {
     /// @param other the @c Lease4 object to be copied.
     Lease4(const Lease4& other);
 
+    /// @brief Returns Lease type
+    ///
+    /// Since @c Lease does not define a member for lease type, we implement this
+    /// so we don't store the same value in a billion v4 lease instances.
+    ///
+    /// @return Lease::TYPE_V4
+    virtual Lease::Type getType() const {
+        return (Lease::TYPE_V4);
+    }
+
     /// @brief Returns name of the lease states specific to DHCPv4.
     ///
     /// @todo Currently it simply returns common states for DHCPv4 and DHCPv6.
@@ -578,6 +589,16 @@ struct Lease6 : public Lease {
     /// Initialize fields that don't have a default constructor.
     Lease6();
 
+    /// @brief Returns Lease type
+    ///
+    /// Since @c Lease does not define a member for lease type, we implement this
+    /// so code that only has LeasePtr can see what it has.
+    ///
+    /// @return Type of lease
+    virtual Lease::Type getType() const {
+        return (type_);
+    }
+
     /// @brief Returns name of the lease states specific to DHCPv6.
     ///
     /// @todo Currently it simply returns common states for DHCPv4 and DHCPv6.
@@ -651,6 +672,32 @@ typedef boost::shared_ptr<Lease6Collection> Lease6CollectionPtr;
 /// @return a reference to the output stream parameter
 std::ostream&
 operator<<(std::ostream& os, const Lease& lease);
+
+/// @brief adapters for linking templates to qualified names
+/// @{
+namespace {
+
+template <isc::util::DhcpSpace D>
+struct AdapterLease {};
+
+template <>
+struct AdapterLease<isc::util::DHCPv4> {
+    using type = Lease4;
+};
+
+template <>
+struct AdapterLease<isc::util::DHCPv6> {
+    using type = Lease6;
+};
+
+}  // namespace
+
+template <isc::util::DhcpSpace D>
+using LeaseT = typename AdapterLease<D>::type;
+
+template <isc::util::DhcpSpace D>
+using LeaseTPtr = boost::shared_ptr<LeaseT<D>>;
+/// @}
 
 }; // end of isc::dhcp namespace
 }; // end of isc namespace

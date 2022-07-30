@@ -121,8 +121,8 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 	base32hex_unittest.cc base64_unittest.cc \
 	boost_time_utils_unittest.cc buffer_unittest.cc \
 	chrono_time_utils_unittest.cc csv_file_unittest.cc \
-	doubles_unittest.cc fd_share_tests.cc fd_tests.cc \
-	file_utilities_unittest.cc filename_unittest.cc \
+	dhcp_space_unittest.cc doubles_unittest.cc fd_share_tests.cc \
+	fd_tests.cc file_utilities_unittest.cc filename_unittest.cc \
 	hash_unittest.cc hex_unittest.cc io_utilities_unittest.cc \
 	labeled_value_unittest.cc memory_segment_local_unittest.cc \
 	memory_segment_common_unittest.h \
@@ -144,6 +144,7 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	run_unittests-buffer_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-chrono_time_utils_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-csv_file_unittest.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	run_unittests-dhcp_space_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-doubles_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-fd_share_tests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-fd_tests.$(OBJEXT) \
@@ -208,6 +209,7 @@ am__depfiles_remade = ./$(DEPDIR)/run_unittests-base32hex_unittest.Po \
 	./$(DEPDIR)/run_unittests-buffer_unittest.Po \
 	./$(DEPDIR)/run_unittests-chrono_time_utils_unittest.Po \
 	./$(DEPDIR)/run_unittests-csv_file_unittest.Po \
+	./$(DEPDIR)/run_unittests-dhcp_space_unittest.Po \
 	./$(DEPDIR)/run_unittests-doubles_unittest.Po \
 	./$(DEPDIR)/run_unittests-fd_share_tests.Po \
 	./$(DEPDIR)/run_unittests-fd_tests.Po \
@@ -375,11 +377,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -389,8 +386,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -404,7 +399,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -584,9 +578,9 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	boost_time_utils_unittest.cc \
 @HAVE_GTEST_TRUE@	buffer_unittest.cc \
 @HAVE_GTEST_TRUE@	chrono_time_utils_unittest.cc \
-@HAVE_GTEST_TRUE@	csv_file_unittest.cc doubles_unittest.cc \
-@HAVE_GTEST_TRUE@	fd_share_tests.cc fd_tests.cc \
-@HAVE_GTEST_TRUE@	file_utilities_unittest.cc \
+@HAVE_GTEST_TRUE@	csv_file_unittest.cc dhcp_space_unittest.cc \
+@HAVE_GTEST_TRUE@	doubles_unittest.cc fd_share_tests.cc \
+@HAVE_GTEST_TRUE@	fd_tests.cc file_utilities_unittest.cc \
 @HAVE_GTEST_TRUE@	filename_unittest.cc hash_unittest.cc \
 @HAVE_GTEST_TRUE@	hex_unittest.cc io_utilities_unittest.cc \
 @HAVE_GTEST_TRUE@	labeled_value_unittest.cc \
@@ -673,6 +667,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-buffer_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-chrono_time_utils_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-csv_file_unittest.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-dhcp_space_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-doubles_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-fd_share_tests.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-fd_tests.Po@am__quote@ # am--include-marker
@@ -827,6 +822,20 @@ run_unittests-csv_file_unittest.obj: csv_file_unittest.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='csv_file_unittest.cc' object='run_unittests-csv_file_unittest.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-csv_file_unittest.obj `if test -f 'csv_file_unittest.cc'; then $(CYGPATH_W) 'csv_file_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/csv_file_unittest.cc'; fi`
+
+run_unittests-dhcp_space_unittest.o: dhcp_space_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-dhcp_space_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-dhcp_space_unittest.Tpo -c -o run_unittests-dhcp_space_unittest.o `test -f 'dhcp_space_unittest.cc' || echo '$(srcdir)/'`dhcp_space_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-dhcp_space_unittest.Tpo $(DEPDIR)/run_unittests-dhcp_space_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp_space_unittest.cc' object='run_unittests-dhcp_space_unittest.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-dhcp_space_unittest.o `test -f 'dhcp_space_unittest.cc' || echo '$(srcdir)/'`dhcp_space_unittest.cc
+
+run_unittests-dhcp_space_unittest.obj: dhcp_space_unittest.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-dhcp_space_unittest.obj -MD -MP -MF $(DEPDIR)/run_unittests-dhcp_space_unittest.Tpo -c -o run_unittests-dhcp_space_unittest.obj `if test -f 'dhcp_space_unittest.cc'; then $(CYGPATH_W) 'dhcp_space_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp_space_unittest.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-dhcp_space_unittest.Tpo $(DEPDIR)/run_unittests-dhcp_space_unittest.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='dhcp_space_unittest.cc' object='run_unittests-dhcp_space_unittest.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-dhcp_space_unittest.obj `if test -f 'dhcp_space_unittest.cc'; then $(CYGPATH_W) 'dhcp_space_unittest.cc'; else $(CYGPATH_W) '$(srcdir)/dhcp_space_unittest.cc'; fi`
 
 run_unittests-doubles_unittest.o: doubles_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(AM_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-doubles_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-doubles_unittest.Tpo -c -o run_unittests-doubles_unittest.o `test -f 'doubles_unittest.cc' || echo '$(srcdir)/'`doubles_unittest.cc
@@ -1525,6 +1534,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/run_unittests-buffer_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-chrono_time_utils_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-csv_file_unittest.Po
+	-rm -f ./$(DEPDIR)/run_unittests-dhcp_space_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-doubles_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-fd_share_tests.Po
 	-rm -f ./$(DEPDIR)/run_unittests-fd_tests.Po
@@ -1605,6 +1615,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/run_unittests-buffer_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-chrono_time_utils_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-csv_file_unittest.Po
+	-rm -f ./$(DEPDIR)/run_unittests-dhcp_space_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-doubles_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-fd_share_tests.Po
 	-rm -f ./$(DEPDIR)/run_unittests-fd_tests.Po

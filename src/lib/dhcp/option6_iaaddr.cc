@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2016 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -48,7 +48,7 @@ Option6IAAddr::clone() const {
     return (cloneInternal<Option6IAAddr>());
 }
 
-void Option6IAAddr::pack(isc::util::OutputBuffer& buf) const {
+void Option6IAAddr::pack(isc::util::OutputBuffer& buf, bool) const {
 
     buf.writeUint16(type_);
 

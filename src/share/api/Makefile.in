@@ -141,11 +141,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -155,8 +150,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -170,7 +163,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -364,6 +356,8 @@ api_files = $(top_srcdir)/src/share/api/build-report.json \
 	$(top_srcdir)/src/share/api/gss-tsig-list.json \
 	$(top_srcdir)/src/share/api/gss-tsig-purge-all.json \
 	$(top_srcdir)/src/share/api/gss-tsig-purge.json \
+	$(top_srcdir)/src/share/api/gss-tsig-rekey-all.json \
+	$(top_srcdir)/src/share/api/gss-tsig-rekey.json \
 	$(top_srcdir)/src/share/api/ha-continue.json \
 	$(top_srcdir)/src/share/api/ha-heartbeat.json \
 	$(top_srcdir)/src/share/api/ha-maintenance-cancel.json \
@@ -508,11 +502,15 @@ api_files = $(top_srcdir)/src/share/api/build-report.json \
 	$(top_srcdir)/src/share/api/status-get.json \
 	$(top_srcdir)/src/share/api/subnet4-add.json \
 	$(top_srcdir)/src/share/api/subnet4-del.json \
+	$(top_srcdir)/src/share/api/subnet4-delta-add.json \
+	$(top_srcdir)/src/share/api/subnet4-delta-del.json \
 	$(top_srcdir)/src/share/api/subnet4-get.json \
 	$(top_srcdir)/src/share/api/subnet4-list.json \
 	$(top_srcdir)/src/share/api/subnet4-update.json \
 	$(top_srcdir)/src/share/api/subnet6-add.json \
 	$(top_srcdir)/src/share/api/subnet6-del.json \
+	$(top_srcdir)/src/share/api/subnet6-delta-add.json \
+	$(top_srcdir)/src/share/api/subnet6-delta-del.json \
 	$(top_srcdir)/src/share/api/subnet6-get.json \
 	$(top_srcdir)/src/share/api/subnet6-list.json \
 	$(top_srcdir)/src/share/api/subnet6-update.json \

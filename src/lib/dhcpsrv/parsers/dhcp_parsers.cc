@@ -44,7 +44,6 @@ namespace dhcp {
 
 void
 MACSourcesListConfigParser::parse(CfgMACSource& mac_sources, ConstElementPtr value) {
-    CfgIface cfg_iface;
     uint32_t source = 0;
     size_t cnt = 0;
 
@@ -340,7 +339,7 @@ RelayInfoParser::addAddress(const std::string& name,
         relay_info->addAddress(*ip);
     } catch (const std::exception& ex) {
         isc_throw(DhcpConfigError, "cannot add address: " << address_str
-                  << "to relay info: " << ex.what()
+                  << " to relay info: " << ex.what()
                   << " (" << getPosition(name, relay_elem) << ")");
     }
 }
@@ -404,7 +403,7 @@ PoolParser::parse(PoolStoragePtr pools,
                 isc_throw(OutOfRange, "");
             }
             len = static_cast<uint8_t>(val_len);
-        } catch (...)  {
+        } catch (...) {
             isc_throw(DhcpConfigError, "Failed to parse pool "
                       "definition: " << txt << " ("
                       << text_pool->getPosition() << ")");
@@ -429,7 +428,7 @@ PoolParser::parse(PoolStoragePtr pools,
             try {
                 min = isc::asiolink::IOAddress(txt.substr(0, pos));
                 max = isc::asiolink::IOAddress(txt.substr(pos + 1));
-            } catch (...)  {
+            } catch (...) {
                 isc_throw(DhcpConfigError, "Failed to parse pool "
                           "definition: " << txt << " ("
                           << text_pool->getPosition() << ")");
@@ -504,7 +503,7 @@ PoolParser::parse(PoolStoragePtr pools,
 
 boost::shared_ptr<OptionDataListParser>
 PoolParser::createOptionDataListParser(const uint16_t address_family) const {
-    auto parser =  boost::make_shared<OptionDataListParser>(address_family);
+    auto parser = boost::make_shared<OptionDataListParser>(address_family);
     return (parser);
 }
 
@@ -623,7 +622,7 @@ SubnetConfigParser::createSubnet(ConstElementPtr params) {
         ConstElementPtr elem = params->get("subnet");
         isc_throw(BadValue,
                   "Invalid prefix length specified for subnet: " << len
-                  << " (" <<  elem->getPosition() << ")");
+                  << " (" << elem->getPosition() << ")");
     }
 
     // Call the subclass's method to instantiate the subnet
@@ -726,7 +725,9 @@ Subnet4ConfigParser::initSubnet(data::ConstElementPtr params,
     // Subnet ID is optional. If it is not supplied the value of 0 is used,
     // which means autogenerate. The value was inserted earlier by calling
     // SimpleParser4::setAllDefaults.
-    SubnetID subnet_id = static_cast<SubnetID>(getInteger(params, "id"));
+    int64_t subnet_id_max = static_cast<int64_t>(SUBNET_ID_MAX);
+    SubnetID subnet_id = static_cast<SubnetID>(getInteger(params, "id", 0,
+                                                          subnet_id_max));
 
     Subnet4Ptr subnet4(new Subnet4(addr, len, Triplet<uint32_t>(),
                                    Triplet<uint32_t>(), Triplet<uint32_t>(),
@@ -1239,7 +1240,9 @@ Subnet6ConfigParser::initSubnet(data::ConstElementPtr params,
     // Subnet ID is optional. If it is not supplied the value of 0 is used,
     // which means autogenerate. The value was inserted earlier by calling
     // SimpleParser6::setAllDefaults.
-    SubnetID subnet_id = static_cast<SubnetID>(getInteger(params, "id"));
+    int64_t subnet_id_max = static_cast<int64_t>(SUBNET_ID_MAX);
+    SubnetID subnet_id = static_cast<SubnetID>(getInteger(params, "id", 0,
+                                                          subnet_id_max));
 
     // We want to log whether rapid-commit is enabled, so we get this
     // before the actual subnet creation.
@@ -1570,7 +1573,7 @@ D2ClientConfigParser::parse(isc::data::ConstElementPtr client_config) {
                   "D2ClientConfig error: address family mismatch: "
                   << "server-ip: " << server_ip.toText()
                   << " is: " << (server_ip.isV4() ? "IPv4" : "IPv6")
-                  << " while sender-ip: "  << sender_ip.toText()
+                  << " while sender-ip: " << sender_ip.toText()
                   << " is: " << (sender_ip.isV4() ? "IPv4" : "IPv6")
                   << " (" << getPosition("sender-ip", client_config) << ")");
     }
@@ -1593,7 +1596,7 @@ D2ClientConfigParser::parse(isc::data::ConstElementPtr client_config) {
                                             max_queue_size,
                                             ncr_protocol,
                                             ncr_format));
-    }  catch (const std::exception& ex) {
+    } catch (const std::exception& ex) {
         isc_throw(DhcpConfigError, ex.what() << " ("
                   << client_config->getPosition() << ")");
     }
@@ -1604,7 +1607,7 @@ D2ClientConfigParser::parse(isc::data::ConstElementPtr client_config) {
         new_config->setContext(user_context);
     }
 
-    return(new_config);
+    return (new_config);
 }
 
 /// @brief This table defines default values for D2 client configuration

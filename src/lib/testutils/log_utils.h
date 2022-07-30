@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -82,7 +82,6 @@ public:
     /// @brief Add a string to the vector of expected strings
     ///
     /// @param new_string the string to add to the end of the vector
-    /// @return void
     void addString(const string& new_string);
 
     vector<string> exp_strings_;

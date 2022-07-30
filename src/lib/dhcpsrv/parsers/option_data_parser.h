@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2019,2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -95,8 +95,8 @@ protected:
     /// @brief Create option instance.
     ///
     /// Creates an instance of an option and adds it to the provided
-    /// options storage. If the option data parsed by \ref build function
-    /// are invalid or insufficient this function emits an exception.
+    /// options storage. If the option data parsed by createOption function
+    /// is invalid or insufficient this function emits an exception.
     ///
     /// If the option data is given as a string containing a hexadecimal
     /// literal, then it is converted into binary format.  These literals
@@ -108,7 +108,7 @@ protected:
     /// -# ab:cd:ef   - colon delimited
     /// -# ab cd ef   - space delimited
     /// -# 0xabcdef   - 0x prefixed (no delimiters)
-    /// -# abcdef     - no prefix or delimeters
+    /// -# abcdef     - no prefix or delimiters
     ///
     /// A leading zero is assumed for odd number of digits
     /// in an octet or continuous string.

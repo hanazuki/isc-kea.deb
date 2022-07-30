@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,6 +9,7 @@
 
 #include <asiolink/io_address.h>
 #include <dhcp/iface_mgr.h>
+#include <util/reconnect_ctl.h>
 #include <cc/cfg_to_element.h>
 #include <cc/user_context.h>
 #include <boost/shared_ptr.hpp>
@@ -181,7 +182,7 @@ public:
     /// traffic should be received through the socket. This parameter is
     /// ignored for IPv6.
     void openSockets(const uint16_t family, const uint16_t port,
-                     const bool use_bcast = true) const;
+                     const bool use_bcast = true);
 
     /// @brief Puts the interface configuration into default state.
     ///
@@ -302,6 +303,63 @@ public:
         re_detect_ = re_detect;
     }
 
+    /// @brief Set flag that Kea must successfully bind all socket services on init.
+    ///
+    /// @param require_all true if all sockets must be bound, false otherwise.
+    void setServiceSocketsRequireAll(bool require_all) {
+        service_socket_require_all_ = require_all;
+    }
+
+    /// @brief Indicates that Kea must successfully bind all socket services on init.
+    ///
+    /// @return true if all sockets must be bound, false otherwise.
+    bool getServiceSocketsRequireAll() const {
+        return (service_socket_require_all_);
+    }
+
+    /// @brief Set the socket service binding retry interval between attempts.
+    ///
+    /// @param interval Milliseconds between attempts.
+    void setServiceSocketsRetryWaitTime(uint32_t interval) {
+        service_sockets_retry_wait_time_ = interval;
+    }
+
+    /// @brief Indicates the socket service binding retry interval between attempts.
+    ///
+    /// @return Milliseconds between attempts.
+    uint32_t getServiceSocketsRetryWaitTime() const {
+        return (service_sockets_retry_wait_time_);
+    }
+
+    /// @brief Set a maximum number of service sockets bind attempts.
+    ///
+    /// @param max_retries Number of attempts. The value 0 disables retries.
+    void setServiceSocketsMaxRetries(uint32_t max_retries) {
+        service_sockets_max_retries_ = max_retries;
+    }
+
+    /// @brief Indicates the maximum number of service sockets bind attempts.
+    ///
+    /// @return Number of attempts.
+    uint32_t getServiceSocketsMaxRetries() const {
+        return (service_sockets_max_retries_);
+    }
+
+    /// @brief Get the reconnect controller.
+    ///
+    /// @return the reconnect controller
+    util::ReconnectCtlPtr getReconnectCtl() const {
+        return (reconnect_ctl_);
+    }
+
+    /// @brief Represents a callback invoked if all retries of the
+    /// opening sockets fail.
+    typedef std::function<void(util::ReconnectCtlPtr)> OpenSocketsFailedCallback;
+
+    /// @brief Optional callback function to invoke if all retries of the
+    /// opening sockets fail.
+    static OpenSocketsFailedCallback open_sockets_failed_callback_;
+
 private:
 
     /// @brief Checks if multiple IPv4 addresses has been activated on any
@@ -316,7 +374,7 @@ private:
     ///
     /// @return true if multiple addresses are activated on any interface,
     /// false otherwise.
-    bool multipleAddressesPerInterfaceActive() const;
+    static bool multipleAddressesPerInterfaceActive();
 
     /// @brief Selects or deselects interfaces.
     ///
@@ -355,6 +413,50 @@ private:
     /// @param errmsg Error message being logged by the function.
     static void socketOpenErrorHandler(const std::string& errmsg);
 
+    /// @brief Calls a family-specific function to open sockets.
+    ///
+    /// It is a static function for a safe call from a CfgIface instance or a
+    /// timer handler.
+    ///
+    /// @param family Address family (AF_INET or AF_INET6).
+    /// @param port Port number to be used to bind sockets to.
+    /// @param can_use_bcast A boolean flag which indicates if the broadcast
+    /// traffic should be received through the socket and the raw sockets are
+    /// used. For the UDP sockets, we only handle the relayed (unicast)
+    /// traffic. This parameter is ignored for IPv6.
+    /// @param skip_opened Omits the already opened sockets (doesn't try to
+    /// re-bind).
+    /// @return Pair of boolean flags. The first boolean is true if at least
+    /// one socket is successfully opened, and the second is true if no errors
+    /// occur.
+    static std::pair<bool, bool> openSocketsForFamily(const uint16_t family,
+                                                      const uint16_t port,
+                                                      const bool can_use_bcast,
+                                                      const bool skip_opened);
+
+    /// @brief Creates a ReconnectCtl based on the configuration's
+    /// retry parameters.
+    ///
+    /// @return The reconnect control created using the configuration
+    /// parameters.
+    util::ReconnectCtlPtr makeReconnectCtl() const;
+
+    /// Calls the @c CfgIface::openSocketsForFamily function and retry it if
+    /// socket opening fails.
+    ///
+    /// @param reconnect_ctl Used to manage socket reconnection.
+    /// @param family Address family (AF_INET or AF_INET6).
+    /// @param port Port number to be used to bind sockets to.
+    /// @param can_use_bcast A boolean flag which indicates if the broadcast
+    /// traffic should be received through the socket and the raw sockets are
+    /// used. For the UDP sockets, we only handle the relayed (unicast)
+    /// traffic. This parameter is ignored for IPv6.
+    ///
+    /// @return True if at least one socket opened successfully.
+    static bool openSocketsWithRetry(util::ReconnectCtlPtr reconnect_ctl,
+                                     const uint16_t family, const uint16_t port,
+                                     const bool can_use_bcast);
+
     /// @brief Represents a set of interface names.
     typedef std::set<std::string> IfaceSet;
 
@@ -379,8 +481,20 @@ private:
     /// @brief A boolean value which reflects current re-detect setting
     bool re_detect_;
 
+    /// @brief A boolean value indicates that Kea must successfully bind all socket services on init
+    bool service_socket_require_all_;
+
+    /// @brief An interval between attempts to retry the socket service binding.
+    uint32_t service_sockets_retry_wait_time_;
+
+    /// @brief A maximum number of attempts to bind the service sockets.
+    uint32_t service_sockets_max_retries_;
+
     /// @brief Indicates how outbound interface is selected for relayed traffic.
     OutboundIface outbound_iface_;
+
+    /// @brief Used to manage socket reconnection.
+    util::ReconnectCtlPtr reconnect_ctl_;
 };
 
 /// @brief A pointer to the @c CfgIface .

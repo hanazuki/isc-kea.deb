@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -201,7 +201,7 @@ ConstElementPtr
 ControlledDhcpv6Srv::commandShutdownHandler(const string&, ConstElementPtr args) {
     if (!ControlledDhcpv6Srv::getInstance()) {
         LOG_WARN(dhcp6_logger, DHCP6_NOT_RUNNING);
-        return(createAnswer(CONTROL_RESULT_ERROR, "Shutdown failure."));
+        return (createAnswer(CONTROL_RESULT_ERROR, "Shutdown failure."));
     }
 
     int exit_value = 0;
@@ -751,6 +751,30 @@ ControlledDhcpv6Srv::commandStatusGetHandler(const string&,
         status->set("multi-threading-enabled", Element::create(false));
     }
 
+    // Iterate through the interfaces and get all the errors.
+    ElementPtr socket_errors(Element::createList());
+    for (IfacePtr const& interface : IfaceMgr::instance().getIfaces()) {
+        for (std::string const& error : interface->getErrors()) {
+            socket_errors->add(Element::create(error));
+        }
+    }
+
+    // Abstract the information from all sockets into a single status.
+    ElementPtr sockets(Element::createMap());
+    if (socket_errors->empty()) {
+        sockets->set("status", Element::create("ready"));
+    } else {
+        ReconnectCtlPtr const reconnect_ctl(
+            CfgMgr::instance().getCurrentCfg()->getCfgIface()->getReconnectCtl());
+        if (reconnect_ctl && reconnect_ctl->retriesLeft()) {
+            sockets->set("status", Element::create("retrying"));
+        } else {
+            sockets->set("status", Element::create("failed"));
+        }
+        sockets->set("errors", socket_errors);
+    }
+    status->set("sockets", sockets);
+
     return (createAnswer(0, status));
 }
 
@@ -919,7 +943,6 @@ ControlledDhcpv6Srv::processConfig(isc::data::ConstElementPtr config) {
         }
 
     } catch (const std::exception& ex) {
-        std::ostringstream err;
         err << "unable to configure server identifier: " << ex.what();
         return (isc::config::createAnswer(1, err.str()));
     }
@@ -937,7 +960,6 @@ ControlledDhcpv6Srv::processConfig(isc::data::ConstElementPtr config) {
     try {
         Dhcp6to4Ipc::instance().open();
     } catch (const std::exception& ex) {
-        std::ostringstream err;
         err << "error starting DHCPv4-over-DHCPv6 IPC "
                " after server reconfiguration: " << ex.what();
         return (isc::config::createAnswer(1, err.str()));
@@ -957,6 +979,11 @@ ControlledDhcpv6Srv::processConfig(isc::data::ConstElementPtr config) {
             << ex.what();
         return (isc::config::createAnswer(1, err.str()));
     }
+
+    // Configure a callback to shut down the server when the bind socket
+    // attempts exceeded.
+    CfgIface::open_sockets_failed_callback_ =
+        std::bind(&ControlledDhcpv6Srv::openSocketsFailedCallback, srv, ph::_1);
 
     // Configuration may change active interfaces. Therefore, we have to reopen
     // sockets according to new configuration. It is possible that this
@@ -1030,8 +1057,16 @@ ControlledDhcpv6Srv::processConfig(isc::data::ConstElementPtr config) {
         HooksManager::callCallouts(Hooks.hooks_index_dhcp6_srv_configured_,
                                    *callout_handle);
 
-        // Ignore status code as none of them would have an effect on further
-        // operation.
+        // If next step is DROP, report a configuration error.
+        if (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_DROP) {
+            string error;
+            try {
+                callout_handle->getArgument("error", error);
+            } catch (NoSuchArgument const& ex) {
+                error = "unknown error";
+            }
+            return (isc::config::createAnswer(CONTROL_RESULT_ERROR, error));
+        }
     }
 
     // Apply multi threading settings.
@@ -1323,6 +1358,22 @@ ControlledDhcpv6Srv::dbFailedCallback(ReconnectCtlPtr db_reconnect_ctl) {
     }
 
     return (true);
+}
+
+void
+ControlledDhcpv6Srv::openSocketsFailedCallback(ReconnectCtlPtr reconnect_ctl) {
+    if (!reconnect_ctl) {
+        // This should never happen
+        LOG_ERROR(dhcp6_logger, DHCP6_OPEN_SOCKETS_NO_RECONNECT_CTL);
+        return;
+    }
+
+    LOG_INFO(dhcp6_logger, DHCP6_OPEN_SOCKETS_FAILED)
+            .arg(reconnect_ctl->maxRetries());
+
+    if (reconnect_ctl->exitOnFailure()) {
+        shutdownServer(EXIT_FAILURE);
+    }
 }
 
 void

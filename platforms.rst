@@ -20,12 +20,13 @@ Regularly Tested Platforms
 Kea is officially supported on Alpine, CentOS, Fedora, Ubuntu, Debian,
 and FreeBSD systems. Kea-|release| builds have been tested on:
 
-* Alpine - 3.12, 3.13
-* CentOS — 7, 8
+* Alpine — 3.13, 3.14, 3.15, 3.16
+* CentOS — 7
 * Debian — 9, 10, 11
-* Fedora — 34
+* Fedora — 34, 35, 36
 * FreeBSD — 12, 13
-* Ubuntu — 18.04, 20.04, 21.04
+* RHEL — 8, 9
+* Ubuntu — 18.04, 20.04, 22.04
 
 There are currently no plans to port Kea to Windows systems.
 
@@ -37,9 +38,8 @@ ISC makes every effort to fix bugs on these platforms, but may be unable to
 do so quickly due to lack of hardware, less familiarity on the part of
 engineering staff, and other constraints.
 
-* Alpine — 3.11
-* FreeBSD - 11
-* macOS — 10.13, 10.14
+* FreeBSD — 11
+* macOS — 10.15, 11, 12
 
 Community-Maintained
 --------------------
@@ -54,12 +54,13 @@ platforms.
 
 These include platforms past their respective EOL dates, such as:
 
-* Alpine — 3.10 (1 May 2021)
-* CentOS — 6 (30 November 2020)
-* Fedora — 31, 32
-* Ubuntu — 14.04, 18.10, 19.04, 19.10
+* Alpine — 3.10 (1 May 2021), 3.11, 3.12
+* CentOS — 6 (30 November 2020), 8 (31 December 2021)
 * Debian — 8 (30 June 2020)
+* Fedora — 31, 32, 33
 * FreeBSD — 10 (31 October 2018)
+* macOS — 10.13, 10.14
+* Ubuntu — 14.04, 18.10, 19.04, 19.10, 21.04
 
 Unsupported Platforms
 ---------------------
@@ -106,11 +107,6 @@ Some optional features of Kea have additional dependencies.
 -  To store lease information in a PostgreSQL database, Kea
    requires PostgreSQL headers and libraries. This is an optional
    dependency; Kea can be built without PostgreSQL support.
-
--  To store lease information in a Cassandra database (CQL),
-   Kea requires Cassandra headers and libraries. This is an optional
-   dependency; Kea can be built without Cassandra support. (Cassandra
-   support is deprecated.)
 
 -  Integration with RADIUS is provided in Kea via the hook library
    available to ISC's paid support customers. Use of this library requires

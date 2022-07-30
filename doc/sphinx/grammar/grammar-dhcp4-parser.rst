@@ -145,6 +145,7 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                  | statistic_default_sample_count
                  | statistic_default_sample_age
                  | dhcp_multi_threading
+                 | early_global_reservations_lookup
                  | ip_reservations_unique
                  | reservations_lookup_first
                  | compatibility
@@ -215,6 +216,8 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
 
      statistic_default_sample_age ::= "statistic-default-sample-age" ":" INTEGER
 
+     early_global_reservations_lookup ::= "early-global-reservations-lookup" ":" BOOLEAN
+
      ip_reservations_unique ::= "ip-reservations-unique" ":" BOOLEAN
 
      reservations_lookup_first ::= "reservations-lookup-first" ":" BOOLEAN
@@ -229,6 +232,9 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                             | dhcp_socket_type
                             | outbound_interface
                             | re_detect
+                            | service_sockets_require_all
+                            | service_sockets_retry_wait_time
+                            | service_sockets_max_retries
                             | user_context
                             | comment
                             | unknown_map_entry
@@ -248,6 +254,12 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                              | "use-routing"
 
      re_detect ::= "re-detect" ":" BOOLEAN
+
+     service_sockets_require_all ::= "service-sockets-require-all" ":" BOOLEAN
+
+     service_sockets_retry_wait_time ::= "service-sockets-retry-wait-time" ":" INTEGER
+
+     service_sockets_max_retries ::= "service-sockets-max-retries" ":" INTEGER
 
      lease_database ::= "lease-database" ":" "{" database_map_params "}"
 
@@ -288,16 +300,9 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                        | lfc_interval
                        | readonly
                        | connect_timeout
-                       | contact_points
                        | max_reconnect_tries
                        | reconnect_wait_time
                        | on_fail
-                       | request_timeout
-                       | tcp_keepalive
-                       | tcp_nodelay
-                       | keyspace
-                       | consistency
-                       | serial_consistency
                        | max_row_errors
                        | trust_anchor
                        | cert_file
@@ -310,7 +315,6 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
      db_type ::= "memfile"
             | "mysql"
             | "postgresql"
-            | "cql"
 
      user ::= "user" ":" STRING
 
@@ -329,20 +333,6 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
      readonly ::= "readonly" ":" BOOLEAN
 
      connect_timeout ::= "connect-timeout" ":" INTEGER
-
-     request_timeout ::= "request-timeout" ":" INTEGER
-
-     tcp_keepalive ::= "tcp-keepalive" ":" INTEGER
-
-     tcp_nodelay ::= "tcp-nodelay" ":" BOOLEAN
-
-     contact_points ::= "contact-points" ":" STRING
-
-     keyspace ::= "keyspace" ":" STRING
-
-     consistency ::= "consistency" ":" STRING
-
-     serial_consistency ::= "serial-consistency" ":" STRING
 
      max_reconnect_tries ::= "max-reconnect-tries" ":" INTEGER
 

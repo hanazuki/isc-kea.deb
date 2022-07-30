@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,10 +21,6 @@
 
 #if defined HAVE_PGSQL
 #include <pgsql/testutils/pgsql_schema.h>
-#endif
-
-#if defined HAVE_CQL
-#include <cql/testutils/cql_schema.h>
 #endif
 
 using namespace isc;
@@ -335,80 +331,6 @@ TEST_F(CfgPgSQLDbAccessTest, createManagersIPResrvUnique) {
     });
 
     EXPECT_FALSE(HostMgr::instance().getIPReservationsUnique());
-}
-
-#endif
-
-// The following tests require Cassandra enabled.
-#if defined HAVE_CQL
-
-/// @brief Test fixture class for testing @ref CfgDbAccessTest using MySQL
-/// backend.
-class CfgCQLDbAccessTest : public ::testing::Test {
-public:
-
-    /// @brief Constructor.
-    CfgCQLDbAccessTest() {
-        // Ensure we have the proper schema with no transient data.
-        db::test::createCqlSchema();
-    }
-
-    /// @brief Destructor.
-    virtual ~CfgCQLDbAccessTest() {
-        // If data wipe enabled, delete transient data otherwise destroy the schema
-        db::test::destroyCqlSchema();
-        LeaseMgrFactory::destroy();
-    }
-};
-
-
-// Tests that CQL lease manager and host data source can be created from a
-// specified configuration.
-TEST_F(CfgCQLDbAccessTest, createManagers) {
-    CfgDbAccess cfg;
-    ASSERT_NO_THROW(cfg.setLeaseDbAccessString(db::test::validCqlConnectionString()));
-    ASSERT_NO_THROW(cfg.setHostDbAccessString(db::test::validCqlConnectionString()));
-    ASSERT_NO_THROW(cfg.createManagers());
-
-    ASSERT_NO_THROW({
-        LeaseMgr& lease_mgr = LeaseMgrFactory::instance();
-        EXPECT_EQ("cql", lease_mgr.getType());
-    });
-
-    ASSERT_NO_THROW({
-        const HostDataSourcePtr& host_data_source =
-            HostMgr::instance().getHostDataSource();
-        ASSERT_TRUE(host_data_source);
-        EXPECT_EQ("cql", host_data_source->getType());
-    });
-
-    // Because of the lazy initialization of the HostMgr instance, it is
-    // possible that the first call to the instance() function tosses
-    // existing connection to the database created by the call to
-    // createManagers(). Let's make sure that this doesn't happen.
-    ASSERT_NO_THROW(HostMgr::instance());
-
-    ASSERT_NO_THROW({
-        const HostDataSourcePtr& host_data_source =
-            HostMgr::instance().getHostDataSource();
-        ASSERT_TRUE(host_data_source);
-        EXPECT_EQ("cql", host_data_source->getType());
-    });
-
-    EXPECT_TRUE(HostMgr::instance().getIPReservationsUnique());
-}
-
-// Tests that the createManagers function refuses to use non unique
-// IP reservations setting for CQL host backend. This backend does
-// not support this setting.
-TEST_F(CfgCQLDbAccessTest, createManagersIPResrvUnique) {
-    CfgDbAccess cfg;
-
-    cfg.setIPReservationsUnique(false);
-
-    ASSERT_NO_THROW(cfg.setLeaseDbAccessString(db::test::validCqlConnectionString()));
-    ASSERT_NO_THROW(cfg.setHostDbAccessString(db::test::validCqlConnectionString()));
-    EXPECT_THROW(cfg.createManagers(), InvalidOperation);
 }
 
 #endif

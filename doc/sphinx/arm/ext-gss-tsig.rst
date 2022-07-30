@@ -451,6 +451,12 @@ zone similar to the one configured in Kea. To do that, open the "DNS Manager" an
 "DNS" from the list; from the dropdown list, choose "Reverse Lookup Zones"; then
 click "Action" and "New Zone"; finally, follow the New Zone Wizard to add a new zone.
 
+The standard requires both anti-replay and sequence services. Experiences with the BIND 9 nsupdate
+showed the sequence service led to problems so it is disabled by default in the hook. It seems
+the anti-replay service can also lead to problems with Microsoft DNS servers so it is now
+configurable. Note that these security services are useless for DNS dynamic update which was
+designed to run over UDP so with out of order and duplicated messages.
+
 .. _gss-tsig-using:
 
 Using GSS-TSIG
@@ -466,7 +472,7 @@ An excerpt from a D2 server configuration is provided below; more examples are a
 
 .. code-block:: javascript
    :linenos:
-   :emphasize-lines: 57-107
+   :emphasize-lines: 57-117
 
 
     {
@@ -525,7 +531,7 @@ An excerpt from a D2 server configuration is provided below; more examples are a
             ]
         },
 
-        // Need to add gss-tsig hook here
+        // The GSS-TSIG hook is loaded and its configuration is specified here.
         "hooks-libraries": [
         {
             "library": "/opt/lib/libddns_gss_tsig.so",
@@ -538,8 +544,16 @@ An excerpt from a D2 server configuration is provided below; more examples are a
 
                 "server-principal": "DNS/server.example.org@EXAMPLE.ORG",
                 "client-principal": "DHCP/admin.example.org@EXAMPLE.ORG",
-                "client-keytab": "FILE:/etc/dhcp.keytab", // toplevel only
+
+                // client-keytab and credentials-cache can both be used to
+                // store client keys. As credentials cache is more flexible,
+                // it is recommended to use it. Typically, using both at the
+                // same time may cause problems.
+                //
+                // "client-keytab": "FILE:/etc/dhcp.keytab", // toplevel only
                 "credentials-cache": "FILE:/etc/ccache", // toplevel only
+                "gss-replay-flag": true, // GSS anti replay service
+                "gss-sequence-flag": false, // no GSS sequence service
                 "tkey-lifetime": 3600, // 1 hour
                 "rekey-interval": 2700, // 45 minutes
                 "retry-interval": 120, // 2 minutes
@@ -558,6 +572,8 @@ An excerpt from a D2 server configuration is provided below; more examples are a
                         "port": 53,
                         "server-principal": "DNS/server1.example.org@EXAMPLE.ORG",
                         "client-principal": "DHCP/admin1.example.org@EXAMPLE.ORG",
+                        "gss-replay-flag": false, // no GSS anti replay service
+                        "gss-sequence-flag": false, // no GSS sequence service
                         "tkey-lifetime": 7200, // 2 hours
                         "rekey-interval": 5400, // 90 minutes
                         "retry-interval": 240, // 4 minutes
@@ -618,6 +634,12 @@ defined, or if all servers have different values.
    +-------------------+----------+---------+---------------------+--------------------------------+
    | client-principal  | global / | string  | empty               | the Kerberos principal name of |
    |                   | server   |         |                     | the Kea D2 service             |
+   +-------------------+----------+---------+---------------------+--------------------------------+
+   | gss-replay-flag   | global / | true /  | true                | require the GSS anti replay    |
+   |                   | server   | false   |                     | service (GSS_C_REPLAY_FLAG)    |
+   +-------------------+----------+---------+---------------------+--------------------------------+
+   | gss-sequence-flag | global / | true /  | false               | require the GSS sequence       |
+   |                   | server   | false   |                     | service (GSS_C_SEQUENCE_FLAG)  |
    +-------------------+----------+---------+---------------------+--------------------------------+
    | tkey-protocol     | global / | string  | "TCP"               | the protocol used to establish |
    |                   | server   | "TCP" / |                     | the security context with the  |
@@ -693,6 +715,13 @@ The global parameters are described below:
   service. It is optional, and uses the typical Kerberos notation:
   ``<SERVICE-NAME>/<server-domain-name>@<REALM>``.
 
+- ``gss-replay-flag`` determines if the GSS anti replay service is
+  required. It is by default but this can be disabled.
+
+- ``gss-sequence-flag`` determines if the GSS sequence service is
+  required. It is not by default but is required by the standard
+  so it can be enabled.
+
 - ``tkey-protocol`` determines which protocol is used to establish the
   security context with the DNS servers. Currently, the only supported
   values are TCP (the default) and UDP.
@@ -758,6 +787,16 @@ The server map parameters are described below:
   service for this DNS server. The ``client-principal`` parameter set at the per-server
   level takes precedence over one set at the global level. It is an optional parameter.
 
+- ``gss-replay-flag`` determines if the GSS anti replay service is
+  required. The ``gss-replay-flag`` parameter set at the per-server
+  level takes precedence over one set at the global level. It is an optional parameter
+  which defaults to true.
+
+- ``gss-sequence-flag`` determines if the GSS sequence service is
+  required. The ``gss-sequence-flag`` parameter set at the per-server
+  level takes precedence over one set at the global level. It is an optional parameter
+  which defaults to false.
+
 - ``tkey-protocol`` determines which protocol is used to establish the
   security context with the DNS server. The ``tkey-protocol`` parameter set at the per-server
   level takes precedence over one set at the global level. The default and supported values
@@ -803,6 +842,21 @@ The server map parameters are described below:
   for a general description of user contexts in Kea).
 
 - ``comment`` is allowed but currently ignored.
+
+.. note::
+
+    Generally it is not recommended to specify both the client keytab (``client-keytab``)
+    and the credentials cache (``credentials-cache``), although this may
+    differ between Kerberos implementations. The client keytab is just for
+    the client key and is typically used to specify the key explicitly in more
+    static manner, while the credentials cache can be used to store multiple
+    credentials and can be dynamically updated by the Kerberos library. As such,
+    the credentials-cache is more flexible and thus the recommended alternative.
+
+    Also note that only the read access right is needed to use the cache.
+    Fetching credentials and updating the cache requires the write access
+    right.
+
 
 GSS-TSIG Automatic Key Removal
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1187,7 +1241,7 @@ Here is an example of a response indicating that two GSS-TSIG keys for server "f
 The ``gss-tsig-rekey-all`` Command
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The command unconditionally creates new GSS-TSIG keys for (rekeys)
+This command unconditionally creates new GSS-TSIG keys (rekeys) for
 all DNS servers.
 
 An example command invocation looks like this:
@@ -1215,7 +1269,7 @@ reconnected to the network.
 The ``gss-tsig-rekey`` Command
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-The command unconditionally creates new GSS-TSIG keys for (rekeys)
+This command unconditionally creates new GSS-TSIG keys (rekeys) for
 a specified DNS server.
 
 An example command invocation looks like this:
@@ -1223,7 +1277,7 @@ An example command invocation looks like this:
 .. code-block:: json
 
     {
-        "command": "gss-tsig-purge",
+        "command": "gss-tsig-rekey",
         "arguments": {
             "server-id": "foo"
         }

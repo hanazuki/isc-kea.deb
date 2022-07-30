@@ -7,6 +7,7 @@
 #include <config.h>
 #include <database/db_exceptions.h>
 #include <database/server.h>
+#include <database/testutils/schema.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/config_backend_dhcp4_mgr.h>
 #include <dhcpsrv/testutils/generic_cb_dhcp4_unittest.h>
@@ -26,7 +27,6 @@
 #include <sstream>
 
 using namespace isc;
-using namespace isc::util;
 using namespace isc::asiolink;
 using namespace isc::db;
 using namespace isc::db::test;
@@ -35,6 +35,7 @@ using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::process;
 using namespace isc::test;
+using namespace isc::util;
 namespace ph = std::placeholders;
 
 namespace {
@@ -266,8 +267,7 @@ TEST_F(MySqlConfigBackendDHCPv4Test, deleteSharedNetworkSubnets4Test) {
     deleteSharedNetworkSubnets4Test();
 }
 
-/// @todo This test is disabled pending resolution of #2299.
-TEST_F(MySqlConfigBackendDHCPv4Test, DISABLED_getAllSharedNetworks4Test) {
+TEST_F(MySqlConfigBackendDHCPv4Test, getAllSharedNetworks4Test) {
     getAllSharedNetworks4Test();
 }
 
@@ -449,7 +449,7 @@ public:
     /// @brief  Attempts to add a backend instance to the CB manager.
     ///
     /// @param access Connection access string containing the database
-    /// connetion parameters.
+    /// connection parameters.
     virtual void addBackend(const std::string& access) {
         ConfigBackendDHCPv4Mgr::instance().addBackend(access);
     }

@@ -105,6 +105,7 @@ libdhcpsrv_unittests_SOURCES += lease_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_mgr_factory_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += generic_lease_mgr_unittest.cc generic_lease_mgr_unittest.h
+libdhcpsrv_unittests_SOURCES += memfile_lease_limits_unittest.cc
 libdhcpsrv_unittests_SOURCES += memfile_lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += multi_threading_config_parser_unittest.cc
 libdhcpsrv_unittests_SOURCES += dhcp_parsers_unittest.cc
@@ -116,10 +117,6 @@ endif
 if HAVE_PGSQL
 libdhcpsrv_unittests_SOURCES += pgsql_lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += pgsql_host_data_source_unittest.cc
-endif
-if HAVE_CQL
-libdhcpsrv_unittests_SOURCES += cql_lease_mgr_unittest.cc
-libdhcpsrv_unittests_SOURCES += cql_host_data_source_unittest.cc
 endif
 libdhcpsrv_unittests_SOURCES += pool_unittest.cc
 libdhcpsrv_unittests_SOURCES += resource_handler_unittest.cc
@@ -141,9 +138,6 @@ endif
 if HAVE_PGSQL
 libdhcpsrv_unittests_CPPFLAGS += $(PGSQL_CPPFLAGS)
 endif
-if HAVE_CQL
-libdhcpsrv_unittests_CPPFLAGS += $(CQL_CPPFLAGS)
-endif
 
 libdhcpsrv_unittests_CXXFLAGS = $(AM_CXXFLAGS)
 
@@ -153,9 +147,6 @@ libdhcpsrv_unittests_LDFLAGS  += $(MYSQL_LIBS)
 endif
 if HAVE_PGSQL
 libdhcpsrv_unittests_LDFLAGS  += $(PGSQL_LIBS)
-endif
-if HAVE_CQL
-libdhcpsrv_unittests_LDFLAGS  += $(CQL_LIBS)
 endif
 
 libdhcpsrv_unittests_LDADD  = $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la
@@ -178,10 +169,6 @@ endif
 if HAVE_PGSQL
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la
-endif
-if HAVE_CQL
-libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/cql/libkea-cql.la
-libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/cql/testutils/libcqltest.la
 endif
 
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/database/testutils/libdatabasetest.la

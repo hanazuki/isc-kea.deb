@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2018 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -75,7 +75,8 @@ public:
     /// @brief Renders option into the buffer in the wire format.
     ///
     /// @param [out] buf Buffer to which the option is rendered.
-    virtual void pack(isc::util::OutputBuffer& buf) const;
+    /// @param check if set to false, allows options larger than 255 for v4
+    virtual void pack(isc::util::OutputBuffer& buf, bool check = true) const;
 
     /// @brief Parses buffer holding an option.
     ///

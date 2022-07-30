@@ -1,4 +1,4 @@
-// Copyright (C) 2018,2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -37,7 +37,7 @@ Option6Auth::clone() const {
 }
 
 void
-Option6Auth::pack(isc::util::OutputBuffer& buf) const {
+Option6Auth::pack(isc::util::OutputBuffer& buf, bool) const {
     if (buf.getCapacity() < (OPTION6_AUTH_MIN_LEN + OPTION6_HASH_MSG_LEN + OPTION6_HDR)) {
        isc_throw(OutOfRange, "Option " << type_ << "Buffer too small for"
                "packing data");

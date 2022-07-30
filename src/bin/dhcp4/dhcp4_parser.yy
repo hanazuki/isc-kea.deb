@@ -64,6 +64,9 @@ using namespace std;
   SAME_AS_INBOUND "same-as-inbound"
   USE_ROUTING "use-routing"
   RE_DETECT "re-detect"
+  SERVICE_SOCKETS_REQUIRE_ALL "service-sockets-require-all"
+  SERVICE_SOCKETS_RETRY_WAIT_TIME "service-sockets-retry-wait-time"
+  SERVICE_SOCKETS_MAX_RETRIES "service-sockets-max-retries"
 
   SANITY_CHECKS "sanity-checks"
   LEASE_CHECKS "lease-checks"
@@ -82,7 +85,6 @@ using namespace std;
   MEMFILE "memfile"
   MYSQL "mysql"
   POSTGRESQL "postgresql"
-  CQL "cql"
   USER "user"
   PASSWORD "password"
   HOST "host"
@@ -91,19 +93,12 @@ using namespace std;
   LFC_INTERVAL "lfc-interval"
   READONLY "readonly"
   CONNECT_TIMEOUT "connect-timeout"
-  CONTACT_POINTS "contact-points"
-  KEYSPACE "keyspace"
-  CONSISTENCY "consistency"
-  SERIAL_CONSISTENCY "serial-consistency"
   MAX_RECONNECT_TRIES "max-reconnect-tries"
   RECONNECT_WAIT_TIME "reconnect-wait-time"
   ON_FAIL "on-fail"
   STOP_RETRY_EXIT "stop-retry-exit"
   SERVE_RETRY_EXIT "serve-retry-exit"
   SERVE_RETRY_CONTINUE "serve-retry-continue"
-  REQUEST_TIMEOUT "request-timeout"
-  TCP_KEEPALIVE "tcp-keepalive"
-  TCP_NODELAY "tcp-nodelay"
   MAX_ROW_ERRORS "max-row-errors"
   TRUST_ANCHOR "trust-anchor"
   CERT_FILE "cert-file"
@@ -239,6 +234,7 @@ using namespace std;
   WHEN_NOT_PRESENT "when-not-present"
   HOSTNAME_CHAR_SET "hostname-char-set"
   HOSTNAME_CHAR_REPLACEMENT "hostname-char-replacement"
+  EARLY_GLOBAL_RESERVATIONS_LOOKUP "early-global-reservations-lookup"
   IP_RESERVATIONS_UNIQUE "ip-reservations-unique"
   RESERVATIONS_LOOKUP_FIRST "reservations-lookup-first"
 
@@ -541,6 +537,7 @@ global_param: valid_lifetime
             | statistic_default_sample_count
             | statistic_default_sample_age
             | dhcp_multi_threading
+            | early_global_reservations_lookup
             | ip_reservations_unique
             | reservations_lookup_first
             | compatibility
@@ -758,6 +755,12 @@ statistic_default_sample_age: STATISTIC_DEFAULT_SAMPLE_AGE COLON INTEGER {
     ctx.stack_.back()->set("statistic-default-sample-age", age);
 };
 
+early_global_reservations_lookup: EARLY_GLOBAL_RESERVATIONS_LOOKUP COLON BOOLEAN {
+    ctx.unique("early-global-reservations-lookup", ctx.loc2pos(@1));
+    ElementPtr early(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("early-global-reservations-lookup", early);
+};
+
 ip_reservations_unique: IP_RESERVATIONS_UNIQUE COLON BOOLEAN {
     ctx.unique("ip-reservations-unique", ctx.loc2pos(@1));
     ElementPtr unique(new BoolElement($3, ctx.loc2pos(@3)));
@@ -793,6 +796,9 @@ interfaces_config_param: interfaces_list
                        | dhcp_socket_type
                        | outbound_interface
                        | re_detect
+                       | service_sockets_require_all
+                       | service_sockets_retry_wait_time
+                       | service_sockets_max_retries
                        | user_context
                        | comment
                        | unknown_map_entry
@@ -850,6 +856,23 @@ re_detect: RE_DETECT COLON BOOLEAN {
     ctx.stack_.back()->set("re-detect", b);
 };
 
+service_sockets_require_all: SERVICE_SOCKETS_REQUIRE_ALL COLON BOOLEAN {
+    ctx.unique("service-sockets-require-all", ctx.loc2pos(@1));
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("service-sockets-require-all", b);
+};
+
+service_sockets_retry_wait_time: SERVICE_SOCKETS_RETRY_WAIT_TIME COLON INTEGER {
+    ctx.unique("service-sockets-retry-wait-time", ctx.loc2pos(@1));
+    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("service-sockets-retry-wait-time", n);
+};
+
+service_sockets_max_retries: SERVICE_SOCKETS_MAX_RETRIES COLON INTEGER {
+    ctx.unique("service-sockets-max-retries", ctx.loc2pos(@1));
+    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("service-sockets-max-retries", n);
+};
 
 lease_database: LEASE_DATABASE {
     ctx.unique("lease-database", ctx.loc2pos(@1));
@@ -965,16 +988,9 @@ database_map_param: database_type
                   | lfc_interval
                   | readonly
                   | connect_timeout
-                  | contact_points
                   | max_reconnect_tries
                   | reconnect_wait_time
                   | on_fail
-                  | request_timeout
-                  | tcp_keepalive
-                  | tcp_nodelay
-                  | keyspace
-                  | consistency
-                  | serial_consistency
                   | max_row_errors
                   | trust_anchor
                   | cert_file
@@ -994,7 +1010,6 @@ database_type: TYPE {
 db_type: MEMFILE { $$ = ElementPtr(new StringElement("memfile", ctx.loc2pos(@1))); }
        | MYSQL { $$ = ElementPtr(new StringElement("mysql", ctx.loc2pos(@1))); }
        | POSTGRESQL { $$ = ElementPtr(new StringElement("postgresql", ctx.loc2pos(@1))); }
-       | CQL { $$ = ElementPtr(new StringElement("cql", ctx.loc2pos(@1))); }
        ;
 
 user: USER {
@@ -1061,60 +1076,6 @@ connect_timeout: CONNECT_TIMEOUT COLON INTEGER {
     ctx.unique("connect-timeout", ctx.loc2pos(@1));
     ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("connect-timeout", n);
-};
-
-request_timeout: REQUEST_TIMEOUT COLON INTEGER {
-    ctx.unique("request-timeout", ctx.loc2pos(@1));
-    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
-    ctx.stack_.back()->set("request-timeout", n);
-};
-
-tcp_keepalive: TCP_KEEPALIVE COLON INTEGER {
-    ctx.unique("tcp-keepalive", ctx.loc2pos(@1));
-    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
-    ctx.stack_.back()->set("tcp-keepalive", n);
-};
-
-tcp_nodelay: TCP_NODELAY COLON BOOLEAN {
-    ctx.unique("tcp-nodelay", ctx.loc2pos(@1));
-    ElementPtr n(new BoolElement($3, ctx.loc2pos(@3)));
-    ctx.stack_.back()->set("tcp-nodelay", n);
-};
-
-contact_points: CONTACT_POINTS {
-    ctx.unique("contact-points", ctx.loc2pos(@1));
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON STRING {
-    ElementPtr cp(new StringElement($4, ctx.loc2pos(@4)));
-    ctx.stack_.back()->set("contact-points", cp);
-    ctx.leave();
-};
-
-keyspace: KEYSPACE {
-    ctx.unique("keyspace", ctx.loc2pos(@1));
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON STRING {
-    ElementPtr ks(new StringElement($4, ctx.loc2pos(@4)));
-    ctx.stack_.back()->set("keyspace", ks);
-    ctx.leave();
-};
-
-consistency: CONSISTENCY {
-    ctx.unique("consistency", ctx.loc2pos(@1));
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON STRING {
-    ElementPtr c(new StringElement($4, ctx.loc2pos(@4)));
-    ctx.stack_.back()->set("consistency", c);
-    ctx.leave();
-};
-
-serial_consistency: SERIAL_CONSISTENCY {
-    ctx.unique("serial-consistency", ctx.loc2pos(@1));
-    ctx.enter(ctx.NO_KEYWORD);
-} COLON STRING {
-    ElementPtr c(new StringElement($4, ctx.loc2pos(@4)));
-    ctx.stack_.back()->set("serial-consistency", c);
-    ctx.leave();
 };
 
 max_reconnect_tries: MAX_RECONNECT_TRIES COLON INTEGER {

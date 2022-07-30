@@ -92,10 +92,8 @@ host_triplet = @host@
 sbin_PROGRAMS = kea-lfc$(EXEEXT)
 @HAVE_MYSQL_TRUE@am__append_1 = $(top_builddir)/src/lib/mysql/libkea-mysql.la
 @HAVE_PGSQL_TRUE@am__append_2 = $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
-@HAVE_CQL_TRUE@am__append_3 = $(top_builddir)/src/lib/cql/libkea-cql.la
-@HAVE_MYSQL_TRUE@am__append_4 = $(MYSQL_LIBS)
-@HAVE_PGSQL_TRUE@am__append_5 = $(PGSQL_LIBS)
-@HAVE_CQL_TRUE@am__append_6 = $(CQL_LIBS)
+@HAVE_MYSQL_TRUE@am__append_3 = $(MYSQL_LIBS)
+@HAVE_PGSQL_TRUE@am__append_4 = $(PGSQL_LIBS)
 subdir = src/bin/lfc
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
@@ -142,7 +140,7 @@ kea_lfc_DEPENDENCIES = liblfc.la \
 	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
 	$(top_builddir)/src/lib/http/libkea-http.la \
 	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la $(am__append_1) \
-	$(am__append_2) $(am__append_3) \
+	$(am__append_2) \
 	$(top_builddir)/src/lib/database/libkea-database.la \
 	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 	$(top_builddir)/src/lib/cc/libkea-cc.la \
@@ -291,11 +289,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -305,8 +298,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -320,7 +311,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -503,7 +493,7 @@ kea_lfc_LDADD = liblfc.la $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
 	$(top_builddir)/src/lib/http/libkea-http.la \
 	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la $(am__append_1) \
-	$(am__append_2) $(am__append_3) \
+	$(am__append_2) \
 	$(top_builddir)/src/lib/database/libkea-database.la \
 	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 	$(top_builddir)/src/lib/cc/libkea-cc.la \
@@ -514,8 +504,8 @@ kea_lfc_LDADD = liblfc.la $(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
-kea_lfc_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(am__append_4) \
-	$(am__append_5) $(am__append_6)
+kea_lfc_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS) $(am__append_3) \
+	$(am__append_4)
 kea_lfcdir = $(pkgdatadir)
 all: all-recursive
 

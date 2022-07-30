@@ -11,6 +11,7 @@ namespace agent {
 extern const isc::log::MessageID CTRL_AGENT_COMMAND_FORWARDED;
 extern const isc::log::MessageID CTRL_AGENT_COMMAND_FORWARD_BEGIN;
 extern const isc::log::MessageID CTRL_AGENT_COMMAND_FORWARD_FAILED;
+extern const isc::log::MessageID CTRL_AGENT_COMMAND_RECEIVED;
 extern const isc::log::MessageID CTRL_AGENT_CONFIG_CHECK_FAIL;
 extern const isc::log::MessageID CTRL_AGENT_CONFIG_FAIL;
 extern const isc::log::MessageID CTRL_AGENT_CONFIG_SYNTAX_WARNING;

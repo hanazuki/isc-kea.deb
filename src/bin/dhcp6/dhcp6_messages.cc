@@ -68,6 +68,7 @@ extern const isc::log::MessageID DHCP6_HOOKS_LIBS_RELOAD_FAIL = "DHCP6_HOOKS_LIB
 extern const isc::log::MessageID DHCP6_HOOK_BUFFER_RCVD_DROP = "DHCP6_HOOK_BUFFER_RCVD_DROP";
 extern const isc::log::MessageID DHCP6_HOOK_BUFFER_RCVD_SKIP = "DHCP6_HOOK_BUFFER_RCVD_SKIP";
 extern const isc::log::MessageID DHCP6_HOOK_BUFFER_SEND_SKIP = "DHCP6_HOOK_BUFFER_SEND_SKIP";
+extern const isc::log::MessageID DHCP6_HOOK_DDNS_UPDATE = "DHCP6_HOOK_DDNS_UPDATE";
 extern const isc::log::MessageID DHCP6_HOOK_DECLINE_DROP = "DHCP6_HOOK_DECLINE_DROP";
 extern const isc::log::MessageID DHCP6_HOOK_DECLINE_SKIP = "DHCP6_HOOK_DECLINE_SKIP";
 extern const isc::log::MessageID DHCP6_HOOK_LEASE6_RELEASE_NA_SKIP = "DHCP6_HOOK_LEASE6_RELEASE_NA_SKIP";
@@ -95,10 +96,13 @@ extern const isc::log::MessageID DHCP6_NOT_RUNNING = "DHCP6_NOT_RUNNING";
 extern const isc::log::MessageID DHCP6_NO_INTERFACES = "DHCP6_NO_INTERFACES";
 extern const isc::log::MessageID DHCP6_NO_SOCKETS_OPEN = "DHCP6_NO_SOCKETS_OPEN";
 extern const isc::log::MessageID DHCP6_OPEN_SOCKET = "DHCP6_OPEN_SOCKET";
+extern const isc::log::MessageID DHCP6_OPEN_SOCKETS_FAILED = "DHCP6_OPEN_SOCKETS_FAILED";
+extern const isc::log::MessageID DHCP6_OPEN_SOCKETS_NO_RECONNECT_CTL = "DHCP6_OPEN_SOCKETS_NO_RECONNECT_CTL";
 extern const isc::log::MessageID DHCP6_OPEN_SOCKET_FAIL = "DHCP6_OPEN_SOCKET_FAIL";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_DHCP_DISABLED = "DHCP6_PACKET_DROP_DHCP_DISABLED";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_DROP_CLASS = "DHCP6_PACKET_DROP_DROP_CLASS";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_DROP_CLASS2 = "DHCP6_PACKET_DROP_DROP_CLASS2";
+extern const isc::log::MessageID DHCP6_PACKET_DROP_DROP_CLASS_EARLY = "DHCP6_PACKET_DROP_DROP_CLASS_EARLY";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_DUPLICATE = "DHCP6_PACKET_DROP_DUPLICATE";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_PARSE_FAIL = "DHCP6_PACKET_DROP_PARSE_FAIL";
 extern const isc::log::MessageID DHCP6_PACKET_DROP_SERVERID_MISMATCH = "DHCP6_PACKET_DROP_SERVERID_MISMATCH";
@@ -227,6 +231,7 @@ const char* values[] = {
     "DHCP6_HOOK_BUFFER_RCVD_DROP", "received buffer from %1 to %2 over interface %3 was dropped because a callout set the drop flag",
     "DHCP6_HOOK_BUFFER_RCVD_SKIP", "received buffer from %1 to %2 over interface %3 is not parsed because a callout set the next step to SKIP",
     "DHCP6_HOOK_BUFFER_SEND_SKIP", "%1: prepared DHCPv6 response was dropped because a callout set the next step to SKIP",
+    "DHCP6_HOOK_DDNS_UPDATE", "A hook has updated the DDNS parameters: hostname %1=>%2, forward update %3=>%4, reverse update %5=>%6",
     "DHCP6_HOOK_DECLINE_DROP", "During Decline processing (client=%1, interface=%2, addr=%3) hook callout set next step to DROP, dropping packet.",
     "DHCP6_HOOK_DECLINE_SKIP", "During Decline processing (client=%1, interface=%2, addr=%3) hook callout set status to SKIP, skipping decline.",
     "DHCP6_HOOK_LEASE6_RELEASE_NA_SKIP", "%1: DHCPv6 address lease was not released because a callout set the next step to SKIP",
@@ -254,10 +259,13 @@ const char* values[] = {
     "DHCP6_NO_INTERFACES", "failed to detect any network interfaces",
     "DHCP6_NO_SOCKETS_OPEN", "no interface configured to listen to DHCP traffic",
     "DHCP6_OPEN_SOCKET", "opening service sockets on port %1",
+    "DHCP6_OPEN_SOCKETS_FAILED", "maximum number of open service sockets attempts: %1, has been exhausted without success",
+    "DHCP6_OPEN_SOCKETS_NO_RECONNECT_CTL", "unexpected error in bind service sockets.",
     "DHCP6_OPEN_SOCKET_FAIL", "failed to open socket: %1",
     "DHCP6_PACKET_DROP_DHCP_DISABLED", "%1: DHCP service is globally disabled",
     "DHCP6_PACKET_DROP_DROP_CLASS", "dropped as member of the special class 'DROP': %1",
     "DHCP6_PACKET_DROP_DROP_CLASS2", "dropped as member of the special class 'DROP' after host reservation lookup: %1",
+    "DHCP6_PACKET_DROP_DROP_CLASS_EARLY", "dropped as member of the special class 'DROP' after early global host reservations lookup: %1",
     "DHCP6_PACKET_DROP_DUPLICATE", "dropped as sent by the same client than a packet being processed by another thread: dropped %1 by thread %2 as duplicate of %3 processed by %4",
     "DHCP6_PACKET_DROP_PARSE_FAIL", "failed to parse packet from %1 to %2, received over interface %3, reason: %4",
     "DHCP6_PACKET_DROP_SERVERID_MISMATCH", "%1: dropping packet with server identifier: %2, server is using: %3",

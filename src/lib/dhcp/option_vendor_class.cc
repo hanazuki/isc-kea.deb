@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2017 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -35,8 +35,8 @@ OptionVendorClass::clone() const {
 }
 
 void
-OptionVendorClass::pack(isc::util::OutputBuffer& buf) const {
-    packHeader(buf);
+OptionVendorClass::pack(isc::util::OutputBuffer& buf, bool check) const {
+    packHeader(buf, check);
 
     buf.writeUint32(getVendorId());
 
@@ -50,7 +50,8 @@ OptionVendorClass::pack(isc::util::OutputBuffer& buf) const {
         it->pack(buf);
 
     }
-
+    // That's it. We don't pack any sub-options here, because this option
+    // must not contain sub-options.
 }
 
 void

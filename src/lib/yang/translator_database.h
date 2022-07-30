@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -27,16 +27,13 @@ namespace yang {
 ///     "port": <port>,
 ///     "lfc-interval": <lfc interval>,
 ///     "readonly": <readonly flag>,
+///     "trust-anchor": <trust anchor>,
+///     "cert-file": <cert file>,
+///     "key-file": <key file>,
+///     "cipher-list": <cipher list>,
 ///     "connect-timeout": <connect timeout>,
-///     "contact-points": <contact points>,
-///     "keyspace": <keyspace>,
 ///     "max-reconnect-tries": <maximum reconnect tries>,
 ///     "reconnect-wait-time": <reconnect wait time>,
-///     "request-timeout": <request timeout>,
-///     "tcp-keepalive": <TCP keepalive>,
-///     "tcp-nodelay": <TCP nodelay flag>,
-///     "consistency": <consistency level>,
-///     "serial-consistency": <serial consistency level>,
 ///     "max-row-errors": <maximum row errors>,
 ///     "user-context": { <json map> },
 ///     "comment": <comment>
@@ -55,16 +52,13 @@ namespace yang {
 ///    +--rw port?                  uint16
 ///    +--rw lfc-interval?          uint32
 ///    +--rw readonly?              boolean
+///    +--rw trust-anchor?          string
+///    +--rw cert-file?             string
+///    +--rw key-file?              string
+///    +--rw cipher-list?           string
 ///    +--rw connect-timeout?       uint32
-///    +--rw contact-points?        string
-///    +--rw keyspace?              string
 ///    +--rw max-reconnect-tries?   uint32
 ///    +--rw reconnect-wait-time?   uint32
-///    +--rw request-timeout?       uint32
-///    +--rw tcp-keepalive?         uint32
-///    +--rw tcp-nodelay?           boolean
-///    +--rw consistency?           string
-///    +--rw serial-consistency?    string
 ///    +--rw max-row-errors?        uint32
 ///    +--rw on-fail?               string
 ///    +--rw user-context?          user-context

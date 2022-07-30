@@ -596,8 +596,7 @@ public:
     /// @param first_binding Iterator of the output binding containing
     /// option definition id.
     /// @return Pointer to the option definition.
-    OptionDefinitionPtr
-    processOptionDefRow(db::MySqlBindingCollection::iterator first_binding);
+    OptionDefinitionPtr processOptionDefRow(db::MySqlBindingCollection::iterator first_binding);
 
     /// @brief Associates a configuration element with multiple servers.
     ///
@@ -645,7 +644,7 @@ public:
 
     /// @brief Creates input binding for user context parameter.
     ///
-    /// @param T Type of the configuration element to which context belongs.
+    /// @tparam T Type of the configuration element to which context belongs.
     /// @param network Pointer to a shared network, subnet or other configuration
     /// element for which binding should be created.
     /// @return Pointer to the binding (possibly null binding if context is

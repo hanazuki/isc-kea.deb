@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2021-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <http/response_creator.h>
 #include <http/basic_auth_config.h>
 #include <boost/shared_ptr.hpp>
+#include <unordered_set>
 
 namespace isc {
 namespace config {
@@ -58,25 +59,39 @@ public:
     createStockHttpResponse(const http::HttpRequestPtr& request,
                             const http::HttpStatusCode& status_code) const;
 
-    /// @brief Fetches the current authentication configuration.
-    ///
-    /// @todo The constructor will have to accept either a pointer
-    /// to the authorization config to use, or a pointer to a function to
-    /// return the authorization config.  For now we just return an empty
-    /// pointer.
-    ///
-    /// @return an empty HttpAuthConfigPtr.
-    const http::HttpAuthConfigPtr& getHttpAuthConfig() {
-        static http::HttpAuthConfigPtr no_config;
-        return (no_config);
-    }
-
     /// @brief Indicates whether or not agent response emulation is enabled.
     ///
     /// @return true if emulation is enabled.
     bool emulateAgentResponse() {
         return (emulate_agent_response_);
     }
+
+    /// @brief Filter commands.
+    ///
+    /// From RBAC code: if the access list is empty or the command
+    /// cannot be found just return.
+    ///
+    /// @param request The HTTP request (for the HTTP version).
+    /// @param body The request body.
+    /// @param accept The accept access list.
+    http::HttpResponseJsonPtr
+    filterCommand(const http::HttpRequestPtr& request,
+                  const data::ConstElementPtr& body,
+                  const std::unordered_set<std::string>& accept);
+
+    /// @brief The server current authentication configuration.
+    ///
+    /// Default to the empty HttpAuthConfigPtr.
+    ///
+    /// @note: This is currently not used, except in unit-tests. For the time being,
+    /// we postponed writing the corresponding code in the HA, so http_auth_config_
+    /// is left to its empty default value.
+    static http::HttpAuthConfigPtr http_auth_config_;
+
+    /// @brief The server command accept list.
+    ///
+    /// Default to the empty list which means to accept everything.
+    static std::unordered_set<std::string> command_accept_list_;
 
 private:
 

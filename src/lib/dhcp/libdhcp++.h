@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,6 +21,33 @@
 
 namespace isc {
 namespace dhcp {
+
+/// @brief A pointer to a ScopedPktOptionsCopy object instantiated using Pkt4.
+typedef ScopedPktOptionsCopy<Pkt4> ScopedPkt4OptionsCopy;
+/// @brief A pointer to a ScopedPktOptionsCopy object instantiated using Pkt6.
+typedef ScopedPktOptionsCopy<Pkt6> ScopedPkt6OptionsCopy;
+/// @brief A pointer to a ScopedSubOptionsCopy object.
+typedef std::shared_ptr<ScopedSubOptionsCopy> ScopedOptionsCopyPtr;
+/// @brief A container of ScopedOptionsCopyPtr objects.
+typedef std::vector<ScopedOptionsCopyPtr> ScopedOptionsCopyContainer;
+
+struct ManagedScopedOptionsCopyContainer {
+    /// @brief Constructor.
+    ManagedScopedOptionsCopyContainer() {
+    }
+
+    /// @brief Destructor.
+    ~ManagedScopedOptionsCopyContainer() {
+        // Destroy the scoped options in same order so that parent options
+        // (stored last) are kept alive longer.
+        for (auto& scoped : scoped_options_) {
+            scoped.reset();
+        }
+    }
+
+    /// @brief The container.
+    ScopedOptionsCopyContainer scoped_options_;
+};
 
 class LibDHCP {
 
@@ -190,9 +217,27 @@ public:
     /// @param top indicates if this is the first call to pack the options.
     /// When true logic to emit the message type first is executed. It
     /// defaults to false.
+    /// @param check indicates if the code should be more flexible with
+    /// PAD and END options. If true, PAD and END options will not be parsed.
+    /// This is useful for partial parsing and slightly broken packets.
     static void packOptions4(isc::util::OutputBuffer& buf,
                              const isc::dhcp::OptionCollection& options,
-                             bool top = false);
+                             bool top = false, bool check = true);
+
+    /// @brief Split long options in multiple options with the same option code
+    /// (RFC3396).
+    ///
+    /// @param options The option container which needs to be updated with split
+    /// options.
+    /// @param scopedOptions temporary storage for options that are going to be
+    /// split. See @ref ScopedPktOptionsCopy for explanation.
+    /// @param used The size of the buffer that has already been used by the
+    /// parent option effectively shrinking the maximum supported length for
+    /// each options in the container.
+    /// @return True if any option has been split, false otherwise.
+    static bool splitOptions4(isc::dhcp::OptionCollection& options,
+                              ScopedOptionsCopyContainer& scopedOptions,
+                              uint32_t used = 0);
 
     /// @brief Stores DHCPv6 options in a buffer.
     ///
@@ -245,6 +290,14 @@ public:
                                  isc::dhcp::OptionCollection& options,
                                  size_t* relay_msg_offset = 0,
                                  size_t* relay_msg_len = 0);
+
+    /// @brief Fuse multiple options with the same option code in long options
+    /// (RFC3396).
+    ///
+    /// @param options The option container which needs to be updated with fused
+    /// options.
+    /// @return True if any option has been fused, false otherwise.
+    static bool fuseOptions4(isc::dhcp::OptionCollection& options);
 
     /// @brief Parses provided buffer as DHCPv4 options and creates
     /// Option objects.

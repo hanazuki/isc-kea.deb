@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -403,7 +403,7 @@ Option6ClientFqdn::getDomainNameType() const {
 }
 
 void
-Option6ClientFqdn::pack(isc::util::OutputBuffer& buf) const {
+Option6ClientFqdn::pack(isc::util::OutputBuffer& buf, bool) const {
     // Header = option code and length.
     packHeader(buf);
     // Flags field.

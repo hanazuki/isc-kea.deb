@@ -4514,6 +4514,1118 @@ LANGUAGE plpgsql;
 UPDATE schema_version
     SET version = '9', minor = '0';
 
+-- Schema 9.0 specification ends here.
+
+-- This starts schema update to 10.0.
+-- It adds corrections for client classes for CB
+
+-- Replace setClientClass4Order():
+-- 1. l_depend_on_known_indirectly needs to be BOOL
+-- 2. follow_class_index needs to be BIGINT
+
+-- -----------------------------------------------------------------------
+-- Stored procedure positioning an inserted or updated client class
+-- within the class hierarchy, depending on the value of the
+-- new_follow_class_name parameter.
+--
+-- Parameters:
+-- - id id of the positioned class,
+-- - new_follow_class_name name of the class after which this class should be
+--   positioned within the class hierarchy.
+-- - old_follow_class_name previous name of the class after which this
+--   class was positioned within the class hierarchy.
+-- -----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION setClientClass4Order(id BIGINT,
+                                                new_follow_class_name VARCHAR(128),
+                                                old_follow_class_name VARCHAR(128))
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    -- Used to fetch class's current value for depend_on_known_indirectly
+    l_depend_on_known_indirectly BOOL := false;
+
+    -- Optionally set if the follow_class_name column value is specified.
+    follow_class_index BIGINT;
+BEGIN
+    -- Fetch the class's current value of depend_on_known_indirectly.
+    SELECT depend_on_known_indirectly INTO l_depend_on_known_indirectly
+        FROM dhcp4_client_class_order WHERE id = class_id;
+
+    -- Save it to the current session for use elsewhere during this transaction.
+    -- Note this does not work prior to Postgres 9.2 unless the variables are
+    -- defined in postgresql.conf. I think for now we put up with CB not supported
+    -- prior to 9.2 or we tell people how to edit the conf file.
+    PERFORM set_session_value('kea.depend_on_known_indirectly', l_depend_on_known_indirectly);
+
+    -- Bail if the class is updated without re-positioning.
+    IF(
+       l_depend_on_known_indirectly IS NOT NULL AND
+       ((new_follow_class_name IS NULL AND old_follow_class_name IS NULL) OR
+        (new_follow_class_name = old_follow_class_name))
+    ) THEN
+        -- The depend_on_known_indirectly is set to 0 because this procedure is invoked
+        -- whenever the dhcp4_client_class record is updated. Such update may include
+        -- test expression changes impacting the dependency on KNOWN/UNKNOWN classes.
+        -- This value will be later adjusted when dependencies are inserted.
+        -- TKM should we update the session value also or is it moot?
+        UPDATE dhcp4_client_class_order SET depend_on_known_indirectly = false
+            WHERE class_id = id;
+        RETURN;
+    END IF;
+
+    IF new_follow_class_name IS NOT NULL THEN
+        -- Get the position of the class after which the new class should be added.
+        SELECT o.order_index INTO follow_class_index
+            FROM dhcp4_client_class AS c
+            INNER JOIN dhcp4_client_class_order AS o
+                ON c.id = o.class_id
+            WHERE c.name = new_follow_class_name;
+
+        IF follow_class_index IS NULL THEN
+            -- The class with a name specified with new_follow_class_name does
+            -- not exist.
+            RAISE EXCEPTION 'Class %s does not exist.', new_follow_class_name
+                USING ERRCODE = 'sql_routine_exception';
+        END IF;
+
+        -- We need to place the new class at the position of follow_class_index + 1.
+        -- There may be a class at this position already.
+        IF EXISTS(SELECT * FROM dhcp4_client_class_order WHERE order_index = follow_class_index + 1) THEN
+            -- There is a class at this position already. Let's move all classes
+            -- starting from this position by one to create a spot for the new
+            -- class.
+            UPDATE dhcp4_client_class_order
+                SET order_index = order_index + 1
+            WHERE order_index >= follow_class_index + 1;
+            -- TKM postgresql doesn't like order by here, does it matter?
+            -- ORDER BY order_index DESC;
+        END IF;
+
+    ELSE
+        -- A caller did not specify the new_follow_class_name value. Let's append the
+        -- new class at the end of the hierarchy.
+        SELECT MAX(order_index) INTO follow_class_index FROM dhcp4_client_class_order;
+        IF follow_class_index IS NULL THEN
+            -- Apparently, there are no classes. Let's start from 0.
+            follow_class_index = 0;
+        END IF;
+    END IF;
+
+    -- Check if moving the class doesn't break dependent classes.
+    IF EXISTS(
+        SELECT 1 FROM dhcp4_client_class_dependency AS d
+            INNER JOIN dhcp4_client_class_order AS o
+                ON d.class_id = o.class_id
+            WHERE d.dependency_id = id AND o.order_index < follow_class_index + 1
+        LIMIT 1
+    ) THEN
+        RAISE EXCEPTION 'Unable to move class with id %s because it would break its dependencies', id
+            USING ERRCODE = 'sql_routine_exception';
+    END IF;
+
+    -- The depend_on_known_indirectly is set to 0 because this procedure is invoked
+    -- whenever the dhcp4_client_class record is updated. Such update may include
+    -- test expression changes impacting the dependency on KNOWN/UNKNOWN classes.
+    -- This value will be later adjusted when dependencies are inserted.
+    -- TKM - note that ON CONFLICT requires PostgreSQL 9.5 or later.
+    UPDATE dhcp4_client_class_order
+        SET order_index = follow_class_index + 1,
+            depend_on_known_indirectly = l_depend_on_known_indirectly
+        WHERE class_id = id;
+    IF FOUND THEN
+        RETURN;
+    END IF;
+
+    INSERT INTO  dhcp4_client_class_order(class_id, order_index, depend_on_known_indirectly)
+        VALUES (id, follow_class_index + 1, false);
+    RETURN;
+END;$$;
+
+-- Replace setClientClass6Order():
+-- 1. l_depend_on_known_indirectly needs to be BOOL
+-- 2. follow_class_index needs to be BIGINT
+
+-- -----------------------------------------------------------------------
+-- Stored procedure positioning an inserted or updated client class
+-- within the class hierarchy, depending on the value of the
+-- new_follow_class_name parameter.
+--
+-- Parameters:
+-- - id id of the positioned class,
+-- - new_follow_class_name name of the class after which this class should be
+--   positioned within the class hierarchy.
+-- - old_follow_class_name previous name of the class after which this
+--   class was positioned within the class hierarchy.
+-- -----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION setClientClass6Order(id BIGINT,
+                                                new_follow_class_name VARCHAR(128),
+                                                old_follow_class_name VARCHAR(128))
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    -- Used to fetch class's current value for depend_on_known_indirectly
+    l_depend_on_known_indirectly BOOL := false;
+
+    -- Optionally set if the follow_class_name column value is specified.
+    follow_class_index BIGINT;
+BEGIN
+    -- Fetch the class's current value of depend_on_known_indirectly.
+    SELECT depend_on_known_indirectly INTO l_depend_on_known_indirectly
+        FROM dhcp6_client_class_order WHERE id = class_id;
+
+    -- Save it to the current session for use elsewhere during this transaction.
+    -- Note this does not work prior to Postgres 9.2 unless the variables are
+    -- defined in postgresql.conf. I think for now we put up with CB not supported
+    -- prior to 9.2 or we tell people how to edit the conf file.
+    PERFORM set_session_value('kea.depend_on_known_indirectly', l_depend_on_known_indirectly);
+
+    -- Bail if the class is updated without re-positioning.
+    IF(
+       l_depend_on_known_indirectly IS NOT NULL AND
+       ((new_follow_class_name IS NULL AND old_follow_class_name IS NULL) OR
+        (new_follow_class_name = old_follow_class_name))
+    ) THEN
+        -- The depend_on_known_indirectly is set to 0 because this procedure is invoked
+        -- whenever the dhcp6_client_class record is updated. Such update may include
+        -- test expression changes impacting the dependency on KNOWN/UNKNOWN classes.
+        -- This value will be later adjusted when dependencies are inserted.
+        -- TKM should we update the session value also or is it moot?
+        UPDATE dhcp6_client_class_order SET depend_on_known_indirectly = false
+            WHERE class_id = id;
+        RETURN;
+    END IF;
+
+    IF new_follow_class_name IS NOT NULL THEN
+        -- Get the position of the class after which the new class should be added.
+        SELECT o.order_index INTO follow_class_index
+            FROM dhcp6_client_class AS c
+            INNER JOIN dhcp6_client_class_order AS o
+                ON c.id = o.class_id
+            WHERE c.name = new_follow_class_name;
+
+        IF follow_class_index IS NULL THEN
+            -- The class with a name specified with new_follow_class_name does
+            -- not exist.
+            RAISE EXCEPTION 'Class %s does not exist.', new_follow_class_name
+                USING ERRCODE = 'sql_routine_exception';
+        END IF;
+
+        -- We need to place the new class at the position of follow_class_index + 1.
+        -- There may be a class at this position already.
+        IF EXISTS(SELECT * FROM dhcp6_client_class_order WHERE order_index = follow_class_index + 1) THEN
+            -- There is a class at this position already. Let's move all classes
+            -- starting from this position by one to create a spot for the new
+            -- class.
+            UPDATE dhcp6_client_class_order
+                SET order_index = order_index + 1
+            WHERE order_index >= follow_class_index + 1;
+            -- TKM postgresql doesn't like order by here, does it matter?
+            -- ORDER BY order_index DESC;
+        END IF;
+
+    ELSE
+        -- A caller did not specify the new_follow_class_name value. Let's append the
+        -- new class at the end of the hierarchy.
+        SELECT MAX(order_index) INTO follow_class_index FROM dhcp6_client_class_order;
+        IF follow_class_index IS NULL THEN
+            -- Apparently, there are no classes. Let's start from 0.
+            follow_class_index = 0;
+        END IF;
+    END IF;
+
+    -- Check if moving the class doesn't break dependent classes.
+    IF EXISTS(
+        SELECT 1 FROM dhcp6_client_class_dependency AS d
+            INNER JOIN dhcp6_client_class_order AS o
+                ON d.class_id = o.class_id
+            WHERE d.dependency_id = id AND o.order_index < follow_class_index + 1
+        LIMIT 1
+    ) THEN
+        RAISE EXCEPTION 'Unable to move class with id %s because it would break its dependencies', id
+            USING ERRCODE = 'sql_routine_exception';
+    END IF;
+
+    -- The depend_on_known_indirectly is set to 0 because this procedure is invoked
+    -- whenever the dhcp6_client_class record is updated. Such update may include
+    -- test expression changes impacting the dependency on KNOWN/UNKNOWN classes.
+    -- This value will be later adjusted when dependencies are inserted.
+    -- TKM - note that ON CONFLICT requires PostgreSQL 9.5 or later.
+    UPDATE dhcp6_client_class_order
+        SET order_index = follow_class_index + 1,
+            depend_on_known_indirectly = l_depend_on_known_indirectly
+        WHERE class_id = id;
+    IF FOUND THEN
+        RETURN;
+    END IF;
+
+    INSERT INTO  dhcp6_client_class_order(class_id, order_index, depend_on_known_indirectly)
+        VALUES (id, follow_class_index + 1, false);
+    RETURN;
+END;$$;
+
+-- Change primary key to composite, dependency table can have multiple rows
+-- per class id.
+ALTER TABLE dhcp4_client_class_dependency DROP CONSTRAINT dhcp4_client_class_dependency_pkey;
+ALTER TABLE dhcp4_client_class_dependency ADD PRIMARY KEY(class_id, dependency_id);
+
+ALTER TABLE dhcp6_client_class_dependency DROP CONSTRAINT dhcp6_client_class_dependency_pkey;
+ALTER TABLE dhcp6_client_class_dependency ADD PRIMARY KEY(class_id, dependency_id);
+
+-- Replace triggers that verify class dependency.
+-- Because they are BEFORE INSERT triggers they need to return NEW not NULL.
+-- -----------------------------------------------------------------------
+-- Trigger verifying if class dependency is met. It includes checking
+-- if referenced classes exist, are associated with the same server
+-- or all servers, and are defined before the class specified with
+-- class_id.
+-- -----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION func_dhcp4_client_class_check_dependency_BINS()
+    RETURNS trigger AS $dhcp4_client_class_check_dependency_BINS$
+BEGIN
+    PERFORM checkDHCPv4ClientClassDependency(NEW.class_id, NEW.dependency_id);
+    RETURN NEW;
+END;
+$dhcp4_client_class_check_dependency_BINS$
+LANGUAGE plpgsql;
+
+-- -----------------------------------------------------------------------
+-- Trigger verifying if class dependency is met. It includes checking
+-- if referenced classes exist, are associated with the same server
+-- or all servers, and are defined before the class specified with
+-- class_id.
+-- -----------------------------------------------------------------------
+CREATE OR REPLACE FUNCTION func_dhcp6_client_class_check_dependency_BINS()
+    RETURNS trigger AS $dhcp6_client_class_check_dependency_BINS$
+BEGIN
+    PERFORM checkDHCPv6ClientClassDependency(NEW.class_id, NEW.dependency_id);
+    RETURN NEW;
+END;
+$dhcp6_client_class_check_dependency_BINS$
+LANGUAGE plpgsql;
+
+-- Update the schema version number.
+UPDATE schema_version
+    SET version = '10', minor = '0';
+
+-- Schema 10.0 specification ends here.
+
+-- This starts schema update to 11.0.
+
+-- Replace createOptionAuditDHCP6() with a version corrected
+-- where clause when scope is 6 (i.e. PD pool)
+--
+-- -----------------------------------------------------
+--
+-- Stored procedure which updates modification timestamp of
+-- a parent object when an option is modified.
+--
+-- The following parameters are passed to the procedure:
+-- - modification_type: "create", "update" or "delete"
+-- - scope_id: identifier of the option scope, e.g.
+--   global, subnet specific etc. See dhcp_option_scope
+--   for specific values.
+-- - option_id: identifier of the option.
+-- - p_subnet_id: identifier of the subnet if the option
+--   belongs to the subnet.
+-- - host_id: identifier of the host if the option
+-- - belongs to the host.
+-- - network_name: shared network name if the option
+--   belongs to the shared network.
+-- - pool_id: identifier of the pool if the option
+--   belongs to the pool.
+-- - pd_pool_id: identifier of the pool if the option
+--   belongs to the pd pool.
+-- - p_modification_ts: modification timestamp of the
+--   option.
+--   Some arguments are prefixed with "p_" to avoid ambiguity
+--   with column names in SQL statements. PostgreSQL does not
+--   allow table aliases to be used with column names in update
+--   set expressions.
+-- -----------------------------------------------------
+CREATE OR REPLACE FUNCTION createOptionAuditDHCP6(modification_type VARCHAR,
+                                                  scope_id SMALLINT,
+                                                  option_id INT,
+                                                  p_subnet_id BIGINT,
+                                                  host_id INT,
+                                                  network_name VARCHAR,
+                                                  pool_id BIGINT,
+                                                  pd_pool_id BIGINT,
+                                                  p_modification_ts TIMESTAMP WITH TIME ZONE)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    -- These variables will hold shared network id and subnet id that
+    -- we will select.
+    snid BIGINT;
+    sid BIGINT;
+    cascade_transaction BOOLEAN;
+BEGIN
+    -- Cascade transaction flag is set to true to prevent creation of
+    -- the audit entries for the options when the options are
+    -- created as part of the parent object creation or update.
+    -- For example: when the option is added as part of the subnet
+    -- addition, the cascade transaction flag is equal to true. If
+    -- the option is added into the existing subnet the cascade
+    -- transaction is equal to false. Note that depending on the option
+    -- scope the audit entry will contain the object_type value
+    -- of the parent object to cause the server to replace the
+    -- entire subnet. The only case when the object_type will be
+    -- set to 'dhcp6_options' is when a global option is added.
+    -- Global options do not have the owner.
+
+    cascade_transaction := get_session_boolean('kea.cascade_transaction');
+    IF cascade_transaction = false THEN
+        -- todo: host manager hasn't been updated to use audit
+        -- mechanisms so ignore host specific options for now.
+        IF scope_id = 0 THEN
+            -- If a global option is added or modified, create audit
+            -- entry for the 'dhcp6_options' table.
+            PERFORM createAuditEntryDHCP6('dhcp6_options', option_id, modification_type);
+        ELSEIF scope_id = 1 THEN
+            -- If subnet specific option is added or modified, update
+            -- the modification timestamp of this subnet to allow the
+            -- servers to refresh the subnet information. This will
+            -- also result in creating an audit entry for this subnet.
+            UPDATE dhcp6_subnet SET modification_ts = p_modification_ts
+                WHERE subnet_id = p_subnet_id;
+        ELSEIF scope_id = 4 THEN
+            -- If shared network specific option is added or modified,
+            -- update the modification timestamp of this shared network
+            -- to allow the servers to refresh the shared network
+            -- information. This will also result in creating an
+            -- audit entry for this shared network.
+           SELECT id INTO snid FROM dhcp6_shared_network WHERE name = network_name LIMIT 1;
+           UPDATE dhcp6_shared_network SET modification_ts = p_modification_ts
+                WHERE id = snid;
+        ELSEIF scope_id = 5 THEN
+            -- If pool specific option is added or modified, update
+            -- the modification timestamp of the owning subnet.
+            SELECT dhcp6_pool.subnet_id INTO sid FROM dhcp6_pool WHERE id = pool_id;
+            UPDATE dhcp6_subnet SET modification_ts = p_modification_ts
+                WHERE subnet_id = sid;
+        ELSEIF scope_id = 6 THEN
+            -- If pd pool specific option is added or modified, create
+            -- audit entry for the subnet which this pool belongs to.
+            SELECT dhcp6_pd_pool.subnet_id INTO sid FROM dhcp6_pd_pool WHERE id = pd_pool_id;
+            UPDATE dhcp6_subnet SET modification_ts = p_modification_ts
+                WHERE subnet_id = sid;
+        END IF;
+    END IF;
+    RETURN;
+END;$$;
+
+-- Update the schema version number.
+UPDATE schema_version
+    SET version = '11', minor = '0';
+
+-- Schema 11.0 specification ends here.
+
+-- This line starts the schema upgrade to version 12.
+
+-- Modify shared-network-name foreign key constraint on dhcp4_subnet to not perform
+-- the update when the network is deleted the cascaded update will not execute
+-- dhcp4_subnet update trigger leaving the updated subnets without audit_entries.
+ALTER TABLE dhcp4_subnet
+    DROP CONSTRAINT fk_dhcp4_subnet_shared_network,
+    ADD CONSTRAINT fk_dhcp4_subnet_shared_network FOREIGN KEY (shared_network_name)
+         REFERENCES dhcp4_shared_network (name)
+         ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- Modify BEFORE delete trigger function on dhcp4_shared_network to explicitly
+-- update dhcp4_subnets. This ensures there are audit entries for updated
+-- subnets.
+-- Trigger function for dhcp4_shared_network_BDEL called BEFORE DELETE on dhcp4_shared_network
+CREATE OR REPLACE FUNCTION func_dhcp4_shared_network_BDEL() RETURNS TRIGGER AS $dhcp4_shared_network_BDEL$
+BEGIN
+    PERFORM createAuditEntryDHCP4('dhcp4_shared_network', OLD.id, 'delete');
+    -- Explicitly update subnets now rather than via foreign key constraint, this ensures the
+    -- audit entries for subnets will preceded that of the shared-network, keeping the order
+    -- of the entries the same as they are for MySQL.
+    UPDATE dhcp4_subnet SET shared_network_name = NULL WHERE shared_network_name = OLD.name;
+    DELETE FROM dhcp4_options WHERE shared_network_name = OLD.name;
+    RETURN OLD;
+END;
+$dhcp4_shared_network_BDEL$
+LANGUAGE plpgsql;
+
+-- Modify shared-network-name foreign key constraint on dhcp6_subnet to not perform
+-- the update when the network is deleted the cascaded update will not execute
+-- dhcp6_subnet update trigger leaving the updated subnets without audit_entries.
+ALTER TABLE dhcp6_subnet
+    DROP CONSTRAINT fk_dhcp6_subnet_shared_network,
+    ADD CONSTRAINT fk_dhcp6_subnet_shared_network FOREIGN KEY (shared_network_name)
+         REFERENCES dhcp6_shared_network (name)
+         ON DELETE NO ACTION ON UPDATE NO ACTION;
+
+-- Modify BEFORE delete trigger function on dhcp6_shared_network to explicitly
+-- update dhcp6_subnets. This ensures there are audit entries for updated
+-- subnets.
+-- Trigger function for dhcp6_shared_network_BDEL called BEFORE DELETE on dhcp6_shared_network
+CREATE OR REPLACE FUNCTION func_dhcp6_shared_network_BDEL() RETURNS TRIGGER AS $dhcp6_shared_network_BDEL$
+BEGIN
+    PERFORM createAuditEntryDHCP6('dhcp6_shared_network', OLD.id, 'delete');
+    -- Explicitly update subnets now rather than via foreign key constraint, this ensures the
+    -- audit entries for subnets will preceded that of the shared-network, keeping the order
+    -- of the entries the same as they are for MySQL.
+    UPDATE dhcp6_subnet SET shared_network_name = NULL WHERE shared_network_name = OLD.name;
+    DELETE FROM dhcp6_options WHERE shared_network_name = OLD.name;
+    RETURN OLD;
+END;
+$dhcp6_shared_network_BDEL$
+LANGUAGE plpgsql;
+
+-- Add user_context column to client class tables.
+ALTER TABLE dhcp4_client_class ADD COLUMN user_context JSON DEFAULT NULL;
+ALTER TABLE dhcp6_client_class ADD COLUMN user_context JSON DEFAULT NULL;
+
+-- Update the schema version number.
+UPDATE schema_version
+    SET version = '12', minor = '0';
+
+-- This line concludes the schema upgrade to version 12.
+
+-- This line starts the schema upgrade to version 13.
+
+-- JSON functions --
+
+-- Helper function that avoids a casting error when the string
+-- presumed to be in JSON format, is empty.
+CREATE OR REPLACE FUNCTION json_cast(IN json_candidate TEXT)
+RETURNS JSON
+AS $$
+BEGIN
+    IF LENGTH(json_candidate) = 0 THEN
+        RETURN '{}'::json;
+    END IF;
+    RETURN json_candidate::json;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Function that establishes whether JSON functions are supported.
+-- They should be provided with PostgreSQL >= 9.4.
+CREATE OR REPLACE FUNCTION isJsonSupported()
+RETURNS BOOLEAN
+AS $$
+BEGIN
+    IF get_session_value('json_supported') IS NULL THEN
+        IF (SELECT proname FROM pg_proc WHERE proname = 'json_extract_path') = 'json_extract_path' THEN
+            PERFORM set_session_value('kea.json_supported', true);
+        ELSE
+            PERFORM set_session_value('kea.json_supported', false);
+        END IF;
+    END IF;
+    RETURN get_session_value('kea.json_supported');
+END
+$$ LANGUAGE plpgsql;
+
+-- Schema changes related to lease limiting start here. --
+
+-- Recreate the triggers that update the leaseX_stat tables as stored procedures. --
+
+CREATE OR REPLACE FUNCTION lease4_AINS_lease4_stat(IN new_state BIGINT,
+                                                   IN new_subnet_id BIGINT)
+RETURNS VOID
+AS $$
+BEGIN
+    IF new_state = 0 OR new_state = 1 THEN
+        -- Update the state count if it exists.
+        UPDATE lease4_stat SET leases = leases + 1
+            WHERE subnet_id = new_subnet_id AND state = new_state;
+
+        -- Insert the state count record if it does not exist.
+        IF NOT FOUND THEN
+            INSERT INTO lease4_stat VALUES (new_subnet_id, new_state, 1);
+        END IF;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease4_AUPD_lease4_stat(IN old_state BIGINT,
+                                                   IN old_subnet_id BIGINT,
+                                                   IN new_state BIGINT,
+                                                   IN new_subnet_id BIGINT)
+RETURNS VOID
+AS $$
+BEGIN
+    IF old_subnet_id != new_subnet_id OR old_state != new_state THEN
+        IF old_state = 0 OR old_state = 1 THEN
+            -- Decrement the old state count if record exists.
+            UPDATE lease4_stat
+                SET leases = GREATEST(leases - 1, 0)
+                WHERE subnet_id = old_subnet_id AND state = old_state;
+        END IF;
+
+        IF new_state = 0 OR new_state = 1 THEN
+            -- Increment the new state count if record exists.
+            UPDATE lease4_stat SET leases = leases + 1
+                WHERE subnet_id = new_subnet_id AND state = new_state;
+
+            -- Insert new state record if it does not exist.
+            IF NOT FOUND THEN
+                INSERT INTO lease4_stat VALUES (new_subnet_id, new_state, 1);
+            END IF;
+        END IF;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease4_ADEL_lease4_stat(IN old_state BIGINT,
+                                                   IN old_subnet_id BIGINT)
+RETURNS VOID
+AS $$
+BEGIN
+    IF old_state = 0 OR old_state = 1 THEN
+        -- Decrement the state count if record exists.
+        UPDATE lease4_stat
+            SET leases = GREATEST(leases - 1, 0)
+            WHERE subnet_id = old_subnet_id AND old_state = state;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease6_AINS_lease6_stat(IN new_state BIGINT,
+                                                   IN new_subnet_id BIGINT,
+                                                   IN new_lease_type SMALLINT)
+RETURNS VOID
+AS $$
+BEGIN
+    IF new_state = 0 OR new_state = 1 THEN
+        -- Update the state count if it exists.
+        UPDATE lease6_stat SET leases = leases + 1
+            WHERE subnet_id = new_subnet_id AND lease_type = new_lease_type
+            AND state = new_state;
+
+        -- Insert the state count record if it does not exist.
+        IF NOT FOUND THEN
+            INSERT INTO lease6_stat VALUES (new_subnet_id, new_lease_type, new_state, 1);
+        END IF;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease6_AUPD_lease6_stat(IN old_state BIGINT,
+                                                   IN old_subnet_id BIGINT,
+                                                   IN old_lease_type SMALLINT,
+                                                   IN new_state BIGINT,
+                                                   IN new_subnet_id BIGINT,
+                                                   IN new_lease_type SMALLINT)
+RETURNS VOID
+AS $$
+BEGIN
+    IF old_subnet_id != new_subnet_id OR
+       old_lease_type != new_lease_type OR
+       old_state != new_state THEN
+        IF old_state = 0 OR old_state = 1 THEN
+            -- Decrement the old state count if record exists.
+            UPDATE lease6_stat
+                SET leases = GREATEST(leases - 1, 0)
+                WHERE subnet_id = old_subnet_id AND lease_type = old_lease_type
+                AND state = old_state;
+        END IF;
+
+        IF new_state = 0 OR new_state = 1 THEN
+            -- Increment the new state count if record exists
+            UPDATE lease6_stat SET leases = leases + 1
+                WHERE subnet_id = new_subnet_id AND lease_type = new_lease_type
+                AND state = new_state;
+
+            -- Insert new state record if it does not exist
+            IF NOT FOUND THEN
+                INSERT INTO lease6_stat
+                VALUES (new_subnet_id, new_lease_type, new_state, 1);
+            END IF;
+        END IF;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease6_ADEL_lease6_stat(IN old_state BIGINT,
+                                                   IN old_subnet_id BIGINT,
+                                                   IN old_lease_type SMALLINT)
+RETURNS VOID
+AS $$
+BEGIN
+    IF old_state = 0 OR old_state = 1 THEN
+        -- Decrement the state count if record exists
+        UPDATE lease6_stat
+            SET leases = GREATEST(leases - 1, 0)
+            WHERE subnet_id = old_subnet_id AND lease_type = old_lease_type
+            AND state = old_state;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Create tables that contain the number of active leases. --
+
+CREATE TABLE lease4_stat_by_client_class (
+    client_class VARCHAR(128) NOT NULL PRIMARY KEY,
+    leases BIGINT NOT NULL
+);
+
+CREATE TABLE lease6_stat_by_client_class (
+    client_class VARCHAR(128) NOT NULL,
+    lease_type SMALLINT NOT NULL,
+    leases BIGINT NOT NULL,
+    PRIMARY KEY (client_class, lease_type),
+    CONSTRAINT fk_lease6_stat_by_client_class_lease_type FOREIGN KEY (lease_type)
+        REFERENCES lease6_types (lease_type)
+);
+
+-- Create procedures to be called for each row in after-event triggers for
+-- INSERT, UPDATE and DELETE on lease tables.
+
+CREATE OR REPLACE FUNCTION lease4_AINS_lease4_stat_by_client_class(IN new_state BIGINT,
+                                                                   IN new_user_context TEXT)
+RETURNS VOID
+AS $$
+DECLARE
+    class VARCHAR(128);
+BEGIN
+    -- Only state 0 is needed for lease limiting.
+    IF new_state = 0 THEN
+        -- Dive into client classes.
+        FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(new_user_context)->'ISC'->'client-classes') LOOP
+            SELECT TRIM('"' FROM class) INTO class;
+
+            -- Upsert to increment the lease count.
+            UPDATE lease4_stat_by_client_class SET leases = leases + 1
+                WHERE client_class = class;
+            IF NOT FOUND THEN
+                INSERT INTO lease4_stat_by_client_class VALUES (class, 1);
+            END IF;
+        END LOOP;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease4_AUPD_lease4_stat_by_client_class(IN old_state BIGINT,
+                                                                   IN old_user_context TEXT,
+                                                                   IN new_state BIGINT,
+                                                                   IN new_user_context TEXT)
+RETURNS VOID
+AS $$
+DECLARE
+    old_client_classes TEXT;
+    new_client_classes TEXT;
+    class VARCHAR(128);
+    length INT;
+    i INT;
+BEGIN
+    SELECT json_cast(old_user_context)->'ISC'->'client-classes' INTO old_client_classes;
+    SELECT json_cast(new_user_context)->'ISC'->'client-classes' INTO new_client_classes;
+
+    IF old_state != new_state OR old_client_classes != new_client_classes THEN
+        -- Check if it's moving away from a counted state.
+        IF old_state = 0 THEN
+            -- Dive into client classes.
+            FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(old_client_classes)) LOOP
+                SELECT TRIM('"' FROM class) INTO class;
+
+                -- Decrement the lease count if the record exists.
+                UPDATE lease4_stat_by_client_class SET leases = GREATEST(leases - 1, 0)
+                    WHERE client_class = class;
+            END LOOP;
+        END IF;
+
+        -- Check if it's moving into a counted state.
+        IF new_state = 0 THEN
+            -- Dive into client classes.
+            FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(new_client_classes)) LOOP
+                SELECT TRIM('"' FROM class) INTO class;
+
+                -- Upsert to increment the lease count.
+                UPDATE lease4_stat_by_client_class SET leases = leases + 1
+                    WHERE client_class = class;
+                IF NOT FOUND THEN
+                    INSERT INTO lease4_stat_by_client_class VALUES (class, 1);
+                END IF;
+            END LOOP;
+        END IF;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease4_ADEL_lease4_stat_by_client_class(IN old_state BIGINT,
+                                                                   IN old_user_context TEXT)
+RETURNS VOID
+AS $$
+DECLARE
+    class VARCHAR(128);
+BEGIN
+    -- Only state 0 is accounted for in lease limiting.
+    IF old_state = 0 THEN
+        -- Dive into client classes.
+        FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(old_user_context)->'ISC'->'client-classes') LOOP
+            SELECT TRIM('"' FROM class) INTO class;
+
+            -- Decrement the lease count if the record exists.
+            UPDATE lease4_stat_by_client_class SET leases = GREATEST(leases - 1, 0)
+                WHERE client_class = class;
+        END LOOP;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease6_AINS_lease6_stat_by_client_class(IN new_state BIGINT,
+                                                                   IN new_user_context TEXT,
+                                                                   IN new_lease_type SMALLINT)
+RETURNS VOID
+AS $$
+DECLARE
+    client_classes TEXT;
+    class VARCHAR(128);
+    length INT;
+    i INT;
+BEGIN
+    -- Only state 0 is needed for lease limiting.
+    IF new_state = 0 THEN
+        -- Dive into client classes.
+        FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(new_user_context)->'ISC'->'client-classes') LOOP
+            SELECT TRIM('"' FROM class) INTO class;
+
+            -- Upsert to increment the lease count.
+            UPDATE lease6_stat_by_client_class SET leases = leases + 1
+                WHERE client_class = class AND lease_type = new_lease_type;
+            IF NOT FOUND THEN
+                INSERT INTO lease6_stat_by_client_class VALUES (class, new_lease_type, 1);
+            END IF;
+        END LOOP;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease6_AUPD_lease6_stat_by_client_class(IN old_state BIGINT,
+                                                                   IN old_user_context TEXT,
+                                                                   IN old_lease_type SMALLINT,
+                                                                   IN new_state BIGINT,
+                                                                   IN new_user_context TEXT,
+                                                                   IN new_lease_type SMALLINT)
+RETURNS VOID
+AS $$
+DECLARE
+    old_client_classes TEXT;
+    new_client_classes TEXT;
+    class VARCHAR(128);
+    length INT;
+    i INT;
+BEGIN
+    SELECT json_cast(old_user_context)->'ISC'->'client-classes' INTO old_client_classes;
+    SELECT json_cast(new_user_context)->'ISC'->'client-classes' INTO new_client_classes;
+
+    IF old_state != new_state OR old_client_classes != new_client_classes OR old_lease_type != new_lease_type THEN
+        -- Check if it's moving away from a counted state.
+        IF old_state = 0 THEN
+            -- Dive into client classes.
+            FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(old_client_classes)) LOOP
+                SELECT TRIM('"' FROM class) INTO class;
+
+                -- Decrement the lease count if the record exists.
+                UPDATE lease6_stat_by_client_class SET leases = GREATEST(leases - 1, 0)
+                    WHERE client_class = class AND lease_type = old_lease_type;
+            END LOOP;
+        END IF;
+
+        -- Check if it's moving into a counted state.
+        IF new_state = 0 THEN
+            -- Dive into client classes.
+            FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(new_client_classes)) LOOP
+                SELECT TRIM('"' FROM class) INTO class;
+
+                -- Upsert to increment the lease count.
+                UPDATE lease6_stat_by_client_class SET leases = leases + 1
+                    WHERE client_class = class AND lease_type = new_lease_type;
+                IF NOT FOUND THEN
+                    INSERT INTO lease6_stat_by_client_class VALUES (class, new_lease_type, 1);
+                END IF;
+            END LOOP;
+        END IF;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION lease6_ADEL_lease6_stat_by_client_class(IN old_state BIGINT,
+                                                                   IN old_user_context TEXT,
+                                                                   IN old_lease_type SMALLINT)
+RETURNS VOID
+AS $$
+DECLARE
+    client_classes VARCHAR(1024);
+    class VARCHAR(128);
+    length INT;
+    i INT;
+BEGIN
+    -- Only state 0 is accounted for in lease limiting. But check both states to be consistent with lease6_stat.
+    IF old_state = 0 THEN
+        -- Dive into client classes.
+        FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(old_user_context)->'ISC'->'client-classes') LOOP
+            SELECT TRIM('"' FROM class) INTO class;
+
+            -- Decrement the lease count if the record exists.
+            UPDATE lease6_stat_by_client_class SET leases = GREATEST(leases - 1, 0)
+                WHERE client_class = class AND lease_type = old_lease_type;
+        END LOOP;
+    END IF;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Recreate the after-event triggers for INSERT, UPDATE and DELETE on lease tables to call the --
+-- stored procedures above in pairs of two: for client classes and for subnets. --
+
+DROP TRIGGER IF EXISTS stat_lease4_insert ON lease4;
+
+CREATE OR REPLACE FUNCTION func_lease4_AINS()
+RETURNS trigger AS $lease4_AINS$
+BEGIN
+    IF isJsonSupported() = true THEN
+        PERFORM lease4_AINS_lease4_stat_by_client_class(NEW.state, NEW.user_context);
+    END IF;
+    PERFORM lease4_AINS_lease4_stat(NEW.state, NEW.subnet_id);
+    RETURN NULL;
+END;
+$lease4_AINS$ LANGUAGE plpgsql;
+
+CREATE TRIGGER lease4_AINS AFTER INSERT ON lease4
+    FOR EACH ROW EXECUTE PROCEDURE func_lease4_AINS();
+
+DROP TRIGGER IF EXISTS stat_lease4_update ON lease4;
+
+CREATE OR REPLACE FUNCTION func_lease4_AUPD()
+RETURNS trigger AS $lease4_AUPD$
+BEGIN
+    IF isJsonSupported() = true THEN
+        PERFORM lease4_AUPD_lease4_stat_by_client_class(OLD.state, OLD.user_context, NEW.state, NEW.user_context);
+    END IF;
+    PERFORM lease4_AUPD_lease4_stat(OLD.state, OLD.subnet_id, NEW.state, NEW.subnet_id);
+    RETURN NULL;
+END;
+$lease4_AUPD$ LANGUAGE plpgsql;
+
+CREATE TRIGGER lease4_AUPD AFTER UPDATE ON lease4
+    FOR EACH ROW EXECUTE PROCEDURE func_lease4_AUPD();
+
+DROP TRIGGER IF EXISTS stat_lease4_delete ON lease4;
+
+CREATE OR REPLACE FUNCTION func_lease4_ADEL()
+RETURNS trigger AS $lease4_ADEL$
+BEGIN
+    IF isJsonSupported() = true THEN
+        PERFORM lease4_ADEL_lease4_stat_by_client_class(OLD.state, OLD.user_context);
+    END IF;
+    PERFORM lease4_ADEL_lease4_stat(OLD.state, OLD.subnet_id);
+    RETURN NULL;
+END;
+$lease4_ADEL$ LANGUAGE plpgsql;
+
+CREATE TRIGGER lease4_ADEL AFTER DELETE ON lease4
+    FOR EACH ROW EXECUTE PROCEDURE func_lease4_ADEL();
+
+DROP TRIGGER IF EXISTS stat_lease6_insert ON lease6;
+
+CREATE OR REPLACE FUNCTION func_lease6_AINS()
+RETURNS trigger AS $lease6_AINS$
+BEGIN
+    IF isJsonSupported() = true THEN
+        PERFORM lease6_AINS_lease6_stat_by_client_class(NEW.state, NEW.user_context, NEW.lease_type);
+    END IF;
+    PERFORM lease6_AINS_lease6_stat(NEW.state, NEW.subnet_id, NEW.lease_type);
+    RETURN NULL;
+END;
+$lease6_AINS$ LANGUAGE plpgsql;
+
+CREATE TRIGGER lease6_AINS AFTER INSERT ON lease6
+    FOR EACH ROW EXECUTE PROCEDURE func_lease6_AINS();
+
+DROP TRIGGER IF EXISTS stat_lease6_update ON lease6;
+
+CREATE OR REPLACE FUNCTION func_lease6_AUPD()
+RETURNS trigger AS $lease6_AUPD$
+BEGIN
+    IF isJsonSupported() = true THEN
+        PERFORM lease6_AUPD_lease6_stat_by_client_class(OLD.state, OLD.user_context, OLD.lease_type, NEW.state, NEW.user_context, NEW.lease_type);
+    END IF;
+    PERFORM lease6_AUPD_lease6_stat(OLD.state, OLD.subnet_id, OLD.lease_type, NEW.state, NEW.subnet_id, NEW.lease_type);
+    RETURN NULL;
+END;
+$lease6_AUPD$ LANGUAGE plpgsql;
+
+CREATE TRIGGER lease6_AUPD AFTER UPDATE ON lease6
+    FOR EACH ROW EXECUTE PROCEDURE func_lease6_AUPD();
+
+DROP TRIGGER IF EXISTS stat_lease6_delete ON lease6;
+
+CREATE OR REPLACE FUNCTION func_lease6_ADEL()
+RETURNS trigger AS $lease6_ADEL$
+BEGIN
+    IF isJsonSupported() = true THEN
+        PERFORM lease6_ADEL_lease6_stat_by_client_class(OLD.state, OLD.user_context, OLD.lease_type);
+    END IF;
+    PERFORM lease6_ADEL_lease6_stat(OLD.state, OLD.subnet_id, OLD.lease_type);
+    RETURN NULL;
+END;
+$lease6_ADEL$ LANGUAGE plpgsql;
+
+CREATE TRIGGER lease6_ADEL AFTER DELETE ON lease6
+    FOR EACH ROW EXECUTE PROCEDURE func_lease6_ADEL();
+
+-- Create functions that return an empty TEXT if all limits allow for more leases, or otherwise a
+-- TEXT in one of the following JSON formats detailing the limit that was reached:
+-- { "limit-type": "client-class", "name": foo, "lease-type": "address", "limit": 2, "count": 2 }
+-- { "limit-type": "subnet", "id": 1, "lease-type": "IA_PD", "limit": 2, "count": 2 }
+-- The following format for user_context is assumed:
+-- { "ISC": { "limits": { "client-classes": [ { "name": "foo", "address-limit": 2, "prefix-limit": 1 } ],
+--                        "subnet": { "id": 1, "address-limit": 2, "prefix-limit": 1 } } } }
+
+CREATE OR REPLACE FUNCTION checkLease4Limits(user_context TEXT)
+RETURNS TEXT
+AS $$
+DECLARE
+    class TEXT;
+    name VARCHAR(255);
+    sid INT;
+    lease_limit INT;
+    lease_count INT;
+BEGIN
+    -- Dive into client class limits.
+    FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(user_context)->'ISC'->'limits'->'client-classes') LOOP
+        SELECT TRIM('"' FROM (json_cast(class)->'name')::text) INTO name;
+        SELECT json_cast(class)->'address-limit' INTO lease_limit;
+
+        IF lease_limit IS NOT NULL THEN
+            -- Get the lease count for this client class.
+            SELECT leases FROM lease4_stat_by_client_class INTO lease_count WHERE client_class = name;
+            IF lease_count IS NULL THEN
+                lease_count := 0;
+            END IF;
+
+            -- Compare. Return immediately if the limit is surpassed.
+            IF lease_limit <= lease_count THEN
+                RETURN CONCAT('address limit ', lease_limit, ' for client class "', name, '", current lease count ', lease_count);
+            END IF;
+        END IF;
+    END LOOP;
+
+    -- Dive into subnet limits.
+    SELECT json_cast(user_context)->'ISC'->'limits'->'subnet'->'id' INTO sid;
+    SELECT json_cast(user_context)->'ISC'->'limits'->'subnet'->'address-limit' INTO lease_limit;
+
+    IF lease_limit IS NOT NULL THEN
+        -- Get the lease count for this client class.
+        SELECT leases FROM lease4_stat WHERE subnet_id = sid AND state = 0 INTO lease_count;
+        IF lease_count IS NULL THEN
+            lease_count := 0;
+        END IF;
+
+        -- Compare. Return immediately if the limit is surpassed.
+        IF lease_limit <= lease_count THEN
+            RETURN CONCAT('address limit ', lease_limit, ' for subnet ID ', sid, ', current lease count ', lease_count);
+        END IF;
+    END IF;
+
+    RETURN '';
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE OR REPLACE FUNCTION checkLease6Limits(user_context TEXT)
+RETURNS TEXT
+AS $$
+DECLARE
+    class TEXT;
+    name VARCHAR(255);
+    sid INT;
+    lease_limit INT;
+    lease_count INT;
+BEGIN
+    -- Dive into client class limits.
+    FOR class IN SELECT * FROM JSON_ARRAY_ELEMENTS(json_cast(user_context)->'ISC'->'limits'->'client-classes') LOOP
+        SELECT TRIM('"' FROM (json_cast(class)->'name')::text) INTO name;
+        SELECT json_cast(class)->'address-limit' INTO lease_limit;
+
+        IF lease_limit IS NOT NULL THEN
+            -- Get the address count for this client class.
+            SELECT leases FROM lease6_stat_by_client_class WHERE client_class = name AND lease_type = 0 INTO lease_count;
+            IF lease_count IS NULL THEN
+                lease_count := 0;
+            END IF;
+
+            -- Compare. Return immediately if the limit is surpassed.
+            IF lease_limit <= lease_count THEN
+                RETURN CONCAT('address limit ', lease_limit, ' for client class "', name, '", current lease count ', lease_count);
+            END IF;
+        END IF;
+
+        SELECT json_cast(class)->'prefix-limit' INTO lease_limit;
+        IF lease_limit IS NOT NULL THEN
+            -- Get the prefix count for this client class.
+            SELECT leases FROM lease6_stat_by_client_class WHERE client_class = name AND lease_type = 2 INTO lease_count;
+            IF lease_count IS NULL THEN
+                lease_count := 0;
+            END IF;
+
+            -- Compare. Return immediately if the limit is surpassed.
+            IF lease_limit <= lease_count THEN
+                RETURN CONCAT('prefix limit ', lease_limit, ' for client class "', name, '", current lease count ', lease_count);
+            END IF;
+        END IF;
+    END LOOP;
+
+    -- Dive into subnet limits.
+    SELECT json_cast(user_context)->'ISC'->'limits'->'subnet'->'id' INTO sid;
+    SELECT json_cast(user_context)->'ISC'->'limits'->'subnet'->'address-limit' INTO lease_limit;
+    IF lease_limit IS NOT NULL THEN
+        -- Get the lease count for this subnet.
+        SELECT leases FROM lease6_stat WHERE subnet_id = sid AND lease_type = 0 AND state = 0 INTO lease_count;
+        IF lease_count IS NULL THEN
+            lease_count := 0;
+        END IF;
+
+        -- Compare. Return immediately if the limit is surpassed.
+        IF lease_limit <= lease_count THEN
+            RETURN CONCAT('address limit ', lease_limit, ' for subnet ID ', sid, ', current lease count ', lease_count);
+        END IF;
+    END IF;
+    SELECT json_cast(user_context)->'ISC'->'limits'->'subnet'->'prefix-limit' INTO lease_limit;
+    IF lease_limit IS NOT NULL THEN
+        -- Get the lease count for this client class.
+        SELECT leases FROM lease6_stat WHERE subnet_id = sid AND lease_type = 2 AND state = 0 INTO lease_count;
+        IF lease_count IS NULL THEN
+            lease_count := 0;
+        END IF;
+
+        -- Compare. Return immediately if the limit is surpassed.
+        IF lease_limit <= lease_count THEN
+            RETURN CONCAT('prefix limit ', lease_limit, ' for subnet ID ', sid, ', current lease count ', lease_count);
+        END IF;
+    END IF;
+
+    RETURN '';
+END;
+$$ LANGUAGE plpgsql;
+
+-- Improve hosts indexes for better performance of global reservations
+-- Create new index that uses only dhcp_identifier.
+CREATE INDEX key_dhcp_identifier on hosts (dhcp_identifier, dhcp_identifier_type);
+
+-- Modify existing indexes to include subnet_id values of 0, so index is also used
+-- for global reservations.
+DROP INDEX IF EXISTS key_dhcp4_identifier_subnet_id;
+CREATE UNIQUE INDEX key_dhcp4_identifier_subnet_id ON hosts
+        (dhcp_identifier ASC, dhcp_identifier_type ASC, dhcp4_subnet_id ASC)
+    WHERE (dhcp4_subnet_id IS NOT NULL);
+
+DROP INDEX IF EXISTS key_dhcp6_identifier_subnet_id;
+CREATE UNIQUE INDEX key_dhcp6_identifier_subnet_id ON hosts
+        (dhcp_identifier ASC, dhcp_identifier_type ASC, dhcp6_subnet_id ASC)
+    WHERE (dhcp6_subnet_id IS NOT NULL);
+
+-- Update the schema version number.
+UPDATE schema_version
+    SET version = '13', minor = '0';
+
+-- This line concludes the schema upgrade to version 13.
+
 -- Commit the script transaction.
 COMMIT;
 

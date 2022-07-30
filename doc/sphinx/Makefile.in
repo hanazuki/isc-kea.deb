@@ -180,11 +180,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -194,8 +189,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -209,7 +202,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -391,13 +383,24 @@ abs_sphinxbuilddir = $(abs_builddir)/_build
 @GENERATE_DOCS_TRUE@	arm/ext-gss-tsig.rst arm/ext-netconf.rst \
 @GENERATE_DOCS_TRUE@	arm/hammer.rst arm/hooks-bootp.rst \
 @GENERATE_DOCS_TRUE@	arm/hooks-cb-cmds.rst \
-@GENERATE_DOCS_TRUE@	arm/hooks-class-cmds.rst arm/hooks-ha.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-class-cmds.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-ddns-tuning.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-flex-id.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-flex-option.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-gss-tsig.rst arm/hooks-ha.rst \
 @GENERATE_DOCS_TRUE@	arm/hooks-host-cache.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-host-cmds.rst \
 @GENERATE_DOCS_TRUE@	arm/hooks-lease-cmds.rst \
 @GENERATE_DOCS_TRUE@	arm/hooks-lease-query.rst \
-@GENERATE_DOCS_TRUE@	arm/hooks-radius.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-limits.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-cb-mysql.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-cb-pgsql.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-legal-log.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-radius.rst arm/hooks-rbac.rst \
 @GENERATE_DOCS_TRUE@	arm/hooks-run-script.rst \
-@GENERATE_DOCS_TRUE@	arm/hooks-stat-cmds.rst arm/hooks.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-stat-cmds.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-subnet-cmds.rst \
+@GENERATE_DOCS_TRUE@	arm/hooks-user-chk.rst arm/hooks.rst \
 @GENERATE_DOCS_TRUE@	arm/install.rst arm/integrations.rst \
 @GENERATE_DOCS_TRUE@	arm/intro.rst arm/keactrl.rst \
 @GENERATE_DOCS_TRUE@	arm/lease-expiration.rst arm/lfc.rst \
@@ -493,6 +496,8 @@ abs_sphinxbuilddir = $(abs_builddir)/_build
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/gss-tsig-list.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/gss-tsig-purge-all.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/gss-tsig-purge.json \
+@GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/gss-tsig-rekey-all.json \
+@GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/gss-tsig-rekey.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/ha-continue.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/ha-heartbeat.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/ha-maintenance-cancel.json \
@@ -637,11 +642,15 @@ abs_sphinxbuilddir = $(abs_builddir)/_build
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/status-get.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet4-add.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet4-del.json \
+@GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet4-delta-add.json \
+@GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet4-delta-del.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet4-get.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet4-list.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet4-update.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet6-add.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet6-del.json \
+@GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet6-delta-add.json \
+@GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet6-delta-del.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet6-get.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet6-list.json \
 @GENERATE_DOCS_TRUE@	$(top_srcdir)/src/share/api/subnet6-update.json \

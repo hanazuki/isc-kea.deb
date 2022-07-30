@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -121,7 +121,6 @@ IfaceMgrTestConfig::createIfaces() {
     addIface("eth1961", ETH1961_INDEX);
     addAddress("eth1961", IOAddress("198.51.100.1"));
     addAddress("eth1961", IOAddress("fe80::3a60:77ff:fed5:9876"));
-
 }
 
 void

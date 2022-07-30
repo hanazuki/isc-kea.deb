@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -472,6 +472,11 @@ public:
         /// to make an update in a lease database: create new lease, or
         /// update existing lease.
         bool fake_allocation_;
+
+        /// @brief Indicates if early global reservation is enabled.
+        ///
+        /// This caches the early-global-reservations-lookup value.
+        bool early_global_reservations_lookup_;
 
         /// @brief Subnet selected for the client by the server.
         Subnet6Ptr subnet_;
@@ -999,9 +1004,9 @@ public:
 public:
     /// @brief Determines the preferred and valid v6 lease lifetimes.
     ///
-    /// A candidate triplet for both preferred and valid lifetimes will be 
+    /// A candidate triplet for both preferred and valid lifetimes will be
     /// selected from the first class matched to the query which defines the
-    /// value or from the subnet if none do. Classes are searched in the order 
+    /// value or from the subnet if none do. Classes are searched in the order
     /// they are assigned to the query.
     ///
     /// If the client requested a lifetime IA hint, then the
@@ -1373,6 +1378,11 @@ public:
     /// information to the allocation engine methods is that adding
     /// new information doesn't modify the API of the allocation engine.
     struct ClientContext4 : public boost::noncopyable {
+        /// @brief Indicates if early global reservation is enabled.
+        ///
+        /// This caches the early-global-reservations-lookup value.
+        bool early_global_reservations_lookup_;
+
         /// @brief Subnet selected for the client by the server.
         Subnet4Ptr subnet_;
 

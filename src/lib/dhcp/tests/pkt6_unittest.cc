@@ -2115,4 +2115,4 @@ TEST_F(Pkt6Test, relayDataOption) {
     EXPECT_EQ(orig_data, clone_data);
 }
 
-}
+}  // namespace

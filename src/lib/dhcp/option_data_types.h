@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -400,7 +400,6 @@ public:
     /// @param tuple reference of the tuple to read into
     /// @throw isc::dhcp::BadDataTypeCast when the data being read
     /// is truncated.
-    /// @return tuple being read.
     static void readTuple(const std::vector<uint8_t>& buf,
                           OpaqueDataTuple& tuple);
 

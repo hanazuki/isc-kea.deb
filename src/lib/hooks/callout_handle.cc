@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -149,6 +149,10 @@ ScopedCalloutHandleState(const CalloutHandlePtr& callout_handle)
 
 ScopedCalloutHandleState::~ScopedCalloutHandleState() {
     resetState();
+
+    if (on_completion_) {
+        on_completion_();
+    }
 }
 
 void

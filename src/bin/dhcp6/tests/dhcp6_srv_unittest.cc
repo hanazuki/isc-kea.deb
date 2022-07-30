@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,9 @@
 #include <config.h>
 
 #include <asiolink/io_address.h>
+#include <cc/command_interpreter.h>
+#include <config/command_mgr.h>
+#include <config_backend/base_config_backend.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/duid.h>
 #include <dhcp/option.h>
@@ -17,7 +20,6 @@
 #include <dhcp/option_int_array.h>
 #include <dhcp/option_string.h>
 #include <dhcp/iface_mgr.h>
-#include <dhcp6/json_config_parser.h>
 #include <dhcp/docsis3_option_defs.h>
 #include <dhcp/tests/iface_mgr_test_config.h>
 #include <dhcpsrv/cfgmgr.h>
@@ -25,6 +27,7 @@
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/host_mgr.h>
 #include <dhcpsrv/utils.h>
+#include <dhcp6/json_config_parser.h>
 #include <util/buffer.h>
 #include <util/range_utilities.h>
 #include <util/encode/hex.h>
@@ -32,7 +35,6 @@
 #include <dhcp6/tests/dhcp6_test_utils.h>
 #include <dhcp6/tests/dhcp6_client.h>
 #include <dhcp/tests/pkt_captures.h>
-#include <cc/command_interpreter.h>
 
 #include <boost/pointer_cast.hpp>
 #include <boost/scoped_ptr.hpp>
@@ -41,10 +43,13 @@
 #include <fstream>
 #include <iostream>
 #include <sstream>
+#include <dirent.h>
 
 using namespace isc;
-using namespace isc::data;
 using namespace isc::asiolink;
+using namespace isc::cb;
+using namespace isc::config;
+using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::util;
@@ -145,6 +150,135 @@ const char* CONFIGS[] = {
     "}"
 };
 
+} // namespace
+
+namespace isc {
+namespace dhcp {
+namespace test {
+
+void
+Dhcpv6SrvTest::loadConfigFile(const string& path) {
+    CfgMgr::instance().clear();
+
+    LibDHCP::clearRuntimeOptionDefs();
+
+    IfaceMgrTestConfig test_config(true);
+
+    // Do not use DHCP6_SERVER_PORT here as 0 means don't open sockets.
+    NakedDhcpv6Srv srv(0);
+    EXPECT_EQ(0, srv.server_port_);
+
+    ConfigBackendDHCPv6Mgr::instance().registerBackendFactory("mysql",
+            [](const db::DatabaseConnection::ParameterMap&) -> ConfigBackendDHCPv6Ptr {
+                return (ConfigBackendDHCPv6Ptr());
+            });
+
+    ConfigBackendDHCPv6Mgr::instance().registerBackendFactory("postgresql",
+            [](const db::DatabaseConnection::ParameterMap&) -> ConfigBackendDHCPv6Ptr {
+                return (ConfigBackendDHCPv6Ptr());
+            });
+
+    // TimerMgr uses IO service to run asynchronous timers.
+    TimerMgr::instance()->setIOService(srv.getIOService());
+
+    // CommandMgr uses IO service to run asynchronous socket operations.
+    CommandMgr::instance().setIOService(srv.getIOService());
+
+    // LeaseMgr uses IO service to run asynchronous timers.
+    LeaseMgr::setIOService(srv.getIOService());
+
+    // HostMgr uses IO service to run asynchronous timers.
+    HostMgr::setIOService(srv.getIOService());
+
+    Parser6Context parser;
+    ConstElementPtr json;
+    ASSERT_NO_THROW(json = parser.parseFile(path, Parser6Context::PARSER_DHCP6));
+    ASSERT_TRUE(json);
+
+    // Check the logic next.
+    ConstElementPtr dhcp6 = json->get("Dhcp6");
+    ASSERT_TRUE(dhcp6);
+    ElementPtr mutable_config = boost::const_pointer_cast<Element>(dhcp6);
+    mutable_config->set(string("hooks-libraries"), Element::createList());
+    ASSERT_NO_THROW(Dhcpv6SrvTest::configure(dhcp6->str(), true, true, true, true));
+
+    LeaseMgrFactory::destroy();
+    HostMgr::create();
+
+    TimerMgr::instance()->unregisterTimers();
+
+    // Close the command socket (if it exists).
+    CommandMgr::instance().closeCommandSocket();
+
+    // Reset CommandMgr IO service.
+    CommandMgr::instance().setIOService(IOServicePtr());
+
+    // Reset LeaseMgr IO service.
+    LeaseMgr::setIOService(IOServicePtr());
+
+    // Reset HostMgr IO service.
+    HostMgr::setIOService(IOServicePtr());
+}
+
+void
+Dhcpv6SrvTest::checkConfigFiles() {
+    IfaceMgrTestConfig test_config(true);
+    string path = CFG_EXAMPLES;
+    vector<string> examples = {
+        "advanced.json",
+#if defined (HAVE_MYSQL) && defined (HAVE_PGSQL)
+        "all-keys-netconf.json",
+        "all-options.json",
+#endif
+        "backends.json",
+        "classify.json",
+        "classify2.json",
+        "comments.json",
+#if defined (HAVE_MYSQL)
+        "config-backend.json",
+#endif
+        "dhcpv4-over-dhcpv6.json",
+        "duid.json",
+        "global-reservations.json",
+        "ha-hot-standby.json",
+        "hooks.json",
+        "iPXE.json",
+        "leases-expiration.json",
+        "multiple-options.json",
+#if defined (HAVE_MYSQL)
+        "mysql-reservations.json",
+#endif
+#if defined (HAVE_PGSQL)
+        "pgsql-reservations.json",
+#endif
+        "reservations.json",
+        "several-subnets.json",
+        "shared-network.json",
+        "simple.json",
+        "softwire46.json",
+        "stateless.json",
+        "tee-times.json",
+        "with-ddns.json",
+    };
+    vector<string> files;
+    for (string example : examples) {
+        string file = path + "/" + example;
+        files.push_back(file);
+    }
+    for (const auto& file: files) {
+        string label("Checking configuration from file: ");
+        label += file;
+        SCOPED_TRACE(label);
+        loadConfigFile(file);
+    }
+}
+
+} // end of isc::dhcp::test namespace
+} // end of isc::dhcp namespace
+} // end of isc namespace
+
+namespace {
+
 // This test verifies that incoming SOLICIT can be handled properly when
 // there are no subnets configured.
 //
@@ -162,7 +296,8 @@ TEST_F(NakedDhcpv6SrvTest, SolicitNoSubnet) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -388,7 +523,8 @@ TEST_F(Dhcpv6SrvTest, advertiseOptions) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv_.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv_.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr adv = srv_.processSolicit(ctx);
@@ -416,6 +552,8 @@ TEST_F(Dhcpv6SrvTest, advertiseOptions) {
 
     // Need to process SOLICIT again after requesting new option.
     AllocEngine::ClientContext6 ctx2;
+    drop = !srv_.earlyGHRLookup(sol, ctx2);
+    ASSERT_FALSE(drop);
     srv_.initContext(sol, ctx2, drop);
     ASSERT_FALSE(drop);
     adv = srv_.processSolicit(ctx2);
@@ -450,7 +588,6 @@ TEST_F(Dhcpv6SrvTest, advertiseOptions) {
     // more checks to be implemented
 }
 
-
 // There are no dedicated tests for Dhcpv6Srv::handleIA_NA and Dhcpv6Srv::assignLeases
 // as they are indirectly tested in Solicit and Request tests.
 
@@ -481,7 +618,8 @@ TEST_F(Dhcpv6SrvTest, SolicitBasic) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -517,7 +655,6 @@ TEST_F(Dhcpv6SrvTest, SolicitBasic) {
 // - server-id
 // - IA that includes IAPREFIX
 TEST_F(Dhcpv6SrvTest, pdSolicitBasic) {
-
     NakedDhcpv6Srv srv(0);
 
     Pkt6Ptr sol = Pkt6Ptr(new Pkt6(DHCPV6_SOLICIT, 1234));
@@ -530,7 +667,8 @@ TEST_F(Dhcpv6SrvTest, pdSolicitBasic) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -572,7 +710,8 @@ TEST_F(Dhcpv6SrvTest, defaultLifetimeSolicit) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -619,7 +758,8 @@ TEST_F(Dhcpv6SrvTest, hintZeroLifetimeSolicit) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -668,7 +808,8 @@ TEST_F(Dhcpv6SrvTest, hintLifetimeSolicit) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -715,7 +856,8 @@ TEST_F(Dhcpv6SrvTest, minLifetimeSolicit) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -764,7 +906,8 @@ TEST_F(Dhcpv6SrvTest, maxLifetimeSolicit) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -823,7 +966,8 @@ TEST_F(Dhcpv6SrvTest, SolicitHint) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -881,7 +1025,8 @@ TEST_F(Dhcpv6SrvTest, SolicitInvalidHint) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -946,15 +1091,20 @@ TEST_F(Dhcpv6SrvTest, ManySolicits) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx1;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol1, ctx1);
+    ASSERT_FALSE(drop);
     srv.initContext(sol1, ctx1, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply1 = srv.processSolicit(ctx1);
     AllocEngine::ClientContext6 ctx2;
+    drop = !srv.earlyGHRLookup(sol2, ctx2);
+    ASSERT_FALSE(drop);
     srv.initContext(sol2, ctx2, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply2 = srv.processSolicit(ctx2);
     AllocEngine::ClientContext6 ctx3;
+    drop = !srv.earlyGHRLookup(sol3, ctx3);
+    ASSERT_FALSE(drop);
     srv.initContext(sol3, ctx3, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply3 = srv.processSolicit(ctx3);
@@ -1043,7 +1193,8 @@ TEST_F(Dhcpv6SrvTest, SolicitCache) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -1114,7 +1265,8 @@ TEST_F(Dhcpv6SrvTest, pdSolicitCache) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -1221,7 +1373,6 @@ TEST_F(Dhcpv6SrvTest, RequestBasic) {
 // - server-id
 // - IA that includes IAPREFIX
 TEST_F(Dhcpv6SrvTest, pdRequestBasic) {
-
     NakedDhcpv6Srv srv(0);
 
     // Let's create a REQUEST
@@ -1409,7 +1560,8 @@ TEST_F(Dhcpv6SrvTest, RequestCache) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(req, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(req, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processRequest(ctx);
@@ -1480,7 +1632,8 @@ TEST_F(Dhcpv6SrvTest, pdRequestCache) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(req, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(req, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processRequest(ctx);
@@ -1693,7 +1846,8 @@ TEST_F(Dhcpv6SrvTest, RenewCache) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(req, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(req, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processRenew(ctx);
@@ -1764,7 +1918,8 @@ TEST_F(Dhcpv6SrvTest, pdRenewCache) {
 
     // Pass it to the server and get an advertise
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv.earlyGHRLookup(req, ctx);
+    ASSERT_FALSE(drop);
     srv.initContext(req, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr reply = srv.processRenew(ctx);
@@ -1993,9 +2148,9 @@ TEST_F(Dhcpv6SrvTest, sanityCheckServerId) {
 // Check that the server is testing if server identifier received in the
 // query, matches server identifier used by the server.
 TEST_F(Dhcpv6SrvTest, testServerID) {
-        NakedDhcpv6Srv srv(0);
+    NakedDhcpv6Srv srv(0);
 
-        Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_REQUEST, 1234));
+    Pkt6Ptr req = Pkt6Ptr(new Pkt6(DHCPV6_REQUEST, 1234));
     std::vector<uint8_t> bin;
 
     // duid_llt constructed with: time = 0, macaddress = 00:00:00:00:00:00
@@ -2069,8 +2224,6 @@ TEST_F(Dhcpv6SrvTest, testUnicast) {
             << static_cast<int>(allowed_unicast[i])
             << "being sent to unicast address";
     }
-
-
 }
 
 // This test verifies if selectSubnet() selects proper subnet for a given
@@ -2389,7 +2542,6 @@ TEST_F(Dhcpv6SrvTest, selectSubnetRelayInterfaceId) {
 
 // Checks if server responses are sent to the proper port.
 TEST_F(Dhcpv6SrvTest, portsClientPort) {
-
     NakedDhcpv6Srv srv(0);
 
     // Enforce a specific client port value.
@@ -2418,7 +2570,6 @@ TEST_F(Dhcpv6SrvTest, portsClientPort) {
 
 // Checks if server responses are sent to the proper port.
 TEST_F(Dhcpv6SrvTest, portsServerPort) {
-
     // Create the test server in test mode.
     NakedDhcpv6Srv srv(0);
 
@@ -2448,7 +2599,6 @@ TEST_F(Dhcpv6SrvTest, portsServerPort) {
 
 // Checks if server responses are sent to the proper port.
 TEST_F(Dhcpv6SrvTest, portsDirectTraffic) {
-
     NakedDhcpv6Srv srv(0);
 
     // Let's create a simple SOLICIT
@@ -2473,7 +2623,6 @@ TEST_F(Dhcpv6SrvTest, portsDirectTraffic) {
 
 // Checks if server responses are sent to the proper port.
 TEST_F(Dhcpv6SrvTest, portsRelayedTraffic) {
-
     NakedDhcpv6Srv srv(0);
 
     // Let's create a simple SOLICIT
@@ -2498,7 +2647,6 @@ TEST_F(Dhcpv6SrvTest, portsRelayedTraffic) {
 
 // Test that the server processes relay-source-port option correctly.
 TEST_F(Dhcpv6SrvTest, relaySourcePort) {
-
     NakedDhcpv6Srv srv(0);
 
     string config =
@@ -2613,7 +2761,8 @@ TEST_F(Dhcpv6SrvTest, prlPersistency) {
 
     // Let the server process it and generate a response.
     AllocEngine::ClientContext6 ctx;
-    bool drop = false;
+    bool drop = !srv_.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
     srv_.initContext(sol, ctx, drop);
     ASSERT_FALSE(drop);
     Pkt6Ptr response = srv_.processSolicit(ctx);
@@ -2633,6 +2782,8 @@ TEST_F(Dhcpv6SrvTest, prlPersistency) {
     // Let the server process it again. This time the name-servers
     // option should be present.
     AllocEngine::ClientContext6 ctx2;
+    drop = !srv_.earlyGHRLookup(sol, ctx2);
+    ASSERT_FALSE(drop);
     srv_.initContext(sol, ctx2, drop);
     ASSERT_FALSE(drop);
     response = srv_.processSolicit(ctx2);
@@ -2653,6 +2804,8 @@ TEST_F(Dhcpv6SrvTest, prlPersistency) {
 
     // Let the server process it again.
     AllocEngine::ClientContext6 ctx3;
+    drop = !srv_.earlyGHRLookup(sol, ctx3);
+    ASSERT_FALSE(drop);
     srv_.initContext(sol, ctx3, drop);
     ASSERT_FALSE(drop);
     response = srv_.processSolicit(ctx3);
@@ -2671,7 +2824,6 @@ TEST_F(Dhcpv6SrvTest, prlPersistency) {
 // @todo Uncomment this test as part of #3180 work.
 // Kea code currently fails to handle docsis traffic.
 TEST_F(Dhcpv6SrvTest, docsisTraffic) {
-
     NakedDhcpv6Srv srv(0);
 
     // Let's get a traffic capture from DOCSIS3.0 modem
@@ -2690,7 +2842,6 @@ TEST_F(Dhcpv6SrvTest, docsisTraffic) {
     Pkt6Ptr adv = srv.fake_sent_.front();
     ASSERT_TRUE(adv);
 }
-
 
 // Checks if relay IP address specified in the relay-info structure in
 // subnet6 is being used properly.
@@ -3232,7 +3383,6 @@ TEST_F(Dhcpv6SrvTest, tooLongServerId) {
 
 // Checks if user-contexts are parsed properly.
 TEST_F(Dhcpv6SrvTest, userContext) {
-
     IfaceMgrTestConfig test_config(true);
 
     NakedDhcpv6Srv srv(0);
@@ -3430,7 +3580,8 @@ TEST_F(Dhcpv6SrvTest, calculateTeeTimers) {
             subnet_->setT1Percent((*test).t1_percent_);
             subnet_->setT2Percent((*test).t2_percent_);
             AllocEngine::ClientContext6 ctx;
-            bool drop = false;
+            bool drop = !srv.earlyGHRLookup(sol, ctx);
+            ASSERT_FALSE(drop);
             srv.initContext(sol, ctx, drop);
             ASSERT_FALSE(drop);
             Pkt6Ptr reply = srv.processSolicit(ctx);
@@ -3442,6 +3593,12 @@ TEST_F(Dhcpv6SrvTest, calculateTeeTimers) {
             checkIA_NA(reply, 234, (*test).t1_exp_value_, (*test).t2_exp_value_);
         }
     }
+}
+
+/// @brief Check that example files from documentation are valid (can be parsed
+/// and loaded).
+TEST_F(Dhcpv6SrvTest, checkConfigFiles) {
+    checkConfigFiles();
 }
 
 /// @todo: Add more negative tests for processX(), e.g. extend sanityCheck() test

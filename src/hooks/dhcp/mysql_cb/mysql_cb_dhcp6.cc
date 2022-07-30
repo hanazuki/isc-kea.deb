@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,10 +6,10 @@
 
 #include <config.h>
 
+#include <asiolink/addr_utilities.h>
 #include <mysql_cb_dhcp6.h>
 #include <mysql_cb_impl.h>
 #include <mysql_query_macros_dhcp.h>
-#include <asiolink/addr_utilities.h>
 #include <cc/data.h>
 #include <config_backend/constants.h>
 #include <database/database_connection.h>
@@ -202,8 +202,8 @@ public:
                                         const std::string& name) {
         StampedValueCollection parameters;
 
-        auto tags = server_selector.getTags();
-        for (auto tag : tags) {
+        auto const& tags = server_selector.getTags();
+        for (auto const& tag : tags) {
             MySqlBindingCollection in_bindings = {
                 MySqlBinding::createString(tag.get()),
                 MySqlBinding::createString(name)
@@ -222,7 +222,6 @@ public:
     /// @param value Value of the global parameter.
     void createUpdateGlobalParameter6(const db::ServerSelector& server_selector,
                                       const StampedValuePtr& value) {
-
         if (server_selector.amUnassigned()) {
             isc_throw(NotImplemented, "managing configuration for no particular server"
                       " (unassigned) is unsupported at the moment");
@@ -250,7 +249,6 @@ public:
         // Try to update the existing row.
         if (conn_.updateDeleteQuery(MySqlConfigBackendDHCPv6Impl::UPDATE_GLOBAL_PARAMETER6,
                                     in_bindings) == 0) {
-
             // No such parameter found, so let's insert it. We have to adjust the
             // bindings collection to match the prepared statement for insert.
             in_bindings.pop_back();
@@ -417,7 +415,6 @@ public:
             // is different than the subnet identifier of the previously returned
             // row, it means that we have to construct new subnet object.
             if (!last_subnet || (last_subnet->getID() != out_bindings[0]->getInteger<uint32_t>())) {
-
                 // Reset per subnet component tracking and server tag because
                 // we're now starting to process a new subnet.
                 last_pool_id = 0;
@@ -831,10 +828,8 @@ public:
         MySqlBindingCollection in_bindings = { MySqlBinding::createInteger<uint32_t>(subnet_id) };
 
         auto index = GET_SUBNET6_ID_NO_TAG;
-
         if (server_selector.amUnassigned()) {
             index = GET_SUBNET6_ID_UNASSIGNED;
-
         } else if (server_selector.amAny()) {
             index = GET_SUBNET6_ID_ANY;
         }
@@ -865,10 +860,8 @@ public:
         MySqlBindingCollection in_bindings = { MySqlBinding::createString(subnet_prefix) };
 
         auto index = GET_SUBNET6_PREFIX_NO_TAG;
-
         if (server_selector.amUnassigned()) {
             index = GET_SUBNET6_PREFIX_UNASSIGNED;
-
         } else if (server_selector.amAny()) {
             index = GET_SUBNET6_PREFIX_ANY;
         }
@@ -890,6 +883,7 @@ public:
             isc_throw(InvalidOperation, "fetching all subnets for ANY "
                       "server is not supported");
         }
+
         auto index = (server_selector.amUnassigned() ? GET_ALL_SUBNETS6_UNASSIGNED :
                       GET_ALL_SUBNETS6);
         MySqlBindingCollection in_bindings;
@@ -983,7 +977,6 @@ public:
                            &pools, &pool_ids]
                           (MySqlBindingCollection& out_bindings) {
             if (out_bindings[0]->getInteger<uint64_t>() > last_pool_id) {
-
                 // pool id (0)
                 last_pool_id = out_bindings[0]->getInteger<uint64_t>();
 
@@ -992,6 +985,9 @@ public:
                 last_pool = Pool6::create(Lease::TYPE_NA,
                                           IOAddress(out_bindings[1]->getString()),
                                           IOAddress(out_bindings[2]->getString()));
+
+                // pool subnet_id (3) (ignored)
+
                 // pool client_class (4)
                 if (!out_bindings[4]->amNull()) {
                     last_pool->allowClientClass(out_bindings[4]->getString());
@@ -1020,7 +1016,7 @@ public:
                     last_pool->setContext(user_context);
                 }
 
-                // pool: modification_ts (7)
+                // pool: modification_ts (7) (ignored)
 
                 pools.push_back(last_pool);
                 pool_ids.push_back(last_pool_id);
@@ -1092,7 +1088,6 @@ public:
                            &last_pd_pool, &pd_pools, &pd_pool_ids]
                           (MySqlBindingCollection& out_bindings) {
             if (out_bindings[0]->getInteger<uint64_t>() > last_pd_pool_id) {
-
                 // pd pool id (0)
                 last_pd_pool_id = out_bindings[0]->getInteger<uint64_t>();
 
@@ -1181,17 +1176,16 @@ public:
                     MySqlBinding::createString(pool_end_address.toText())
             };
             getPools(GET_POOL6_RANGE_ANY, in_bindings, pools, pool_ids);
-
         } else {
-            auto tags = server_selector.getTags();
-            for (auto tag : tags) {
+            auto const& tags = server_selector.getTags();
+            for (auto const& tag : tags) {
                 MySqlBindingCollection in_bindings = {
                     MySqlBinding::createString(tag.get()),
                     MySqlBinding::createString(pool_start_address.toText()),
                     MySqlBinding::createString(pool_end_address.toText())
                 };
                 getPools(GET_POOL6_RANGE, in_bindings, pools, pool_ids);
-
+                // Break if something is found?
             }
         }
 
@@ -1202,6 +1196,7 @@ public:
         }
 
         pool_id = 0;
+
         return (Pool6Ptr());
     }
 
@@ -1225,10 +1220,9 @@ public:
                 MySqlBinding::createInteger<uint8_t>(pd_pool_prefix_length)
             };
             getPdPools(GET_PD_POOL_ANY, in_bindings, pd_pools, pd_pool_ids);
-
         } else {
-            auto tags = server_selector.getTags();
-            for (auto tag : tags) {
+            auto const& tags = server_selector.getTags();
+            for (auto const& tag : tags) {
                 MySqlBindingCollection in_bindings = {
                     MySqlBinding::createString(tag.get()),
                     MySqlBinding::createString(pd_pool_prefix.toText()),
@@ -1254,7 +1248,6 @@ public:
     /// @param subnet Pointer to the subnet to be inserted or updated.
     void createUpdateSubnet6(const ServerSelector& server_selector,
                              const Subnet6Ptr& subnet) {
-
         if (server_selector.amAny()) {
             isc_throw(InvalidOperation, "creating or updating a subnet for ANY"
                       " server is not supported");
@@ -1430,7 +1423,8 @@ public:
     /// @param server_selector Server selector.
     /// @param pool Pointer to the pool to be inserted.
     /// @param subnet Pointer to the subnet that this pool belongs to.
-    void createPool6(const ServerSelector& server_selector, const Pool6Ptr& pool,
+    void createPool6(const ServerSelector& server_selector,
+                     const Pool6Ptr& pool,
                      const Subnet6Ptr& subnet) {
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(pool->getFirstAddress().toText()),
@@ -1534,7 +1528,6 @@ public:
                                  const std::string& log_message,
                                  const bool cascade_delete,
                                  Args&&... keys) {
-
         MySqlTransaction transaction(conn_);
 
         // Create scoped audit revision. As long as this instance exists
@@ -1701,7 +1694,6 @@ public:
             // row points to the next shared network we use the data in the
             // row to create the new shared network instance.
             if (last_network_id != out_bindings[0]->getInteger<uint64_t>()) {
-
                 // Reset per shared network component tracking and server tag because
                 // we're now starting to process a new shared network.
                 last_option_id = 0;
@@ -1732,8 +1724,8 @@ public:
                 // max_preferred_lifetime at 32.
                 if (!out_bindings[5]->amNull()) {
                     last_network->setPreferred(createTriplet(out_bindings[5],
-                                                         out_bindings[31],
-                                                         out_bindings[32]));
+                                                             out_bindings[31],
+                                                             out_bindings[32]));
                 }
 
                 // rapid_commit at 6.
@@ -1900,6 +1892,15 @@ public:
                 }
             }
 
+            // Check for new server tags.
+            if (!out_bindings[45]->amNull() &&
+                (last_tag != out_bindings[45]->getString())) {
+                last_tag = out_bindings[45]->getString();
+                if (!last_tag.empty() && !last_network->hasServerTag(ServerTag(last_tag))) {
+                    last_network->setServerTag(last_tag);
+                }
+            }
+
             // Parse option from 14 to 26.
             if (!out_bindings[14]->amNull() &&
                 (last_option_id < out_bindings[14]->getInteger<uint64_t>())) {
@@ -1908,15 +1909,6 @@ public:
                 OptionDescriptorPtr desc = processOptionRow(Option::V6, out_bindings.begin() + 14);
                 if (desc) {
                     last_network->getCfgOption()->add(*desc, desc->space_name_);
-                }
-            }
-
-            // Check for new server tags.
-            if (!out_bindings[45]->amNull() &&
-                (last_tag != out_bindings[45]->getString())) {
-                last_tag = out_bindings[45]->getString();
-                if (!last_tag.empty() && !last_network->hasServerTag(ServerTag(last_tag))) {
-                    last_network->setServerTag(last_tag);
                 }
             }
         });
@@ -1938,7 +1930,6 @@ public:
     /// network doesn't exist.
     SharedNetwork6Ptr getSharedNetwork6(const ServerSelector& server_selector,
                                         const std::string& name) {
-
         if (server_selector.hasMultipleTags()) {
             isc_throw(InvalidOperation, "expected one server tag to be specified"
                       " while fetching a shared network. Got: "
@@ -1948,10 +1939,8 @@ public:
         MySqlBindingCollection in_bindings = { MySqlBinding::createString(name) };
 
         auto index = GET_SHARED_NETWORK6_NAME_NO_TAG;
-
         if (server_selector.amUnassigned()) {
             index = GET_SHARED_NETWORK6_NAME_UNASSIGNED;
-
         } else if (server_selector.amAny()) {
             index = GET_SHARED_NETWORK6_NAME_ANY;
         }
@@ -2009,7 +1998,6 @@ public:
     /// @param subnet Pointer to the shared network to be inserted or updated.
     void createUpdateSharedNetwork6(const ServerSelector& server_selector,
                                     const SharedNetwork6Ptr& shared_network) {
-
         if (server_selector.amAny()) {
             isc_throw(InvalidOperation, "creating or updating a shared network for ANY"
                       " server is not supported");
@@ -2104,9 +2092,9 @@ public:
             };
             conn_.updateDeleteQuery(MySqlConfigBackendDHCPv6Impl::DELETE_SHARED_NETWORK6_SERVER,
                                     in_server_bindings);
-
         }
 
+        // Associate the shared network with the servers.
         attachElementToServers(MySqlConfigBackendDHCPv6Impl::INSERT_SHARED_NETWORK6_SERVER,
                                server_selector,
                                MySqlBinding::createString(shared_network->getName()),
@@ -2126,7 +2114,6 @@ public:
 
         transaction.commit();
     }
-
 
     /// @brief Sends query to insert DHCP option.
     ///
@@ -2160,7 +2147,6 @@ public:
     /// @param option Pointer to the option descriptor encapsulating the option.
     void createUpdateOption6(const ServerSelector& server_selector,
                              const OptionDescriptorPtr& option) {
-
         if (server_selector.amUnassigned()) {
             isc_throw(NotImplemented, "managing configuration for no particular server"
                       " (unassigned) is unsupported at the moment");
@@ -2217,7 +2203,6 @@ public:
                              const SubnetID& subnet_id,
                              const OptionDescriptorPtr& option,
                              const bool cascade_update) {
-
         if (server_selector.amUnassigned()) {
             isc_throw(NotImplemented, "managing configuration for no particular server"
                       " (unassigned) is unsupported at the moment");
@@ -2293,7 +2278,6 @@ public:
                             pool_id, option, false);
     }
 
-
     /// @brief Sends query to insert or update DHCP option in a pd pool.
     ///
     /// @param server_selector Server selector.
@@ -2319,7 +2303,6 @@ public:
                             pd_pool_id, option, false);
     }
 
-
     /// @brief Sends query to insert or update DHCP option in an address
     /// or prefix delegation pool.
     ///
@@ -2335,7 +2318,6 @@ public:
                              const uint64_t pool_id,
                              const OptionDescriptorPtr& option,
                              const bool cascade_update) {
-
         if (server_selector.amUnassigned()) {
             isc_throw(NotImplemented, "managing configuration for no particular server"
                       " (unassigned) is unsupported at the moment");
@@ -2394,7 +2376,6 @@ public:
         in_bindings.push_back(MySqlBinding::createInteger<uint16_t>(option->option_->getType()));
         in_bindings.push_back(MySqlBinding::condCreateString(option->space_name_));
 
-
         MySqlTransaction transaction(conn_);
 
         // Create scoped audit revision. As long as this instance exists
@@ -2434,7 +2415,6 @@ public:
                              const std::string& shared_network_name,
                              const OptionDescriptorPtr& option,
                              const bool cascade_update) {
-
         if (server_selector.amUnassigned()) {
             isc_throw(NotImplemented, "managing configuration for no particular server"
                       " (unassigned) is unsupported at the moment");
@@ -2496,7 +2476,6 @@ public:
     void createUpdateOption6(const ServerSelector& server_selector,
                              const ClientClassDefPtr& client_class,
                              const OptionDescriptorPtr& option) {
-
         if (server_selector.amUnassigned()) {
             isc_throw(NotImplemented, "managing configuration for no particular server"
                       " (unassigned) is unsupported at the moment");
@@ -2544,7 +2523,6 @@ public:
     /// @param option_def Pointer to the option definition to be inserted or updated.
     void createUpdateOptionDef6(const ServerSelector& server_selector,
                                 const OptionDefinitionPtr& option_def) {
-
         createUpdateOptionDef(server_selector, option_def, DHCP6_OPTION_SPACE,
                               MySqlConfigBackendDHCPv6Impl::GET_OPTION_DEF6_CODE_SPACE,
                               MySqlConfigBackendDHCPv6Impl::INSERT_OPTION_DEF6,
@@ -2581,7 +2559,6 @@ public:
     uint64_t deleteOptionDef6(const ServerSelector& server_selector,
                               const uint16_t code,
                               const std::string& space) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createInteger<uint16_t>(code),
             MySqlBinding::createString(space)
@@ -2624,7 +2601,6 @@ public:
     uint64_t deleteOption6(const ServerSelector& server_selector,
                            const uint16_t code,
                            const std::string& space) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createInteger<uint16_t>(code),
             MySqlBinding::createString(space)
@@ -2650,7 +2626,6 @@ public:
                            const SubnetID& subnet_id,
                            const uint16_t code,
                            const std::string& space) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createInteger<uint32_t>(static_cast<uint32_t>(subnet_id)),
             MySqlBinding::createInteger<uint16_t>(code),
@@ -2678,7 +2653,6 @@ public:
                            const IOAddress& pool_end_address,
                            const uint16_t code,
                            const std::string& space) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createInteger<uint16_t>(code),
             MySqlBinding::createString(space),
@@ -2707,7 +2681,6 @@ public:
                            const uint8_t pd_pool_prefix_length,
                            const uint16_t code,
                            const std::string& space) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createInteger<uint16_t>(code),
             MySqlBinding::createString(space),
@@ -2735,7 +2708,6 @@ public:
                            const std::string& shared_network_name,
                            const uint16_t code,
                            const std::string& space) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(shared_network_name),
             MySqlBinding::createInteger<uint16_t>(code),
@@ -2758,7 +2730,6 @@ public:
     /// @return Number of deleted options.
     uint64_t deleteOptions6(const ServerSelector& server_selector,
                             const Subnet6Ptr& subnet) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createInteger<uint32_t>(subnet->getID()),
             MySqlBinding::createString(subnet->toText())
@@ -2780,7 +2751,6 @@ public:
     /// @return Number of deleted options.
     uint64_t deleteOptions6(const ServerSelector& server_selector,
                             const SharedNetwork6Ptr& shared_network) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(shared_network->getName())
         };
@@ -2801,7 +2771,6 @@ public:
     /// @return Number of deleted options.
     uint64_t deleteOptions6(const ServerSelector& server_selector,
                             const ClientClassDefPtr& client_class) {
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(client_class->getName())
         };
@@ -2839,6 +2808,7 @@ public:
             MySqlBinding::createInteger<uint8_t>(), // depend on known directly
             MySqlBinding::createInteger<uint8_t>(), // depend on known indirectly
             MySqlBinding::createTimestamp(), // modification_ts
+            MySqlBinding::createString(USER_CONTEXT_BUF_LENGTH), // user_context
             MySqlBinding::createInteger<uint64_t>(), // option def: id
             MySqlBinding::createInteger<uint16_t>(), // option def: code
             MySqlBinding::createString(OPTION_NAME_BUF_LENGTH), // option def: name
@@ -2882,16 +2852,15 @@ public:
             }
 
             if (!last_client_class || (last_client_class->getId() != out_bindings[0]->getInteger<uint64_t>())) {
-
                 last_option_id = 0;
                 last_option_def_id = 0;
                 last_tag.clear();
 
                 auto options = boost::make_shared<CfgOption>();
                 auto option_defs = boost::make_shared<CfgOptionDef>();
-                auto expression = boost::make_shared<Expression>();
 
-                last_client_class = boost::make_shared<ClientClassDef>(out_bindings[1]->getString(), expression, options);
+                last_client_class = boost::make_shared<ClientClassDef>(out_bindings[1]->getString(),
+                                                                       ExpressionPtr(), options);
                 last_client_class->setCfgOptionDef(option_defs);
 
                 // id
@@ -2919,38 +2888,46 @@ public:
                 // modification_ts
                 last_client_class->setModificationTime(out_bindings[9]->getTimestamp());
 
+                // user_context
+                ElementPtr user_context = out_bindings[10]->getJSON();
+                if (user_context) {
+                    last_client_class->setContext(user_context);
+                }
+
                 // preferred lifetime: default, min, max
-                last_client_class->setPreferred(createTriplet(out_bindings[33], out_bindings[34], out_bindings[35]));
+                last_client_class->setPreferred(createTriplet(out_bindings[34],
+                                                              out_bindings[35],
+                                                              out_bindings[36]));
 
                 class_list.push_back(last_client_class);
             }
 
             // server tag
-            if (!out_bindings[32]->amNull() &&
-                (last_tag != out_bindings[32]->getString())) {
-                last_tag = out_bindings[32]->getString();
+            if (!out_bindings[33]->amNull() &&
+                (last_tag != out_bindings[33]->getString())) {
+                last_tag = out_bindings[33]->getString();
                 if (!last_tag.empty() && !last_client_class->hasServerTag(ServerTag(last_tag))) {
                     last_client_class->setServerTag(last_tag);
                 }
             }
 
-            // Parse client class specific option definition from 10 to 19.
-            if (!out_bindings[10]->amNull() &&
-                (last_option_def_id < out_bindings[10]->getInteger<uint64_t>())) {
-                last_option_def_id = out_bindings[10]->getInteger<uint64_t>();
+            // Parse client class specific option definition from 11 to 20.
+            if (!out_bindings[11]->amNull() &&
+                (last_option_def_id < out_bindings[11]->getInteger<uint64_t>())) {
+                last_option_def_id = out_bindings[11]->getInteger<uint64_t>();
 
-                auto def = processOptionDefRow(out_bindings.begin() + 10);
+                auto def = processOptionDefRow(out_bindings.begin() + 11);
                 if (def) {
                     last_client_class->getCfgOptionDef()->add(def);
                 }
             }
 
-            // Parse client class specific option from 20 to 31.
-            if (!out_bindings[20]->amNull() &&
-                (last_option_id < out_bindings[20]->getInteger<uint64_t>())) {
-                last_option_id = out_bindings[20]->getInteger<uint64_t>();
+            // Parse client class specific option from 21 to 32.
+            if (!out_bindings[21]->amNull() &&
+                (last_option_id < out_bindings[21]->getInteger<uint64_t>())) {
+                last_option_id = out_bindings[21]->getInteger<uint64_t>();
 
-                OptionDescriptorPtr desc = processOptionRow(Option::V6, out_bindings.begin() + 20);
+                OptionDescriptorPtr desc = processOptionRow(Option::V6, out_bindings.begin() + 21);
                 if (desc) {
                     last_client_class->getCfgOption()->add(*desc, desc->space_name_);
                 }
@@ -3061,21 +3038,21 @@ public:
             });
         }
 
-
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(client_class->getName()),
             MySqlBinding::createString(client_class->getTest()),
             MySqlBinding::createBool(client_class->getRequired()),
-            MySqlBinding::createInteger<uint32_t>(client_class->getValid()),
-            MySqlBinding::createInteger<uint32_t>(client_class->getValid().getMin()),
-            MySqlBinding::createInteger<uint32_t>(client_class->getValid().getMax()),
+            createBinding(client_class->getValid()),
+            createMinBinding(client_class->getValid()),
+            createMaxBinding(client_class->getValid()),
             MySqlBinding::createBool(depend_on_known),
             (follow_class_name.empty() ? MySqlBinding::createNull() :
              MySqlBinding::createString(follow_class_name)),
+            createBinding(client_class->getPreferred()),
+            createMinBinding(client_class->getPreferred()),
+            createMaxBinding(client_class->getPreferred()),
             MySqlBinding::createTimestamp(client_class->getModificationTime()),
-            MySqlBinding::createInteger<uint32_t>(client_class->getPreferred()),
-            MySqlBinding::createInteger<uint32_t>(client_class->getPreferred().getMin()),
-            MySqlBinding::createInteger<uint32_t>(client_class->getPreferred().getMax()),
+            createInputContextBinding(client_class)
         };
 
         MySqlTransaction transaction(conn_);
@@ -3101,7 +3078,7 @@ public:
                 // If position is not specified, leave the class at the same position.
                 // Remove the binding which specifies the position and use different
                 // query.
-                in_bindings.erase(in_bindings.begin() + 7, in_bindings.begin() + 8);
+                in_bindings.erase(in_bindings.begin() + 10, in_bindings.begin() + 11);
                 conn_.updateDeleteQuery(MySqlConfigBackendDHCPv6Impl::UPDATE_CLIENT_CLASS6_SAME_POSITION,
                                         in_bindings);
             } else {
@@ -3412,11 +3389,6 @@ TaggedStatementArray tagged_statements = { {
     // Select modified global parameters.
     { MySqlConfigBackendDHCPv6Impl::GET_MODIFIED_GLOBAL_PARAMETERS6,
       MYSQL_GET_GLOBAL_PARAMETER(dhcp6, AND g.modification_ts >= ?)
-    },
-
-    // Delete all global parameters which are unassigned to any servers.
-    { MySqlConfigBackendDHCPv6Impl::DELETE_ALL_GLOBAL_PARAMETERS6_UNASSIGNED,
-      MYSQL_DELETE_GLOBAL_PARAMETER_UNASSIGNED(dhcp6)
     },
 
     // Select subnet by id.
@@ -3763,16 +3735,19 @@ TaggedStatementArray tagged_statements = { {
       "  max_valid_lifetime,"
       "  depend_on_known_directly,"
       "  follow_class_name,"
-      "  modification_ts,"
       "  preferred_lifetime,"
       "  min_preferred_lifetime,"
-      "  max_preferred_lifetime"
-      ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+      "  max_preferred_lifetime,"
+      "  modification_ts, "
+      "  user_context "
+      ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
     },
+
     // Insert association of a client class with a server.
     { MySqlConfigBackendDHCPv6Impl::INSERT_CLIENT_CLASS6_SERVER,
       MYSQL_INSERT_CLIENT_CLASS_SERVER(dhcp6)
     },
+
     // Insert client class dependency.
     { MySqlConfigBackendDHCPv6Impl::INSERT_CLIENT_CLASS6_DEPENDENCY,
       MYSQL_INSERT_CLIENT_CLASS_DEPENDENCY(dhcp6)
@@ -3867,7 +3842,7 @@ TaggedStatementArray tagged_statements = { {
       MYSQL_UPDATE_OPTION_DEF(dhcp6)
     },
 
-    // Update existing option definition.
+    // Update existing client class option definition.
     { MySqlConfigBackendDHCPv6Impl::UPDATE_OPTION_DEF6_CLIENT_CLASS,
       MYSQL_UPDATE_OPTION_DEF_CLIENT_CLASS(dhcp6)
     },
@@ -3925,6 +3900,11 @@ TaggedStatementArray tagged_statements = { {
     // Delete all global parameters.
     { MySqlConfigBackendDHCPv6Impl::DELETE_ALL_GLOBAL_PARAMETERS6,
       MYSQL_DELETE_GLOBAL_PARAMETER(dhcp6)
+    },
+
+    // Delete all global parameters which are unassigned to any servers.
+    { MySqlConfigBackendDHCPv6Impl::DELETE_ALL_GLOBAL_PARAMETERS6_UNASSIGNED,
+      MYSQL_DELETE_GLOBAL_PARAMETER_UNASSIGNED(dhcp6)
     },
 
     // Delete subnet by id with specifying server tag.
@@ -4120,6 +4100,8 @@ MySqlConfigBackendDHCPv6Impl::MySqlConfigBackendDHCPv6Impl(const DatabaseConnect
     // database is read only for the current user.
     conn_.prepareStatements(tagged_statements.begin(),
                             tagged_statements.end());
+// @todo As part of enabling read-only CB access, statements need to
+// be limited:
 //                            tagged_statements.begin() + WRITE_STMTS_BEGIN);
 
     // Create unique timer name per instance.
@@ -4306,8 +4288,8 @@ StampedValueCollection
 MySqlConfigBackendDHCPv6::getAllGlobalParameters6(const ServerSelector& server_selector) const {
     LOG_DEBUG(mysql_cb_logger, DBGLVL_TRACE_BASIC, MYSQL_CB_GET_ALL_GLOBAL_PARAMETERS6);
     StampedValueCollection parameters;
-    auto tags = server_selector.getTags();
-    for (auto tag : tags) {
+    auto const& tags = server_selector.getTags();
+    for (auto const& tag : tags) {
         MySqlBindingCollection in_bindings = { MySqlBinding::createString(tag.get()) };
         impl_->getGlobalParameters(MySqlConfigBackendDHCPv6Impl::GET_ALL_GLOBAL_PARAMETERS6,
                                    in_bindings, parameters);
@@ -4323,8 +4305,8 @@ MySqlConfigBackendDHCPv6::getModifiedGlobalParameters6(const db::ServerSelector&
     LOG_DEBUG(mysql_cb_logger, DBGLVL_TRACE_BASIC, MYSQL_CB_GET_MODIFIED_GLOBAL_PARAMETERS6)
         .arg(util::ptimeToText(modification_time));
     StampedValueCollection parameters;
-    auto tags = server_selector.getTags();
-    for (auto tag : tags) {
+    auto const& tags = server_selector.getTags();
+    for (auto const& tag : tags) {
         MySqlBindingCollection in_bindings = {
             MySqlBinding::createString(tag.get()),
             MySqlBinding::createTimestamp(modification_time)
@@ -4559,8 +4541,18 @@ MySqlConfigBackendDHCPv6::deleteSharedNetworkSubnets6(const db::ServerSelector& 
 uint64_t
 MySqlConfigBackendDHCPv6::deleteSharedNetwork6(const ServerSelector& server_selector,
                                                const std::string& name) {
+    /// @todo Using UNASSIGNED selector is allowed by the CB API but we don't have
+    /// dedicated query for this at the moment. The user should use ANY to delete
+    /// the shared network by name.
+    if (server_selector.amUnassigned()) {
+        isc_throw(NotImplemented, "deleting an unassigned shared network requires "
+                  "an explicit server tag or using ANY server. The UNASSIGNED server "
+                  "selector is currently not supported");
+    }
+
     LOG_DEBUG(mysql_cb_logger, DBGLVL_TRACE_BASIC, MYSQL_CB_DELETE_SHARED_NETWORK6)
         .arg(name);
+
     int index = (server_selector.amAny() ?
                  MySqlConfigBackendDHCPv6Impl::DELETE_SHARED_NETWORK6_NAME_ANY :
                  MySqlConfigBackendDHCPv6Impl::DELETE_SHARED_NETWORK6_NAME_WITH_TAG);
@@ -4584,8 +4576,7 @@ MySqlConfigBackendDHCPv6::deleteAllSharedNetworks6(const ServerSelector& server_
     int index = (server_selector.amUnassigned() ?
                  MySqlConfigBackendDHCPv6Impl::DELETE_ALL_SHARED_NETWORKS6_UNASSIGNED :
                  MySqlConfigBackendDHCPv6Impl::DELETE_ALL_SHARED_NETWORKS6);
-    uint64_t result = impl_->deleteTransactional(index,
-                                                 server_selector, "deleting all shared networks",
+    uint64_t result = impl_->deleteTransactional(index, server_selector, "deleting all shared networks",
                                                  "deleted all shared networks", true);
     LOG_DEBUG(mysql_cb_logger, DBGLVL_TRACE_BASIC, MYSQL_CB_DELETE_ALL_SHARED_NETWORKS6_RESULT)
         .arg(result);
@@ -4671,8 +4662,8 @@ MySqlConfigBackendDHCPv6::deleteOption6(const ServerSelector& /* server_selector
     /// just delete it when there is a match with the parent object.
     LOG_DEBUG(mysql_cb_logger, DBGLVL_TRACE_BASIC, MYSQL_CB_DELETE_BY_POOL_OPTION6)
         .arg(pool_start_address.toText()).arg(pool_end_address.toText()).arg(code).arg(space);
-    uint64_t result = impl_->deleteOption6(ServerSelector::ANY(), pool_start_address, pool_end_address,
-                                           code, space);
+    uint64_t result = impl_->deleteOption6(ServerSelector::ANY(), pool_start_address,
+                                           pool_end_address, code, space);
     LOG_DEBUG(mysql_cb_logger, DBGLVL_TRACE_BASIC, MYSQL_CB_DELETE_BY_POOL_OPTION6_RESULT)
         .arg(result);
     return (result);

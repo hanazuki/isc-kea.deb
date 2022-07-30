@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1013,8 +1013,47 @@ const char* NETWORKS_CONFIG[] = {
     "            ]"
     "        }"
     "    ]"
-    "}"
+    "}",
 
+// Configuration #20
+// - a shared network with two subnets
+// - first subnet has a dynamic address pool
+// - second subnet has no address pool but it has a host reservation
+    "{"
+    "    \"interfaces-config\": {"
+    "        \"interfaces\": [ \"*\" ]"
+    "    },"
+    "    \"valid-lifetime\": 600,"
+    "    \"shared-networks\": ["
+    "        {"
+    "            \"name\": \"frog\","
+    "            \"relay\": {"
+    "                \"ip-address\": \"192.3.5.6\""
+    "            },"
+    "            \"subnet4\": ["
+    "                {"
+    "                    \"subnet\": \"10.0.0.0/24\","
+    "                    \"id\": 100,"
+    "                    \"pools\": ["
+    "                        {"
+    "                            \"pool\": \"10.0.0.1 - 10.0.0.1\""
+    "                        }"
+    "                    ]"
+    "                },"
+    "                {"
+    "                    \"subnet\": \"192.0.2.0/26\","
+    "                    \"id\": 10,"
+    "                    \"reservations\": ["
+    "                        {"
+    "                            \"circuit-id\": \"'charter950'\","
+    "                            \"ip-address\": \"192.0.2.28\""
+    "                        }"
+    "                    ]"
+    "                }"
+    "            ]"
+    "        }"
+    "    ]"
+    "}"
 };
 
 /// @Brief Test fixture class for DHCPv4 server using shared networks.
@@ -1666,6 +1705,14 @@ TEST_F(Dhcpv4SharedNetworkTest, reservationInSharedNetwork) {
     EXPECT_EQ(DHCPACK, resp1->getType());
     EXPECT_NE("10.0.0.29", resp1->getYiaddr().toText());
     EXPECT_NE("192.0.2.28", resp1->getYiaddr().toText());
+    // Ensure stats are being recorded for HR conflicts
+    ObservationPtr subnet_conflicts = StatsMgr::instance().getObservation(
+        "subnet[10].v4-reservation-conflicts");
+    ASSERT_TRUE(subnet_conflicts);
+    ASSERT_EQ(1, subnet_conflicts->getInteger().first);
+    subnet_conflicts = StatsMgr::instance().getObservation("v4-reservation-conflicts");
+    ASSERT_TRUE(subnet_conflicts);
+    ASSERT_EQ(1, subnet_conflicts->getInteger().first);
 
     // Client #2 is now doing 4-way exchange and should get its newly reserved
     // address, released by the 4-way transaction of client 1.
@@ -1679,6 +1726,65 @@ TEST_F(Dhcpv4SharedNetworkTest, reservationInSharedNetwork) {
     testAssigned([this, &client1] {
         doDORA(client1, "192.0.2.28");
     });
+}
+
+// Two clients use the same circuit ID and this circuit ID is used to assign a
+// host reservation. The clients compete for the reservation, and one of them
+// gets it and the other one gets an address from the dynamic pool. This test
+// checks that the assigned leases have appropriate subnet IDs. Previously, the
+// client getting the lease from the dynamic pool had a wrong subnet ID (not
+// matching the address from the dynamic pool).
+TEST_F(Dhcpv4SharedNetworkTest, reservationInSharedNetworkTwoClientsSameIdentifier) {
+    // Create client #1 which uses a circuit ID as a host identifier.
+    Dhcp4Client client1(Dhcp4Client::SELECTING);
+    client1.useRelay(true, IOAddress("192.3.5.6"));
+    client1.includeClientId("01:02:03:04");
+    client1.setCircuitId("charter950");
+
+    // Create server configuration with a shared network including two subnets.
+    // One of the subnets includes a reservation identified by the client's
+    // circuit ID.
+    configure(NETWORKS_CONFIG[20], *client1.getServer());
+
+    // Client #1 should get the reserved address.
+    testAssigned([this, &client1] {
+        doDORA(client1, "192.0.2.28", "");
+    });
+
+    // Create client #2 with the same circuit ID.
+    Dhcp4Client client2(client1.getServer(), Dhcp4Client::SELECTING);
+    client2.useRelay(true, IOAddress("192.3.5.6"));
+    client2.includeClientId("02:03:04:05");
+    client2.setCircuitId("charter950");
+
+    // Client #2 presents the same circuit ID but the reserved address has been
+    // already allocated. The client should get an address from the dynamic pool.
+    testAssigned([this, &client2] {
+        doDORA(client2, "10.0.0.1", "192.0.2.28");
+    });
+
+    // Client #1 renews the lease.
+    client1.setState(Dhcp4Client::RENEWING);
+    testAssigned([this, &client1]() {
+        doRequest(client1, "192.0.2.28");
+    });
+
+    // Client #2 renews the lease.
+    client2.setState(Dhcp4Client::RENEWING);
+    // Check if the client successfully renewed its address and that the
+    // subnet id in the renewed lease is not messed up.
+    testAssigned([this, &client2]() {
+        doRequest(client2, "10.0.0.1");
+    });
+
+    // Ensure stats are being recorded for HR conflicts
+    ObservationPtr subnet_conflicts = StatsMgr::instance().getObservation(
+        "subnet[10].v4-reservation-conflicts");
+    ASSERT_TRUE(subnet_conflicts);
+    ASSERT_EQ(1, subnet_conflicts->getInteger().first);
+    subnet_conflicts = StatsMgr::instance().getObservation("v4-reservation-conflicts");
+    ASSERT_TRUE(subnet_conflicts);
+    ASSERT_EQ(1, subnet_conflicts->getInteger().first);
 }
 
 // Reserved address can't be assigned as long as access to a subnet is

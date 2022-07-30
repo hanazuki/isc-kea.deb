@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2019,2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -446,6 +446,12 @@ public:
         return (value.unspecified() ? createNull() :
                 createInteger<float> (static_cast<float>(value.get())));
     }
+
+    /// @brief Creates binding having a bool type for receiving data.
+    ///
+    /// @return Pointer to the created binding holding an @c uint8_t
+    /// value representing the boolean value.
+    static MySqlBindingPtr createBool();
 
     /// @brief Creates binding having a bool type for sending data.
     ///

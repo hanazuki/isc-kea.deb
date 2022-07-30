@@ -34,13 +34,18 @@ ways:
 
 -  Using a hook.
 
-Client classification can be used to change the
-behavior of almost any part of the DHCP message processing. There are
-currently five mechanisms that take advantage of client classification:
-subnet selection, pool selection, definition of DHCPv4 private (codes
-224-254) and code 43 options, assignment of different options, and, for
-DHCPv4 cable modems, the setting of specific options for use with the
-TFTP server address and the boot file field.
+Client classification can be used to change the behavior of almost any
+part of the DHCP message processing. There are currently six
+mechanisms that take advantage of client classification: dropping
+queries, subnet selection, pool selection, definition of DHCPv4
+private (codes 224-254) and code 43 options, assignment of different
+options, and, for DHCPv4 cable modems, the setting of specific options
+for use with the TFTP server address and the boot file field.
+
+.. _classify-classification-steps:
+
+Classification Steps
+--------------------
 
 The classification process is conducted in several steps:
 
@@ -63,7 +68,17 @@ The classification process is conducted in several steps:
     dropped and an informational message is logged with the packet
     information.
 
-6.  A subnet is chosen, possibly based on the class information when
+.. note::
+
+    The ``pkt4_receive`` and ``pkt6_receive`` callouts are called here.
+
+6.  When the ``early-global-reservations-lookup`` global parameter is
+    configured to true global reservations are looked for and the 8, 9
+    and 10 steps are partially performed: the lookup is limited to
+    global reservations, if one is found the ``KNOWN`` class is set
+    but if none is found the ``UNKNOWN`` class is **not** set.
+
+7.  A subnet is chosen, possibly based on the class information when
     some subnets are reserved. More precisely: when choosing a subnet,
     the server iterates over all of the subnets that are feasible given
     the information found in the packet (client address, relay address,
@@ -71,36 +86,47 @@ The classification process is conducted in several steps:
     class associated with it, or has a class which matches one of the
     packet's classes.
 
-7.  The server looks for host reservations. If an identifier from the
+.. note::
+
+    The ``subnet4_select`` and ``subnet6_select`` callouts are called here.
+
+8.  The server looks for host reservations. If an identifier from the
     incoming packet matches a host reservation in the subnet or shared
     network, the packet is associated with the ``KNOWN`` class and all
     classes of the host reservation. If a reservation is not found, the
     packet is assigned to the ``UNKNOWN`` class.
 
-8.  Classes with matching expressions - directly, or indirectly using the
+9.  Classes with matching expressions - directly, or indirectly using the
     ``KNOWN``/``UNKNOWN`` built-in classes and not marked for later evaluation ("on
     request") - are processed in the order they are defined
     in the configuration; the boolean expression is evaluated and, if it
     returns ``true`` (a match), the incoming packet is associated with the
     class. After a subnet is selected, the server determines whether
     there is a reservation for a given client. Therefore, it is not
-    possible to use ``KNOWN``/``UNKNOWN`` classes to select a shared network or
-    a subnet.
+    possible to use the ``UNKNOWN`` class to select a shared network or
+    a subnet. For the ``KNOWN`` class only global reservations only
+    global reservations are used and the ``early-global-reservations-lookup``
+    parameter must be configured to true
 
-9.  When the incoming packet belongs to the special class ``DROP``, it is
+10. When the incoming packet belongs to the special class ``DROP``, it is
     dropped and an informational message is logged with the packet
     information. Since Kea version 1.9.8, it is permissible to make the ``DROP``
     class dependent on the ``KNOWN``/``UNKNOWN`` classes.
 
-10. If needed, addresses and prefixes from pools are assigned, possibly
+11. If needed, addresses and prefixes from pools are assigned, possibly
     based on the class information when some pools are reserved for
     class members.
 
-11. Classes marked as "required" are evaluated in the order in which
+.. note::
+
+    The ``lease4_select``, ``lease4_renew``, ``lease6_select``, ``lease6_renew``, and ``lease6_rebind``
+    callouts are called here.
+
+12. Classes marked as "required" are evaluated in the order in which
     they are listed: first the shared network, then the subnet, and
     finally the pools that assigned resources belong to.
 
-12. Options are assigned, again possibly based on the class information
+13. Options are assigned, again possibly based on the class information
     in the order that classes were associated with the incoming packet.
     For DHCPv4 private and code 43 options, this includes option
     definitions specified within classes.
@@ -153,21 +179,25 @@ balancing. The class name is constructed by prepending the ``HA_`` prefix
 to the name of the server which should process the DHCP packet. This
 server uses an appropriate pool or subnet to allocate IP addresses
 (and/or prefixes), based on the assigned client classes. The details can
-be found in :ref:`high-availability-library`.
+be found in :ref:`hooks-high-availability`.
 
 The ``BOOTP`` class is used by the BOOTP hook library to classify and
 respond to inbound BOOTP queries.
+
+The ``SKIP_DDNS`` class is used by the DDNS-tuning hook library to suppress
+DDNS updates on a per client basis.
 
 Other examples are the ``ALL`` class, to which all incoming packets belong,
 and the ``KNOWN`` class, assigned when host reservations exist for a
 particular client. By convention, the names of built-in classes begin with all
 capital letters.
 
-Currently recognized built-in class names are ``ALL``, ``KNOWN`` and ``UNKNOWN``, and the
-prefixes ``VENDOR_CLASS_``, ``HA_``, ``AFTER_``, and ``EXTERNAL_``. Although the ``AFTER_``
-prefix is a provision for an as-yet-unwritten hook, the ``EXTERNAL_``
-prefix can be freely used; built-in classes are implicitly defined so
-they never raise warnings if they do not appear in the configuration.
+Currently recognized built-in class names are ``ALL``, ``KNOWN`` and ``UNKNOWN``,
+and the prefixes ``VENDOR_CLASS_``, ``HA_``, ``AFTER_``, ``EXTERNAL_``,
+``SKIP_DDNS``. Although the ``AFTER_`` prefix is a provision for an
+as-yet-unwritten hook, the ``EXTERNAL_`` prefix can be freely used; built-in
+classes are implicitly defined so they never raise warnings if they do not
+appear in the configuration.
 
 .. _classification-using-expressions:
 
@@ -466,6 +496,10 @@ Notes:
    |                       |                         | a hexadecimal string, |
    |                       |                         | e.g. 0a:1b:2c:3e      |
    +-----------------------+-------------------------+-----------------------+
+   | Split                 | split('foo.bar', '.', 2)| Return the second     |
+   |                       |                         | field, splitting on   |
+   |                       |                         | dots.                 |
+   +-----------------------+-------------------------+-----------------------+
 
 .. table:: List of conversion-to-text expressions
 
@@ -577,6 +611,25 @@ or:
 ::
 
            'abcdefghijkl...'
+
+Split
+---------
+
+The Split operator ``split(value, delimiters, field-number)`` accepts a list
+of characters to use as delimiters and a positive field number of the
+desired field when the value is split into fields separated by the delimiters.
+Adjacent delimiters are not compressed out, rather they result in an empty
+string for that field number. If value is an empty string, the result will be an
+empty string. If the delimiters list is empty, the result will be the original
+value. If the field-number is less than one or larger than the number of
+fields, the result will be an empty string. Some examples follow:
+::
+
+           split ('one.two..four', '.', 1) == 'one'
+           split ('one.two..four', '.', 2) == 'two'
+           split ('one.two..four', '.', 3) == ''
+           split ('one.two..four', '.', 4) == 'four'
+           split ('one.two..four', '.', 5) == ''
 
 Ifelse
 ------
@@ -710,6 +763,13 @@ Using Static Host Reservations in Classification
 Classes can be statically assigned to the clients using techniques
 described in :ref:`reservation4-client-classes` and
 :ref:`reservation6-client-classes`.
+
+Subnet host reservations are searched after subnet selection.
+Global host reservations are searched at the same time by default but
+the ``early-global-reservations-lookup`` allows to change this behavior
+into searching them before the subnet selection.
+
+Pool selection is performed after all host reservations lookups.
 
 .. _classification-subnets:
 
@@ -913,11 +973,10 @@ To enable the debug statements in the classification system,
 the severity must be set to ``DEBUG`` and the debug level to at least 55.
 The specific loggers are ``kea-dhcp4.eval`` and ``kea-dhcp6.eval``.
 
-To understand the logging statements, it is essential to understand a bit
-about how expressions are evaluated; for a more complete description,
-refer to the design document at
-https://gitlab.isc.org/isc-projects/kea/wikis/designs/Design-documents. In
-brief, there are two structures used during the evaluation of an
+To understand the logging statements, it is essential to understand a bit about
+how expressions are evaluated; for a more complete description, refer to
+[the design document](https://gitlab.isc.org/isc-projects/kea/-/wikis/designs/client-classification-design).
+In brief, there are two structures used during the evaluation of an
 expression: a list of tokens which represent the expressions, and a value
 stack which represents the values being manipulated.
 

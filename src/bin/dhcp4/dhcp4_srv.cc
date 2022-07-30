@@ -57,9 +57,6 @@
 #ifdef HAVE_PGSQL
 #include <dhcpsrv/pgsql_lease_mgr.h>
 #endif
-#ifdef HAVE_CQL
-#include <dhcpsrv/cql_lease_mgr.h>
-#endif
 #include <dhcpsrv/memfile_lease_mgr.h>
 
 #include <boost/algorithm/string.hpp>
@@ -97,6 +94,7 @@ struct Dhcp4Hooks {
     int hook_index_buffer4_send_;      ///< index for "buffer4_send" hook point
     int hook_index_lease4_decline_;    ///< index for "lease4_decline" hook point
     int hook_index_host4_identifier_;  ///< index for "host4_identifier" hook point
+    int hook_index_ddns4_update_;      ///< index for "ddns4_update" hook point
 
     /// Constructor that registers hook points for DHCPv4 engine
     Dhcp4Hooks() {
@@ -109,6 +107,7 @@ struct Dhcp4Hooks {
         hook_index_buffer4_send_      = HooksManager::registerHook("buffer4_send");
         hook_index_lease4_decline_    = HooksManager::registerHook("lease4_decline");
         hook_index_host4_identifier_  = HooksManager::registerHook("host4_identifier");
+        hook_index_ddns4_update_      = HooksManager::registerHook("ddns4_update");
     }
 };
 
@@ -135,7 +134,8 @@ std::set<std::string> dhcp4_statistics = {
     "v4-allocation-fail-shared-network",
     "v4-allocation-fail-subnet",
     "v4-allocation-fail-no-pools",
-    "v4-allocation-fail-classes"
+    "v4-allocation-fail-classes",
+    "v4-reservation-conflicts"
 };
 
 } // end of anonymous namespace
@@ -151,10 +151,11 @@ namespace dhcp {
 
 Dhcpv4Exchange::Dhcpv4Exchange(const AllocEnginePtr& alloc_engine,
                                const Pkt4Ptr& query,
+                               AllocEngine::ClientContext4Ptr& context,
                                const Subnet4Ptr& subnet,
                                bool& drop)
     : alloc_engine_(alloc_engine), query_(query), resp_(),
-      context_(new AllocEngine::ClientContext4()) {
+      context_(context) {
 
     if (!alloc_engine_) {
         isc_throw(BadValue, "alloc_engine value must not be NULL"
@@ -165,31 +166,35 @@ Dhcpv4Exchange::Dhcpv4Exchange(const AllocEnginePtr& alloc_engine,
         isc_throw(BadValue, "query value must not be NULL when"
                   " creating an instance of the Dhcpv4Exchange");
     }
+
+    // Reset the given context argument.
+    context.reset();
+
     // Create response message.
     initResponse();
     // Select subnet for the query message.
     context_->subnet_ = subnet;
-    // Hardware address.
-    context_->hwaddr_ = query->getHWAddr();
-    // Pointer to client's query.
-    context_->query_ = query;
 
     // If subnet found, retrieve client identifier which will be needed
     // for allocations and search for reservations associated with a
     // subnet/shared network.
     SharedNetwork4Ptr sn;
-    if (subnet) {
+    if (subnet && !context_->early_global_reservations_lookup_) {
         OptionPtr opt_clientid = query->getOption(DHO_DHCP_CLIENT_IDENTIFIER);
         if (opt_clientid) {
             context_->clientid_.reset(new ClientId(opt_clientid->getData()));
         }
+    }
 
+    if (subnet) {
         // Find static reservations if not disabled for our subnet.
         if (subnet->getReservationsInSubnet() ||
             subnet->getReservationsGlobal()) {
             // Before we can check for static reservations, we need to prepare a set
             // of identifiers to be used for this.
-            setHostIdentifiers();
+            if (!context_->early_global_reservations_lookup_) {
+                setHostIdentifiers(context_);
+            }
 
             // Check for static reservations.
             alloc_engine->findReservation(*context_);
@@ -207,7 +212,8 @@ Dhcpv4Exchange::Dhcpv4Exchange(const AllocEnginePtr& alloc_engine,
     // affect selection of a pool within the selected subnet.
     auto global_host = context_->globalHost();
     auto current_host = context_->currentHost();
-    if ((global_host && !global_host->getClientClasses4().empty()) ||
+    if ((!context_->early_global_reservations_lookup_ &&
+         global_host && !global_host->getClientClasses4().empty()) ||
         (!sn && current_host && !current_host->getClientClasses4().empty())) {
         // We have already evaluated client classes and some of them may
         // be in conflict with the reserved classes. Suppose there are
@@ -223,19 +229,9 @@ Dhcpv4Exchange::Dhcpv4Exchange(const AllocEnginePtr& alloc_engine,
         // a result, the first_class set via the host reservation will
         // replace the second_class because the second_class will this
         // time evaluate to false as desired.
-        const ClientClassDictionaryPtr& dict =
-            CfgMgr::instance().getCurrentCfg()->getClientClassDictionary();
-        const ClientClassDefListPtr& defs_ptr = dict->getClasses();
-        for (auto def : *defs_ptr) {
-            // Only remove evaluated classes. Other classes can be
-            // assigned via hooks libraries and we should not remove
-            // them because there is no way they can be added back.
-            if (def->getMatchExpr()) {
-                context_->query_->classes_.erase(def->getName());
-            }
-        }
+        removeDependentEvaluatedClasses(query);
         setReservedClientClasses(context_);
-        evaluateClasses(context_->query_, false);
+        evaluateClasses(query, false);
     }
 
     // Set KNOWN builtin class if something was found, UNKNOWN if not.
@@ -392,7 +388,7 @@ Dhcpv4Exchange::copyDefaultOptions() {
 }
 
 void
-Dhcpv4Exchange::setHostIdentifiers() {
+Dhcpv4Exchange::setHostIdentifiers(AllocEngine::ClientContext4Ptr context) {
     const ConstCfgHostOperationsPtr cfg =
         CfgMgr::instance().getCurrentCfg()->getCfgHostOperations4();
 
@@ -402,23 +398,23 @@ Dhcpv4Exchange::setHostIdentifiers() {
                   cfg->getIdentifierTypes()) {
         switch (id_type) {
         case Host::IDENT_HWADDR:
-            if (context_->hwaddr_ && !context_->hwaddr_->hwaddr_.empty()) {
-                context_->addHostIdentifier(id_type, context_->hwaddr_->hwaddr_);
+            if (context->hwaddr_ && !context->hwaddr_->hwaddr_.empty()) {
+                context->addHostIdentifier(id_type, context->hwaddr_->hwaddr_);
             }
             break;
 
         case Host::IDENT_DUID:
-            if (context_->clientid_) {
-                const std::vector<uint8_t>& vec = context_->clientid_->getDuid();
+            if (context->clientid_) {
+                const std::vector<uint8_t>& vec = context->clientid_->getDuid();
                 if (!vec.empty()) {
                     // Client identifier type = DUID? Client identifier holding a DUID
                     // comprises Type (1 byte), IAID (4 bytes), followed by the actual
                     // DUID. Thus, the minimal length is 6.
                     if ((vec[0] == CLIENT_ID_OPTION_TYPE_DUID) && (vec.size() > 5)) {
                         // Extract DUID, skip IAID.
-                        context_->addHostIdentifier(id_type,
-                                                    std::vector<uint8_t>(vec.begin() + 5,
-                                                                         vec.end()));
+                        context->addHostIdentifier(id_type,
+                                                   std::vector<uint8_t>(vec.begin() + 5,
+                                                                        vec.end()));
                     }
                 }
             }
@@ -426,13 +422,13 @@ Dhcpv4Exchange::setHostIdentifiers() {
 
         case Host::IDENT_CIRCUIT_ID:
             {
-                OptionPtr rai = query_->getOption(DHO_DHCP_AGENT_OPTIONS);
+                OptionPtr rai = context->query_->getOption(DHO_DHCP_AGENT_OPTIONS);
                 if (rai) {
                     OptionPtr circuit_id_opt = rai->getOption(RAI_OPTION_AGENT_CIRCUIT_ID);
                     if (circuit_id_opt) {
                         const OptionBuffer& circuit_id_vec = circuit_id_opt->getData();
                         if (!circuit_id_vec.empty()) {
-                            context_->addHostIdentifier(id_type, circuit_id_vec);
+                            context->addHostIdentifier(id_type, circuit_id_vec);
                         }
                     }
                 }
@@ -440,10 +436,10 @@ Dhcpv4Exchange::setHostIdentifiers() {
             break;
 
         case Host::IDENT_CLIENT_ID:
-            if (context_->clientid_) {
-                const std::vector<uint8_t>& vec = context_->clientid_->getDuid();
+            if (context->clientid_) {
+                const std::vector<uint8_t>& vec = context->clientid_->getDuid();
                 if (!vec.empty()) {
-                    context_->addHostIdentifier(id_type, vec);
+                    context->addHostIdentifier(id_type, vec);
                 }
             }
             break;
@@ -453,7 +449,7 @@ Dhcpv4Exchange::setHostIdentifiers() {
                     break;
                 }
 
-                CalloutHandlePtr callout_handle = getCalloutHandle(context_->query_);
+                CalloutHandlePtr callout_handle = getCalloutHandle(context->query_);
 
                 Host::IdentifierType type = Host::IDENT_FLEX;
                 std::vector<uint8_t> id;
@@ -465,7 +461,7 @@ Dhcpv4Exchange::setHostIdentifiers() {
                 ScopedCalloutHandleState callout_handle_state(callout_handle);
 
                 // Pass incoming packet as argument
-                callout_handle->setArgument("query4", context_->query_);
+                callout_handle->setArgument("query4", context->query_);
                 callout_handle->setArgument("id_type", type);
                 callout_handle->setArgument("id_value", id);
 
@@ -482,12 +478,27 @@ Dhcpv4Exchange::setHostIdentifiers() {
                     LOG_DEBUG(packet4_logger, DBGLVL_TRACE_BASIC, DHCP4_FLEX_ID)
                         .arg(Host::getIdentifierAsText(type, &id[0], id.size()));
 
-                    context_->addHostIdentifier(type, id);
+                    context->addHostIdentifier(type, id);
                 }
                 break;
             }
         default:
             ;
+        }
+    }
+}
+
+void
+Dhcpv4Exchange::removeDependentEvaluatedClasses(const Pkt4Ptr& query) {
+    const ClientClassDictionaryPtr& dict =
+        CfgMgr::instance().getCurrentCfg()->getClientClassDictionary();
+    const ClientClassDefListPtr& defs_ptr = dict->getClasses();
+    for (auto def : *defs_ptr) {
+        // Only remove evaluated classes. Other classes can be
+        // assigned via hooks libraries and we should not remove
+        // them because there is no way they can be added back.
+        if (def->getMatchExpr()) {
+            query->classes_.erase(def->getName());
         }
     }
 }
@@ -934,6 +945,79 @@ Dhcpv4Srv::sendPacket(const Pkt4Ptr& packet) {
     IfaceMgr::instance().send(packet);
 }
 
+bool
+Dhcpv4Srv::earlyGHRLookup(const Pkt4Ptr& query,
+                          AllocEngine::ClientContext4Ptr ctx) {
+    // Pointer to client's query.
+    ctx->query_ = query;
+
+    // Hardware address.
+    ctx->hwaddr_ = query->getHWAddr();
+
+    // Get the early-global-reservations-lookup flag value.
+    data::ConstElementPtr egrl = CfgMgr::instance().getCurrentCfg()->
+        getConfiguredGlobal(CfgGlobals::EARLY_GLOBAL_RESERVATIONS_LOOKUP);
+    if (egrl) {
+        ctx->early_global_reservations_lookup_ = egrl->boolValue();
+    }
+
+    // Perform early global reservations lookup when wanted.
+    if (ctx->early_global_reservations_lookup_) {
+        // Retrieve retrieve client identifier.
+        OptionPtr opt_clientid = query->getOption(DHO_DHCP_CLIENT_IDENTIFIER);
+        if (opt_clientid) {
+            ctx->clientid_.reset(new ClientId(opt_clientid->getData()));
+        }
+
+        // Get the host identifiers.
+        Dhcpv4Exchange::setHostIdentifiers(ctx);
+
+        // Check for global host reservations.
+        ConstHostPtr global_host = alloc_engine_->findGlobalReservation(*ctx);
+
+        if (global_host && !global_host->getClientClasses4().empty()) {
+            // Remove dependent evaluated classes.
+            Dhcpv4Exchange::removeDependentEvaluatedClasses(query);
+
+            // Add classes from the global reservations.
+            const ClientClasses& classes = global_host->getClientClasses4();
+            for (ClientClasses::const_iterator cclass = classes.cbegin();
+                 cclass != classes.cend(); ++cclass) {
+                query->addClass(*cclass);
+            }
+
+            // Evaluate classes before KNOWN.
+            Dhcpv4Exchange::evaluateClasses(query, false);
+        }
+
+        if (global_host) {
+            // Add the KNOWN class;
+            query->addClass("KNOWN");
+            LOG_DEBUG(dhcp4_logger, DBG_DHCP4_BASIC, DHCP4_CLASS_ASSIGNED)
+                .arg(query->getLabel())
+                .arg("KNOWN");
+
+            // Evaluate classes after KNOWN.
+            Dhcpv4Exchange::evaluateClasses(query, true);
+
+            // Check the DROP special class.
+            if (query->inClass("DROP")) {
+                LOG_DEBUG(packet4_logger, DBGLVL_PKT_HANDLING,
+                          DHCP4_PACKET_DROP_0014)
+                    .arg(query->toText());
+                isc::stats::StatsMgr::instance().addValue("pkt4-receive-drop",
+                                                          static_cast<int64_t>(1));
+                return (false);
+            }
+
+            // Store the reservation.
+            ctx->hosts_[SUBNET_ID_GLOBAL] = global_host;
+        }
+    }
+
+    return (true);
+}
+
 int
 Dhcpv4Srv::run() {
 #ifdef ENABLE_AFL
@@ -1281,12 +1365,15 @@ Dhcpv4Srv::processDhcp4Query(Pkt4Ptr& query, Pkt4Ptr& rsp,
         }
     }
 
-    AllocEngine::ClientContext4Ptr ctx;
+    AllocEngine::ClientContext4Ptr ctx(new AllocEngine::ClientContext4());
+    if (!earlyGHRLookup(query, ctx)) {
+        return;
+    }
 
     try {
         switch (query->getType()) {
         case DHCPDISCOVER:
-            rsp = processDiscover(query);
+            rsp = processDiscover(query, ctx);
             break;
 
         case DHCPREQUEST:
@@ -1305,7 +1392,7 @@ Dhcpv4Srv::processDhcp4Query(Pkt4Ptr& query, Pkt4Ptr& rsp,
             break;
 
         case DHCPINFORM:
-            rsp = processInform(query);
+            rsp = processInform(query, ctx);
             break;
 
         default:
@@ -1334,11 +1421,31 @@ Dhcpv4Srv::processDhcp4Query(Pkt4Ptr& query, Pkt4Ptr& rsp,
 
     CalloutHandlePtr callout_handle = getCalloutHandle(query);
     if (ctx && HooksManager::calloutsPresent(Hooks.hook_index_leases4_committed_)) {
+        // The ScopedCalloutHandleState class which guarantees that the task
+        // is added to the thread pool after the response is reset (if needed)
+        // and CalloutHandle state is reset. In ST it does nothing.
+        // A smart pointer is used to store the ScopedCalloutHandleState so that
+        // a copy of the pointer is created by the lambda and only on the
+        // destruction of the last reference the task is added.
+        // In MT there are 2 cases:
+        // 1. packet is unparked before current thread smart pointer to
+        //    ScopedCalloutHandleState is destroyed:
+        //  - the lambda uses the smart pointer to set the callout which adds the
+        //    task, but the task is added after ScopedCalloutHandleState is
+        //    destroyed, on the destruction of the last reference which is held
+        //    by the current thread.
+        // 2. packet is unparked after the current thread smart pointer to
+        //    ScopedCalloutHandleState is destroyed:
+        //  - the current thread reference to ScopedCalloutHandleState is
+        //    destroyed, but the reference in the lambda keeps it alive until
+        //    the lambda is called and the last reference is released, at which
+        //    time the task is actually added.
         // Use the RAII wrapper to make sure that the callout handle state is
         // reset when this object goes out of scope. All hook points must do
         // it to prevent possible circular dependency between the callout
         // handle and its arguments.
-        ScopedCalloutHandleState callout_handle_state(callout_handle);
+        std::shared_ptr<ScopedCalloutHandleState> callout_handle_state =
+                std::make_shared<ScopedCalloutHandleState>(callout_handle);
 
         ScopedEnableOptionsCopy<Pkt4> query4_options_copy(query);
 
@@ -1363,8 +1470,8 @@ Dhcpv4Srv::processDhcp4Query(Pkt4Ptr& query, Pkt4Ptr& rsp,
         if (allow_packet_park) {
             // Get the parking limit. Parsing should ensure the value is present.
             uint32_t parked_packet_limit = 0;
-            data::ConstElementPtr ppl = CfgMgr::instance().
-                getCurrentCfg()->getConfiguredGlobal("parked-packet-limit");
+            data::ConstElementPtr ppl = CfgMgr::instance().getCurrentCfg()->
+                getConfiguredGlobal(CfgGlobals::PARKED_PACKET_LIMIT);
             if (ppl) {
                 parked_packet_limit = ppl->intValue();
             }
@@ -1391,13 +1498,15 @@ Dhcpv4Srv::processDhcp4Query(Pkt4Ptr& query, Pkt4Ptr& rsp,
             // NEXT_STEP_PARK.  Otherwise the callback we bind here will be
             // executed when the hook library unparks the packet.
             HooksManager::park("leases4_committed", query,
-            [this, callout_handle, query, rsp]() mutable {
+            [this, callout_handle, query, rsp, callout_handle_state]() mutable {
                 if (MultiThreadingMgr::instance().getMode()) {
                     typedef function<void()> CallBack;
                     boost::shared_ptr<CallBack> call_back =
                         boost::make_shared<CallBack>(std::bind(&Dhcpv4Srv::sendResponseNoThrow,
                                                                this, callout_handle, query, rsp));
-                    MultiThreadingMgr::instance().getThreadPool().add(call_back);
+                    callout_handle_state->on_completion_ = [call_back]() {
+                        MultiThreadingMgr::instance().getThreadPool().add(call_back);
+                    };
                 } else {
                     processPacketPktSend(callout_handle, query, rsp);
                     processPacketBufferSend(callout_handle, rsp);
@@ -1963,18 +2072,19 @@ Dhcpv4Srv::processClientName(Dhcpv4Exchange& ex) {
     // option. In that the server should prefer Client FQDN option and
     // ignore the Hostname option.
     try {
+        Pkt4Ptr query = ex.getQuery();
         Pkt4Ptr resp = ex.getResponse();
         Option4ClientFqdnPtr fqdn = boost::dynamic_pointer_cast<Option4ClientFqdn>
-            (ex.getQuery()->getOption(DHO_FQDN));
+            (query->getOption(DHO_FQDN));
         if (fqdn) {
             LOG_DEBUG(ddns4_logger, DBG_DHCP4_DETAIL, DHCP4_CLIENT_FQDN_PROCESS)
-                .arg(ex.getQuery()->getLabel());
+                .arg(query->getLabel());
             processClientFqdnOption(ex);
 
         } else {
             LOG_DEBUG(ddns4_logger, DBG_DHCP4_DETAIL,
                       DHCP4_CLIENT_HOSTNAME_PROCESS)
-                    .arg(ex.getQuery()->getLabel());
+                    .arg(query->getLabel());
             processHostnameOption(ex);
         }
 
@@ -1984,6 +2094,8 @@ Dhcpv4Srv::processClientName(Dhcpv4Exchange& ex) {
         std::string hostname;
         bool fqdn_fwd = false;
         bool fqdn_rev = false;
+
+
         OptionStringPtr opt_hostname;
         fqdn = boost::dynamic_pointer_cast<Option4ClientFqdn>(resp->getOption(DHO_FQDN));
         if (fqdn) {
@@ -1991,7 +2103,7 @@ Dhcpv4Srv::processClientName(Dhcpv4Exchange& ex) {
             CfgMgr::instance().getD2ClientMgr().getUpdateDirections(*fqdn, fqdn_fwd, fqdn_rev);
         } else {
             opt_hostname = boost::dynamic_pointer_cast<OptionString>
-                (resp->getOption(DHO_HOST_NAME));
+                           (resp->getOption(DHO_HOST_NAME));
 
             if (opt_hostname) {
                 hostname = opt_hostname->getValue();
@@ -2008,6 +2120,70 @@ Dhcpv4Srv::processClientName(Dhcpv4Exchange& ex) {
                 if (ex.getContext()->getDdnsParams()->getEnableUpdates()) {
                     fqdn_fwd = true;
                     fqdn_rev = true;
+                }
+            }
+        }
+
+        // Optionally, call a hook that may possibly override the decisions made
+        // earlier.
+        if (HooksManager::calloutsPresent(Hooks.hook_index_ddns4_update_)) {
+            CalloutHandlePtr callout_handle = getCalloutHandle(query);
+
+            // Use the RAII wrapper to make sure that the callout handle state is
+            // reset when this object goes out of scope. All hook points must do
+            // it to prevent possible circular dependency between the callout
+            // handle and its arguments.
+            ScopedCalloutHandleState callout_handle_state(callout_handle);
+
+            // Setup the callout arguments.
+            Subnet4Ptr subnet = ex.getContext()->subnet_;
+            callout_handle->setArgument("query4", query);
+            callout_handle->setArgument("response4", resp);
+            callout_handle->setArgument("subnet4", subnet);
+            callout_handle->setArgument("hostname", hostname);
+            callout_handle->setArgument("fwd-update", fqdn_fwd);
+            callout_handle->setArgument("rev-update", fqdn_rev);
+            callout_handle->setArgument("ddns-params", ex.getContext()->getDdnsParams());
+
+            // Call callouts
+            HooksManager::callCallouts(Hooks.hook_index_ddns4_update_, *callout_handle);
+
+            // Let's get the parameters returned by hook.
+            string hook_hostname;
+            bool hook_fqdn_fwd = false;
+            bool hook_fqdn_rev = false;
+            callout_handle->getArgument("hostname", hook_hostname);
+            callout_handle->getArgument("fwd-update", hook_fqdn_fwd);
+            callout_handle->getArgument("rev-update", hook_fqdn_rev);
+
+            // If there's anything changed by the hook, log it and then update
+            // the parameters.
+            if ((hostname != hook_hostname) || (fqdn_fwd != hook_fqdn_fwd) ||
+                (fqdn_rev != hook_fqdn_rev)) {
+                LOG_DEBUG(hooks_logger, DBGLVL_PKT_HANDLING, DHCP4_HOOK_DDNS_UPDATE)
+                    .arg(hostname).arg(hook_hostname).arg(fqdn_fwd).arg(hook_fqdn_fwd)
+                    .arg(fqdn_rev).arg(hook_fqdn_rev);
+                hostname = hook_hostname;
+                fqdn_fwd = hook_fqdn_fwd;
+                fqdn_rev = hook_fqdn_rev;
+
+                // If there's an outbound host-name option in the response we
+                // need to updated it with the new host name.
+                OptionStringPtr hostname_opt = boost::dynamic_pointer_cast<OptionString>
+                                              (resp->getOption(DHO_HOST_NAME));
+                if (hostname_opt) {
+                    hostname_opt->setValue(hook_hostname);
+                }
+
+                // If there's an outbound FQDN option in the response we need
+                // to update it with the new host name.
+                Option4ClientFqdnPtr fqdn = boost::dynamic_pointer_cast<Option4ClientFqdn>
+                                            (resp->getOption(DHO_FQDN));
+                if (fqdn) {
+                    fqdn->setDomainName(hook_hostname, Option4ClientFqdn::FULL);
+                    // Hook disabled updates, Set flags back to client accordingly.
+                    fqdn->setFlag(Option4ClientFqdn::FLAG_S, 0);
+                    fqdn->setFlag(Option4ClientFqdn::FLAG_N, 1);
                 }
             }
         }
@@ -2031,7 +2207,6 @@ Dhcpv4Srv::processClientName(Dhcpv4Exchange& ex) {
             .arg(ex.getQuery()->getLabel())
             .arg(e.what());
     }
-
 }
 
 void
@@ -2454,7 +2629,7 @@ Dhcpv4Srv::assignLease(Dhcpv4Exchange& ex) {
 
     // Subnet may be modified by the allocation engine, if the initial subnet
     // belongs to a shared network.
-    if (subnet->getID() != ctx->subnet_->getID()) {
+    if (subnet && ctx->subnet_ && subnet->getID() != ctx->subnet_->getID()) {
         SharedNetwork4Ptr network;
         subnet->getSharedNetwork(network);
         LOG_DEBUG(packet4_logger, DBG_DHCP4_BASIC_DATA, DHCP4_SUBNET_DYNAMICALLY_CHANGED)
@@ -2564,8 +2739,6 @@ Dhcpv4Srv::assignLease(Dhcpv4Exchange& ex) {
         // Create NameChangeRequests if this is a real allocation.
         if (!fake_allocation) {
             try {
-                LOG_DEBUG(ddns4_logger, DBG_DHCP4_DETAIL, DHCP4_NCR_CREATE)
-                    .arg(query->getLabel());
                 createNameChangeRequests(lease, ctx->old_lease_,
                                          *ex.getContext()->getDdnsParams());
             } catch (const Exception& ex) {
@@ -3049,7 +3222,7 @@ Dhcpv4Srv::getNetmaskOption(const Subnet4Ptr& subnet) {
 }
 
 Pkt4Ptr
-Dhcpv4Srv::processDiscover(Pkt4Ptr& discover) {
+Dhcpv4Srv::processDiscover(Pkt4Ptr& discover, AllocEngine::ClientContext4Ptr& context) {
     // server-id is forbidden.
     sanityCheck(discover, FORBIDDEN);
 
@@ -3061,7 +3234,7 @@ Dhcpv4Srv::processDiscover(Pkt4Ptr& discover) {
         return (Pkt4Ptr());
     }
 
-    Dhcpv4Exchange ex(alloc_engine_, discover, subnet, drop);
+    Dhcpv4Exchange ex(alloc_engine_, discover, context, subnet, drop);
 
     // Stop here if Dhcpv4Exchange constructor decided to drop the packet
     if (drop) {
@@ -3132,7 +3305,7 @@ Dhcpv4Srv::processRequest(Pkt4Ptr& request, AllocEngine::ClientContext4Ptr& cont
         return (Pkt4Ptr());
     }
 
-    Dhcpv4Exchange ex(alloc_engine_, request, subnet, drop);
+    Dhcpv4Exchange ex(alloc_engine_, request, context, subnet, drop);
 
     // Stop here if Dhcpv4Exchange constructor decided to drop the packet
     if (drop) {
@@ -3474,7 +3647,7 @@ Dhcpv4Srv::declineLease(const Lease4Ptr& lease, const Pkt4Ptr& decline,
 }
 
 Pkt4Ptr
-Dhcpv4Srv::processInform(Pkt4Ptr& inform) {
+Dhcpv4Srv::processInform(Pkt4Ptr& inform, AllocEngine::ClientContext4Ptr& context) {
     // server-id is supposed to be forbidden (as is requested address)
     // but ISC DHCP does not enforce either. So neither will we.
     sanityCheck(inform, OPTIONAL);
@@ -3487,7 +3660,7 @@ Dhcpv4Srv::processInform(Pkt4Ptr& inform) {
         return (Pkt4Ptr());
     }
 
-    Dhcpv4Exchange ex(alloc_engine_, inform, subnet, drop);
+    Dhcpv4Exchange ex(alloc_engine_, inform, context, subnet, drop);
 
     // Stop here if Dhcpv4Exchange constructor decided to drop the packet
     if (drop) {
@@ -3972,6 +4145,8 @@ Dhcpv4Srv::deferredUnpack(Pkt4Ptr& query) {
                 .arg(code);
             continue;
         }
+        // Because options have already been fused, the buffer contains entire
+        // data.
         const OptionBuffer buf = opt->getData();
         try {
             // Unpack the option
@@ -4044,9 +4219,6 @@ Dhcpv4Srv::getVersion(bool extended) {
 #endif
 #ifdef HAVE_PGSQL
         tmp << PgSqlLeaseMgr::getDBVersion() << endl;
-#endif
-#ifdef HAVE_CQL
-        tmp << CqlLeaseMgr::getDBVersion() << endl;
 #endif
         tmp << Memfile_LeaseMgr::getDBVersion(Memfile_LeaseMgr::V4);
 

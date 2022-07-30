@@ -56,6 +56,7 @@ libkea_dhcp___la_SOURCES += pkt_filter.h pkt_filter.cc
 libkea_dhcp___la_SOURCES += pkt_filter6.h pkt_filter6.cc
 libkea_dhcp___la_SOURCES += pkt_filter_inet.cc pkt_filter_inet.h
 libkea_dhcp___la_SOURCES += pkt_filter_inet6.cc pkt_filter_inet6.h
+libkea_dhcp___la_SOURCES += pkt_template.h
 libkea_dhcp___la_SOURCES += socket_info.h
 
 # Utilize Linux Packet Filtering on Linux.
@@ -83,7 +84,7 @@ libkea_dhcp___la_LIBADD  += $(top_builddir)/src/lib/cc/libkea-cc.la
 libkea_dhcp___la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_dhcp___la_LIBADD  += $(BOOST_LIBS)
 libkea_dhcp___la_LIBADD  += $(CRYPTO_LIBS)
-libkea_dhcp___la_LDFLAGS  = -no-undefined -version-info 49:0:0
+libkea_dhcp___la_LDFLAGS  = -no-undefined -version-info 54:0:0
 libkea_dhcp___la_LDFLAGS += $(CRYPTO_LDFLAGS)
 
 EXTRA_DIST  = README libdhcp++.dox
@@ -138,6 +139,7 @@ libkea_dhcp___include_HEADERS = \
 	pkt_filter6.h \
 	pkt_filter_inet.h \
 	pkt_filter_inet6.h \
+	pkt_template.h \
 	protocol_util.h \
 	socket_info.h \
 	std_option_defs.h

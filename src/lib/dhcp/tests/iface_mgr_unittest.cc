@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1989,6 +1989,32 @@ TEST_F(IfaceMgrTest, openSocket4ErrorHandler) {
     EXPECT_EQ(2, errors_count_);
 }
 
+// Test that no exception is thrown when a port is already bound but skip open
+// flag is provided.
+TEST_F(IfaceMgrTest, openSockets4SkipOpen) {
+    NakedIfaceMgr ifacemgr;
+
+    // Remove all real interfaces and create a set of dummy interfaces.
+    ifacemgr.createIfaces();
+
+    boost::shared_ptr<TestPktFilter> custom_packet_filter(new TestPktFilter());
+    ASSERT_TRUE(custom_packet_filter);
+    ASSERT_NO_THROW(ifacemgr.setPacketFilter(custom_packet_filter));
+
+    // Open socket on eth1. The openSockets4 should detect that this
+    // socket has been already open and an attempt to open another socket
+    // and bind to this address and port should fail.
+    ASSERT_NO_THROW(ifacemgr.openSocket("eth1", IOAddress("192.0.2.3"),
+                                        DHCP4_SERVER_PORT));
+
+    // The function doesn't throw an exception when it tries to open a socket
+    // and bind it to the address in use but the skip open flag is provided.
+    EXPECT_NO_THROW(ifacemgr.openSockets4(DHCP4_SERVER_PORT, true, 0, true));
+
+    // Check that the other port is bound.
+    EXPECT_TRUE(ifacemgr.hasOpenSocket(IOAddress("10.0.0.1")));
+}
+
 // This test verifies that the function correctly checks that the v4 socket is
 // open and bound to a specific address.
 TEST_F(IfaceMgrTest, hasOpenSocketForAddress4) {
@@ -2419,7 +2445,7 @@ TEST_F(IfaceMgrTest, openSockets6NoIfaces) {
 // Test that the external error handler is called when trying to bind a new
 // socket to the address and port being in use. The sockets on the other
 // interfaces should open just fine.
-TEST_F(IfaceMgrTest, openSocket6ErrorHandler) {
+TEST_F(IfaceMgrTest, openSockets6ErrorHandler) {
     NakedIfaceMgr ifacemgr;
 
     // Remove all real interfaces and create a set of dummy interfaces.
@@ -2454,6 +2480,33 @@ TEST_F(IfaceMgrTest, openSocket6ErrorHandler) {
     // when opening a socket on eth1.
     ASSERT_NO_THROW(ifacemgr.openSockets6(DHCP6_SERVER_PORT, error_handler));
     EXPECT_EQ(2, errors_count_);
+}
+
+// Test that no exception is thrown when a port is already bound but skip open
+// flag is provided.
+TEST_F(IfaceMgrTest, openSockets6SkipOpen) {
+    NakedIfaceMgr ifacemgr;
+
+    // Remove all real interfaces and create a set of dummy interfaces.
+    ifacemgr.createIfaces();
+
+    boost::shared_ptr<PktFilter6Stub> filter(new PktFilter6Stub());
+    ASSERT_TRUE(filter);
+    ASSERT_NO_THROW(ifacemgr.setPacketFilter(filter));
+
+    // Open socket on eth0. The openSockets6 should detect that this
+    // socket has been already open and an attempt to open another socket
+    // and bind to this address and port should fail.
+    ASSERT_NO_THROW(ifacemgr.openSocket("eth0",
+                                        IOAddress("fe80::3a60:77ff:fed5:cdef"),
+                                        DHCP6_SERVER_PORT, true));
+
+    // The function doesn't throw an exception when it tries to open a socket
+    // and bind it to the address in use but the skip open flag is provided.
+    EXPECT_NO_THROW(ifacemgr.openSockets6(DHCP6_SERVER_PORT, 0, true));
+
+    // Check that the other port is bound.
+    EXPECT_TRUE(ifacemgr.isBound("eth1", "fe80::3a60:77ff:fed5:abcd"));
 }
 
 // This test verifies that the function correctly checks that the v6 socket is

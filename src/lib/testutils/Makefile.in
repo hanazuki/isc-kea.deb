@@ -120,7 +120,7 @@ am__libkea_testutils_la_SOURCES_DIST = io_utils.cc io_utils.h \
 	test_to_element.h threaded_test.cc threaded_test.h \
 	unix_control_client.cc unix_control_client.h \
 	user_context_utils.cc user_context_utils.h gtest_utils.h \
-	multi_threading_utils.h
+	multi_threading_utils.h lib_load_test_fixture.h
 @HAVE_GTEST_TRUE@am_libkea_testutils_la_OBJECTS =  \
 @HAVE_GTEST_TRUE@	libkea_testutils_la-io_utils.lo \
 @HAVE_GTEST_TRUE@	libkea_testutils_la-log_utils.lo \
@@ -232,11 +232,6 @@ AUTOCONF = @AUTOCONF@
 AUTOHEADER = @AUTOHEADER@
 AUTOMAKE = @AUTOMAKE@
 AWK = @AWK@
-BENCHMARK_CPPFLAGS = @BENCHMARK_CPPFLAGS@
-BENCHMARK_INCLUDES = @BENCHMARK_INCLUDES@
-BENCHMARK_LDADD = @BENCHMARK_LDADD@
-BENCHMARK_LDFLAGS = @BENCHMARK_LDFLAGS@
-BENCHMARK_SOURCE = @BENCHMARK_SOURCE@
 BOOST_INCLUDES = @BOOST_INCLUDES@
 BOOST_LIBS = @BOOST_LIBS@
 BOTAN_TOOL = @BOTAN_TOOL@
@@ -246,8 +241,6 @@ CFLAGS = @CFLAGS@
 CONTRIB_DIR = @CONTRIB_DIR@
 CPP = @CPP@
 CPPFLAGS = @CPPFLAGS@
-CQL_CPPFLAGS = @CQL_CPPFLAGS@
-CQL_LIBS = @CQL_LIBS@
 CRYPTO_CFLAGS = @CRYPTO_CFLAGS@
 CRYPTO_INCLUDES = @CRYPTO_INCLUDES@
 CRYPTO_LDFLAGS = @CRYPTO_LDFLAGS@
@@ -261,7 +254,6 @@ CXXFLAGS = @CXXFLAGS@
 CYGPATH_W = @CYGPATH_W@
 DEFS = @DEFS@
 DEPDIR = @DEPDIR@
-DISTCHECK_BENCHMARK_CONFIGURE_FLAG = @DISTCHECK_BENCHMARK_CONFIGURE_FLAG@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
@@ -433,7 +425,8 @@ noinst_SCRIPTS = dhcp_test_lib.sh xml_reporting_test_lib.sh
 @HAVE_GTEST_TRUE@	threaded_test.cc threaded_test.h \
 @HAVE_GTEST_TRUE@	unix_control_client.cc unix_control_client.h \
 @HAVE_GTEST_TRUE@	user_context_utils.cc user_context_utils.h \
-@HAVE_GTEST_TRUE@	gtest_utils.h multi_threading_utils.h
+@HAVE_GTEST_TRUE@	gtest_utils.h multi_threading_utils.h \
+@HAVE_GTEST_TRUE@	lib_load_test_fixture.h
 @HAVE_GTEST_TRUE@libkea_testutils_la_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@libkea_testutils_la_LIBADD = $(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dns/libkea-dns++.la
