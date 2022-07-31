@@ -1,1 +1,3 @@
 kea-doc: embedded-javascript-library *
+kea-doc: font-in-non-font-package [usr/share/doc/kea/html/_static/fonts/*]
+kea-doc: font-outside-font-dir [usr/share/doc/kea/html/_static/fonts/*]
