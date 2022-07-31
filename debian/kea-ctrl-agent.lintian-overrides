@@ -1,2 +1,2 @@
-kea-ctrl-agent: systemd-service-file-refers-to-unusual-wantedby-target lib/systemd/system/kea-ctrl-agent.service kea-dhcp4-server.service
-kea-ctrl-agent: systemd-service-file-refers-to-unusual-wantedby-target lib/systemd/system/kea-ctrl-agent.service kea-dhcp6-server.service
+kea-ctrl-agent: systemd-service-file-refers-to-unusual-wantedby-target kea-dhcp4-server.service [lib/systemd/system/kea-ctrl-agent.service]
+kea-ctrl-agent: systemd-service-file-refers-to-unusual-wantedby-target kea-dhcp6-server.service [lib/systemd/system/kea-ctrl-agent.service]

@@ -1,2 +1,2 @@
-kea-dhcp-ddns-server: systemd-service-file-refers-to-unusual-wantedby-target lib/systemd/system/kea-dhcp-ddns-server.service kea-dhcp4-server.service
-kea-dhcp-ddns-server: systemd-service-file-refers-to-unusual-wantedby-target lib/systemd/system/kea-dhcp-ddns-server.service kea-dhcp6-server.service
+kea-dhcp-ddns-server: systemd-service-file-refers-to-unusual-wantedby-target kea-dhcp4-server.service [lib/systemd/system/kea-dhcp-ddns-server.service]
+kea-dhcp-ddns-server: systemd-service-file-refers-to-unusual-wantedby-target kea-dhcp6-server.service [lib/systemd/system/kea-dhcp-ddns-server.service]
