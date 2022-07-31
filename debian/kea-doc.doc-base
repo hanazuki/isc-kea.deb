@@ -1,0 +1,11 @@
+Document: kea
+Title: Kea Administrator Reference Manual
+Author: Internet Systems Consortium
+Abstract: This is the reference guide for Kea, an open source implementation
+ of the Dynamic Host Configuration Protocol (DHCP) servers, developed and
+ maintained by Internet Systems Consortium (ISC).
+Section: System/Administration
+
+Format: HTML
+Files: /usr/share/doc/kea/html/*
+Index: /usr/share/doc/kea/html/index.html
