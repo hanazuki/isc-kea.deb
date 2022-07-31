@@ -1,1 +1,2 @@
 kea-admin: script-not-executable [usr/share/kea/scripts/*]
+kea-admin: bash-term-in-posix-shell
