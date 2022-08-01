@@ -1,3 +1,27 @@
+isc-kea (2.2.0-1~2.gbp57a9f2) UNRELEASED; urgency=medium
+
+  ** SNAPSHOT build @57a9f2837108ec89bcd96478782b4aaa37b7ddce **
+
+  * New upstream version 2.2.0.
+    Thanks to Daniel Baumann (Closes: #1016109)
+  * debian/patches:
+    - 0002-kea_admin_fix.patch: refresh patch
+    - 0007-keyctrl-colored-ddns-status.patch: drop patch (fixed upstream)
+    - 0009-disable-database-tests.patch: refresh patch
+    - 0010-build-libco-when-gtest-is-not-enabled: drop patch (fixed upstream)
+    - 0011-sphinx-set-language.patch: drop patch (fixed upstream)
+  * d/kea-doc.doc-base: register documentation to doc-base
+  * Lintian overrides:
+    - *.lintian-overrides: adapt to "pointed hints" syntax
+    - kea-admin.l-o: bash-term-in-posix-shell (false positives)
+    - d/kea-doc.l-o: add overrides for sphinx installed fonts.
+      + font-in-non-font-package [usr/share/doc/kea/html/_static/fonts/*]
+      + font-outside-font-dir [usr/share/doc/kea/html/_static/fonts/*]
+  * d/copyright: remove file patterns made unnecessary by new release
+  * d/salsa-ci.yml: add salsa CI
+
+ -- Paride Legovini <paride@debian.org>  Mon, 01 Aug 2022 20:53:52 +0000
+
 isc-kea (2.0.2-3) unstable; urgency=medium
 
   * d/rules: configure: specify the Python site packages location.
