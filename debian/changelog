@@ -1,6 +1,4 @@
-isc-kea (2.2.0-1~2.gbp57a9f2) UNRELEASED; urgency=medium
-
-  ** SNAPSHOT build @57a9f2837108ec89bcd96478782b4aaa37b7ddce **
+isc-kea (2.2.0-1) unstable; urgency=medium
 
   * New upstream version 2.2.0.
     Thanks to Daniel Baumann (Closes: #1016109)
@@ -20,7 +18,7 @@ isc-kea (2.2.0-1~2.gbp57a9f2) UNRELEASED; urgency=medium
   * d/copyright: remove file patterns made unnecessary by new release
   * d/salsa-ci.yml: add salsa CI
 
- -- Paride Legovini <paride@debian.org>  Mon, 01 Aug 2022 20:53:52 +0000
+ -- Paride Legovini <paride@debian.org>  Tue, 02 Aug 2022 12:16:45 +0000
 
 isc-kea (2.0.2-3) unstable; urgency=medium
 
