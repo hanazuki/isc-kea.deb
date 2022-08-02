@@ -1,3 +1,10 @@
 include:
   - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/salsa-ci.yml
   - https://salsa.debian.org/salsa-ci-team/pipeline/raw/master/pipeline-jobs.yml
+
+variables:
+  # We don't have autopkgtests for now, and the autodep8 auto-generated
+  # ones fail. Let's just disable the autopkgtest run.
+  SALSA_CI_DISABLE_AUTOPKGTEST: 1
+  # The package isn't near to be reproducible.
+  SALSA_CI_DISABLE_REPROTEST: 1
