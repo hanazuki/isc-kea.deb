@@ -1,0 +1,30 @@
+abi <abi/3.0>,
+
+include <tunables/global>
+
+profile kea-dhcp-ddns /usr/sbin/kea-dhcp-ddns {
+  include <abstractions/base>
+  include <abstractions/openssl>
+
+  network inet dgram,
+  network netlink raw,
+
+  /etc/kea/ r,
+  /etc/kea/** r,
+  /usr/sbin/kea-dhcp-ddns mr,
+
+  owner /run/kea/kea-dhcp-ddns.kea-dhcp-ddns.pid w,
+  owner /run/lock/kea/logger_lockfile rwk,
+  owner /run/kea/logger_lockfile rwk,
+
+  # Control sockets
+  # Before LP: #1863100, these were in /tmp. For compatibility, let's keep both
+  # locations
+  owner /{tmp,run/kea}/kea-ddns-ctrl-socket w,
+  owner /{tmp,run/kea}/kea-ddns-ctrl-socket.lock rwk,
+
+  owner /var/log/kea/kea-ddns.log rw,
+  owner /var/log/kea/kea-ddns.log.[0-9]* rw,
+  owner /var/log/kea/kea-ddns.log.lock rwk,
+
+}

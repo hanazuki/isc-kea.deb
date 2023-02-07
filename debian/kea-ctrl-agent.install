@@ -1,3 +1,4 @@
 etc/kea/kea-ctrl-agent.conf
 usr/sbin/kea-ctrl-agent
 usr/sbin/kea-shell
+debian/usr.sbin.kea-ctrl-agent etc/apparmor.d/

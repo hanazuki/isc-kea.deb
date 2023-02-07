@@ -1,2 +1,3 @@
 etc/kea/kea-dhcp4.conf
 usr/sbin/kea-dhcp4
+debian/usr.sbin.kea-dhcp4 /etc/apparmor.d/

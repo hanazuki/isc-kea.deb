@@ -1,3 +1,4 @@
+debian/usr.sbin.kea-lfc etc/apparmor.d/
 usr/lib/*/kea/hooks
 usr/lib/*/libkea-*.so.*
 usr/sbin/kea-lfc
