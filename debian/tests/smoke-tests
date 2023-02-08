@@ -13,6 +13,3 @@ curl -s -X POST -H "Content-Type: application/json" -d '{ "command": "version-ge
 
 # Check control agent API through kea-shell
 echo | kea-shell --service dhcp4 --host 127.0.0.1 --port 8000 version-get | jq '.[0].text'
-
-# Use keactrl to check if services are running
-keactrl status | grep 'DHCPv[46] server: active'
