@@ -1,1 +1,4 @@
 usr/share/man/man8/kea-netconf.8
+usr/sbin/keactrl
+usr/share/man/man8/keactrl.8
+etc/kea/keactrl.conf

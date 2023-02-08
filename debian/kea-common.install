@@ -1,5 +1,3 @@
-etc/kea/keactrl.conf
 usr/lib/*/kea/hooks
 usr/lib/*/libkea-*.so.*
 usr/sbin/kea-lfc
-usr/sbin/keactrl
