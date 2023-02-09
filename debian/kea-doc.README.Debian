@@ -1,0 +1,13 @@
+# ISC Kea for Debian
+
+## Logging
+
+Following what upstream does with their .deb packaging, the Debian packages by
+default log to the systemd journal. If logging to file is desired just edit the
+config files and change the loggers "output" to a file under /var/log/kea/,
+e.g. for /etc/kea/kea-dhcp4.conf:
+
+  "output": "/var/log/kea/kea-dhcp4.log"
+
+The systemd units automatically create the /var/log/kea/ right ownership and
+permissions.

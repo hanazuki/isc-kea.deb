@@ -7,7 +7,6 @@ After=network-online.target time-sync.target
 User=_kea
 Environment="KEA_PIDFILE_DIR=/run/kea"
 Environment="KEA_LOCKFILE_DIR=/run/lock/kea"
-Environment="KEA_LOGGER_DESTINATION=/var/log/kea"
 ConfigurationDirectory=kea
 RuntimeDirectory=kea lock/kea
 RuntimeDirectoryPreserve=yes

@@ -38,3 +38,7 @@ execute_after_dh_auto_install:
 	    debian/tmp/usr/share/doc/kea/COPYING \
 	    debian/tmp/usr/lib/python3/dist-packages/kea/__pycache__ \
 	    debian/tmp/usr/lib/python3/dist-packages/kea/kea_connector2.py
+	# log to stdout (i.e. to to the systemd journal), and use a shorter log
+	# pattern that avoids logging information made redundant by the journal.
+	# adapted from: https://gitlab.isc.org/isc-projects/kea-packaging/-/blob/master/debian/rules
+	sed -i -e 's/"output": .*/"output": "stdout",/' -e 's@// "pattern"@"pattern"@' debian/tmp/etc/kea/kea-*.conf
