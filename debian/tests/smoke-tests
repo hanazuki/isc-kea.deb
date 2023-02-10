@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -e
+set -ex
 
 # Check that the PID files are in the right location
 for f in kea-dhcp4.kea-dhcp4.pid kea-dhcp6.kea-dhcp6.pid; do
