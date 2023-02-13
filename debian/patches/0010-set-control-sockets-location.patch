@@ -1,0 +1,116 @@
+From: Athos Ribeiro <athos.ribeiro@canonical.com>
+Date: Mon, 13 Feb 2023 16:20:18 -0300
+Subject: d/rules: set the default location for control sockets to /run/kea
+
+The default config files place the control sockets in /tmp, which is
+insecure. Mangle the config files to place the sockets under _kea-owned
+/run/kea instead.
+
+Patch originally submitted by Paride Legovini in
+https://salsa.debian.org/debian/isc-kea/-/merge_requests/15.
+
+Last-Update: 2023-02-13
+Bug: https://gitlab.isc.org/isc-projects/kea/-/issues/2495
+Bug-Debian: https://bugs.debian.org/cgi-bin/bugreport.cgi?bug=1014929
+Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/isc-kea/+bug/1863100
+---
+ src/bin/keactrl/kea-ctrl-agent.conf.pre | 6 +++---
+ src/bin/keactrl/kea-dhcp-ddns.conf.pre  | 2 +-
+ src/bin/keactrl/kea-dhcp4.conf.pre      | 2 +-
+ src/bin/keactrl/kea-dhcp6.conf.pre      | 2 +-
+ src/bin/keactrl/kea-netconf.conf.pre    | 4 ++--
+ 5 files changed, 8 insertions(+), 8 deletions(-)
+
+--- a/src/bin/keactrl/kea-ctrl-agent.conf.pre
++++ b/src/bin/keactrl/kea-ctrl-agent.conf.pre
+@@ -32,15 +32,15 @@
+     "control-sockets": {
+         "dhcp4": {
+             "socket-type": "unix",
+-            "socket-name": "/tmp/kea4-ctrl-socket"
++            "socket-name": "@runstatedir@/@PACKAGE@/kea4-ctrl-socket"
+         },
+         "dhcp6": {
+             "socket-type": "unix",
+-            "socket-name": "/tmp/kea6-ctrl-socket"
++            "socket-name": "@runstatedir@/@PACKAGE@/kea6-ctrl-socket"
+         },
+         "d2": {
+             "socket-type": "unix",
+-            "socket-name": "/tmp/kea-ddns-ctrl-socket"
++            "socket-name": "@runstatedir@/@PACKAGE@/kea-ddns-ctrl-socket"
+         }
+     },
+ 
+--- a/src/bin/keactrl/kea-dhcp-ddns.conf.pre
++++ b/src/bin/keactrl/kea-dhcp-ddns.conf.pre
+@@ -23,7 +23,7 @@
+   "port": 53001,
+   "control-socket": {
+       "socket-type": "unix",
+-      "socket-name": "/tmp/kea-ddns-ctrl-socket"
++      "socket-name": "@runstatedir@/@PACKAGE@/kea-ddns-ctrl-socket"
+   },
+   "tsig-keys": [],
+   "forward-ddns" : {},
+--- a/src/bin/keactrl/kea-dhcp4.conf.pre
++++ b/src/bin/keactrl/kea-dhcp4.conf.pre
+@@ -49,7 +49,7 @@
+     // more. For detailed description, see Sections 8.8, 16 and 15.
+     "control-socket": {
+         "socket-type": "unix",
+-        "socket-name": "/tmp/kea4-ctrl-socket"
++        "socket-name": "@runstatedir@/@PACKAGE@/kea4-ctrl-socket"
+     },
+ 
+     // Use Memfile lease database backend to store leases in a CSV file.
+--- a/src/bin/keactrl/kea-dhcp6.conf.pre
++++ b/src/bin/keactrl/kea-dhcp6.conf.pre
+@@ -43,7 +43,7 @@
+     // description, see Sections 9.12, 16 and 15.
+     "control-socket": {
+         "socket-type": "unix",
+-        "socket-name": "/tmp/kea6-ctrl-socket"
++        "socket-name": "@runstatedir@/@PACKAGE@/kea6-ctrl-socket"
+     },
+ 
+     // Use Memfile lease database backend to store leases in a CSV file.
+--- a/src/bin/keactrl/kea-netconf.conf.pre
++++ b/src/bin/keactrl/kea-netconf.conf.pre
+@@ -30,13 +30,13 @@
+         "dhcp4": {
+             "control-socket": {
+                 "socket-type": "unix",
+-                "socket-name": "/tmp/kea4-ctrl-socket"
++                "socket-name": "@runstatedir@/@PACKAGE@/kea4-ctrl-socket"
+             }
+         },
+         "dhcp6": {
+             "control-socket": {
+                 "socket-type": "unix",
+-                "socket-name": "/tmp/kea6-ctrl-socket"
++                "socket-name": "@runstatedir@/@PACKAGE@/kea6-ctrl-socket"
+             }
+         }
+     },
+--- a/tools/path_replacer.sh.in
++++ b/tools/path_replacer.sh.in
+@@ -28,13 +28,17 @@
+ localstatedir="@localstatedir@"
+ exec_prefix="@exec_prefix@"
+ libdir="@libdir@"
++runstatedir="@runstatedir@"
++PACKAGE="@PACKAGE@"
+ 
+ echo "Replacing \@prefix\@ with ${prefix}"
+ echo "Replacing \@libdir\@ with ${libdir}"
+ echo "Replacing \@sysconfdir\@ with ${sysconfdir}"
+ echo "Replacing \@localstatedir\@ with ${localstatedir}"
++echo "Replacing \@runstatedir\@ with ${runstatedir}"
++echo "Replacing \@PACKAGE\@ with ${PACKAGE}"
+ 
+ echo "Input file: $1"
+ echo "Output file: $2"
+ 
+-sed -e "s@SEP@\@libdir\@@SEP@${libdir}@SEP@g; s@SEP@\@localstatedir\@@SEP@${localstatedir}@SEP@g; s@SEP@\@prefix\@@SEP@${prefix}@SEP@g; s@SEP@\@sysconfdir\@@SEP@${sysconfdir}@SEP@g" "${1}" > "${2}"
++sed -e "s@SEP@\@libdir\@@SEP@${libdir}@SEP@g; s@SEP@\@localstatedir\@@SEP@${localstatedir}@SEP@g; s@SEP@\@prefix\@@SEP@${prefix}@SEP@g; s@SEP@\@sysconfdir\@@SEP@${sysconfdir}@SEP@g; s@SEP@\@runstatedir\@@SEP@${runstatedir}@SEP@g; s@SEP@\@PACKAGE\@@SEP@${PACKAGE}@SEP@g" "${1}" > "${2}"
