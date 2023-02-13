@@ -1,6 +1,6 @@
 #!/bin/bash
 
-set -ex
+set -exo pipefail
 
 # Check that the PID files are in the right location
 for f in kea-dhcp4.kea-dhcp4.pid kea-dhcp6.kea-dhcp6.pid; do
@@ -10,14 +10,24 @@ done
 # Check that lock files are in the right location
 test -f /run/lock/kea/logger_lockfile
 
+check_kea_version() {
+  CHECKED_VERSION=$1
+  if [[ ! ${CHECKED_VERSION} =~ [0-9]+(\.[0-9]+){2} ]]; then
+    echo "Version [ ${CHECKED_VERSION} ] does not match X.Y.Z format"
+    exit 1
+  fi
+}
+
 # Check dhcp4 server configuration file
-kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+kea-dhcp4 -t /etc/kea/kea-dhcp4.conf > /dev/null
 
 # Check dhcp6 server configuration file
-kea-dhcp6 -t /etc/kea/kea-dhcp6.conf
+kea-dhcp6 -t /etc/kea/kea-dhcp6.conf > /dev/null
 
 # Check control agent API
-curl -s -X POST -H "Content-Type: application/json" -d '{ "command": "version-get", "service": [ "dhcp4" ] }' 127.0.0.1:8000 | jq '.[0].text'
+TEST_KEA_VERSION=$(curl -s -X POST -H "Content-Type: application/json" -d '{ "command": "version-get", "service": [ "dhcp4" ] }' 127.0.0.1:8000 | jq -r '.[0].text')
+check_kea_version "${TEST_KEA_VERSION}"
 
 # Check control agent API through kea-shell
-echo | kea-shell --service dhcp4 --host 127.0.0.1 --port 8000 version-get | jq '.[0].text'
+TEST_KEA_VERSION=$(echo | kea-shell --service dhcp4 --host 127.0.0.1 --port 8000 version-get | jq -r '.[0].text')
+check_kea_version "${TEST_KEA_VERSION}"
