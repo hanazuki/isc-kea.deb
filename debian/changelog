@@ -1,3 +1,34 @@
+isc-kea (2.2.0-2) unstable; urgency=medium
+
+  [ Athos Ribeiro ]
+  * d/tests: add simple DEP8 smoke tests
+  * Set default control sockets location to /run/kea (Closes: #1014929)
+    (LP: #1863100)
+
+  [ Paride Legovini ]
+  * d/control: drop dependency on lsb-base (obsolete)
+  * d/salsa-ci.yml: enable the autopkgtest job
+  * d/kea-common.*:
+    - Do not install keactrl. The keactrl script is not systemd-aware and not
+      installed by the upstream .deb packages. Remove it from the Debian
+      packaging
+    - Leave handling of /var/*/kea directories to systemd. No need to create
+      them in packaging as the systemd units will automatically create them
+      with the right ownership and permissions
+  * d/*.service:
+    - Do not set KEA_LOGGER_DESTINATION. The variable is meant to tell the
+      daemons where to log *before* their config files are loaded. If unset
+      the default is stdout, which works well with systemd
+    - Do not set KEA_PIDFILE_DIR. What we set it to corresponds to the
+      defaults. The documentation says that KEA_PIDFILE_DIR "is intended
+      primarily for testing"
+  * d/rules: use the systemd journal for logging (Closes: #1016747)
+    (LP: #2006522)
+  * d/kea-doc.README.Debian: document how logging is done by default
+  * d/tests/smoke-tests: check location of PID and lock files
+
+ -- Athos Ribeiro <athos.ribeiro@canonical.com>  Tue, 14 Feb 2023 11:24:58 -0300
+
 isc-kea (2.2.0-1) unstable; urgency=medium
 
   * New upstream version 2.2.0.
