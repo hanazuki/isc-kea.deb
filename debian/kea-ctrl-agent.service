@@ -5,7 +5,6 @@ After=network-online.target time-sync.target
 
 [Service]
 User=_kea
-Environment="KEA_PIDFILE_DIR=/run/kea"
 Environment="KEA_LOCKFILE_DIR=/run/lock/kea"
 ConfigurationDirectory=kea
 RuntimeDirectory=kea lock/kea
