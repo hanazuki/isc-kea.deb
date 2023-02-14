@@ -3,7 +3,7 @@
 set -exo pipefail
 
 # Check that the PID files are in the right location
-for f in kea-dhcp4.kea-dhcp4.pid kea-dhcp6.kea-dhcp6.pid; do
+for f in kea-dhcp4.kea-dhcp4.pid kea-dhcp6.kea-dhcp6.pid kea-ctrl-agent.kea-ctrl-agent.pid kea-dhcp-ddns.kea-dhcp-ddns.pid; do
     test -f "/run/kea/$f"
 done
 
