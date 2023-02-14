@@ -7,6 +7,11 @@ for f in kea-dhcp4.kea-dhcp4.pid kea-dhcp6.kea-dhcp6.pid kea-ctrl-agent.kea-ctrl
     test -f "/run/kea/$f"
 done
 
+# Check that the sockets are in the right location
+for socket in kea-ddns-ctrl-socket kea4-ctrl-socket kea6-ctrl-socket; do
+    test -S "/run/kea/$socket"
+done
+
 # Check that lock files are in the right location
 test -f /run/lock/kea/logger_lockfile
 
