@@ -11,6 +11,7 @@ Build-Depends:
  bison,
  debhelper-compat (= 13),
  default-libmysqlclient-dev,
+ dh-apparmor,
  dh-python,
  docbook,
  docbook-xsl,

@@ -1,0 +1,69 @@
+{
+"Dhcp4": {
+    "interfaces-config": {
+        "interfaces": [ "@interface@" ]
+    },
+    "control-socket": {
+        "socket-type": "unix",
+        "socket-name": "/run/kea/kea4-ctrl-socket"
+    },
+    "hooks-libraries": [
+        {
+            "library": "/usr/lib/@multiarch@/kea/hooks/libdhcp_lease_cmds.so"
+        }
+    ],
+    "lease-database": {
+        "type": "memfile",
+        "lfc-interval": 3600
+    },
+    "expired-leases-processing": {
+        "reclaim-timer-wait-time": 10,
+        "flush-reclaimed-timer-wait-time": 25,
+        "hold-reclaimed-time": 3600,
+        "max-reclaim-leases": 100,
+        "max-reclaim-time": 250,
+        "unwarned-reclaim-cycles": 5
+    },
+    "renew-timer": 900,
+    "rebind-timer": 1800,
+    "valid-lifetime": 3600,
+    "option-data": [
+        {
+            "name": "domain-name-servers",
+            "data": "@dnsip@"
+        },
+        {
+            "code": 15,
+            "data": "@domain@"
+        },
+        {
+            "name": "domain-search",
+            "data": "@domainsearch@"
+        }
+    ],
+    "subnet4": [
+        {
+            "subnet": "@subnetcidr@",
+            "pools": [ { "pool": "@poolrange@" } ],
+            "option-data": [
+                {
+                    "name": "routers",
+                    "data": "@router@"
+                }
+            ]
+        }
+    ],
+    "loggers": [
+    {
+        "name": "kea-dhcp4",
+        "output_options": [
+            {
+                "output": "stdout"
+            }
+        ],
+        "severity": "INFO",
+        "debuglevel": 0
+    }
+  ]
+}
+}

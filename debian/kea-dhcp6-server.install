@@ -1,2 +1,3 @@
 etc/kea/kea-dhcp6.conf
 usr/sbin/kea-dhcp6
+debian/usr.sbin.kea-dhcp6 /etc/apparmor.d/

@@ -1,3 +1,7 @@
 Tests: smoke-tests
 Restrictions: needs-root, allow-stderr
 Depends: kea, curl, jq
+
+Tests: kea-dhcp4
+Restrictions: needs-root, allow-stderr, breaks-testbed
+Depends: kea-dhcp4-server, kea-ctrl-agent, isc-dhcp-client, bridge-utils, iproute2, jq

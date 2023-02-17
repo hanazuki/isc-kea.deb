@@ -29,6 +29,13 @@ override_dh_auto_configure:
 		--without-werror \
 		--with-site-packages=/usr/lib/python3/dist-packages
 
+execute_after_dh_install:
+	dh_apparmor -pkea-ctrl-agent --profile-name=usr.sbin.kea-ctrl-agent
+	dh_apparmor -pkea-dhcp4-server --profile-name=usr.sbin.kea-dhcp4
+	dh_apparmor -pkea-dhcp6-server --profile-name=usr.sbin.kea-dhcp6
+	dh_apparmor -pkea-dhcp-ddns-server --profile-name=usr.sbin.kea-dhcp-ddns
+	dh_apparmor -pkea-common --profile-name=usr.sbin.kea-lfc
+
 override_dh_auto_test:
 	dh_auto_test --no-parallel
 

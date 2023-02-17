@@ -1,0 +1,234 @@
+#!/bin/bash
+
+set -e
+set -o pipefail
+
+bridge="keabr0"
+bridge_ip="192.168.127.1/24"
+subnetcidr="192.168.127.0/24"
+pool_range="192.168.127.10 - 192.168.127.250"
+test_domain="example.autopkgtest"
+server_iface="p1"
+client_iface="client0"
+client_ns="clientns"
+declare -A dhcp4_config
+resolv_conf_bkp=$(mktemp)
+
+cleanup() {
+    if [ $? -ne 0 ]; then
+        echo "## FAIL"
+    fi
+    echo "## Cleaning up"
+    ip link set "${server_iface}" down || :
+    ip link del "${server_iface}" || :
+    ip link set "${bridge}" down || :
+    brctl delbr "${bridge}" || :
+    ip netns delete "${client_ns}" || :
+    sed -r -i "/example.autopkgtest/d" /etc/hosts || :
+    if [ -s "${resolv_conf_bkp}" ]; then
+        cat "${resolv_conf_bkp}" > /etc/resolv.conf
+    fi
+    rm -f "${resolv_conf_bkp}" || :
+}
+
+trap cleanup EXIT
+
+run_on_client() {
+    ip netns exec "${client_ns}" "$@"
+}
+
+setup() {
+    cleanup 2>/dev/null
+    # so we don't have to worry about it being a symlink
+    cat /etc/resolv.conf > "${resolv_conf_bkp}"
+    echo "127.0.1.1 $(hostname).${test_domain} $(hostname)" >> /etc/hosts
+    ip netns add "${client_ns}"
+    ip link add "${server_iface}" type veth peer "${client_iface}" netns "${client_ns}"
+    brctl addbr "${bridge}"
+    brctl addif "${bridge}" "${server_iface}"
+    ip link set "${server_iface}" up
+    ip link set "${bridge}" up
+    ip addr add "${bridge_ip}" dev "${bridge}"
+}
+
+render_dhcp4_conf() {
+    local -n config="${1}"
+    local -r service="dhcp4"
+
+    template="debian/tests/kea-${service}.conf.template"
+    [ -f "${template}" ] || return 1
+    output="/etc/kea/kea-${service}.conf"
+
+    cat "${template}" | sed -r \
+        -e "s,@interface@,${config[interface]}," \
+        -e "s,@dnsip@,${config[dnsip]}," \
+        -e "s,@domain@,${config[domain]}," \
+        -e "s/@domainsearch@/${config[domainsearch]}/" \
+        -e "s,@router@,${config[router]}," \
+        -e "s,@subnetcidr@,${config[subnetcidr]}," \
+        -e "s,@poolrange@,${config[poolrange]}," \
+        -e "s,@multiarch@,$(dpkg-architecture -qDEB_HOST_MULTIARCH)," \
+        > "${output}"
+}
+
+json_get_length() {
+    echo "${1}" | jq '. | length'
+}
+
+kea_get_leases_by_mac() {
+    local mac="${1}"
+    echo "\"hw-address\": \"${mac}\"" | kea-shell --service dhcp4 lease4-get-by-hw-address
+}
+
+get_result_from_lease() {
+    echo "${1}" | jq -r '.[0].result'
+}
+
+get_number_of_leases() {
+    echo "${1}" | jq '.[0].arguments.leases | length'
+}
+
+get_ip_from_lease() {
+    echo "${1}" | jq -r '.[0]["arguments"]["leases"][0]["ip-address"]'
+}
+
+get_mac_from_lease() {
+    echo "${1}" | jq -r '.[0]["arguments"]["leases"][0]["hw-address"]'
+}
+
+check_leases() {
+    local data="${1}"
+    local if_mac="${2}"
+    local if_ip="${3}"
+    local res
+
+    res=$(json_get_length "${data}")
+    if [ ${res} != 1 ]; then
+        echo "## ERROR"
+        echo "## Expected 1 result, got ${res}:"
+        return 1
+    fi
+
+    res=$(get_result_from_lease "${data}")
+    if [ ${res} != 0 ]; then
+        echo "## ERROR"
+        echo "## Failed to obtain leases from server, code ${res}"
+        return 1
+    fi
+
+    res=$(get_number_of_leases "${data}")
+    if [ ${res} -ne 1 ]; then
+        echo "## ERROR"
+        echo "## Expected 1 lease, got ${res}:"
+        return 1
+    fi
+
+    res=$(get_ip_from_lease "${data}")
+    if [ "${if_ip}" != "${res}" ]; then
+        echo "## ERROR"
+        echo "## IP from lease (${res}) does not match IP from interface: ${if_ip}"
+        run_on_client ip a show
+        return 1
+    fi
+
+    res=$(get_mac_from_lease "${data}")
+    if [ "${if_mac}" != "${res}" ]; then
+        echo "## ERROR"
+        echo "## MAC from lease (${res}) does not match MAC from client interface: ${if_mac}"
+        run_on_client ip l show
+        return 1
+    fi
+}
+
+
+setup
+
+dhcp4_config["interface"]="${bridge}"
+# get rid of the CIDR part at the end
+dhcp4_config["dnsip"]="${bridge_ip%%/*}"
+dhcp4_config["domain"]="${test_domain}"
+dhcp4_config["domainsearch"]="${test_domain}"
+# get rid of the CIDR part at the end
+dhcp4_config["router"]="${bridge_ip%%/*}"
+dhcp4_config["subnetcidr"]="${subnetcidr}"
+dhcp4_config["poolrange"]="${pool_range}"
+
+echo
+echo "## Configuring kea-dhcp4 and restarting the service"
+render_dhcp4_conf dhcp4_config
+systemctl restart kea-dhcp4-server.service
+sleep 2s
+
+echo
+echo "## Obtaining IP via dhclient"
+run_on_client timeout -v 20s dhclient "${client_iface}"
+echo "## OK"
+
+ip=$(run_on_client ip -4 -o addr show dev "${client_iface}" | awk '{print $4}')
+ip=${ip%%/*} # remove the CIDR part
+mac=$(run_on_client ip -4 link show dev "${client_iface}" | grep "link/ether" | awk '{print $2}')
+
+echo
+echo "## Got ip=${ip}"
+
+echo
+echo "## Checking leases that match client's ethernet address ${mac}"
+# this will break if/when we close LP: #2007312
+leases=$(kea_get_leases_by_mac "${mac}")
+echo "## Leases:"
+echo "${leases}" | jq .
+
+check_leases "${leases}" "${mac}" "${ip}"
+echo "## OK"
+
+echo
+echo "## INFO: Networking in the ${client_ns} namespace:"
+echo
+echo "## Interfaces"
+run_on_client ip a
+echo
+echo "## Routes"
+run_on_client ip route
+echo
+echo "## DNS"
+if command -v resolvectl > /dev/null 2>&1; then
+    run_on_client resolvectl status
+else
+    echo "## Skipping DNS info (no resolvectl installed)"
+fi
+
+echo
+echo "## Checking that the DNS domain \"${test_domain}\" was added to resolv.conf"
+if grep -qE "^search[[:blank:]]+${test_domain//./\\.}" /etc/resolv.conf; then
+    echo "## OK"
+else
+    echo "## ERROR"
+    echo "## /etc/resolv.conf does not contain ${test_domain}"
+    cat /etc/resolv.conf
+    exit 1
+fi
+
+echo
+echo "## Releasing IP via dhclient -r"
+run_on_client timeout -v 20s dhclient -r
+echo "## OK"
+
+echo
+echo "## Checking that the lease was removed"
+leases=$(kea_get_leases_by_mac "${mac}")
+echo "${leases}" | jq .
+n_results=$(json_get_length "${leases}")
+if [ ${n_results} -ne 1 ]; then
+    echo "## ERROR, expected 1 result, got ${n_results}"
+    echo "${leases}" | jq .
+    exit 1
+fi
+
+n_leases=$(get_number_of_leases "${leases}")
+if [ ${n_leases} -ne 0 ]; then
+    echo "## ERROR"
+    echo "## Expected 0 leases, got ${n_leases}:"
+    echo "${leases}" | jq .
+    exit 1
+fi
+echo "## OK"
