@@ -1,3 +1,15 @@
+isc-kea (2.2.0-3) unstable; urgency=medium
+
+  [ Andreas Hasenack ]
+  * Add apparmor profiles.
+    - d/control: add build-depends on dh-apparmor
+    - d/usr.sbin.kea-*: add the profiles
+    - d/kea-*.install: install the profiles
+    - d/rules: use dh_apparmor to enable the profiles
+  * d/tests: Add DEP8 test for kea-dhcp4
+
+ -- Paride Legovini <paride@debian.org>  Fri, 17 Feb 2023 19:59:43 +0100
+
 isc-kea (2.2.0-2) unstable; urgency=medium
 
   [ Athos Ribeiro ]
