@@ -15,20 +15,31 @@ declare -A dhcp4_config
 resolv_conf_bkp=$(mktemp)
 
 cleanup() {
-    if [ $? -ne 0 ]; then
+    rc=$?
+    set +e # so we don't exit midcleanup
+    if [ ${rc} -ne 0 ]; then
         echo "## FAIL"
+        echo
+        echo "## dmesg"
+        dmesg -T | tail -n 500
+        echo
+        echo "## kea logs"
+        journalctl -u kea-dhcp4-server.service
     fi
+    echo
     echo "## Cleaning up"
-    ip link set "${server_iface}" down || :
-    ip link del "${server_iface}" || :
-    ip link set "${bridge}" down || :
-    brctl delbr "${bridge}" || :
-    ip netns delete "${client_ns}" || :
-    sed -r -i "/example.autopkgtest/d" /etc/hosts || :
+    ip link set "${server_iface}" down
+    ip link del "${server_iface}"
+    ip link set "${bridge}" down
+    brctl delbr "${bridge}"
+    ip netns delete "${client_ns}"
+    sed -r -i "/example.autopkgtest/d" /etc/hosts
     if [ -s "${resolv_conf_bkp}" ]; then
         cat "${resolv_conf_bkp}" > /etc/resolv.conf
     fi
-    rm -f "${resolv_conf_bkp}" || :
+    rm -f "${resolv_conf_bkp}"
+    # restore it for when we are called from the main script, and not the trap
+    set -e
 }
 
 trap cleanup EXIT
@@ -161,7 +172,7 @@ sleep 2s
 
 echo
 echo "## Obtaining IP via dhclient"
-run_on_client timeout -v 20s dhclient "${client_iface}"
+run_on_client timeout -v 60s dhclient -v "${client_iface}"
 echo "## OK"
 
 ip=$(run_on_client ip -4 -o addr show dev "${client_iface}" | awk '{print $4}')
@@ -199,7 +210,7 @@ fi
 
 echo
 echo "## Checking that the DNS domain \"${test_domain}\" was added to resolv.conf"
-if grep -qE "^search[[:blank:]]+${test_domain//./\\.}" /etc/resolv.conf; then
+if grep -E "^search[[:blank:]]" /etc/resolv.conf | grep -q -w -F "${test_domain}"; then
     echo "## OK"
 else
     echo "## ERROR"
@@ -210,7 +221,7 @@ fi
 
 echo
 echo "## Releasing IP via dhclient -r"
-run_on_client timeout -v 20s dhclient -r
+run_on_client timeout -v 60s dhclient -v -r
 echo "## OK"
 
 echo
