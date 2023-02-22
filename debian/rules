@@ -29,6 +29,13 @@ override_dh_auto_configure:
 		--without-werror \
 		--with-site-packages=/usr/lib/python3/dist-packages
 
+execute_after_dh_auto_build-indep:
+	# Do not download external JS components in binary documentation package
+	# Inspired by similar removal in python-pyopencl
+	# Thanks to Andreas Beckmann
+	find doc/sphinx/_build/html -name '*.html' -exec sed -r -i -e '\,( *)<script async="async" src="https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js"></script>,i \1<script src="/usr/share/javascript/mathjax/MathJax.js"></script>' {} +
+	find doc/sphinx/_build/html -name '*.html' -exec sed -r -i -e 's,https://cdn.jsdelivr.net/npm/mathjax@3/es5/tex-mml-chtml.js,/usr/share/javascript/mathjax/config/TeX-MML-AM_CHTML.js,' {} +
+
 execute_after_dh_install:
 	dh_apparmor -pkea-ctrl-agent --profile-name=usr.sbin.kea-ctrl-agent
 	dh_apparmor -pkea-dhcp4-server --profile-name=usr.sbin.kea-dhcp4

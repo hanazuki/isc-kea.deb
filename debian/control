@@ -156,6 +156,8 @@ Architecture: all
 Section: doc
 Depends:
  ${misc:Depends},
+Recommends:
+ libjs-mathjax,
 Description: Documentation for Kea DHCP server
  Kea is an IPv4 and IPv6 DHCP server developed by Internet Systems Consortium.
  .
