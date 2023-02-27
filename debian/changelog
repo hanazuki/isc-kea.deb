@@ -1,3 +1,17 @@
+isc-kea (2.2.0-4) unstable; urgency=medium
+
+  [ Athos Ribeiro ]
+  * d/rules: use MathJax from libjs-mathjax instead loading from external CDN
+
+  [ Andreas Hasenack ]
+  * d/t/kea-dhcp4: make the test more robust
+    - increase dhclient timeout to 60s, and run in verbose mode
+    - show logs in the case of failure
+    - set +e inside the cleanup handler
+    - fix resolv.conf regexp
+
+ -- Athos Ribeiro <athos.ribeiro@canonical.com>  Mon, 27 Feb 2023 14:58:26 -0300
+
 isc-kea (2.2.0-3) unstable; urgency=medium
 
   [ Andreas Hasenack ]
