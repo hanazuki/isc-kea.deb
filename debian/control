@@ -28,7 +28,7 @@ Build-Depends:
  python3-sphinx,
  python3-sphinx-rtd-theme,
  xsltproc,
-Standards-Version: 4.6.1
+Standards-Version: 4.6.2
 Homepage: http://kea.isc.org/
 Vcs-Git: https://salsa.debian.org/debian/isc-kea.git
 Vcs-Browser: https://salsa.debian.org/debian/isc-kea
