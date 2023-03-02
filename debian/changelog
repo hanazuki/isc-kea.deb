@@ -1,3 +1,17 @@
+isc-kea (2.2.0-5) unstable; urgency=medium
+
+  [ Paride Legovini ]
+  * d/control: update to Standards-Version 4.6.2, no changes needed
+
+  [ Andreas Hasenack ]
+  * d/t/kea-dhcp4.conf.template: retry opening a socket. Sometimes the
+    `keabr0` bridge used in the DEP8 test takes a while to become ready, and
+    kea-dhcp4 fails to open a socket on it. Add configuration options to
+    kea-dhcp4 to retry opening the socket a few times before giving up.
+    (LP: #2008932)
+
+ -- Athos Ribeiro <athos.ribeiro@canonical.com>  Thu, 02 Mar 2023 14:00:17 -0300
+
 isc-kea (2.2.0-4) unstable; urgency=medium
 
   [ Athos Ribeiro ]
