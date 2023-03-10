@@ -4,6 +4,8 @@
 DPKG_EXPORT_BUILDFLAGS = 1
 include /usr/share/dpkg/default.mk
 
+include /usr/share/dpkg/pkg-info.mk
+
 # see FEATURE AREAS in dpkg-buildflags(1)
 export DEB_BUILD_MAINT_OPTIONS = hardening=+all
 
@@ -56,3 +58,11 @@ execute_after_dh_auto_install:
 	# pattern that avoids logging information made redundant by the journal.
 	# adapted from: https://gitlab.isc.org/isc-projects/kea-packaging/-/blob/master/debian/rules
 	sed -i -e 's/"output": .*/"output": "stdout",/' -e 's@// "pattern"@"pattern"@' debian/tmp/etc/kea/kea-*.conf
+
+# Since we do not maintain a symbols file for the libraries shipped in
+# kea-common, make the shlibs control file more strict, generating dependencies
+# such as "libkea-util 52 kea-common (= 2.2.0-5)" instead of the less strict
+# "libkea-util 52 kea-common (>= 2.2.0)".
+override_dh_makeshlibs:
+	dh_makeshlibs -pkea-common -V'kea-common (= ${DEB_VERSION})'
+	dh_makeshlibs -Nkea-common
