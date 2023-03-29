@@ -4,6 +4,7 @@ include <tunables/global>
 
 profile kea-dhcp-ddns /usr/sbin/kea-dhcp-ddns {
   include <abstractions/base>
+  include <abstractions/nameservice>
   include <abstractions/openssl>
 
   network inet dgram,
