@@ -1,3 +1,12 @@
+isc-kea (2.2.0-7) experimental; urgency=medium
+
+  [ Andreas Hasenack ]
+  * apparmor: use the apparmor nameservice abstraction.
+    Use the apparmor nameservice abstraction instead of hand-picked rules.
+    (Closes: #1033640, #1033639)
+
+ -- Paride Legovini <paride@debian.org>  Thu, 30 Mar 2023 20:17:25 +0200
+
 isc-kea (2.2.0-6~exp1) experimental; urgency=medium
 
   * d/rules: add strict shlibs control file
