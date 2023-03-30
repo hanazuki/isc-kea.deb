@@ -4,14 +4,9 @@ include <tunables/global>
 
 profile kea-lfc /usr/sbin/kea-lfc {
   include <abstractions/base>
+  include <abstractions/nameservice>
 
   network inet dgram,
-
-  # <abstractions/nameservice>?
-  /etc/host.conf r,
-  /etc/hosts r,
-  /etc/nsswitch.conf r,
-  /run/systemd/resolve/stub-resolv.conf r,
 
   /usr/sbin/kea-lfc mr,
 
