@@ -23,7 +23,7 @@ sys.setrecursionlimit(5000)
 # -- Project information -----------------------------------------------------
 
 project = 'Kea'
-copyright = '2019-2022, Internet Systems Consortium'
+copyright = '2019-2023, Internet Systems Consortium'
 author = 'Internet Systems Consortium'
 
 # get current kea version
@@ -121,6 +121,10 @@ exclude_patterns = [
     'arm/hooks-subnet-cmds.rst',
     'arm/hooks-user-chk.rst',
 ]
+
+# Leave quotes and dashes unchanged and don't convert them to typographically
+# correct entities.
+smartquotes = False
 
 # The name of the Pygments (syntax highlighting) style to use.
 pygments_style = None
@@ -262,7 +266,12 @@ def run_generate_docs(_):
         [ '../examples/template-power-user-home/kea-ca-1.conf', 'template-power-user-home-ca-1.conf' ],
         [ '../examples/template-power-user-home/kea-ca-2.conf', 'template-power-user-home-ca-2.conf' ],
         [ '../examples/template-power-user-home/kea-dhcp4-1.conf', 'template-power-user-home-dhcp4-1.conf' ],
-        [ '../examples/template-power-user-home/kea-dhcp4-2.conf', 'template-power-user-home-dhcp4-2.conf' ]
+        [ '../examples/template-power-user-home/kea-dhcp4-2.conf', 'template-power-user-home-dhcp4-2.conf' ],
+        [ '../examples/template-ha-mt-tls/info.md', 'template-ha-mt-tls.md' ],
+        [ '../examples/template-ha-mt-tls/kea-ca-1.conf', 'template-ha-mt-tls-ca-1.conf' ],
+        [ '../examples/template-ha-mt-tls/kea-ca-2.conf', 'template-ha-mt-tls-ca-2.conf' ],
+        [ '../examples/template-ha-mt-tls/kea-dhcp4-1.conf', 'template-ha-mt-tls-dhcp4-1.conf' ],
+        [ '../examples/template-ha-mt-tls/kea-dhcp4-2.conf', 'template-ha-mt-tls-dhcp4-2.conf' ]
     ]
 
     from shutil import copyfile

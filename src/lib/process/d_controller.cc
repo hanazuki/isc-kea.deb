@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,7 +6,7 @@
 
 #include <config.h>
 #include <cc/command_interpreter.h>
-#include <cfgrpt/config_report.h>
+#include <process/cfgrpt/config_report.h>
 #include <exceptions/exceptions.h>
 #include <hooks/hooks_manager.h>
 #include <log/logger.h>
@@ -820,10 +820,10 @@ DControllerBase::~DControllerBase() {
         }
         LOG_ERROR(dctl_logger, DCTL_UNLOAD_LIBRARIES_ERROR).arg(msg);
     }
-}
 
-// Refer to config_report so it will be embedded in the binary
-const char* const* d_config_report = isc::detail::config_report;
+    io_signal_set_.reset();
+    getIOService()->poll();
+}
 
 std::string
 DControllerBase::getVersion(bool extended) {

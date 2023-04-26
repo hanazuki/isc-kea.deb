@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -61,15 +61,16 @@ DStubProcess::shutdown(isc::data::ConstElementPtr /* args */) {
 
     setShutdownFlag(true);
     stopIOService();
-    return (isc::config::createAnswer(0, "Shutdown initiated."));
+    return (isc::config::createAnswer(isc::config::CONTROL_RESULT_SUCCESS,
+                                      "Shutdown initiated."));
 }
 
 isc::data::ConstElementPtr
 DStubProcess::configure(isc::data::ConstElementPtr config_set, bool check_only) {
     if (SimFailure::shouldFailOn(SimFailure::ftProcessConfigure)) {
         // Simulates a process configure failure.
-        return (isc::config::createAnswer(1,
-                "Simulated process configuration error."));
+        return (isc::config::createAnswer(isc::config::CONTROL_RESULT_ERROR,
+                                          "Simulated process configuration error."));
     }
 
     return (getCfgMgr()->simpleParseConfig(config_set, check_only));
@@ -329,7 +330,8 @@ DStubCfgMgr::createNewContext() {
 
 isc::data::ConstElementPtr
 DStubCfgMgr::parse(isc::data::ConstElementPtr /*config*/, bool /*check_only*/) {
-    return (isc::config::createAnswer(0, "It all went fine. I promise"));
+    return (isc::config::createAnswer(isc::config::CONTROL_RESULT_SUCCESS,
+                                      "It all went fine. I promise"));
 }
 
 } // namespace isc::process

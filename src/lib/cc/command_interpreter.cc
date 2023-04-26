@@ -1,4 +1,4 @@
-// Copyright (C) 2009-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2009-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -52,7 +52,7 @@ createAnswer(const int status_code, const std::string& text,
 
 ConstElementPtr
 createAnswer() {
-    return (createAnswer(0, string(""), ConstElementPtr()));
+    return (createAnswer(CONTROL_RESULT_SUCCESS, string(""), ConstElementPtr()));
 }
 
 ConstElementPtr

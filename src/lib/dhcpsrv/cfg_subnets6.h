@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -100,7 +100,7 @@ public:
     /// not be modified after the call to @c merge because it may affect the
     /// merged configuration.
     ///
-    /// @param cfg_def set of of user-defined option definitions to use
+    /// @param cfg_def set of user-defined option definitions to use
     /// when creating option instances.
     /// @param networks collection of shared networks that to which assignments
     /// should be added. In other words, the list of shared networks that belong
@@ -248,6 +248,18 @@ public:
                  const ClientClasses& client_classes = ClientClasses(),
                  const bool is_relay_address = false) const;
 
+    /// @brief Convert a link address into a link set.
+    ///
+    /// Given a link address this returns the ordered list aka set of id
+    /// of subnets the address belongs to. It also sets the minimum link
+    /// length when there is at least one subnet.
+    ///
+    /// @param link_addr The link address.
+    /// @param[out] link_len The minimum link length.
+    /// @return The set of subnet ids the link address belongs to.
+    SubnetIDSet getLinks(const asiolink::IOAddress& link_addr,
+                         uint8_t& link_len) const;
+
     /// @brief Updates statistics.
     ///
     /// This method updates statistics that are affected by the newly committed
@@ -264,6 +276,9 @@ public:
     /// anything related to subnets, as there may be fewer subnets in the new
     /// configuration and also subnet-ids may change.
     void removeStatistics();
+
+    /// @brief Calls @c initAllocatorsAfterConfigure for each subnet.
+    void initAllocatorsAfterConfigure();
 
     /// @brief Unparse a configuration object
     ///

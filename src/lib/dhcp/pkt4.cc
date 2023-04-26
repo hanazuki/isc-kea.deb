@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -226,6 +226,10 @@ Pkt4::unpack() {
     // store more than 255 bytes of data and the regex parsers can effectively
     // access the entire data.
     LibDHCP::fuseOptions4(options_);
+
+    // Kea supports multiple vendor options so it needs to split received and
+    // fused options in multiple OptionVendor instances.
+    LibDHCP::extendVendorOptions4(options_);
 
     // No need to call check() here. There are thorough tests for this
     // later (see Dhcp4Srv::accept()). We want to drop the packet later,

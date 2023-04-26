@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -31,6 +31,7 @@
 #include <boost/scoped_ptr.hpp>
 #include <gtest/gtest.h>
 
+#include <fstream>
 #include <iomanip>
 #include <sstream>
 #include <thread>
@@ -152,14 +153,12 @@ public:
             socket_path_ = sandbox.join("/kea6.sock");
         }
         reset();
-        MultiThreadingMgr::instance().setMode(false);
     }
 
     /// @brief Destructor
     ~CtrlChannelDhcpv6SrvTest() {
         server_.reset();
         reset();
-        MultiThreadingMgr::instance().setMode(false);
     };
 
     /// @brief Returns pointer to the server's IO service.
@@ -399,7 +398,7 @@ public:
         // both structures are built using the same order.
         EXPECT_EQ(Element::fromJSON(expected_command)->str(),
                   entire_command->str());
-        return (createAnswer(0, "long command received ok"));
+        return (createAnswer(CONTROL_RESULT_SUCCESS, "long command received ok"));
     }
 
     /// @brief Command handler which generates long response
@@ -415,7 +414,7 @@ public:
             s << std::setw(5) << i;
             arguments->add(Element::create(s.str()));
         }
-        return (createAnswer(0, arguments));
+        return (createAnswer(CONTROL_RESULT_SUCCESS, arguments));
     }
 };
 
@@ -463,7 +462,6 @@ TEST_F(CtrlChannelDhcpv6SrvTest, libreload) {
     // Load two libraries
     HookLibsCollection libraries;
     libraries.push_back(make_pair(CALLOUT_LIBRARY_1, ConstElementPtr()));
-    libraries.push_back(make_pair(CALLOUT_LIBRARY_2, ConstElementPtr()));
     HooksManager::loadLibraries(libraries);
 
     // Check they are loaded.
@@ -475,7 +473,7 @@ TEST_F(CtrlChannelDhcpv6SrvTest, libreload) {
     // load functions exists and holds the correct value (of "12" - the
     // first library appends "1" to the file, the second appends "2"). Also
     // check that the unload marker file does not yet exist.
-    EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "12"));
+    EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "1"));
     EXPECT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
 
     // Now execute the "libreload" command.  This should cause the libraries
@@ -483,14 +481,15 @@ TEST_F(CtrlChannelDhcpv6SrvTest, libreload) {
     std::string response;
     sendUnixCommand("{ \"command\": \"libreload\" }", response);
     EXPECT_EQ("{ \"result\": 0, "
-              "\"text\": \"Hooks libraries successfully reloaded.\" }"
+              "\"text\": \"Hooks libraries successfully reloaded"
+              " (WARNING: libreload is deprecated).\" }"
               , response);
 
     // Check that the libraries have unloaded and reloaded.  The libraries are
     // unloaded in the reverse order to which they are loaded.  When they load,
     // they should append information to the loading marker file.
-    EXPECT_TRUE(checkMarkerFile(UNLOAD_MARKER_FILE, "21"));
-    EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "1212"));
+    EXPECT_TRUE(checkMarkerFile(UNLOAD_MARKER_FILE, "1"));
+    EXPECT_TRUE(checkMarkerFile(LOAD_MARKER_FILE, "11"));
 }
 
 // Check that the "libreload" command will fail to reload libraries which are
@@ -501,6 +500,10 @@ TEST_F(CtrlChannelDhcpv6SrvTest, libreloadFailMultiThreading) {
     // Ensure no marker files to start with.
     ASSERT_FALSE(checkMarkerFileExists(LOAD_MARKER_FILE));
     ASSERT_FALSE(checkMarkerFileExists(UNLOAD_MARKER_FILE));
+
+    // Disable multi-threading to temporarily trick the hook manager
+    // into loading single-threaded libraries.
+    MultiThreadingMgr::instance().setMode(false);
 
     // Load two libraries
     HookLibsCollection libraries;
@@ -529,7 +532,8 @@ TEST_F(CtrlChannelDhcpv6SrvTest, libreloadFailMultiThreading) {
     std::string response;
     sendUnixCommand("{ \"command\": \"libreload\" }", response);
     EXPECT_EQ("{ \"result\": 1, "
-              "\"text\": \"Failed to reload hooks libraries.\" }"
+              "\"text\": \"Failed to reload hooks libraries "
+              "(WARNING: libreload is deprecated).\" }"
               , response);
 
     // Check that the libraries have unloaded and failed to reload.  The
@@ -1030,16 +1034,21 @@ TEST_F(CtrlChannelDhcpv6SrvTest, statusGet) {
 
     auto found_multi_threading = arguments->get("multi-threading-enabled");
     ASSERT_TRUE(found_multi_threading);
-    EXPECT_FALSE(found_multi_threading->boolValue());
+    EXPECT_TRUE(found_multi_threading->boolValue());
 
     auto found_thread_count = arguments->get("thread-pool-size");
-    ASSERT_FALSE(found_thread_count);
+    ASSERT_TRUE(found_thread_count);
+    // The default value varies between systems.
+    // Let's just make sure it's a positive value.
+    EXPECT_LE(0, found_thread_count->intValue());
 
     auto found_queue_size = arguments->get("packet-queue-size");
-    ASSERT_FALSE(found_queue_size);
+    ASSERT_TRUE(found_queue_size);
+    EXPECT_EQ(64, found_queue_size->intValue());
 
     auto found_queue_stats = arguments->get("packet-queue-statistics");
-    ASSERT_FALSE(found_queue_stats);
+    ASSERT_TRUE(found_queue_stats);
+    EXPECT_FALSE(found_queue_stats->str().empty());
 
     MultiThreadingMgr::instance().setMode(true);
     MultiThreadingMgr::instance().setThreadPoolSize(4);

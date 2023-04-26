@@ -89,17 +89,18 @@ build_triplet = @build@
 host_triplet = @host@
 @HAVE_MYSQL_TRUE@am__append_1 = mysql
 @HAVE_PGSQL_TRUE@am__append_2 = pgsql
-@HAVE_SYSREPO_TRUE@am__append_3 = yang
+@HAVE_NETCONF_TRUE@am__append_3 = yang
 subdir = src/lib
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -168,9 +169,9 @@ am__define_uniq_tagged_files = \
 ETAGS = etags
 CTAGS = ctags
 DIST_SUBDIRS = exceptions util log cryptolink dns asiolink cc \
-	testutils database mysql pgsql config_backend hooks dhcp http \
-	config stats yang asiodns dhcp_ddns eval cfgrpt process \
-	dhcpsrv d2srv
+	testutils database mysql pgsql config_backend hooks dhcp tcp \
+	http config stats yang asiodns dhcp_ddns eval process dhcpsrv \
+	d2srv
 am__DIST_COMMON = $(srcdir)/Makefile.in
 DISTFILES = $(DIST_COMMON) $(DIST_SOURCES) $(TEXINFOS) $(EXTRA_DIST)
 am__relativize = \
@@ -232,11 +233,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -255,7 +263,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -273,6 +281,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -319,12 +337,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -393,8 +417,8 @@ top_srcdir = @top_srcdir@
 # The following build order must be maintained.
 SUBDIRS = exceptions util log cryptolink dns asiolink cc testutils \
 	database $(am__append_1) $(am__append_2) config_backend hooks \
-	dhcp http config stats $(am__append_3) asiodns dhcp_ddns eval \
-	cfgrpt process dhcpsrv d2srv
+	dhcp tcp http config stats $(am__append_3) asiodns dhcp_ddns \
+	eval process dhcpsrv d2srv
 all: all-recursive
 
 .SUFFIXES:

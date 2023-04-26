@@ -163,9 +163,9 @@ HAConfig::HAConfig()
     : this_server_name_(), ha_mode_(HOT_STANDBY), send_lease_updates_(true),
       sync_leases_(true), sync_timeout_(60000), sync_page_limit_(10000),
       delayed_updates_limit_(0), heartbeat_delay_(10000), max_response_delay_(60000),
-      max_ack_delay_(10000), max_unacked_clients_(10), wait_backup_ack_(false),
-      enable_multi_threading_(false), http_dedicated_listener_(false),
-      http_listener_threads_(0), http_client_threads_(0),
+      max_ack_delay_(10000), max_unacked_clients_(10), max_rejected_lease_updates_(10),
+      wait_backup_ack_(false), enable_multi_threading_(false),
+      http_dedicated_listener_(false), http_listener_threads_(0), http_client_threads_(0),
       trust_anchor_(), cert_file_(), key_file_(), require_client_certs_(true),
       restrict_commands_(false), peers_(),
       state_machine_(new StateMachineConfig()) {
@@ -462,15 +462,15 @@ HAConfig::validate() {
         }
     }
 
-    if (enable_multi_threading_) {
-        // We get it from staging because applying the DHCP multi-threading configuration
-        // occurs after library loading during the (re)configuration process.
-        auto mcfg = CfgMgr::instance().getStagingCfg()->getDHCPMultiThreading();
-        bool dhcp_mt_enabled = false;
-        uint32_t dhcp_threads = 0;
-        uint32_t dummy_queue_size = 0;
-        CfgMultiThreading::extract(mcfg, dhcp_mt_enabled, dhcp_threads, dummy_queue_size);
+    // We get it from staging because applying the DHCP multi-threading configuration
+    // occurs after library loading during the (re)configuration process.
+    auto mcfg = CfgMgr::instance().getStagingCfg()->getDHCPMultiThreading();
+    bool dhcp_mt_enabled = false;
+    uint32_t dhcp_threads = 0;
+    uint32_t dummy_queue_size = 0;
+    CfgMultiThreading::extract(mcfg, dhcp_mt_enabled, dhcp_threads, dummy_queue_size);
 
+    if (enable_multi_threading_) {
         if (!dhcp_mt_enabled) {
             // HA+MT requires DHCP multi-threading.
             LOG_INFO(ha_logger, HA_CONFIG_DHCP_MT_DISABLED);
@@ -499,6 +499,12 @@ HAConfig::validate() {
         // threads as DHCP does.
         if (http_client_threads_ == 0) {
             http_client_threads_ = dhcp_threads;
+        }
+    } else {
+        if (dhcp_mt_enabled) {
+            // DHCP multi-threading requires HA+MT for optimal performance.
+            LOG_WARN(ha_logger, HA_CONFIG_DHCP_MT_DISABLED_AND_KEA_MT_ENABLED);
+            return;
         }
     }
 }

@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -120,7 +120,7 @@ HookedCommandMgr::handleCommand(const std::string& cmd_name,
             // registered
             // for it, combine the lists of commands.
             if (!hooks_commands->empty()) {
-                response = combineCommandsLists(response, createAnswer(0, hooks_commands));
+                response = combineCommandsLists(response, createAnswer(CONTROL_RESULT_SUCCESS, hooks_commands));
             }
         }
     }

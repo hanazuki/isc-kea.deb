@@ -96,12 +96,13 @@ subdir = src/bin/netconf/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -153,7 +154,6 @@ am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@netconf_unittests_DEPENDENCIES = $(top_builddir)/src/bin/netconf/libnetconf.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/testutils/libprocesstest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/yang/testutils/libyangtest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/yang/libkea-yang.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
@@ -171,7 +171,8 @@ am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
 @HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
-@HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1)
+@HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+@HAVE_GTEST_TRUE@	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 netconf_unittests_LINK = $(LIBTOOL) $(AM_V_lt) --tag=CXX \
 	$(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=link $(CXXLD) \
 	$(AM_CXXFLAGS) $(CXXFLAGS) $(netconf_unittests_LDFLAGS) \
@@ -367,11 +368,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -390,7 +398,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -408,6 +416,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -454,12 +472,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -529,19 +553,20 @@ EXTRA_DIST = testdata/get_config.json
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
 	-I$(top_srcdir)/src -I$(top_builddir)/src \
 	-I$(top_srcdir)/src/bin -I$(top_builddir)/src/bin \
-	-DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/bin/netconf/tests\" \
 	-DCFG_EXAMPLES=\"$(abs_top_srcdir)/doc/examples/netconf\" \
-	-DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/bin/netconf/tests\" \
+	-DKEATEST_MODULE \
 	-DSYNTAX_FILE=\"$(abs_srcdir)/../netconf_parser.yy\" \
+	-DTEST_DATA_BUILDDIR=\"$(abs_top_builddir)/src/bin/netconf/tests\" \
 	$(BOOST_INCLUDES) $(CRYPTO_CFLAGS) $(CRYPTO_INCLUDES) \
-	$(SYSREPO_CPPFLAGS) $(SYSREPO_INCLUDEDIR)
+	$(LIBYANG_CPPFLAGS) $(LIBYANG_INCLUDEDIR) \
+	$(LIBYANGCPP_CPPFLAGS) $(LIBYANGCPP_INCLUDEDIR) \
+	$(SYSREPO_CPPFLAGS) $(SYSREPO_INCLUDEDIR) \
+	$(SYSREPOCPP_CPPFLAGS) $(SYSREPOCPP_INCLUDEDIR)
 CLEANFILES = *.json *.log
 DISTCLEANFILES = test_data_files_config.h test_libraries.h
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 @USE_STATIC_LINK_TRUE@AM_LDFLAGS = -static
-TESTS_ENVIRONMENT = \
-        $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
-
+TESTS_ENVIRONMENT = $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 @HAVE_GTEST_TRUE@noinst_LTLIBRARIES = libbasic.la
 @HAVE_GTEST_TRUE@netconf_unittests_SOURCES =  \
 @HAVE_GTEST_TRUE@	control_socket_unittests.cc \
@@ -553,16 +578,9 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	run_unittests.cc
 @HAVE_GTEST_TRUE@netconf_unittests_CPPFLAGS = $(AM_CPPFLAGS) $(GTEST_INCLUDES)
 @HAVE_GTEST_TRUE@netconf_unittests_LDFLAGS = $(AM_LDFLAGS) $(CRYPTO_LDFLAGS)
-#netconf_unittests_LDADD += $(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la
-#netconf_unittests_LDADD += $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la
-#netconf_unittests_LDADD += $(top_builddir)/src/lib/eval/libkea-eval.la
-#netconf_unittests_LDADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
-#netconf_unittests_LDADD += $(top_builddir)/src/lib/stats/libkea-stats.la
-#netconf_unittests_LDADD += $(top_builddir)/src/lib/dhcp/tests/libdhcptest.la
 @HAVE_GTEST_TRUE@netconf_unittests_LDADD = $(top_builddir)/src/bin/netconf/libnetconf.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/testutils/libprocesstest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/yang/testutils/libyangtest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/yang/libkea-yang.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
@@ -579,7 +597,9 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) \
-@HAVE_GTEST_TRUE@	$(BOOST_LIBS) $(GTEST_LDADD) $(SYSREPO_LIBS)
+@HAVE_GTEST_TRUE@	$(BOOST_LIBS) $(GTEST_LDADD) $(LIBYANG_LIBS) \
+@HAVE_GTEST_TRUE@	$(LIBYANGCPP_LIBS) $(SYSREPO_LIBS) \
+@HAVE_GTEST_TRUE@	$(SYSREPOCPP_LIBS)
 
 # The basic callout library - contains standard callouts
 @HAVE_GTEST_TRUE@libbasic_la_SOURCES = basic_library.cc

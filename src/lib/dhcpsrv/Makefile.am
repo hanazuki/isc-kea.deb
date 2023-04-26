@@ -61,9 +61,11 @@ CLEANFILES += *.csv
 
 lib_LTLIBRARIES = libkea-dhcpsrv.la
 libkea_dhcpsrv_la_SOURCES  =
+libkea_dhcpsrv_la_SOURCES += allocation_state.cc allocation_state.h
 libkea_dhcpsrv_la_SOURCES += alloc_engine.cc alloc_engine.h
 libkea_dhcpsrv_la_SOURCES += alloc_engine_log.cc alloc_engine_log.h
 libkea_dhcpsrv_la_SOURCES += alloc_engine_messages.h alloc_engine_messages.cc
+libkea_dhcpsrv_la_SOURCES += allocator.h allocator.cc
 libkea_dhcpsrv_la_SOURCES += base_host_data_source.h
 libkea_dhcpsrv_la_SOURCES += cache_host_data_source.h
 libkea_dhcpsrv_la_SOURCES += callout_handle_store.h
@@ -114,6 +116,8 @@ libkea_dhcpsrv_la_SOURCES += hosts_log.cc hosts_log.h
 libkea_dhcpsrv_la_SOURCES += hosts_messages.h hosts_messages.cc
 libkea_dhcpsrv_la_SOURCES += ip_range.h ip_range.cc
 libkea_dhcpsrv_la_SOURCES += ip_range_permutation.h ip_range_permutation.cc
+libkea_dhcpsrv_la_SOURCES += iterative_allocation_state.cc iterative_allocation_state.h
+libkea_dhcpsrv_la_SOURCES += iterative_allocator.cc iterative_allocator.h
 libkea_dhcpsrv_la_SOURCES += key_from_key.h
 libkea_dhcpsrv_la_SOURCES += lease.cc lease.h
 libkea_dhcpsrv_la_SOURCES += lease_file_loader.h
@@ -139,6 +143,8 @@ libkea_dhcpsrv_la_SOURCES += pgsql_lease_mgr.cc pgsql_lease_mgr.h
 endif
 
 libkea_dhcpsrv_la_SOURCES += pool.cc pool.h
+libkea_dhcpsrv_la_SOURCES += random_allocation_state.cc random_allocation_state.h
+libkea_dhcpsrv_la_SOURCES += random_allocator.cc random_allocator.h
 libkea_dhcpsrv_la_SOURCES += resource_handler.cc resource_handler.h
 libkea_dhcpsrv_la_SOURCES += sanity_checker.cc sanity_checker.h
 libkea_dhcpsrv_la_SOURCES += shared_network.cc shared_network.h
@@ -147,6 +153,7 @@ libkea_dhcpsrv_la_SOURCES += subnet.cc subnet.h
 libkea_dhcpsrv_la_SOURCES += subnet_id.h
 libkea_dhcpsrv_la_SOURCES += subnet_selector.h
 libkea_dhcpsrv_la_SOURCES += timer_mgr.cc timer_mgr.h
+libkea_dhcpsrv_la_SOURCES += tracking_lease_mgr.cc tracking_lease_mgr.h
 libkea_dhcpsrv_la_SOURCES += utils.h
 libkea_dhcpsrv_la_SOURCES += writable_host_data_source.h
 
@@ -190,33 +197,33 @@ endif
 
 libkea_dhcpsrv_la_CXXFLAGS = $(AM_CXXFLAGS)
 libkea_dhcpsrv_la_CPPFLAGS = $(AM_CPPFLAGS)
-libkea_dhcpsrv_la_LIBADD  = $(top_builddir)/src/lib/eval/libkea-eval.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/process/libkea-process.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/stats/libkea-stats.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/config/libkea-cfgclient.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/http/libkea-http.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
+libkea_dhcpsrv_la_LIBADD  = $(top_builddir)/src/lib/process/libkea-process.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/eval/libkea-eval.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/stats/libkea-stats.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/config/libkea-cfgclient.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/http/libkea-http.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 
 if HAVE_MYSQL
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/mysql/libkea-mysql.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/mysql/libkea-mysql.la
 endif
 if HAVE_PGSQL
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
 endif
 
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/database/libkea-database.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/cc/libkea-cc.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/dns/libkea-dns++.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/hooks/libkea-hooks.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/log/libkea-log.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/util/libkea-util.la
-libkea_dhcpsrv_la_LIBADD  += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
-libkea_dhcpsrv_la_LIBADD  += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/database/libkea-database.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/cc/libkea-cc.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/log/libkea-log.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
+libkea_dhcpsrv_la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
+libkea_dhcpsrv_la_LIBADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 
-libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 69:0:0
+libkea_dhcpsrv_la_LDFLAGS  = -no-undefined -version-info 86:0:0
 libkea_dhcpsrv_la_LDFLAGS += $(CRYPTO_LDFLAGS)
 if HAVE_MYSQL
 libkea_dhcpsrv_la_LDFLAGS += $(MYSQL_LIBS)
@@ -289,9 +296,11 @@ EXTRA_DIST += database_backends.dox libdhcpsrv.dox
 # Specify the headers for copying into the installation directory tree.
 libkea_dhcpsrv_includedir = $(pkgincludedir)/dhcpsrv
 libkea_dhcpsrv_include_HEADERS = \
+	allocation_state.h \
 	alloc_engine.h \
 	alloc_engine_log.h \
 	alloc_engine_messages.h \
+	allocator.h \
 	base_host_data_source.h \
 	cache_host_data_source.h \
 	callout_handle_store.h \
@@ -341,6 +350,8 @@ libkea_dhcpsrv_include_HEADERS = \
 	hosts_log.h \
 	ip_range.h \
 	ip_range_permutation.h \
+	iterative_allocation_state.h \
+	iterative_allocator.h \
 	key_from_key.h \
 	lease.h \
 	lease_file_loader.h \
@@ -353,7 +364,10 @@ libkea_dhcpsrv_include_HEADERS = \
 	ncr_generator.h \
 	network.h \
 	network_state.h \
+	tracking_lease_mgr.h \
 	pool.h \
+	random_allocation_state.h \
+	random_allocator.h \
 	resource_handler.h \
 	sanity_checker.h \
 	shared_network.h \

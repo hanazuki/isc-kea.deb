@@ -12,6 +12,10 @@
     // Kea DHCPv4 server configuration begins here.
     "Dhcp4": {
 
+        // Global flag selecting an IP address allocation strategy for all
+        // subnets. Use "random" for random allocation strategy.
+        "allocator": "iterative",
+
         // Global authoritative flag to handle requests by clients for
         // unknown IP addresses (ignore if disabled, NAK if enabled).
         "authoritative": false,
@@ -54,7 +58,11 @@
                 "min-valid-lifetime": 4000,
 
                 // Class max valid lifetime.
-                "max-valid-lifetime": 8000
+                "max-valid-lifetime": 8000,
+
+                // If greater than zero, it is the lifetime of leases temporarily allocated
+                // on DISCOVER.  When zero (the default) leases are not allocated on DISCOVER.
+                "offer-lifetime" : 65
             },
             {
                 // Default value of the class specific bootfile name. Empty name
@@ -83,7 +91,6 @@
                 // class when the given expression evaluates to true.
                 "test": "member('HA_server2')"
             },
-
             {
                 // Third class name.
                 "name": "late",
@@ -97,15 +104,43 @@
 
                 // Class selection expression.
                 "test": "member('ALL')"
+            },
+            {
+                // Fourth class name.
+                "name": "my-template-class",
+
+                // Template class flag that holds the expression used to generate the names for all
+                // the spawned subclasses. In this case, the classes are named after the client ID.
+                "template-test": "substring(option[61].hex, 0, all)"
             }
         ],
 
         // Parameters for triggering behaviors compatible with broken or
         // non-compliant clients, relays or other agents
         "compatibility": {
+            // Ignore DHCP Server Identifier option if set to true.
+            // Enabling this will cause Kea to accept any query even
+            // if the address in the option belongs to another server
+            // instead of dropping it. This config option defaults to
+            // false, as enabling it breaks RFC compliance.
+            "ignore-dhcp-server-identifier": false,
+
+            // Ignore Relay Agent Information Link Selection suboption if set
+            // to true. Enabling this will cause Kea use normal subnet
+            // selection logic instead of attempting to use the subnet
+            // specified in the suboption. This config option defaults to
+            // false, as enabling it breaks RFC compliance.
+            "ignore-rai-link-selection": false,
+
             // Parse options more leniently where fields can be deduced
             // deterministically even if against RFC or common practice.
-            "lenient-option-parsing": true
+            "lenient-option-parsing": true,
+
+            // Boolean flag indicating whether or not .0 and .255 addresses
+            // must be considered as never free in subnets with prefix length
+            // less than 24. The default is false as these addresses are not
+            // special: only the first and the last addresses are.
+            "exclude-first-last-24": false
         },
 
         // Command control socket configuration parameters for Kea DHCPv4 server.
@@ -178,6 +213,10 @@
         // given update request.  The default value for this flag is true.
         // It may be specified at the global, shared-network and subnet levels.
         "ddns-use-conflict-resolution": true,
+
+        // When greater than 0.0, it is the percent of the lease's lifetime
+        // to use for the DNS TTL.
+        "ddns-ttl-percent": 0.75,
 
         // Time in seconds specifying how long a declined lease should be
         // excluded from DHCP assignments. The default value is 24 hours.
@@ -253,10 +292,18 @@
         "expired-leases-processing": {
             // Specifies the number of seconds since last removal of
             // the expired leases when next removal should occur.
+            // If both "flush-reclaimed-timer-wait-time" and
+            // "hold-reclaimed-time" are not 0, when the client sends a release
+            // message the lease is expired instead of being deleted from the
+            // lease storage.
             "flush-reclaimed-timer-wait-time": 25,
 
             // Specifies the time period in seconds to keep expired
             // leases in the lease database (lease affinity).
+            // If both "flush-reclaimed-timer-wait-time" and
+            // "hold-reclaimed-time" are not 0, when the client sends a release
+            // message the lease is expired instead of being deleted from the
+            // lease storage.
             "hold-reclaimed-time": 3600,
 
             // Specifies the maximum number of expired leases that can be
@@ -349,7 +396,11 @@
                 "type": "postgresql",
 
                 // User name to be used to access the database.
-                "user": "keatest"
+                "user": "keatest",
+
+                // TCP user timeout while communicating with the database.
+                // It is specified in seconds.
+                "tcp-user-timeout": 100
             },
             {
                 // Name of the database to connect to.
@@ -381,8 +432,14 @@
                 // serve-retry-continue
                 "on-fail": "stop-retry-exit",
 
-                // Connection connect timeout.
-                "connect-timeout": 100
+                // Connection connect timeout in seconds.
+                "connect-timeout": 100,
+
+                // Data read from the database timeout in seconds.
+                "read-timeout": 120,
+
+                // Data write to the database timeout in seconds.
+                "write-timeout": 180
             }
         ],
 
@@ -541,7 +598,7 @@
         "option-data": [
             {
                 // Boolean flag indicating if the given option is always
-                // send in response or only when requested. The default
+                // sent in response or only when requested. The default
                 // value of false indicates that it is only sent when
                 // requested.
                 "always-send": false,
@@ -561,6 +618,13 @@
                 // Option name. It is not required of the option code is
                 // provided.
                 "name": "domain-name-servers",
+
+                // Boolean flag indicating if the given option is never
+                // sent in response. The default value of false indicates
+                // that it is sent when it should. When true the option
+                // is not sent despite of any other setting, i.e. it is
+                // a final flag.
+                "never-send": false,
 
                 // Option space. The default is the "dhcp4" option space which
                 // groups top level DHCPv4 options.
@@ -655,13 +719,27 @@
             // to "fix" but delete the lease if no suitable subnet found),
             // "del" (delete the lease if the lease has invalid subnet
             // identifier value).
-            "lease-checks": "warn"
+            "lease-checks": "warn",
+
+            // Specifies how Kea DHCPv4 server should behave when invalid
+            // extended info is read for a lease from the lease file, or
+            // whether to upgrade from old format. The following values
+            // are supported "none" (don't attempt to correct or upgrade
+            // the extended info), "fix" (fix common inconsistencies and
+            // upgrade from old format, this is the default), "strict"
+            // (fix inconsistencies with an impact on Lease Query),
+            // "pedantic" (enforce full Kea code format).
+            "extended-info-checks": "fix"
         },
 
         // List of shared networks used by Kea DHCPv4 server. The shared
         // networks group subnets together.
         "shared-networks": [
             {
+                // A flag selecting an IP address allocation strategy for all
+                // subnets in this shared network.
+                "allocator": "random",
+
                 // Shared network level authoritative flag.
                 "authoritative": false,
 
@@ -698,6 +776,9 @@
                 "ddns-use-conflict-resolution": true,
 
                 // Shared network level value. See description at the global level.
+                "ddns-ttl-percent": 0.65,
+
+                // Shared network level value. See description at the global level.
                 "hostname-char-replacement": "x",
 
                 // Shared network level value. See description at the global level.
@@ -717,6 +798,10 @@
                 // Shared network level specification of the next server
                 // to be sent in 'siaddr'.
                 "next-server": "192.0.2.123",
+
+                // If greater than zero, it is the lifetime of leases temporarily allocated
+                // on DISCOVER.  When zero (the default) leases are not allocated on DISCOVER.
+                "offer-lifetime" : 60,
 
                 // List of shared network specific DHCP options.
                 "option-data": [],
@@ -793,6 +878,10 @@
                         // Prefix matched against source address. See RFC7341.
                         "4o6-subnet": "2001:db8:1:1::/64",
 
+                        // A flag selecting an IP address allocation strategy for
+                        // the subnet.
+                        "allocator": "iterative",
+
                         // Subnet level authoritative flag.
                         "authoritative": false,
 
@@ -829,6 +918,9 @@
                         "ddns-use-conflict-resolution": true,
 
                         // Subnet level value. See description at the global level.
+                        "ddns-ttl-percent": 0.55,
+
+                        // Subnet level value. See description at the global level.
                         "hostname-char-replacement": "x",
 
                         // Subnet level value. See description at the global level.
@@ -848,6 +940,10 @@
                         // Subnet level specification of the next server to be sent
                         // in 'siaddr'.
                         "next-server": "0.0.0.0",
+
+                        // If greater than zero, it is the lifetime of leases temporarily allocated
+                        // on DISCOVER.  When zero (the default) leases are not allocated on DISCOVER.
+                        "offer-lifetime" : 60,
 
                         // Turn on storage of extended information (e.g. relay agent
                         // information) with each lease for this subnet.
@@ -873,6 +969,10 @@
 
                                 // Option name.
                                 "name": "routers",
+
+                                // Boolean flag indicating if the given option is never
+                                // sent in response.
+                                "never-send": false,
 
                                 // Option space. The default value "dhcp4" designates the
                                 // top level option space.
@@ -1148,6 +1248,10 @@
                 "severity": "INFO"
             }
         ],
+
+        // If greater than zero, it is the lifetime of leases temporarily allocated
+        // on DISCOVER.  When zero (the default) leases are not allocated on DISCOVER.
+        "offer-lifetime" : 60,
 
         // Look at advanced example for the use of user-contexts.
         "user-context": { }

@@ -130,8 +130,14 @@
 /* MySQL is present */
 /* #undef HAVE_MYSQL */
 
+/* MySQL has mysql_get_option defined. */
+/* #undef HAVE_MYSQL_GET_OPTION */
+
 /* MySQL uses my_bool */
 /* #undef HAVE_MYSQL_MY_BOOL */
+
+/* NETCONF capabilities enabled */
+/* #undef HAVE_NETCONF */
 
 /* Check for optreset? */
 /* #undef HAVE_OPTRESET */
@@ -141,6 +147,9 @@
 
 /* PostgreSQL was built with OpenSSL support */
 /* #undef HAVE_PGSQL_SSL */
+
+/* PostgreSQL connection parameter tcp_user_timeout supported */
+/* #undef HAVE_PGSQL_TCP_USER_TIMEOUT */
 
 /* Define to 1 if you have the `pselect' function. */
 #define HAVE_PSELECT 1
@@ -166,9 +175,6 @@
 
 /* Define to 1 if you have the <string.h> header file. */
 #define HAVE_STRING_H 1
-
-/* Using sysrepo 1.x */
-/* #undef HAVE_SYSREPO_V1 */
 
 /* Define to 1 if you have the <sys/devpoll.h> header file. */
 /* #undef HAVE_SYS_DEVPOLL_H */
@@ -202,6 +208,9 @@
 
 /* Define to 1 if libc is musl */
 /* #undef LIBC_MUSL */
+
+/* libyang version */
+/* #undef LIBYANG_VERSION */
 
 /* Explicit initialization of log4cplus possible */
 /* #undef LOG4CPLUS_INITIALIZER_H */
@@ -240,7 +249,7 @@
 #define PACKAGE_NAME "kea"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "kea 2.2.0"
+#define PACKAGE_STRING "kea 2.3.6"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "kea"
@@ -249,10 +258,13 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "2.2.0"
+#define PACKAGE_VERSION "2.3.6"
 
 /* Define to 1 if you have the ANSI C header files. */
 #define STDC_HEADERS 1
+
+/* sysrepo version */
+/* #undef SYSREPO_VERSION */
 
 /* Define to 1 if C++11 regex is usable */
 #define USE_REGEX 1
@@ -261,7 +273,7 @@
 /* #undef USE_STATIC_LINK */
 
 /* Version number of package */
-#define VERSION "2.2.0"
+#define VERSION "2.3.6"
 
 /* Compile with Botan crypto */
 /* #undef WITH_BOTAN */

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -492,6 +492,12 @@ struct Lease4 : public Lease {
     static Lease4Ptr fromElement(const data::ConstElementPtr& element);
 
     /// @todo: Add DHCPv4 failover related fields here
+
+    /// @brief Remote identifier for Bulk Lease Query
+    std::vector<uint8_t> remote_id_;
+
+    /// @brief Relay identifier for Bulk Lease Query
+    std::vector<uint8_t> relay_id_;
 };
 
 /// @brief A collection of IPv4 leases.
@@ -546,6 +552,16 @@ struct Lease6 : public Lease {
     /// This parameter is used only when reuseable_valid_lft_ is not zero,
     /// i.e. when the lease can be reused.
     uint32_t reuseable_preferred_lft_;
+
+    /// @brief Action on extended info tables.
+    typedef enum {
+        ACTION_IGNORE, ///< ignore extended info,
+        ACTION_DELETE, ///< delete reference to the lease
+        ACTION_UPDATE  ///< update extended info tables.
+    } ExtendedInfoAction;
+
+    /// @brief Record the action on extended info tables in the lease.
+    ExtendedInfoAction extended_info_action_;
 
     /// @todo: Add DHCPv6 failover related fields here
 
@@ -659,7 +675,6 @@ typedef boost::shared_ptr<const Lease6> ConstLease6Ptr;
 
 /// @brief A collection of IPv6 leases.
 typedef std::vector<Lease6Ptr> Lease6Collection;
-
 
 /// @brief A shared pointer to the collection of IPv6 leases.
 typedef boost::shared_ptr<Lease6Collection> Lease6CollectionPtr;

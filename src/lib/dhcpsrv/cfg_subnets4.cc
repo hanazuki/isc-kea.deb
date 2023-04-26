@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,6 +7,7 @@
 #include <config.h>
 #include <dhcp/iface_mgr.h>
 #include <dhcp/option_custom.h>
+#include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/cfg_subnets4.h>
 #include <dhcpsrv/dhcpsrv_log.h>
 #include <dhcpsrv/lease_mgr_factory.h>
@@ -224,14 +225,21 @@ CfgSubnets4::initSelector(const Pkt4Ptr& query) {
         OptionCustomPtr rai_custom =
             boost::dynamic_pointer_cast<OptionCustom>(rai);
         if (rai_custom) {
-            OptionPtr link_select =
-                rai_custom->getOption(RAI_OPTION_LINK_SELECTION);
-            if (link_select) {
-                OptionBuffer link_select_buf = link_select->getData();
-                if (link_select_buf.size() == sizeof(uint32_t)) {
-                    selector.option_select_ =
-                        IOAddress::fromBytes(AF_INET, &link_select_buf[0]);
-                    return (selector);
+            // If Relay Agent Information Link Selection is ignored in the
+            // configuration, skip returning the related subnet selector here,
+            // and move on to normal subnet selection.
+            bool ignore_link_sel = CfgMgr::instance().getCurrentCfg()->
+                                   getIgnoreRAILinkSelection();
+            if (!ignore_link_sel) {
+                OptionPtr link_select =
+                    rai_custom->getOption(RAI_OPTION_LINK_SELECTION);
+                if (link_select) {
+                    OptionBuffer link_select_buf = link_select->getData();
+                    if (link_select_buf.size() == sizeof(uint32_t)) {
+                        selector.option_select_ =
+                            IOAddress::fromBytes(AF_INET, &link_select_buf[0]);
+                        return (selector);
+                    }
                 }
             }
         }
@@ -487,6 +495,24 @@ CfgSubnets4::selectSubnet(const IOAddress& address,
     return (Subnet4Ptr());
 }
 
+SubnetIDSet
+CfgSubnets4::getLinks(const IOAddress& link_addr, uint8_t& link_len) const {
+    SubnetIDSet links;
+    bool link_len_set = false;
+    for (auto const& subnet : subnets_) {
+        if (!subnet->inRange(link_addr)) {
+            continue;
+        }
+        uint8_t plen = subnet->get().second;
+        if (!link_len_set || (plen < link_len)) {
+            link_len_set = true;
+            link_len = plen;
+        }
+        links.insert(subnet->getID());
+    }
+    return (links);
+}
+
 void
 CfgSubnets4::removeStatistics() {
     using namespace isc::stats;
@@ -542,6 +568,13 @@ CfgSubnets4::updateStatistics() {
     // Only recount the stats if we have subnets.
     if (subnets_.begin() != subnets_.end()) {
         LeaseMgrFactory::instance().recountLeaseStats4();
+    }
+}
+
+void
+CfgSubnets4::initAllocatorsAfterConfigure() {
+    for (auto subnet : subnets_) {
+        subnet->initAllocatorsAfterConfigure();
     }
 }
 

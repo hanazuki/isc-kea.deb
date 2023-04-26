@@ -271,7 +271,8 @@ Here's an example of a result returned when the host was found successfully:
        "option-data": [
 
        ],
-       "server-hostname": "server-hostname.example.org"
+       "server-hostname": "server-hostname.example.org",
+       "subnet-id": 4
      },
      "result": 0,
      "text": "Host found."
@@ -320,7 +321,8 @@ returns some IPv4 hosts:
                    "ip-address": "192.0.2.100",
                    "next-server": "192.0.0.2",
                    "option-data": [ ],
-                   "server-hostname": "server-hostname.example.org"
+                   "server-hostname": "server-hostname.example.org",
+                   "subnet-id": 1
                },
                ...
                {
@@ -331,7 +333,8 @@ returns some IPv4 hosts:
                    "ip-address": "192.0.2.200",
                    "next-server": "192.0.0.2",
                    "option-data": [ ],
-                   "server-hostname": "server-hostname.example.org"
+                   "server-hostname": "server-hostname.example.org",
+                   "subnet-id": 1
                }
            ]
        },
@@ -460,12 +463,12 @@ The response will contain a list of hosts with updated ``source-index``
 and ``from`` fields. Continue calling the command until the last
 page is received. Its response will look like this:
 
-::
+.. code-block:: json
 
    {
        "arguments": {
            "count": 0,
-           "hosts": [ ],
+           "hosts": [ ]
        },
        "result": 3,
        "0 IPv4 host(s) found."
@@ -683,3 +686,10 @@ an error. Here are some examples of possible results:
        "text": "Unable to delete a host because there is no hosts-database
                 configured."
    }
+
+.. note::
+
+   The host cache and RADIUS hook libraries are two host backends that do not
+   contribute to commands returning a collection of host reservations, such as
+   ``reservation-get-all``. Commands returning one host entry or dedicated host
+   cache commands should be used instead.

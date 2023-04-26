@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <dhcpsrv/lease.h>
 #include <util/pointer_util.h>
+#include <util/strutil.h>
 #include <boost/algorithm/string.hpp>
 #include <boost/scoped_ptr.hpp>
 #include <sstream>
@@ -318,6 +319,8 @@ Lease4::Lease4(const Lease4& other)
 
     if (other.getContext()) {
         setContext(other.getContext());
+        relay_id_ = other.relay_id_;
+        remote_id_ = other.remote_id_;
     }
 }
 
@@ -333,7 +336,7 @@ Lease4::Lease4(const isc::asiolink::IOAddress& address,
 
     : Lease(address, valid_lifetime, subnet_id, cltt, fqdn_fwd,
             fqdn_rev, hostname, hw_address),
-      client_id_(client_id) {
+      client_id_(client_id), remote_id_(), relay_id_() {
 }
 
 std::string
@@ -343,7 +346,7 @@ Lease4::statesToText(const uint32_t state) {
 
 const std::vector<uint8_t>&
 Lease4::getClientIdVector() const {
-    if(!client_id_) {
+    if (!client_id_) {
         static std::vector<uint8_t> empty_vec;
         return (empty_vec);
     }
@@ -419,6 +422,8 @@ Lease4::operator=(const Lease4& other) {
 
         if (other.getContext()) {
             setContext(other.getContext());
+            relay_id_ = other.relay_id_;
+            remote_id_ = other.remote_id_;
         }
     }
     return (*this);
@@ -492,7 +497,8 @@ Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
                SubnetID subnet_id, const HWAddrPtr& hwaddr, uint8_t prefixlen)
     : Lease(addr, valid, subnet_id, 0/*cltt*/, false, false, "", hwaddr),
       type_(type), prefixlen_(prefixlen), iaid_(iaid), duid_(duid),
-      preferred_lft_(preferred), reuseable_preferred_lft_(0) {
+      preferred_lft_(preferred), reuseable_preferred_lft_(0),
+      extended_info_action_(ExtendedInfoAction::ACTION_IGNORE) {
     if (!duid) {
         isc_throw(InvalidOperation, "DUID is mandatory for an IPv6 lease");
     }
@@ -509,7 +515,9 @@ Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
     : Lease(addr, valid, subnet_id, 0/*cltt*/,
             fqdn_fwd, fqdn_rev, hostname, hwaddr),
       type_(type), prefixlen_(prefixlen), iaid_(iaid), duid_(duid),
-      preferred_lft_(preferred), reuseable_preferred_lft_(0) {
+      preferred_lft_(preferred), reuseable_preferred_lft_(0),
+      extended_info_action_(ExtendedInfoAction::ACTION_IGNORE) {
+
     if (!duid) {
         isc_throw(InvalidOperation, "DUID is mandatory for an IPv6 lease");
     }
@@ -521,7 +529,8 @@ Lease6::Lease6(Lease::Type type, const isc::asiolink::IOAddress& addr,
 Lease6::Lease6()
     : Lease(isc::asiolink::IOAddress("::"), 0, 0, 0, false, false, "",
             HWAddrPtr()), type_(TYPE_NA), prefixlen_(0), iaid_(0),
-            duid_(DuidPtr()), preferred_lft_(0), reuseable_preferred_lft_(0) {
+            duid_(DuidPtr()), preferred_lft_(0), reuseable_preferred_lft_(0),
+            extended_info_action_(ExtendedInfoAction::ACTION_IGNORE) {
 }
 
 std::string
@@ -587,7 +596,11 @@ Lease4::toText() const {
            << "Hardware addr: " << (hwaddr_ ? hwaddr_->toText(false) : "(none)") << "\n"
            << "Client id:     " << (client_id_ ? client_id_->toText() : "(none)") << "\n"
            << "Subnet ID:     " << subnet_id_ << "\n"
-           << "State:         " << statesToText(state_) << "\n";
+           << "State:         " << statesToText(state_) << "\n"
+           << "Relay ID:      " << (relay_id_.empty() ? "(none)" :
+                                    str::dumpAsHex(&relay_id_[0], relay_id_.size())) << "\n"
+           << "Remote ID:     " << (remote_id_.empty() ? "(none)" :
+                                    str::dumpAsHex(&remote_id_[0], remote_id_.size())) << "\n";
 
     if (getContext()) {
         stream << "User context:  " << getContext()->str() << "\n";
@@ -691,8 +704,10 @@ Lease6::fromElement(const data::ConstElementPtr& element) {
     lease->type_ = textToType(lease_type->stringValue());
 
     // prefix length
-    ConstElementPtr prefix_len = element->get("prefix-len");
-    if (lease->type_ == Lease::TYPE_PD) {
+    if (lease->type_ != Lease::TYPE_PD) {
+        lease->prefixlen_ = 128;
+    } else {
+        ConstElementPtr prefix_len = element->get("prefix-len");
         if (!prefix_len || (prefix_len->getType() != Element::integer)) {
             isc_throw(BadValue, "prefix-len is not present in the parsed lease"
                       " or it is not a number");

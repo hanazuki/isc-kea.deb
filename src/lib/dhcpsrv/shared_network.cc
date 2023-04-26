@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -304,13 +304,29 @@ public:
 
         auto preferred_subnet = selected_subnet;
         for (auto s = subnets.begin(); s != subnets.end(); ++s) {
-            if (((*s)->getClientClass() == selected_subnet->getClientClass()) &&
-                ((*s)->getLastAllocatedTime(lease_type) >
-                 selected_subnet->getLastAllocatedTime(lease_type))) {
+            // It doesn't make sense to check the subnet against itself.
+            if (preferred_subnet == (*s)) {
+                continue;
+            }
+            if ((*s)->getClientClass().get() != selected_subnet->getClientClass().get()) {
+                continue;
+            }
+            auto current_subnet_state = (*s)->getAllocationState(lease_type);
+            if (!current_subnet_state) {
+                continue;
+            }
+            auto preferred_subnet_state = preferred_subnet->getAllocationState(lease_type);
+            if (!preferred_subnet_state) {
+                continue;
+            }
+            // The currently checked subnet has more recent time than the
+            // currently preferred subnet. Update the preferred subnet
+            // instance.
+            if (current_subnet_state->getLastAllocatedTime() >
+                preferred_subnet_state->getLastAllocatedTime()) {
                 preferred_subnet = (*s);
             }
         }
-
         return (preferred_subnet);
     }
 };

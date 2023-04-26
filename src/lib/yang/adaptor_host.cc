@@ -9,8 +9,10 @@
 #include <util/encode/hex.h>
 #include <util/strutil.h>
 #include <yang/adaptor_host.h>
+
 #include <iomanip>
 #include <sstream>
+#include <vector>
 
 using namespace std;
 using namespace isc::data;
@@ -22,12 +24,6 @@ namespace yang {
 const string
 AdaptorHost::STD_CHARACTERS =
     "0123456789@ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz-.@_";
-
-AdaptorHost::AdaptorHost() {
-}
-
-AdaptorHost::~AdaptorHost() {
-}
 
 void
 AdaptorHost::quoteIdentifier(ElementPtr host) {
@@ -64,5 +60,5 @@ AdaptorHost::quoteIdentifier(ElementPtr host) {
     host->set("flex-id", Element::create(tmp.str()));
 }
 
-}  // end of namespace isc::yang
-}  // end of namespace isc
+}  // namespace yang
+}  // namespace isc

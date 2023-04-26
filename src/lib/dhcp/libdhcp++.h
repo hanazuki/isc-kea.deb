@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -298,6 +298,13 @@ public:
     /// options.
     /// @return True if any option has been fused, false otherwise.
     static bool fuseOptions4(isc::dhcp::OptionCollection& options);
+
+    /// @brief Extend vendor options from fused options in multiple OptionVendor
+    /// or OptionVendorClass options and add respective suboptions or values.
+    ///
+    /// @param options The option container which needs to be updated with
+    /// extended vendor options.
+    static void extendVendorOptions4(isc::dhcp::OptionCollection& options);
 
     /// @brief Parses provided buffer as DHCPv4 options and creates
     /// Option objects.

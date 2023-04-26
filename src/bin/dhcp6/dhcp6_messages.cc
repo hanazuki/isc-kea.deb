@@ -54,6 +54,7 @@ extern const isc::log::MessageID DHCP6_DECLINE_FAIL_LEASE_WITHOUT_DUID = "DHCP6_
 extern const isc::log::MessageID DHCP6_DECLINE_FAIL_NO_LEASE = "DHCP6_DECLINE_FAIL_NO_LEASE";
 extern const isc::log::MessageID DHCP6_DECLINE_LEASE = "DHCP6_DECLINE_LEASE";
 extern const isc::log::MessageID DHCP6_DECLINE_PROCESS_IA = "DHCP6_DECLINE_PROCESS_IA";
+extern const isc::log::MessageID DHCP6_DEPRECATED = "DHCP6_DEPRECATED";
 extern const isc::log::MessageID DHCP6_DEVELOPMENT_VERSION = "DHCP6_DEVELOPMENT_VERSION";
 extern const isc::log::MessageID DHCP6_DHCP4O6_PACKET_RECEIVED = "DHCP6_DHCP4O6_PACKET_RECEIVED";
 extern const isc::log::MessageID DHCP6_DHCP4O6_RECEIVE_FAIL = "DHCP6_DHCP4O6_RECEIVE_FAIL";
@@ -136,10 +137,14 @@ extern const isc::log::MessageID DHCP6_QUERY_DATA = "DHCP6_QUERY_DATA";
 extern const isc::log::MessageID DHCP6_RAPID_COMMIT = "DHCP6_RAPID_COMMIT";
 extern const isc::log::MessageID DHCP6_RECLAIM_EXPIRED_LEASES_FAIL = "DHCP6_RECLAIM_EXPIRED_LEASES_FAIL";
 extern const isc::log::MessageID DHCP6_RELEASE_NA = "DHCP6_RELEASE_NA";
+extern const isc::log::MessageID DHCP6_RELEASE_NA_DELETED = "DHCP6_RELEASE_NA_DELETED";
+extern const isc::log::MessageID DHCP6_RELEASE_NA_EXPIRED = "DHCP6_RELEASE_NA_EXPIRED";
 extern const isc::log::MessageID DHCP6_RELEASE_NA_FAIL = "DHCP6_RELEASE_NA_FAIL";
 extern const isc::log::MessageID DHCP6_RELEASE_NA_FAIL_WRONG_DUID = "DHCP6_RELEASE_NA_FAIL_WRONG_DUID";
 extern const isc::log::MessageID DHCP6_RELEASE_NA_FAIL_WRONG_IAID = "DHCP6_RELEASE_NA_FAIL_WRONG_IAID";
 extern const isc::log::MessageID DHCP6_RELEASE_PD = "DHCP6_RELEASE_PD";
+extern const isc::log::MessageID DHCP6_RELEASE_PD_DELETED = "DHCP6_RELEASE_PD_DELETED";
+extern const isc::log::MessageID DHCP6_RELEASE_PD_EXPIRED = "DHCP6_RELEASE_PD_EXPIRED";
 extern const isc::log::MessageID DHCP6_RELEASE_PD_FAIL = "DHCP6_RELEASE_PD_FAIL";
 extern const isc::log::MessageID DHCP6_RELEASE_PD_FAIL_WRONG_DUID = "DHCP6_RELEASE_PD_FAIL_WRONG_DUID";
 extern const isc::log::MessageID DHCP6_RELEASE_PD_FAIL_WRONG_IAID = "DHCP6_RELEASE_PD_FAIL_WRONG_IAID";
@@ -217,6 +222,7 @@ const char* values[] = {
     "DHCP6_DECLINE_FAIL_NO_LEASE", "Client %1 sent DECLINE for address %2, but there's no lease for it",
     "DHCP6_DECLINE_LEASE", "Client %1 sent DECLINE for address %2 and the server marked it as declined. The lease will be recovered in %3 seconds.",
     "DHCP6_DECLINE_PROCESS_IA", "Processing of IA (IAID: %1) from client %2 started.",
+    "DHCP6_DEPRECATED", "The following mechanism is now deprecated and will be removed in the future: %1",
     "DHCP6_DEVELOPMENT_VERSION", "This software is a development branch of Kea. It is not recommended for production use.",
     "DHCP6_DHCP4O6_PACKET_RECEIVED", "received DHCPv4o6 packet from DHCPv4 server (type %1) for %2 port %3 on interface %4",
     "DHCP6_DHCP4O6_RECEIVE_FAIL", "failed to receive DHCPv4o6: %1",
@@ -299,10 +305,14 @@ const char* values[] = {
     "DHCP6_RAPID_COMMIT", "%1: Rapid Commit option received, following 2-way exchange",
     "DHCP6_RECLAIM_EXPIRED_LEASES_FAIL", "failed to reclaim expired leases: %1",
     "DHCP6_RELEASE_NA", "%1: binding for address %2 and iaid=%3 was released properly",
+    "DHCP6_RELEASE_NA_DELETED", "%1: binding for address %2 and iaid=%3 was deleted on release",
+    "DHCP6_RELEASE_NA_EXPIRED", "%1: binding for address %2 and iaid=%3 expired on release",
     "DHCP6_RELEASE_NA_FAIL", "%1: failed to remove address lease for address %2 and iaid=%3",
     "DHCP6_RELEASE_NA_FAIL_WRONG_DUID", "%1: client tried to release address %2, but it belongs to another client using duid=%3",
     "DHCP6_RELEASE_NA_FAIL_WRONG_IAID", "%1: client tried to release address %2, but it used wrong IAID (expected %3, but got %4)",
     "DHCP6_RELEASE_PD", "%1: prefix %2/%3 for iaid=%4 was released properly",
+    "DHCP6_RELEASE_PD_DELETED", "%1: prefix %2/%3 for iaid=%4 was deleted on release",
+    "DHCP6_RELEASE_PD_EXPIRED", "%1: prefix %2/%3 for iaid=%4 expired on release",
     "DHCP6_RELEASE_PD_FAIL", "%1: failed to release prefix %2/%3 for iaid=%4",
     "DHCP6_RELEASE_PD_FAIL_WRONG_DUID", "%1: client tried to release prefix %2/%3, but it belongs to another client (duid=%4)",
     "DHCP6_RELEASE_PD_FAIL_WRONG_IAID", "%1: client tried to release prefix %2/%3, but it used wrong IAID (expected %4, but got %5)",

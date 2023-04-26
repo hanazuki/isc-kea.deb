@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -127,7 +127,7 @@ public:
         if (value.unspecified()) {
             return (db::MySqlBinding::createNull());
         }
-        return (db::MySqlBinding::createInteger(value));
+        return (db::MySqlBinding::createInteger(value.get()));
     }
 
     /// @brief Creates MySQL binding from a @c Triplet.
@@ -562,6 +562,7 @@ public:
     /// - formatted_value,
     /// - space,
     /// - persistent,
+    /// - cancelled,
     /// - dhcp4_subnet_id/dhcp6_subnet_id,
     /// - scope_id,
     /// - user_context,

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,11 +7,13 @@
 #ifndef LIBDHCPSRV_ALLOC_ENGINE_UTILS_H
 #define LIBDHCPSRV_ALLOC_ENGINE_UTILS_H
 
-#include <dhcpsrv/lease_mgr.h>
-#include <dhcpsrv/lease_mgr_factory.h>
+#include <asiolink/io_address.h>
 #include <dhcpsrv/alloc_engine.h>
 #include <dhcpsrv/cfgmgr.h>
-#include <asiolink/io_address.h>
+#include <dhcpsrv/iterative_allocator.h>
+#include <dhcpsrv/lease_mgr.h>
+#include <dhcpsrv/lease_mgr_factory.h>
+
 #include <gtest/gtest.h>
 #include <vector>
 
@@ -31,7 +33,6 @@ namespace test {
 /// alloc_engine6_unittest.cc - all unit-tests dedicated to IPv6
 /// alloc_engine_hooks_unittest.cc - all unit-tests dedicated to hooks
 
-
 /// @brief Test that statistic manager holds a given value.
 ///
 /// This function may be used in many allocation tests and there's no
@@ -43,7 +44,8 @@ namespace test {
 ///
 /// @return true if the statistic manager holds a particular value,
 /// false otherwise.
-bool testStatistics(const std::string& stat_name, const int64_t exp_value,
+bool testStatistics(const std::string& stat_name,
+                    const int64_t exp_value,
                     const SubnetID subnet_id = SUBNET_ID_UNUSED);
 
 /// @brief Get a value held by statistic manager.
@@ -54,41 +56,32 @@ bool testStatistics(const std::string& stat_name, const int64_t exp_value,
 /// @param stat_name Statistic name.
 /// @param subnet_id subnet_id of the desired subnet, if not zero.
 /// @return the value held by the statistic manager or zero.
-int64_t getStatistics(const std::string& stat_name,
-                      const SubnetID subnet_id = SUBNET_ID_UNUSED);
+int64_t getStatistics(const std::string& stat_name, const SubnetID subnet_id = SUBNET_ID_UNUSED);
+
+/// @brief IterativeAllocator with internal methods exposed
+class NakedIterativeAllocator : public IterativeAllocator {
+public:
+    /// @brief constructor
+    /// @param type pool types that will be iterated through
+    NakedIterativeAllocator(Lease::Type type, const WeakSubnetPtr& subnet)
+        : IterativeAllocator(type, subnet) {
+    }
+
+    using IterativeAllocator::increaseAddress;
+    using IterativeAllocator::increasePrefix;
+};
 
 /// @brief Allocation engine with some internal methods exposed
 class NakedAllocEngine : public AllocEngine {
 public:
-
     /// @brief the sole constructor
-    /// @param engine_type specifies engine type (e.g. iterative)
     /// @param attempts number of lease selection attempts before giving up
-    /// @param ipv6 specifies if the engine is IPv6 or IPv4
-    NakedAllocEngine(AllocEngine::AllocType engine_type,
-                     unsigned int attempts, bool ipv6 = true)
-        :AllocEngine(engine_type, attempts, ipv6) {
+    NakedAllocEngine(unsigned int attempts)
+        : AllocEngine(attempts) {
     }
 
     // Expose internal classes for testing purposes
-    using AllocEngine::Allocator;
-    using AllocEngine::IterativeAllocator;
-    using AllocEngine::getAllocator;
     using AllocEngine::updateLease4ExtendedInfo;
-
-    /// @brief IterativeAllocator with internal methods exposed
-    class NakedIterativeAllocator: public AllocEngine::IterativeAllocator {
-    public:
-
-        /// @brief constructor
-        /// @param type pool types that will be iterated through
-        NakedIterativeAllocator(Lease::Type type)
-            :IterativeAllocator(type) {
-        }
-
-        using AllocEngine::IterativeAllocator::increaseAddress;
-        using AllocEngine::IterativeAllocator::increasePrefix;
-    };
 
     /// @brief Wrapper method for invoking AllocEngine4::updateLease4ExtendedInfo().
     /// @param lease lease to update
@@ -102,8 +95,7 @@ public:
     /// @brief Wrapper method for invoking AllocEngine6::updateLease6ExtendedInfo().
     /// @param lease lease to update
     /// @param ctx current packet processing context
-    /// @return true if extended information was changed
-    bool callUpdateLease6ExtendedInfo(const Lease6Ptr& lease,
+    void callUpdateLease6ExtendedInfo(const Lease6Ptr& lease,
                                       AllocEngine::ClientContext6& ctx) const {
         return (updateLease6ExtendedInfo(lease, ctx));
     }
@@ -146,7 +138,6 @@ public:
                     asiolink::IOAddress::IPV6_ZERO_ADDRESS(),
                     const uint8_t pd_pool_length = 0,
                     const uint8_t pd_delegated_length = 0);
-
 
     /// @brief Initializes FQDN data for a test.
     ///
@@ -200,8 +191,10 @@ public:
     /// @param exp_pd_len expected prefix length
     /// @param expected_in_subnet whether the lease is expected to be in subnet
     /// @param expected_in_pool whether the lease is expected to be in dynamic
-    void checkLease6(const DuidPtr& duid, const Lease6Ptr& lease,
-                     Lease::Type exp_type, uint8_t exp_pd_len = 128,
+    void checkLease6(const DuidPtr& duid,
+                     const Lease6Ptr& lease,
+                     Lease::Type exp_type,
+                     uint8_t exp_pd_len = 128,
                      bool expected_in_subnet = true,
                      bool expected_in_pool = true) {
 
@@ -265,9 +258,9 @@ public:
     /// @param alloc IterativeAllocator that is tested
     /// @param input address to be increased
     /// @param exp_output expected address after increase
-    void
-    checkAddrIncrease(NakedAllocEngine::NakedIterativeAllocator& alloc,
-                      std::string input, std::string exp_output) {
+    void checkAddrIncrease(NakedIterativeAllocator& alloc,
+                           std::string input,
+                           std::string exp_output) {
         EXPECT_EQ(exp_output, alloc.increaseAddress(asiolink::IOAddress(input),
                                                     false, 0).toText());
     }
@@ -280,12 +273,13 @@ public:
     /// @param input IPv6 prefix (as a string)
     /// @param prefix_len prefix len
     /// @param exp_output expected output (string)
-    void
-    checkPrefixIncrease(NakedAllocEngine::NakedIterativeAllocator& alloc,
-                        std::string input, uint8_t prefix_len,
-                        std::string exp_output) {
-        EXPECT_EQ(exp_output, alloc.increasePrefix(asiolink::IOAddress(input),
-                                                   prefix_len).toText());
+    void checkPrefixIncrease(NakedIterativeAllocator& alloc,
+                             std::string input,
+                             uint8_t prefix_len,
+                             std::string exp_output) {
+        EXPECT_EQ(exp_output,
+                  alloc.increasePrefix(asiolink::IOAddress(input),
+                                       prefix_len).toText());
     }
 
     /// @brief Checks if the simple allocation can succeed
@@ -299,7 +293,8 @@ public:
     /// @return allocated lease (or NULL)
     Lease6Ptr simpleAlloc6Test(const Pool6Ptr& pool,
                                const asiolink::IOAddress& hint,
-                               bool fake, bool in_pool = true);
+                               bool fake,
+                               bool in_pool = true);
 
     /// @brief Checks if the simple allocation can succeed with lifetimes.
     ///
@@ -311,11 +306,15 @@ public:
     /// @param valid valid lifetime to be used as a hint
     /// @param exp_preferred expected lease preferred lifetime
     /// @param exp_valid expected lease valid lifetime
+    /// @param class_def class definition to add to the context
     /// @return allocated lease (or NULL)
     Lease6Ptr simpleAlloc6Test(const Pool6Ptr& pool,
                                const asiolink::IOAddress& hint,
-                               uint32_t preferred, uint32_t valid,
-                               uint32_t exp_preferred, uint32_t exp_valid);
+                               uint32_t preferred,
+                               uint32_t valid,
+                               uint32_t exp_preferred,
+                               uint32_t exp_valid,
+                               ClientClassDefPtr class_def = ClientClassDefPtr());
 
     /// @brief Checks if the simple allocation can succeed for custom DUID.
     ///
@@ -327,10 +326,11 @@ public:
     /// @param fake true - this is fake allocation (SOLICIT)
     /// @param in_pool specifies whether the lease is expected to be in pool
     /// @return allocated lease (or NULL)
-    Lease6Ptr simpleAlloc6Test(const Pool6Ptr& pool, const DuidPtr& duid,
+    Lease6Ptr simpleAlloc6Test(const Pool6Ptr& pool,
+                               const DuidPtr& duid,
                                const asiolink::IOAddress& hint,
-                               bool fake, bool in_pool = true);
-
+                               bool fake,
+                               bool in_pool = true);
 
     /// @brief Checks if the allocation can succeed.
     ///
@@ -342,10 +342,15 @@ public:
     /// @param hint address to be used as a hint
     /// @param fake true - this is fake allocation (SOLICIT)
     /// @param in_pool specifies whether the lease is expected to be in pool
+    /// @param hint_prefix_length The hint prefix length that the client
+    /// provided.
     /// @return allocated lease(s) (may be empty)
-    Lease6Collection allocateTest(AllocEngine& engine, const Pool6Ptr& pool,
-                                  const asiolink::IOAddress& hint, bool fake,
-                                  bool in_pool = true);
+    Lease6Collection allocateTest(AllocEngine& engine,
+                                  const Pool6Ptr& pool,
+                                  const asiolink::IOAddress& hint,
+                                  bool fake,
+                                  bool in_pool = true,
+                                  uint8_t hint_prefix_length = 128);
 
     /// @brief Checks if the allocation can be renewed.
     ///
@@ -355,11 +360,14 @@ public:
     /// @param engine a reference to Allocation Engine
     /// @param pool pool from which the lease will be allocated from
     /// @param hints address to be used as a hint
+    /// @param in_subnet whether the lease is expected to be in subnet
     /// @param in_pool specifies whether the lease is expected to be in pool
     /// @return allocated lease(s) (may be empty)
-    Lease6Collection renewTest(AllocEngine& engine, const Pool6Ptr& pool,
+    Lease6Collection renewTest(AllocEngine& engine,
+                               const Pool6Ptr& pool,
                                AllocEngine::HintContainer& hints,
-                               bool in_pool = true);
+                               bool in_subnet,
+                               bool in_pool);
 
     /// @brief Checks if the address allocation with a hint that is in range,
     ///        in pool, but is currently used, can succeed
@@ -371,7 +379,8 @@ public:
     ///        allocation by some other user)
     /// @param requested address requested by the client
     /// @param expected_pd_len expected PD len (128 for addresses)
-    void allocWithUsedHintTest(Lease::Type type, asiolink::IOAddress used_addr,
+    void allocWithUsedHintTest(Lease::Type type,
+                               asiolink::IOAddress used_addr,
                                asiolink::IOAddress requested,
                                uint8_t expected_pd_len);
 
@@ -428,12 +437,12 @@ public:
     /// @param addr specifies reserved address or prefix
     /// @param prefix_len prefix length (should be 128 for addresses)
     /// @return created Host object.
-    HostPtr
-    createHost6(bool add_to_host_mgr, IPv6Resrv::Type type,
-                const asiolink::IOAddress& addr, uint8_t prefix_len) {
-        HostPtr host(new Host(&duid_->getDuid()[0], duid_->getDuid().size(),
-                              Host::IDENT_DUID, SUBNET_ID_UNUSED, subnet_->getID(),
-                              asiolink::IOAddress("0.0.0.0")));
+    HostPtr createHost6(bool add_to_host_mgr,
+                        IPv6Resrv::Type type,
+                        const asiolink::IOAddress& addr,
+                        uint8_t prefix_len) {
+        HostPtr host(new Host(&duid_->getDuid()[0], duid_->getDuid().size(), Host::IDENT_DUID,
+                              SUBNET_ID_UNUSED, subnet_->getID(), asiolink::IOAddress("0.0.0.0")));
         IPv6Resrv resv(type, addr, prefix_len);
         host->addReservation(resv);
 
@@ -452,8 +461,7 @@ public:
     /// such as subnets.
     ///
     /// @param host host reservation to add
-    void
-    addHost(HostPtr& host) {
+    void addHost(HostPtr& host) {
         SrvConfigPtr cfg = boost::const_pointer_cast<SrvConfig>(CfgMgr::instance().getCurrentCfg());
         cfg->getCfgHosts()->add(host);
     }
@@ -466,10 +474,11 @@ public:
     /// @param addr specifies reserved address or prefix
     /// @param prefix_len prefix length (should be 128 for addresses)
     /// @return created Host object.
-    HostPtr
-    createHost6HWAddr(bool add_to_host_mgr, IPv6Resrv::Type type,
-                      HWAddrPtr& hwaddr, const asiolink::IOAddress& addr,
-                      uint8_t prefix_len);
+    HostPtr createHost6HWAddr(bool add_to_host_mgr,
+                              IPv6Resrv::Type type,
+                              HWAddrPtr& hwaddr,
+                              const asiolink::IOAddress& addr,
+                              uint8_t prefix_len);
 
     /// @brief Utility function that decrements cltt of a persisted lease
     ///
@@ -480,13 +489,11 @@ public:
     ///
     /// @param[in][out] lease pointer reference to the lease to modify.  Upon
     /// return it will point to the newly updated lease.
-    void
-    rollbackPersistedCltt(Lease6Ptr& lease) {
+    void rollbackPersistedCltt(Lease6Ptr& lease) {
         ASSERT_TRUE(lease) << "rollbackPersistedCltt lease is empty";
 
         // Fetch it, so we can update it.
-        Lease6Ptr from_mgr = LeaseMgrFactory::instance().getLease6(lease->type_,
-                                                                   lease->addr_);
+        Lease6Ptr from_mgr = LeaseMgrFactory::instance().getLease6(lease->type_, lease->addr_);
         ASSERT_TRUE(from_mgr) << "rollbackPersistedCltt: lease not found?";
 
         // Decrement cltt then update it in the manager.
@@ -554,11 +561,9 @@ public:
         }
         if (lease->client_id_ && !clientid_) {
             ADD_FAILURE() << "Lease4 has a client-id, while it should have none.";
-        } else
-        if (!lease->client_id_ && clientid_) {
+        } else if (!lease->client_id_ && clientid_) {
             ADD_FAILURE() << "Lease4 has no client-id, but it was expected to have one.";
-        } else
-        if (lease->client_id_ && clientid_) {
+        } else if (lease->client_id_ && clientid_) {
             EXPECT_TRUE(*lease->client_id_ == *clientid_);
         }
         EXPECT_TRUE(*lease->hwaddr_ == *hwaddr_);
@@ -612,16 +617,16 @@ public:
         factory_.destroy();
     }
 
-    ClientIdPtr clientid_;      ///< Client-identifier (value used in tests)
-    ClientIdPtr clientid2_;     ///< Alternative client-identifier.
-    HWAddrPtr hwaddr_;          ///< Hardware address (value used in tests)
-    HWAddrPtr hwaddr2_;         ///< Alternative hardware address.
-    Subnet4Ptr subnet_;         ///< Subnet4 (used in tests)
-    Pool4Ptr pool_;             ///< Pool belonging to subnet_
-    LeaseMgrFactory factory_;   ///< Pointer to LeaseMgr factory
+    ClientIdPtr clientid_;            ///< Client-identifier (value used in tests)
+    ClientIdPtr clientid2_;           ///< Alternative client-identifier.
+    HWAddrPtr hwaddr_;                ///< Hardware address (value used in tests)
+    HWAddrPtr hwaddr2_;               ///< Alternative hardware address.
+    Subnet4Ptr subnet_;               ///< Subnet4 (used in tests)
+    Pool4Ptr pool_;                   ///< Pool belonging to subnet_
+    LeaseMgrFactory factory_;         ///< Pointer to LeaseMgr factory
     AllocEngine::ClientContext4 ctx_; ///< Context information passed to various
-    ClientClasses cc_;          ///< Client classes
-                                     ///< allocation engine functions.
+    ClientClasses cc_;                ///< Client classes
+                                      ///< allocation engine functions.
 };
 
 } // namespace test

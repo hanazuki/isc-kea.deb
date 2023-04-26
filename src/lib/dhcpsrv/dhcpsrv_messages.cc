@@ -31,6 +31,7 @@ extern const isc::log::MessageID DHCPSRV_CFGMGR_ONLY_SUBNET4 = "DHCPSRV_CFGMGR_O
 extern const isc::log::MessageID DHCPSRV_CFGMGR_ONLY_SUBNET6 = "DHCPSRV_CFGMGR_ONLY_SUBNET6";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_OPTION_DUPLICATE = "DHCPSRV_CFGMGR_OPTION_DUPLICATE";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_RELAY_IP_ADDRESS_DEPRECATED = "DHCPSRV_CFGMGR_RELAY_IP_ADDRESS_DEPRECATED";
+extern const isc::log::MessageID DHCPSRV_CFGMGR_RENEW_GTR_REBIND = "DHCPSRV_CFGMGR_RENEW_GTR_REBIND";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_SOCKET_RAW_UNSUPPORTED = "DHCPSRV_CFGMGR_SOCKET_RAW_UNSUPPORTED";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_SOCKET_TYPE_DEFAULT = "DHCPSRV_CFGMGR_SOCKET_TYPE_DEFAULT";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_SOCKET_TYPE_SELECT = "DHCPSRV_CFGMGR_SOCKET_TYPE_SELECT";
@@ -48,6 +49,7 @@ extern const isc::log::MessageID DHCPSRV_CFGMGR_UPDATE_SUBNET6 = "DHCPSRV_CFGMGR
 extern const isc::log::MessageID DHCPSRV_CFGMGR_USE_ADDRESS = "DHCPSRV_CFGMGR_USE_ADDRESS";
 extern const isc::log::MessageID DHCPSRV_CFGMGR_USE_UNICAST = "DHCPSRV_CFGMGR_USE_UNICAST";
 extern const isc::log::MessageID DHCPSRV_CLOSE_DB = "DHCPSRV_CLOSE_DB";
+extern const isc::log::MessageID DHCPSRV_DDNS_TTL_PERCENT_TOO_SMALL = "DHCPSRV_DDNS_TTL_PERCENT_TOO_SMALL";
 extern const isc::log::MessageID DHCPSRV_DEPRECATED = "DHCPSRV_DEPRECATED";
 extern const isc::log::MessageID DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET = "DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET";
 extern const isc::log::MessageID DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION = "DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION";
@@ -64,12 +66,22 @@ extern const isc::log::MessageID DHCPSRV_HOOK_LEASE6_EXTEND_SKIP = "DHCPSRV_HOOK
 extern const isc::log::MessageID DHCPSRV_HOOK_LEASE6_RECOVER_SKIP = "DHCPSRV_HOOK_LEASE6_RECOVER_SKIP";
 extern const isc::log::MessageID DHCPSRV_HOOK_LEASE6_SELECT_SKIP = "DHCPSRV_HOOK_LEASE6_SELECT_SKIP";
 extern const isc::log::MessageID DHCPSRV_INVALID_ACCESS = "DHCPSRV_INVALID_ACCESS";
+extern const isc::log::MessageID DHCPSRV_LEASE4_EXTENDED_INFO_SANITY_FAIL = "DHCPSRV_LEASE4_EXTENDED_INFO_SANITY_FAIL";
+extern const isc::log::MessageID DHCPSRV_LEASE4_EXTENDED_INFO_UPGRADED = "DHCPSRV_LEASE4_EXTENDED_INFO_UPGRADED";
+extern const isc::log::MessageID DHCPSRV_LEASE6_EXTENDED_INFO_SANITY_FAIL = "DHCPSRV_LEASE6_EXTENDED_INFO_SANITY_FAIL";
+extern const isc::log::MessageID DHCPSRV_LEASE6_EXTENDED_INFO_UPGRADED = "DHCPSRV_LEASE6_EXTENDED_INFO_UPGRADED";
+extern const isc::log::MessageID DHCPSRV_LEASE_MGR_CALLBACK_EXCEPTION = "DHCPSRV_LEASE_MGR_CALLBACK_EXCEPTION";
+extern const isc::log::MessageID DHCPSRV_LEASE_MGR_CALLBACK_UNKNOWN_EXCEPTION = "DHCPSRV_LEASE_MGR_CALLBACK_UNKNOWN_EXCEPTION";
 extern const isc::log::MessageID DHCPSRV_LEASE_SANITY_FAIL = "DHCPSRV_LEASE_SANITY_FAIL";
 extern const isc::log::MessageID DHCPSRV_LEASE_SANITY_FAIL_DISCARD = "DHCPSRV_LEASE_SANITY_FAIL_DISCARD";
 extern const isc::log::MessageID DHCPSRV_LEASE_SANITY_FIXED = "DHCPSRV_LEASE_SANITY_FIXED";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_ADD_ADDR4 = "DHCPSRV_MEMFILE_ADD_ADDR4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_ADD_ADDR6 = "DHCPSRV_MEMFILE_ADD_ADDR6";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_BEGIN_BUILD_EXTENDED_INFO_TABLES6 = "DHCPSRV_MEMFILE_BEGIN_BUILD_EXTENDED_INFO_TABLES6";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_BEGIN_EXTRACT_EXTENDED_INFO4 = "DHCPSRV_MEMFILE_BEGIN_EXTRACT_EXTENDED_INFO4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_BEGIN_TRANSACTION = "DHCPSRV_MEMFILE_BEGIN_TRANSACTION";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_BUILD_EXTENDED_INFO_TABLES6 = "DHCPSRV_MEMFILE_BUILD_EXTENDED_INFO_TABLES6";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_BUILD_EXTENDED_INFO_TABLES6_ERROR = "DHCPSRV_MEMFILE_BUILD_EXTENDED_INFO_TABLES6_ERROR";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_COMMIT = "DHCPSRV_MEMFILE_COMMIT";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_CONVERTING_LEASE_FILES = "DHCPSRV_MEMFILE_CONVERTING_LEASE_FILES";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_DB = "DHCPSRV_MEMFILE_DB";
@@ -77,6 +89,8 @@ extern const isc::log::MessageID DHCPSRV_MEMFILE_DELETE_ADDR = "DHCPSRV_MEMFILE_
 extern const isc::log::MessageID DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED4 = "DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED6 = "DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED_START = "DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED_START";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_EXTRACT_EXTENDED_INFO4 = "DHCPSRV_MEMFILE_EXTRACT_EXTENDED_INFO4";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_EXTRACT_EXTENDED_INFO4_ERROR = "DHCPSRV_MEMFILE_EXTRACT_EXTENDED_INFO4_ERROR";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET4 = "DHCPSRV_MEMFILE_GET4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET6 = "DHCPSRV_MEMFILE_GET6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET6_DUID = "DHCPSRV_MEMFILE_GET6_DUID";
@@ -90,8 +104,13 @@ extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_HOSTNAME6 = "DHCPSRV_MEMFIL
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_HWADDR = "DHCPSRV_MEMFILE_GET_HWADDR";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_IAID_DUID = "DHCPSRV_MEMFILE_GET_IAID_DUID";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_IAID_SUBID_DUID = "DHCPSRV_MEMFILE_GET_IAID_SUBID_DUID";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_LINKADDR6 = "DHCPSRV_MEMFILE_GET_LINKADDR6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_PAGE4 = "DHCPSRV_MEMFILE_GET_PAGE4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_PAGE6 = "DHCPSRV_MEMFILE_GET_PAGE6";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_RELAYID4 = "DHCPSRV_MEMFILE_GET_RELAYID4";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_RELAYID6 = "DHCPSRV_MEMFILE_GET_RELAYID6";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_REMOTEID4 = "DHCPSRV_MEMFILE_GET_REMOTEID4";
+extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_REMOTEID6 = "DHCPSRV_MEMFILE_GET_REMOTEID6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_SUBID4 = "DHCPSRV_MEMFILE_GET_SUBID4";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_SUBID6 = "DHCPSRV_MEMFILE_GET_SUBID6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_GET_SUBID_CLIENTID = "DHCPSRV_MEMFILE_GET_SUBID_CLIENTID";
@@ -118,6 +137,7 @@ extern const isc::log::MessageID DHCPSRV_MEMFILE_WIPE_LEASES4 = "DHCPSRV_MEMFILE
 extern const isc::log::MessageID DHCPSRV_MEMFILE_WIPE_LEASES4_FINISHED = "DHCPSRV_MEMFILE_WIPE_LEASES4_FINISHED";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_WIPE_LEASES6 = "DHCPSRV_MEMFILE_WIPE_LEASES6";
 extern const isc::log::MessageID DHCPSRV_MEMFILE_WIPE_LEASES6_FINISHED = "DHCPSRV_MEMFILE_WIPE_LEASES6_FINISHED";
+extern const isc::log::MessageID DHCPSRV_MT_DISABLED_QUEUE_CONTROL = "DHCPSRV_MT_DISABLED_QUEUE_CONTROL";
 extern const isc::log::MessageID DHCPSRV_MULTIPLE_RAW_SOCKETS_PER_IFACE = "DHCPSRV_MULTIPLE_RAW_SOCKETS_PER_IFACE";
 extern const isc::log::MessageID DHCPSRV_MYSQL_ADD_ADDR4 = "DHCPSRV_MYSQL_ADD_ADDR4";
 extern const isc::log::MessageID DHCPSRV_MYSQL_ADD_ADDR6 = "DHCPSRV_MYSQL_ADD_ADDR6";
@@ -267,6 +287,7 @@ const char* values[] = {
     "DHCPSRV_CFGMGR_ONLY_SUBNET6", "retrieved subnet %1 for address hint %2",
     "DHCPSRV_CFGMGR_OPTION_DUPLICATE", "multiple options with the code: %1 added to the subnet: %2",
     "DHCPSRV_CFGMGR_RELAY_IP_ADDRESS_DEPRECATED", "\"relay\" uses \"ip-address\", which has been deprecated, please use \"ip-addresses\": %1",
+    "DHCPSRV_CFGMGR_RENEW_GTR_REBIND", "in %1, the value of renew-timer %2 is greater than the value of rebind-timer %3, ignoring renew-timer",
     "DHCPSRV_CFGMGR_SOCKET_RAW_UNSUPPORTED", "use of raw sockets is unsupported on this OS, UDP sockets will be used",
     "DHCPSRV_CFGMGR_SOCKET_TYPE_DEFAULT", "\"dhcp-socket-type\" not specified , using default socket type %1",
     "DHCPSRV_CFGMGR_SOCKET_TYPE_SELECT", "using socket type %1",
@@ -284,6 +305,7 @@ const char* values[] = {
     "DHCPSRV_CFGMGR_USE_ADDRESS", "listening on address %1, on interface %2",
     "DHCPSRV_CFGMGR_USE_UNICAST", "listening on unicast address %1, on interface %2",
     "DHCPSRV_CLOSE_DB", "closing currently open %1 database",
+    "DHCPSRV_DDNS_TTL_PERCENT_TOO_SMALL", "ddns-ttl-percent %1 of lease lifetime %2 is too small, ignoring it",
     "DHCPSRV_DEPRECATED", "This configuration is using a deprecated feature: %1",
     "DHCPSRV_DHCP4O6_RECEIVED_BAD_PACKET", "received bad DHCPv4o6 packet: %1",
     "DHCPSRV_DHCP_DDNS_ERROR_EXCEPTION", "error handler for DHCP_DDNS IO generated an expected exception: %1",
@@ -300,12 +322,22 @@ const char* values[] = {
     "DHCPSRV_HOOK_LEASE6_RECOVER_SKIP", "DHCPv6 lease %1 was not recovered from declined state because a callout set the skip status.",
     "DHCPSRV_HOOK_LEASE6_SELECT_SKIP", "Lease6 (non-temporary) creation was skipped, because of callout skip flag.",
     "DHCPSRV_INVALID_ACCESS", "invalid database access string: %1",
+    "DHCPSRV_LEASE4_EXTENDED_INFO_SANITY_FAIL", "extended info for lease %1 failed checks (%2)",
+    "DHCPSRV_LEASE4_EXTENDED_INFO_UPGRADED", "extended info for lease %1 was upgraded",
+    "DHCPSRV_LEASE6_EXTENDED_INFO_SANITY_FAIL", "extended info for lease %1 failed checks (%2)",
+    "DHCPSRV_LEASE6_EXTENDED_INFO_UPGRADED", "extended info for lease %1 was upgraded",
+    "DHCPSRV_LEASE_MGR_CALLBACK_EXCEPTION", "exception occurred in a lease manager callback for callback type %1, subnet id %2, and lease %3: %4",
+    "DHCPSRV_LEASE_MGR_CALLBACK_UNKNOWN_EXCEPTION", "unknown exception occurred in a lease manager callback for callback type %1, subnet id %2, and lease %3",
     "DHCPSRV_LEASE_SANITY_FAIL", "The lease %1 with subnet-id %2 failed subnet-id checks (%3).",
     "DHCPSRV_LEASE_SANITY_FAIL_DISCARD", "The lease %1 with subnet-id %2 failed subnet-id checks (%3) and was dropped.",
     "DHCPSRV_LEASE_SANITY_FIXED", "The lease %1 with subnet-id %2 failed subnet-id checks, but was corrected to subnet-id %3.",
     "DHCPSRV_MEMFILE_ADD_ADDR4", "adding IPv4 lease with address %1",
     "DHCPSRV_MEMFILE_ADD_ADDR6", "adding IPv6 lease with address %1",
+    "DHCPSRV_MEMFILE_BEGIN_BUILD_EXTENDED_INFO_TABLES6", "building extended info tables with %1 sanity check level%2, tables %3",
+    "DHCPSRV_MEMFILE_BEGIN_EXTRACT_EXTENDED_INFO4", "extract extended info with %1 sanity check level%2",
     "DHCPSRV_MEMFILE_BEGIN_TRANSACTION", "committing to memory file database",
+    "DHCPSRV_MEMFILE_BUILD_EXTENDED_INFO_TABLES6", "building extended info tables saw %1 leases, extended info sanity checks modified %2 / updated %3 leases and %4 leases were entered into tables",
+    "DHCPSRV_MEMFILE_BUILD_EXTENDED_INFO_TABLES6_ERROR", "building extended info tables got an exception on the lease for %1: %2",
     "DHCPSRV_MEMFILE_COMMIT", "committing to memory file database",
     "DHCPSRV_MEMFILE_CONVERTING_LEASE_FILES", "running LFC now to convert lease files to the current schema: %1.%2",
     "DHCPSRV_MEMFILE_DB", "opening memory file lease database: %1",
@@ -313,6 +345,8 @@ const char* values[] = {
     "DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED4", "deleting reclaimed IPv4 leases that expired more than %1 seconds ago",
     "DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED6", "deleting reclaimed IPv6 leases that expired more than %1 seconds ago",
     "DHCPSRV_MEMFILE_DELETE_EXPIRED_RECLAIMED_START", "starting deletion of %1 expired-reclaimed leases",
+    "DHCPSRV_MEMFILE_EXTRACT_EXTENDED_INFO4", "extracting extended info saw %1 leases, extended info sanity checks modified %2 / updated %3 leases and %4 leases have relay or remote id",
+    "DHCPSRV_MEMFILE_EXTRACT_EXTENDED_INFO4_ERROR", "extracting extended info got an exception on the lease for %1: %2",
     "DHCPSRV_MEMFILE_GET4", "obtaining all IPv4 leases",
     "DHCPSRV_MEMFILE_GET6", "obtaining all IPv6 leases",
     "DHCPSRV_MEMFILE_GET6_DUID", "obtaining IPv6 leases for DUID %1",
@@ -326,8 +360,13 @@ const char* values[] = {
     "DHCPSRV_MEMFILE_GET_HWADDR", "obtaining IPv4 leases for hardware address %1",
     "DHCPSRV_MEMFILE_GET_IAID_DUID", "obtaining IPv6 leases for IAID %1 and DUID %2 and lease type %3",
     "DHCPSRV_MEMFILE_GET_IAID_SUBID_DUID", "obtaining IPv6 leases for IAID %1, Subnet ID %2, DUID %3 and lease type %4",
+    "DHCPSRV_MEMFILE_GET_LINKADDR6", "obtaining at most %1 IPv6 leases starting from address %2 with link %3/%4",
     "DHCPSRV_MEMFILE_GET_PAGE4", "obtaining at most %1 IPv4 leases starting from address %2",
     "DHCPSRV_MEMFILE_GET_PAGE6", "obtaining at most %1 IPv6 leases starting from address %2",
+    "DHCPSRV_MEMFILE_GET_RELAYID4", "obtaining at most %1 IPv4 leases starting from address %2 with relay id %3 and cltt between %4 and %5",
+    "DHCPSRV_MEMFILE_GET_RELAYID6", "obtaining at most %1 IPv6 leases starting from address %2 with relay id %3 and link %4/%5",
+    "DHCPSRV_MEMFILE_GET_REMOTEID4", "obtaining at most %1 IPv4 leases starting from address %2 with remote id %3 and cltt between %4 and %5",
+    "DHCPSRV_MEMFILE_GET_REMOTEID6", "obtaining at most %1 IPv6 leases starting from address %2 with remote id %3 and link %4/%5",
     "DHCPSRV_MEMFILE_GET_SUBID4", "obtaining IPv4 leases for subnet ID %1",
     "DHCPSRV_MEMFILE_GET_SUBID6", "obtaining IPv6 leases for subnet ID %1",
     "DHCPSRV_MEMFILE_GET_SUBID_CLIENTID", "obtaining IPv4 lease for subnet ID %1 and client ID %2",
@@ -354,6 +393,7 @@ const char* values[] = {
     "DHCPSRV_MEMFILE_WIPE_LEASES4_FINISHED", "removing all IPv4 leases from subnet %1 finished, removed %2 leases",
     "DHCPSRV_MEMFILE_WIPE_LEASES6", "removing all IPv6 leases from subnet %1",
     "DHCPSRV_MEMFILE_WIPE_LEASES6_FINISHED", "removing all IPv6 leases from subnet %1 finished, removed %2 leases",
+    "DHCPSRV_MT_DISABLED_QUEUE_CONTROL", "disabling dhcp queue control when multi-threading is enabled.",
     "DHCPSRV_MULTIPLE_RAW_SOCKETS_PER_IFACE", "current configuration will result in opening multiple broadcast capable sockets on some interfaces and some DHCP messages may be duplicated",
     "DHCPSRV_MYSQL_ADD_ADDR4", "adding IPv4 lease with address %1",
     "DHCPSRV_MYSQL_ADD_ADDR6", "adding IPv6 lease with address %1, lease type %2",

@@ -171,7 +171,9 @@ public:
     /// @note This buffer is only valid till object that returned it exists.
     ///
     /// @return reference to output buffer
-    isc::util::OutputBuffer& getBuffer() { return (buffer_out_); };
+    isc::util::OutputBuffer& getBuffer() {
+        return (buffer_out_);
+    }
 
     /// @brief Adds an option to this packet.
     ///
@@ -258,12 +260,16 @@ public:
     /// @brief Sets transaction-id value.
     ///
     /// @param transid transaction-id to be set.
-    void setTransid(uint32_t transid) { transid_ = transid; }
+    void setTransid(uint32_t transid) {
+        transid_ = transid;
+    }
 
     /// @brief Returns value of transaction-id field.
     ///
     /// @return transaction-id
-    uint32_t getTransid() const { return (transid_); };
+    uint32_t getTransid() const {
+        return (transid_);
+    }
 
     /// @brief Checks whether a client belongs to a given class.
     ///
@@ -271,24 +277,27 @@ public:
     /// @return true if belongs
     bool inClass(const isc::dhcp::ClientClass& client_class);
 
-    /// @brief Adds packet to a specified class.
+    /// @brief Adds a specified class to the packet.
     ///
-    /// A packet can be added to the same class repeatedly. Any additional
-    /// attempts to add to a class the packet already belongs to, will be
+    /// A class can be added to the same packet repeatedly. Any additional
+    /// attempts to add to a packet the class already added, will be
     /// ignored silently.
-    ///
-    /// @note It is a matter of naming convention. Conceptually, the server
-    /// processes a stream of packets, with some packets belonging to given
-    /// classes. From that perspective, this method adds a packet to specified
-    /// class. Implementation wise, it looks the opposite - the class name
-    /// is added to the packet. Perhaps the most appropriate name for this
-    /// method would be associateWithClass()? But that seems overly long,
-    /// so I decided to stick with addClass().
     ///
     /// @param client_class name of the class to be added
     /// @param required the class is marked for required evaluation
     void addClass(const isc::dhcp::ClientClass& client_class,
                   bool required = false);
+
+    /// @brief Adds a specified subclass to the packet.
+    ///
+    /// A subclass can be added to the same packet repeatedly. Any additional
+    /// attempts to add to a packet the subclass already added, will be
+    /// ignored silently.
+    ///
+    /// @param class_def name of the class definition to be added
+    /// @param subclass name of the subclass to be added
+    void addSubClass(const isc::dhcp::ClientClass& class_def,
+                     const isc::dhcp::ClientClass& subclass);
 
     /// @brief Returns the class set
     ///
@@ -299,6 +308,19 @@ public:
     /// evaluated.
     const ClientClasses& getClasses(bool required = false) const {
         return (!required ? classes_ : required_classes_);
+    }
+
+    /// @brief Returns the class set including template classes associated with
+    /// subclasses
+    ///
+    /// @note This should be used only to iterate over the class set.
+    /// @note SubClasses are always last.
+    /// @param required return classes or required to be evaluated classes.
+    /// @return if required is false (the default) the classes the
+    /// packet belongs to else the classes which are required to be
+    /// evaluated.
+    const SubClassRelationContainer& getSubClassesRelations() const {
+        return (subclasses_);
     }
 
     /// @brief Unparsed data (in received packets).
@@ -326,13 +348,26 @@ protected:
     /// if such option is not present.
     OptionPtr getNonCopiedOption(const uint16_t type) const;
 
+    /// @brief Returns all option instances of specified type without
+    /// copying.
+    ///
+    /// This is a variant of @ref getOptions method, which returns a collection
+    /// of options without copying them. This method should be only used by
+    /// the @ref Pkt6 class and derived classes. Any external callers should
+    /// use @ref getOptions which copies option instances before returning them
+    /// when the @ref Pkt::copy_retrieved_options_ flag is set to true.
+    ///
+    /// @param opt_type Option code.
+    ///
+    /// @return Collection of options found.
+    OptionCollection getNonCopiedOptions(const uint16_t opt_type) const;
+
 public:
 
     /// @brief Returns the first option of specified type.
     ///
     /// Returns the first option of specified type. Note that in DHCPv6 several
     /// instances of the same option are allowed (and frequently used).
-    /// Also see @ref Pkt6::getOptions().
     ///
     /// The options will be only returned after unpack() is called.
     ///
@@ -340,6 +375,15 @@ public:
     ///
     /// @return pointer to found option (or NULL)
     OptionPtr getOption(const uint16_t type);
+
+    /// @brief Returns all instances of specified type.
+    ///
+    /// Returns all instances of options of the specified type. DHCPv6 protocol
+    /// allows (and uses frequently) multiple instances.
+    ///
+    /// @param type option type we are looking for
+    /// @return instance of option collection with requested options
+    isc::dhcp::OptionCollection getOptions(const uint16_t type);
 
     /// @brief Controls whether the option retrieved by the @ref Pkt::getOption
     /// should be copied before being returned.
@@ -357,7 +401,7 @@ public:
     /// Kea configuration. To prevent this, option copying should be
     /// enabled prior to passing the pointer to a packet to a hook library.
     ///
-    /// Note that only only does this method causes the server to copy
+    /// Not only does this method cause the server to copy
     /// an option, but the copied option also replaces the original
     /// option within the packet. The option can be then freely modified
     /// and the modifications will only affect the instance of this
@@ -482,7 +526,7 @@ public:
     /// @param ifindex specifies interface index.
     void setIndex(int ifindex) {
         ifindex_ = ifindex;
-    };
+    }
 
     /// @brief Resets interface index to negative value.
     void resetIndex() {
@@ -494,7 +538,7 @@ public:
     /// @return interface index
     int getIndex() const {
         return (ifindex_);
-    };
+    }
 
     /// @brief Checks if interface index has been set.
     ///
@@ -509,7 +553,9 @@ public:
     /// going to be transmitted.
     ///
     /// @return interface name
-    std::string getIface() const { return (iface_); };
+    std::string getIface() const {
+        return (iface_);
+    }
 
     /// @brief Sets interface name.
     ///
@@ -517,7 +563,9 @@ public:
     /// going to be transmitted.
     ///
     /// @param iface The interface name
-    void setIface(const std::string& iface) { iface_ = iface; };
+    void setIface(const std::string& iface) {
+        iface_ = iface;
+    }
 
     /// @brief Sets remote hardware address.
     ///
@@ -592,7 +640,7 @@ public:
     /// This field is public, so the code outside of Pkt4 or Pkt6 class can
     /// iterate over existing classes. Having it public also solves the problem
     /// of returned reference lifetime. It is preferred to use @ref inClass and
-    /// @ref addClass should be used to operate on this field.
+    /// @ref addClass to operate on this field.
     ClientClasses classes_;
 
     /// @brief Classes which are required to be evaluated.
@@ -602,6 +650,14 @@ public:
     /// Before output option processing these classes will be evaluated
     /// and if evaluation status is true added to the previous collection.
     ClientClasses required_classes_;
+
+    /// @brief SubClasses this packet belongs to.
+    ///
+    /// This field is public, so the code outside of Pkt4 or Pkt6 class can
+    /// iterate over existing classes. Having it public also solves the problem
+    /// of returned reference lifetime. It is preferred to use @ref inClass and
+    /// @ref addSubClass to operate on this field.
+    SubClassRelationContainer subclasses_;
 
     /// @brief Collection of options present in this message.
     ///

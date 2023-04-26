@@ -25,6 +25,7 @@ extern const isc::log::MessageID HA_CONFIGURATION_FAILED = "HA_CONFIGURATION_FAI
 extern const isc::log::MessageID HA_CONFIGURATION_SUCCESSFUL = "HA_CONFIGURATION_SUCCESSFUL";
 extern const isc::log::MessageID HA_CONFIG_AUTO_FAILOVER_DISABLED = "HA_CONFIG_AUTO_FAILOVER_DISABLED";
 extern const isc::log::MessageID HA_CONFIG_DHCP_MT_DISABLED = "HA_CONFIG_DHCP_MT_DISABLED";
+extern const isc::log::MessageID HA_CONFIG_DHCP_MT_DISABLED_AND_KEA_MT_ENABLED = "HA_CONFIG_DHCP_MT_DISABLED_AND_KEA_MT_ENABLED";
 extern const isc::log::MessageID HA_CONFIG_LEASE_SYNCING_DISABLED = "HA_CONFIG_LEASE_SYNCING_DISABLED";
 extern const isc::log::MessageID HA_CONFIG_LEASE_SYNCING_DISABLED_REMINDER = "HA_CONFIG_LEASE_SYNCING_DISABLED_REMINDER";
 extern const isc::log::MessageID HA_CONFIG_LEASE_UPDATES_AND_SYNCING_DIFFER = "HA_CONFIG_LEASE_UPDATES_AND_SYNCING_DIFFER";
@@ -43,7 +44,7 @@ extern const isc::log::MessageID HA_HEARTBEAT_COMMUNICATIONS_FAILED = "HA_HEARTB
 extern const isc::log::MessageID HA_HEARTBEAT_FAILED = "HA_HEARTBEAT_FAILED";
 extern const isc::log::MessageID HA_HEARTBEAT_HANDLER_FAILED = "HA_HEARTBEAT_HANDLER_FAILED";
 extern const isc::log::MessageID HA_HIGH_CLOCK_SKEW = "HA_HIGH_CLOCK_SKEW";
-extern const isc::log::MessageID HA_HIGH_CLOCK_SKEW_CAUSES_TERMINATION = "HA_HIGH_CLOCK_SKEW_CAUSES_TERMINATION";
+extern const isc::log::MessageID HA_HIGH_CLOCK_SKEW_CAUSED_TERMINATION = "HA_HIGH_CLOCK_SKEW_CAUSED_TERMINATION";
 extern const isc::log::MessageID HA_INIT_OK = "HA_INIT_OK";
 extern const isc::log::MessageID HA_INVALID_PARTNER_STATE_COMMUNICATION_RECOVERY = "HA_INVALID_PARTNER_STATE_COMMUNICATION_RECOVERY";
 extern const isc::log::MessageID HA_INVALID_PARTNER_STATE_HOT_STANDBY = "HA_INVALID_PARTNER_STATE_HOT_STANDBY";
@@ -66,9 +67,11 @@ extern const isc::log::MessageID HA_LEASE_SYNC_STALE_LEASE6_SKIP = "HA_LEASE_SYN
 extern const isc::log::MessageID HA_LEASE_UPDATES_DISABLED = "HA_LEASE_UPDATES_DISABLED";
 extern const isc::log::MessageID HA_LEASE_UPDATES_ENABLED = "HA_LEASE_UPDATES_ENABLED";
 extern const isc::log::MessageID HA_LEASE_UPDATE_COMMUNICATIONS_FAILED = "HA_LEASE_UPDATE_COMMUNICATIONS_FAILED";
+extern const isc::log::MessageID HA_LEASE_UPDATE_CONFLICT = "HA_LEASE_UPDATE_CONFLICT";
 extern const isc::log::MessageID HA_LEASE_UPDATE_CREATE_UPDATE_FAILED_ON_PEER = "HA_LEASE_UPDATE_CREATE_UPDATE_FAILED_ON_PEER";
 extern const isc::log::MessageID HA_LEASE_UPDATE_DELETE_FAILED_ON_PEER = "HA_LEASE_UPDATE_DELETE_FAILED_ON_PEER";
 extern const isc::log::MessageID HA_LEASE_UPDATE_FAILED = "HA_LEASE_UPDATE_FAILED";
+extern const isc::log::MessageID HA_LEASE_UPDATE_REJECTS_CAUSED_TERMINATION = "HA_LEASE_UPDATE_REJECTS_CAUSED_TERMINATION";
 extern const isc::log::MessageID HA_LOAD_BALANCING_DUID_MISSING = "HA_LOAD_BALANCING_DUID_MISSING";
 extern const isc::log::MessageID HA_LOAD_BALANCING_IDENTIFIER_MISSING = "HA_LOAD_BALANCING_IDENTIFIER_MISSING";
 extern const isc::log::MessageID HA_LOCAL_DHCP_DISABLE = "HA_LOCAL_DHCP_DISABLE";
@@ -130,6 +133,7 @@ const char* values[] = {
     "HA_CONFIGURATION_SUCCESSFUL", "HA hook library has been successfully configured",
     "HA_CONFIG_AUTO_FAILOVER_DISABLED", "auto-failover disabled for %1",
     "HA_CONFIG_DHCP_MT_DISABLED", "HA multi-threading has been disabled, it cannot be enabled when Kea global multi-threading is disabled",
+    "HA_CONFIG_DHCP_MT_DISABLED_AND_KEA_MT_ENABLED", "HA multi-threading is disabled while Kea global multi-threading is enabled which most likely cause performance degradation.",
     "HA_CONFIG_LEASE_SYNCING_DISABLED", "lease database synchronization between HA servers is disabled",
     "HA_CONFIG_LEASE_SYNCING_DISABLED_REMINDER", "bypassing SYNCING state because lease database synchronization is administratively disabled",
     "HA_CONFIG_LEASE_UPDATES_AND_SYNCING_DIFFER", "unusual configuration where \"send-lease-updates\": %1 and \"sync-leases\": %2",
@@ -148,7 +152,7 @@ const char* values[] = {
     "HA_HEARTBEAT_FAILED", "heartbeat to %1 failed: %2",
     "HA_HEARTBEAT_HANDLER_FAILED", "heartbeat command failed: %1",
     "HA_HIGH_CLOCK_SKEW", "%1, please synchronize clocks!",
-    "HA_HIGH_CLOCK_SKEW_CAUSES_TERMINATION", "%1, causing HA service to terminate",
+    "HA_HIGH_CLOCK_SKEW_CAUSED_TERMINATION", "%1, causing HA service to terminate",
     "HA_INIT_OK", "loading High Availability hooks library successful",
     "HA_INVALID_PARTNER_STATE_COMMUNICATION_RECOVERY", "partner is in the communication-recovery state unexpectedly",
     "HA_INVALID_PARTNER_STATE_HOT_STANDBY", "partner is in the hot-standby state unexpectedly",
@@ -171,9 +175,11 @@ const char* values[] = {
     "HA_LEASE_UPDATES_DISABLED", "lease updates will not be sent to the partner while in %1 state",
     "HA_LEASE_UPDATES_ENABLED", "lease updates will be sent to the partner while in %1 state",
     "HA_LEASE_UPDATE_COMMUNICATIONS_FAILED", "%1: failed to communicate with %2: %3",
+    "HA_LEASE_UPDATE_CONFLICT", "%1: lease update to %2 returned conflict status code: %3",
     "HA_LEASE_UPDATE_CREATE_UPDATE_FAILED_ON_PEER", "%1: failed to create or update the lease having type %2 for address %3, reason: %4",
     "HA_LEASE_UPDATE_DELETE_FAILED_ON_PEER", "%1: failed to delete the lease having type %2 for address %3, reason: %4",
     "HA_LEASE_UPDATE_FAILED", "%1: lease update to %2 failed: %3",
+    "HA_LEASE_UPDATE_REJECTS_CAUSED_TERMINATION", "too many rejected lease updates cause the HA service to terminate",
     "HA_LOAD_BALANCING_DUID_MISSING", "load balancing failed for the DHCPv6 message (transaction id: %1) because DUID is missing",
     "HA_LOAD_BALANCING_IDENTIFIER_MISSING", "load balancing failed for the DHCPv4 message (transaction id: %1) because HW address and client identifier are missing",
     "HA_LOCAL_DHCP_DISABLE", "local DHCP service is disabled while the %1 is in the %2 state",

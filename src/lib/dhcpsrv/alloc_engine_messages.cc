@@ -7,6 +7,8 @@
 namespace isc {
 namespace dhcp {
 
+extern const isc::log::MessageID ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS = "ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS";
+extern const isc::log::MessageID ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS6 = "ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS6";
 extern const isc::log::MessageID ALLOC_ENGINE_LEASE_RECLAIMED = "ALLOC_ENGINE_LEASE_RECLAIMED";
 extern const isc::log::MessageID ALLOC_ENGINE_REMOVAL_NCR_FAILED = "ALLOC_ENGINE_REMOVAL_NCR_FAILED";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_ERROR = "ALLOC_ENGINE_V4_ALLOC_ERROR";
@@ -19,6 +21,7 @@ extern const isc::log::MessageID ALLOC_ENGINE_V4_DECLINED_RECOVERED = "ALLOC_ENG
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT = "ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_HR = "ALLOC_ENGINE_V4_DISCOVER_HR";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_COMPLETE = "ALLOC_ENGINE_V4_LEASES_RECLAMATION_COMPLETE";
+extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_FAILED = "ALLOC_ENGINE_V4_LEASES_RECLAMATION_FAILED";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_SLOW = "ALLOC_ENGINE_V4_LEASES_RECLAMATION_SLOW";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_START = "ALLOC_ENGINE_V4_LEASES_RECLAMATION_START";
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_TIMEOUT = "ALLOC_ENGINE_V4_LEASES_RECLAMATION_TIMEOUT";
@@ -64,6 +67,7 @@ extern const isc::log::MessageID ALLOC_ENGINE_V6_HINT_RESERVED = "ALLOC_ENGINE_V
 extern const isc::log::MessageID ALLOC_ENGINE_V6_HR_ADDR_GRANTED = "ALLOC_ENGINE_V6_HR_ADDR_GRANTED";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_HR_PREFIX_GRANTED = "ALLOC_ENGINE_V6_HR_PREFIX_GRANTED";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_COMPLETE = "ALLOC_ENGINE_V6_LEASES_RECLAMATION_COMPLETE";
+extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_FAILED = "ALLOC_ENGINE_V6_LEASES_RECLAMATION_FAILED";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_SLOW = "ALLOC_ENGINE_V6_LEASES_RECLAMATION_SLOW";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_START = "ALLOC_ENGINE_V6_LEASES_RECLAMATION_START";
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_TIMEOUT = "ALLOC_ENGINE_V6_LEASES_RECLAMATION_TIMEOUT";
@@ -88,6 +92,8 @@ extern const isc::log::MessageID ALLOC_ENGINE_V6_REVOKED_SHARED_PREFIX_LEASE = "
 namespace {
 
 const char* values[] = {
+    "ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS", "ignoring globally reserved address %1, it falls outside %2",
+    "ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS6", "ignoring globally reserved address %1, it falls outside %2",
     "ALLOC_ENGINE_LEASE_RECLAIMED", "successfully reclaimed lease %1",
     "ALLOC_ENGINE_REMOVAL_NCR_FAILED", "sending removal name change request failed for lease %1: %2",
     "ALLOC_ENGINE_V4_ALLOC_ERROR", "%1: error during attempt to allocate an IPv4 address: %2",
@@ -100,6 +106,7 @@ const char* values[] = {
     "ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT", "%1: conflicting reservation for address %2 with existing lease %3",
     "ALLOC_ENGINE_V4_DISCOVER_HR", "client %1 sending DHCPDISCOVER has reservation for the address %2",
     "ALLOC_ENGINE_V4_LEASES_RECLAMATION_COMPLETE", "reclaimed %1 leases in %2",
+    "ALLOC_ENGINE_V4_LEASES_RECLAMATION_FAILED", "reclamation of expired leases failed: %1",
     "ALLOC_ENGINE_V4_LEASES_RECLAMATION_SLOW", "expired leases still exist after %1 reclamations",
     "ALLOC_ENGINE_V4_LEASES_RECLAMATION_START", "starting reclamation of expired leases (limit = %1 leases or %2 milliseconds)",
     "ALLOC_ENGINE_V4_LEASES_RECLAMATION_TIMEOUT", "timeout of %1 ms reached while reclaiming IPv4 leases",
@@ -145,6 +152,7 @@ const char* values[] = {
     "ALLOC_ENGINE_V6_HR_ADDR_GRANTED", "reserved address %1 was assigned to client %2",
     "ALLOC_ENGINE_V6_HR_PREFIX_GRANTED", "reserved prefix %1/%2 was assigned to client %3",
     "ALLOC_ENGINE_V6_LEASES_RECLAMATION_COMPLETE", "reclaimed %1 leases in %2",
+    "ALLOC_ENGINE_V6_LEASES_RECLAMATION_FAILED", "reclamation of expired leases failed: %1",
     "ALLOC_ENGINE_V6_LEASES_RECLAMATION_SLOW", "expired leases still exist after %1 reclamations",
     "ALLOC_ENGINE_V6_LEASES_RECLAMATION_START", "starting reclamation of expired leases (limit = %1 leases or %2 milliseconds)",
     "ALLOC_ENGINE_V6_LEASES_RECLAMATION_TIMEOUT", "timeout of %1 ms reached while reclaiming IPv6 leases",

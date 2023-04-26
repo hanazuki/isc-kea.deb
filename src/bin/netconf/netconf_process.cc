@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -7,16 +7,14 @@
 #include <config.h>
 
 #include <asiolink/asio_wrapper.h>
-#include <netconf/netconf.h>
-#include <netconf/netconf_process.h>
-#include <netconf/netconf_controller.h>
-#include <netconf/netconf_log.h>
 #include <asiolink/io_address.h>
 #include <asiolink/io_error.h>
 #include <cc/command_interpreter.h>
 #include <config/timeouts.h>
-
-#include <boost/pointer_cast.hpp>
+#include <netconf/netconf.h>
+#include <netconf/netconf_controller.h>
+#include <netconf/netconf_log.h>
+#include <netconf/netconf_process.h>
 
 using namespace isc::asiolink;
 using namespace isc::config;
@@ -77,7 +75,7 @@ NetconfProcess::runIO() {
 isc::data::ConstElementPtr
 NetconfProcess::shutdown(isc::data::ConstElementPtr /*args*/) {
     setShutdownFlag(true);
-    return (isc::config::createAnswer(0, "Netconf is shutting down"));
+    return (isc::config::createAnswer(CONTROL_RESULT_SUCCESS, "Netconf is shutting down"));
 }
 
 isc::data::ConstElementPtr
@@ -95,5 +93,5 @@ NetconfProcess::getNetconfCfgMgr() {
     return (boost::dynamic_pointer_cast<NetconfCfgMgr>(getCfgMgr()));
 }
 
-} // namespace isc::netconf
-} // namespace isc
+}  // namespace netconf
+}  // namespace isc

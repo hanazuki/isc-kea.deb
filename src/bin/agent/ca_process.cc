@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -98,7 +98,8 @@ CtrlAgentProcess::runIO() {
 isc::data::ConstElementPtr
 CtrlAgentProcess::shutdown(isc::data::ConstElementPtr /*args*/) {
     setShutdownFlag(true);
-    return (isc::config::createAnswer(0, "Control Agent is shutting down"));
+    return (isc::config::createAnswer(CONTROL_RESULT_SUCCESS,
+                                      "Control Agent is shutting down"));
 }
 
 isc::data::ConstElementPtr
@@ -197,7 +198,7 @@ void
 CtrlAgentProcess::garbageCollectListeners(size_t leaving) {
     // We expect only one active listener. If there are more (most likely 2),
     // it means we have just reconfigured the server and need to shut down all
-    // listeners execept the most recently added.
+    // listeners except the most recently added.
     if (http_listeners_.size() > leaving) {
         // Stop no longer used listeners.
         for (auto l = http_listeners_.begin();

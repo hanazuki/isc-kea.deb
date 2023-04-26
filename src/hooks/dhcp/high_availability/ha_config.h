@@ -550,6 +550,39 @@ public:
         max_unacked_clients_ = max_unacked_clients;
     }
 
+    /// @brief Returns a maximum number of clients for whom lease updates failed
+    /// due to other than general error.
+    ///
+    /// A lease update may fail due to a conflict with the partner's configuration.
+    /// The server distinguishes such errors from general errors (e.g., related to
+    /// communication issues) to avoid transitioning to the partner-down state
+    /// when there is in fact a problem with a lease or the configuration. On the other
+    /// hand, if such problematic leases accumulate, the server can no longer provide
+    /// the HA service and should transition to the terminated state. Consequently,
+    /// an administrator must fix the configuration problem. This function returns
+    /// the maximum number of clients with conflicting leases before the server
+    /// transitions to the terminated state.
+    ///
+    /// @return Maximum number of rejected lease updates before the server terminates
+    /// the HA service.
+    uint32_t getMaxRejectedLeaseUpdates() const {
+        return (max_rejected_lease_updates_);
+    }
+
+    /// @brief Sets the maximum number of clients for which lease updates can fail
+    /// due to other than general error.
+    ///
+    /// The service is terminated when the actual number of rejected clients is equal
+    /// or greater that number.
+    ///
+    /// @param max_rejected_clients maximum number of distinct clients for which
+    /// the lease updates can fail before the server terminates the HA service.
+    /// A special value of 0 configures the server to never transition to the
+    /// terminated state as a result of the lease updates issues.
+    void setMaxRejectedLeaseUpdates(const uint32_t max_rejected_lease_updates) {
+        max_rejected_lease_updates_ = max_rejected_lease_updates;
+    }
+
     /// @brief Configures the server to wait/not wait for the lease update
     /// acknowledgments from the backup servers.
     ///
@@ -768,6 +801,7 @@ public:
     uint32_t max_response_delay_;             ///< Max delay in response to heartbeats.
     uint32_t max_ack_delay_;                  ///< Maximum DHCP message ack delay.
     uint32_t max_unacked_clients_;            ///< Maximum number of unacked clients.
+    uint32_t max_rejected_lease_updates_;     ///< Limit of rejected lease updates before termination.
     bool wait_backup_ack_;                    ///< Wait for lease update ack from backup?
     bool enable_multi_threading_;             ///< Enable multi-threading.
     bool http_dedicated_listener_;            ///< Enable use of own HTTP listener.

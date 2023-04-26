@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -345,7 +345,7 @@ public:
     /// @brief Return array type indicator.
     ///
     /// The method returns the bool value to indicate whether the option is a
-    /// a single value or an array of values.
+    /// single value or an array of values.
     ///
     /// @return true if option comprises an array of values.
     bool getArrayType() const { return (array_type_); }
@@ -580,6 +580,24 @@ public:
                                              uint16_t type,
                                              OptionBufferConstIter begin,
                                              OptionBufferConstIter end);
+
+    /// @brief Factory to create option with tuple list with explict
+    /// tuple's length field type.
+    ///
+    /// @param u option universe (V4 or V6).
+    /// @param type option type.
+    /// @param begin iterator pointing to the beginning of the buffer
+    /// with a list of tuples.
+    /// @param end iterator pointing to the end of the buffer with
+    /// a list of tuples.
+    /// @param length_field_type explicit tuple's length field type.
+    ///
+    /// @return instance of the DHCP option.
+    static OptionPtr factoryOpaqueDataTuples(Option::Universe u,
+                                             uint16_t type,
+                                             OptionBufferConstIter begin,
+                                             OptionBufferConstIter end,
+                                             OpaqueDataTuple::LengthFieldType length_field_type);
 
     /// @brief Factory function to create option with integer value.
     ///

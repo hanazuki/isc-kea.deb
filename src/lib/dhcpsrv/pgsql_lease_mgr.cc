@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1250,10 +1250,60 @@ PgSqlLeaseMgr::PgSqlLeaseContextAlloc::~PgSqlLeaseContextAlloc() {
     // If running in single-threaded mode, there's nothing to do here.
 }
 
+// PgSqlLeaseTrackingContextAlloc Constructor and Destructor
+
+PgSqlLeaseMgr::PgSqlLeaseTrackingContextAlloc::PgSqlLeaseTrackingContextAlloc(
+    PgSqlLeaseMgr& mgr, const LeasePtr& lease) : ctx_(), mgr_(mgr), lease_(lease) {
+
+    if (MultiThreadingMgr::instance().getMode()) {
+        // multi-threaded
+        {
+            // we need to protect the whole pool_ operation, hence extra scope {}
+            lock_guard<mutex> lock(mgr_.pool_->mutex_);
+            if (mgr_.hasCallbacks() && !mgr_.tryLock(lease)) {
+                isc_throw(DbOperationError, "unable to lock the lease " << lease->addr_);
+            }
+            if (!mgr_.pool_->pool_.empty()) {
+                ctx_ = mgr_.pool_->pool_.back();
+                mgr_.pool_->pool_.pop_back();
+            }
+        }
+        if (!ctx_) {
+            ctx_ = mgr_.createContext();
+        }
+    } else {
+        // single-threaded
+        if (mgr_.pool_->pool_.empty()) {
+            isc_throw(Unexpected, "No available PostgreSQL lease context?!");
+        }
+        ctx_ = mgr_.pool_->pool_.back();
+    }
+}
+
+PgSqlLeaseMgr::PgSqlLeaseTrackingContextAlloc::~PgSqlLeaseTrackingContextAlloc() {
+    if (MultiThreadingMgr::instance().getMode()) {
+        // multi-threaded
+        lock_guard<mutex> lock(mgr_.pool_->mutex_);
+        if (mgr_.hasCallbacks()) {
+            mgr_.unlock(lease_);
+        }
+        mgr_.pool_->pool_.push_back(ctx_);
+    }
+    // If running in single-threaded mode, there's nothing to do here.
+}
+
+void
+PgSqlLeaseMgr::setExtendedInfoTablesEnabled(const db::DatabaseConnection::ParameterMap& /* parameters */) {
+    isc_throw(isc::NotImplemented, "extended info tables are not yet supported by mysql");
+}
+
 // PgSqlLeaseMgr Constructor and Destructor
 
 PgSqlLeaseMgr::PgSqlLeaseMgr(const DatabaseConnection::ParameterMap& parameters)
-    : parameters_(parameters), timer_name_("") {
+    : TrackingLeaseMgr(), parameters_(parameters), timer_name_("") {
+
+    // Check if the extended info tables are enabled.
+    LeaseMgr::setExtendedInfoTablesEnabled(parameters);
 
     // Create unique timer name per instance.
     timer_name_ = "PgSqlLeaseMgr[";
@@ -1318,8 +1368,7 @@ PgSqlLeaseMgr::dbReconnect(ReconnectCtlPtr db_reconnect_ctl) {
     // At least one connection was lost.
     try {
         CfgDbAccessPtr cfg_db = CfgMgr::instance().getCurrentCfg()->getCfgDbAccess();
-        LeaseMgrFactory::destroy();
-        LeaseMgrFactory::create(cfg_db->getLeaseDbAccessString());
+        LeaseMgrFactory::recreate(cfg_db->getLeaseDbAccessString());
         reopened = true;
     } catch (const std::exception& ex) {
         LOG_ERROR(dhcpsrv_logger, DHCPSRV_PGSQL_LEASE_DB_RECONNECT_ATTEMPT_FAILED)
@@ -1444,7 +1493,7 @@ PgSqlLeaseMgr::addLease(const Lease4Ptr& lease) {
         .arg(lease->addr_.toText());
 
     // Get a context
-    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseTrackingContextAlloc get_context(*this, lease);
     PgSqlLeaseContextPtr ctx = get_context.ctx_;
 
     PsqlBindArray bind_array;
@@ -1454,6 +1503,11 @@ PgSqlLeaseMgr::addLease(const Lease4Ptr& lease) {
     // Update lease current expiration time (allows update between the creation
     // of the Lease up to the point of insertion in the database).
     lease->updateCurrentExpirationTime();
+
+    // Run installed callbacks.
+    if (hasCallbacks()) {
+        trackAddLease(lease, false);
+    }
 
     return (result);
 }
@@ -1465,7 +1519,7 @@ PgSqlLeaseMgr::addLease(const Lease6Ptr& lease) {
         .arg(lease->type_);
 
     // Get a context
-    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseTrackingContextAlloc get_context(*this, lease);
     PgSqlLeaseContextPtr ctx = get_context.ctx_;
 
     PsqlBindArray bind_array;
@@ -1476,6 +1530,11 @@ PgSqlLeaseMgr::addLease(const Lease6Ptr& lease) {
     // Update lease current expiration time (allows update between the creation
     // of the Lease up to the point of insertion in the database).
     lease->updateCurrentExpirationTime();
+
+    // Run installed callbacks.
+    if (hasCallbacks()) {
+        trackAddLease(lease, false);
+    }
 
     return (result);
 }
@@ -2108,7 +2167,7 @@ PgSqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
         .arg(lease->addr_.toText());
 
     // Get a context
-    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseTrackingContextAlloc get_context(*this, lease);
     PgSqlLeaseContextPtr ctx = get_context.ctx_;
 
     // Create the BIND array for the data being updated
@@ -2134,6 +2193,11 @@ PgSqlLeaseMgr::updateLease4(const Lease4Ptr& lease) {
 
     // Update lease current expiration time.
     lease->updateCurrentExpirationTime();
+
+    // Run installed callbacks.
+    if (hasCallbacks()) {
+        trackUpdateLease(lease, false);
+    }
 }
 
 void
@@ -2145,7 +2209,7 @@ PgSqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
         .arg(lease->type_);
 
     // Get a context
-    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseTrackingContextAlloc get_context(*this, lease);
     PgSqlLeaseContextPtr ctx = get_context.ctx_;
 
     // Create the BIND array for the data being updated
@@ -2171,15 +2235,17 @@ PgSqlLeaseMgr::updateLease6(const Lease6Ptr& lease) {
 
     // Update lease current expiration time.
     lease->updateCurrentExpirationTime();
+
+    // Run installed callbacks.
+    if (hasCallbacks()) {
+        trackUpdateLease(lease, false);
+    }
 }
 
 uint64_t
-PgSqlLeaseMgr::deleteLeaseCommon(StatementIndex stindex,
+PgSqlLeaseMgr::deleteLeaseCommon(PgSqlLeaseContextPtr& ctx,
+                                 StatementIndex stindex,
                                  PsqlBindArray& bind_array) {
-    // Get a context
-    PgSqlLeaseContextAlloc get_context(*this);
-    PgSqlLeaseContextPtr ctx = get_context.ctx_;
-
     PgSqlResult r(PQexecPrepared(ctx->conn_, tagged_statements[stindex].name,
                                  tagged_statements[stindex].nbparams,
                                  &bind_array.values_[0],
@@ -2214,10 +2280,17 @@ PgSqlLeaseMgr::deleteLease(const Lease4Ptr& lease) {
     }
     bind_array.add(expire_str);
 
-    auto affected_rows = deleteLeaseCommon(DELETE_LEASE4, bind_array);
+    // Get a context
+    PgSqlLeaseTrackingContextAlloc get_context(*this, lease);
+    PgSqlLeaseContextPtr ctx = get_context.ctx_;
+
+    auto affected_rows = deleteLeaseCommon(ctx, DELETE_LEASE4, bind_array);
 
     // Check success case first as it is the most likely outcome.
     if (affected_rows == 1) {
+        if (hasCallbacks()) {
+            trackDeleteLease(lease, false);
+        }
         return (true);
     }
 
@@ -2255,10 +2328,17 @@ PgSqlLeaseMgr::deleteLease(const Lease6Ptr& lease) {
     }
     bind_array.add(expire_str);
 
-    auto affected_rows = deleteLeaseCommon(DELETE_LEASE6, bind_array);
+    // Get a context
+    PgSqlLeaseTrackingContextAlloc get_context(*this, lease);
+    PgSqlLeaseContextPtr ctx = get_context.ctx_;
+
+    auto affected_rows = deleteLeaseCommon(ctx, DELETE_LEASE6, bind_array);
 
     // Check success case first as it is the most likely outcome.
     if (affected_rows == 1) {
+        if (hasCallbacks()) {
+            trackDeleteLease(lease, false);
+        }
         return (true);
     }
 
@@ -2301,8 +2381,12 @@ PgSqlLeaseMgr::deleteExpiredReclaimedLeasesCommon(const uint32_t secs,
         static_cast<time_t>(secs));
     bind_array.add(expiration_str);
 
+    // Get a context
+    PgSqlLeaseContextAlloc get_context(*this);
+    PgSqlLeaseContextPtr ctx = get_context.ctx_;
+
     // Delete leases.
-    return (deleteLeaseCommon(statement_index, bind_array));
+    return (deleteLeaseCommon(ctx, statement_index, bind_array));
 }
 
 string
@@ -2411,6 +2495,16 @@ PgSqlLeaseMgr::recountClassLeases6() {
 void
 PgSqlLeaseMgr::clearClassLeaseCounts() {
     isc_throw(NotImplemented, "PgSqlLeaseMgr::clearClassLeaseCounts() not implemented");
+}
+
+void
+PgSqlLeaseMgr::writeLeases4(const std::string&) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::writeLeases4() not implemented");
+}
+
+void
+PgSqlLeaseMgr::writeLeases6(const std::string&) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::writeLeases6() not implemented");
 }
 
 LeaseStatsQueryPtr
@@ -2544,6 +2638,73 @@ PgSqlLeaseMgr::commit() {
 void
 PgSqlLeaseMgr::rollback() {
     LOG_DEBUG(dhcpsrv_logger, DHCPSRV_DBG_TRACE_DETAIL, DHCPSRV_PGSQL_ROLLBACK);
+}
+
+void
+PgSqlLeaseMgr::deleteExtendedInfo6(const IOAddress& /* addr */) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::deleteExtendedInfo6 not implemented");
+}
+
+void
+PgSqlLeaseMgr::addRelayId6(const IOAddress& /* lease_addr */,
+                           const vector<uint8_t>& /* relay_id */) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::addRelayId6 not implemented");
+}
+
+void
+PgSqlLeaseMgr::addRemoteId6(const IOAddress& /* lease_addr */,
+                            const vector<uint8_t>& /* remote_id */) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::addRemoteId6 not implemented");
+}
+
+Lease4Collection
+PgSqlLeaseMgr::getLeases4ByRelayId(const OptionBuffer& /* relay_id */,
+                                   const IOAddress& /* lower_bound_address */,
+                                   const LeasePageSize& /* page_size */,
+                                   const time_t& /* qry_start_time = 0 */,
+                                   const time_t& /* qry_end_time = 0 */) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::getLeases4ByRelayId not implemented");
+}
+
+Lease4Collection
+PgSqlLeaseMgr::getLeases4ByRemoteId(const OptionBuffer& /* remote_id */,
+                                    const IOAddress& /* lower_bound_address */,
+                                    const LeasePageSize& /* page_size */,
+                                    const time_t& /* qry_start_time = 0 */,
+                                    const time_t& /* qry_end_time = 0 */) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::getLeases4ByRemoteId not implemented");
+}
+
+Lease6Collection
+PgSqlLeaseMgr::getLeases6ByRelayId(const DUID& /* relay_id */,
+                                   const IOAddress& /* link_addr */,
+                                   uint8_t /* link_len */,
+                                   const IOAddress& /* lower_bound_address */,
+                                   const LeasePageSize& /* page_size */) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::getLeases6ByRelayId not implemented");
+}
+
+Lease6Collection
+PgSqlLeaseMgr::getLeases6ByRemoteId(const OptionBuffer& /* remote_id */,
+                                    const IOAddress& /* link_addr */,
+                                    uint8_t /* link_len */,
+                                    const IOAddress& /* lower_bound_address */,
+                                    const LeasePageSize& /* page_size*/) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::getLeases6ByRemoteId not implemented");
+}
+
+Lease6Collection
+PgSqlLeaseMgr::getLeases6ByLink(const IOAddress& /* link_addr */,
+                                uint8_t /* link_len */,
+                                const IOAddress& /* lower_bound_address */,
+                                const LeasePageSize& /* page_size */) {
+    isc_throw(NotImplemented, "PgSqlLeaseMgr::getLeases6ByLink not implemented");
+}
+
+size_t
+PgSqlLeaseMgr::buildExtendedInfoTables6(bool /* update */, bool /* current */) {
+    isc_throw(isc::NotImplemented,
+              "PgSqlLeaseMgr::buildExtendedInfoTables6 not implemented");
 }
 
 }  // namespace dhcp

@@ -217,7 +217,13 @@ triggered by the SIGHUP signal. The ``reload`` command sends the SIGHUP
 signal to any servers that are enabled in the ``keactrl`` configuration
 file and that are currently running. When a server receives the SIGHUP signal
 it rereads its configuration file and, if the new configuration is
-valid, uses the new configuration. A reload is executed as follows:
+valid, uses the new configuration.
+If the new configuration proves to be invalid, the server retains its
+current configuration; however, in some cases a fatal error message is logged
+indicating that the server no longer provides any service: a working
+configuration must be loaded as soon as possible.
+
+A reload is executed as follows:
 
 .. code-block:: console
 
@@ -348,10 +354,10 @@ Briefly, here are example commands to check status, start, stop, and restart var
 
 .. code-block:: console
 
-   # systemctl status isc-kea-ctrl-agent
-   # systemctl start isc-kea-dhcp4-server
-   # systemctl stop isc-kea-dhcp6-server
-   # systemctl restart isc-kea-dhcp-ddns-server
+   # systemctl status kea-ctrl-agent
+   # systemctl start kea-dhcp4
+   # systemctl stop kea-dhcp6
+   # systemctl restart kea-dhcp-ddns
 
 Note that the service names may be slightly different between Linux distributions; in general,
 we have followed the naming conventions in third-party packages. In particular,

@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -188,6 +188,14 @@ OptionDataTypeUtil::writeBinary(const std::string& hex_str,
     // Decode was successful so append decoded binary value
     // to the buffer.
     buf.insert(buf.end(), binary.begin(), binary.end());
+}
+
+OpaqueDataTuple::LengthFieldType
+OptionDataTypeUtil::getTupleLenFieldType(Option::Universe u) {
+    if (u == Option::V4) {
+        return (OpaqueDataTuple::LENGTH_1_BYTE);
+    }
+    return (OpaqueDataTuple::LENGTH_2_BYTES);
 }
 
 std::string

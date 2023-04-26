@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -195,7 +195,7 @@ TEST(PgSqlOpenTest, OpenDatabase) {
 
     // Check for missing parameters
     EXPECT_THROW(LeaseMgrFactory::create(connectionString(
-        PGSQL_VALID_TYPE, NULL, VALID_HOST, INVALID_USER, VALID_PASSWORD)),
+        PGSQL_VALID_TYPE, NULL, VALID_HOST, VALID_USER, VALID_PASSWORD)),
         NoDatabaseName);
 
     // Check for SSL/TLS support.
@@ -208,6 +208,12 @@ TEST(PgSqlOpenTest, OpenDatabase) {
         PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD,
         0, 0, 0, 0, VALID_CA)), DbOpenError);
 #endif
+
+    // Check for extended info tables.
+    const char* EX_INFO = "extended-info-tables=true";
+    EXPECT_THROW(LeaseMgrFactory::create(connectionString(
+        PGSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD, EX_INFO)),
+        NotImplemented);
 
     // Tidy up after the test
     destroyPgSQLSchema();
@@ -1156,5 +1162,171 @@ TEST_F(PgSqlLeaseMgrTest, checkLimits6) {
     // The rest of the checks are only for databases with JSON support.
     testLeaseLimits6();
 }
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is added.
+TEST_F(PgSqlLeaseMgrTest, trackAddLease4) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackAddLease4(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is added.
+TEST_F(PgSqlLeaseMgrTest, trackAddLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackAddLease4(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is added.
+TEST_F(PgSqlLeaseMgrTest, trackAddLeaseNA) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackAddLeaseNA(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is added.
+TEST_F(PgSqlLeaseMgrTest, trackAddLeaseNAMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackAddLeaseNA(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is added.
+TEST_F(PgSqlLeaseMgrTest, trackAddLeasePD) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackAddLeasePD(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is added.
+TEST_F(PgSqlLeaseMgrTest, trackAddLeasePDMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackAddLeasePD(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is updated.
+TEST_F(PgSqlLeaseMgrTest, trackUpdateLease4) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackUpdateLease4(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is updated.
+TEST_F(PgSqlLeaseMgrTest, trackUpdateLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackUpdateLease4(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is updated.
+TEST_F(PgSqlLeaseMgrTest, trackUpdateLeaseNA) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackUpdateLeaseNA(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is updated.
+TEST_F(PgSqlLeaseMgrTest, trackUpdateLeaseNAMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackUpdateLeaseNA(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is updated.
+TEST_F(PgSqlLeaseMgrTest, trackUpdateLeasePD) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackUpdateLeasePD(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is updated.
+TEST_F(PgSqlLeaseMgrTest, trackUpdateLeasePDMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackUpdateLeasePD(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is deleted.
+TEST_F(PgSqlLeaseMgrTest, trackDeleteLease4) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackDeleteLease4(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is deleted.
+TEST_F(PgSqlLeaseMgrTest, trackDeleteLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackDeleteLease4(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is deleted.
+TEST_F(PgSqlLeaseMgrTest, trackDeleteLeaseNA) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackDeleteLeaseNA(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is deleted.
+TEST_F(PgSqlLeaseMgrTest, trackDeleteLeaseNAMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackDeleteLeaseNA(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is deleted.
+TEST_F(PgSqlLeaseMgrTest, trackDeleteLeasePD) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackDeleteLeasePD(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is deleted.
+TEST_F(PgSqlLeaseMgrTest, trackDeleteLeasePDMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackDeleteLeasePD(true, false);
+}
+
+/// @brief Checks that the lease manager can be recreated and its
+/// registered callbacks preserved, if desired.
+TEST_F(PgSqlLeaseMgrTest, recreateWithCallbacks) {
+    testRecreateWithCallbacks(validPgSQLConnectionString());
+}
+
+/// @brief Checks that the lease manager can be recreated without the
+/// previously registered callbacks.
+TEST_F(PgSqlLeaseMgrTest, recreateWithoutCallbacks) {
+    testRecreateWithoutCallbacks(validPgSQLConnectionString());
+}
+
 
 }  // namespace

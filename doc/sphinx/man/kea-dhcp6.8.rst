@@ -1,5 +1,5 @@
 ..
-   Copyright (C) 2019-2021 Internet Systems Consortium, Inc. ("ISC")
+   Copyright (C) 2019-2023 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -48,6 +48,15 @@ The arguments are as follows:
    that not all parameters are completely checked; in particular,
    service and control channel sockets are not opened, and hook
    libraries are not loaded.
+
+``-T config-file``
+   Checks the configuration file and reports the first error, if any.
+   It performs extra checks beside what ``-t`` is doing, like establising
+   database connections (lease backend, host reservations backend, configuration
+   backend and forensic logging backend), hook libraries
+   loading and configuration parsing, etc. It does not open unix or TCP/UDP
+   sockets, neither does it open or rotate files, as all these actions could
+   interfere with a running process on the same machine.
 
 ``-p server-port-number``
    Specifies the server port number (1-65535) on which the server listens. This is

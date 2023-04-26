@@ -93,12 +93,13 @@ subdir = src/lib/yang
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -144,14 +145,14 @@ am__installdirs = "$(DESTDIR)$(libdir)" \
 	"$(DESTDIR)$(libkea_yang_includedir)"
 LTLIBRARIES = $(lib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
-libkea_yang_la_DEPENDENCIES =  \
+libkea_yang_la_DEPENDENCIES = $(top_builddir)/src/lib/cc/libkea-cc.la \
 	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
-	$(top_builddir)/src/lib/cc/libkea-cc.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
-	$(am__DEPENDENCIES_1)
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1) \
+	$(am__DEPENDENCIES_1) $(am__DEPENDENCIES_1)
 am_libkea_yang_la_OBJECTS = adaptor.lo adaptor_host.lo adaptor_pool.lo \
 	adaptor_option.lo adaptor_subnet.lo adaptor_config.lo \
 	translator.lo translator_control_socket.lo \
@@ -342,11 +343,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -365,7 +373,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -383,6 +391,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -429,12 +447,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -501,14 +525,17 @@ top_builddir = @top_builddir@
 top_srcdir = @top_srcdir@
 SUBDIRS = . testutils pretests tests
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
-	$(BOOST_INCLUDES) $(SYSREPO_CPPFLAGS) $(SYSREPO_INCLUDEDIR)
+	$(BOOST_INCLUDES) $(LIBYANG_CPPFLAGS) $(LIBYANG_INCLUDEDIR) \
+	$(LIBYANGCPP_CPPFLAGS) $(LIBYANGCPP_INCLUDEDIR) \
+	$(SYSREPO_CPPFLAGS) $(SYSREPO_INCLUDEDIR) \
+	$(SYSREPOCPP_CPPFLAGS) $(SYSREPOCPP_INCLUDEDIR)
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 lib_LTLIBRARIES = libkea-yang.la
 libkea_yang_la_SOURCES = adaptor.cc adaptor.h adaptor_host.cc \
 	adaptor_host.h adaptor_pool.cc adaptor_pool.h \
 	adaptor_option.cc adaptor_option.h adaptor_subnet.cc \
 	adaptor_subnet.h adaptor_config.cc adaptor_config.h \
-	sysrepo_error.h translator.cc translator.h \
+	netconf_error.h translator.cc translator.h \
 	translator_control_socket.cc translator_control_socket.h \
 	translator_database.cc translator_database.h \
 	translator_logger.cc translator_logger.h \
@@ -520,14 +547,14 @@ libkea_yang_la_SOURCES = adaptor.cc adaptor.h adaptor_host.cc \
 	translator_subnet.h translator_shared_network.cc \
 	translator_shared_network.h translator_config.cc \
 	translator_config.h yang_models.h yang_revisions.h
-libkea_yang_la_LIBADD =  \
+libkea_yang_la_LIBADD = $(top_builddir)/src/lib/cc/libkea-cc.la \
 	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
-	$(top_builddir)/src/lib/cc/libkea-cc.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
-	$(LOG4CPLUS_LIBS) $(BOOST_LIBS) $(SYSREPO_LIBS)
-libkea_yang_la_LDFLAGS = -no-undefined -version-info 29:0:0
+	$(LOG4CPLUS_LIBS) $(BOOST_LIBS) $(LIBYANG_LIBS) \
+	$(LIBYANGCPP_LIBS) $(SYSREPO_LIBS) $(SYSREPOCPP_LIBS)
+libkea_yang_la_LDFLAGS = -no-undefined -version-info 44:0:0
 
 # Specify the headers for copying into the installation directory tree.
 libkea_yang_includedir = $(pkgincludedir)/yang
@@ -538,7 +565,7 @@ libkea_yang_include_HEADERS = \
 	adaptor_option.h \
 	adaptor_pool.h \
 	adaptor_subnet.h \
-	sysrepo_error.h \
+	netconf_error.h \
 	translator.h \
 	translator_class.h \
 	translator_config.h \

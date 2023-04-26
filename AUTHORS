@@ -31,6 +31,7 @@ Primary developers:
  - Slawek Figiel (documentation)
  - Dan Theisen (documentation, option handling, shell scripts)
  - Marcin Godzina (documentation, release engineering, testing)
+ - Piotrek Zadroga (documentation, options handling)
 
 Former developers who are no longer active:
  - Stephen Morris (Hooks, MySQL)
@@ -250,3 +251,13 @@ We have received the following contributions:
             hook library to be able to configure the timestamp format for log
             file. Also adds the '%Q' extra format which adds the microseconds
             subunits.
+
+ - rski
+   2022-09: Improved build compatibility in Kea between g++ and Boost libraries.
+
+ - Kyle Birkeland
+   2023-02: Contributed a patch that enforces address suitability for globally
+            reserved addresses for both kea-dhcp4 and kea-dhcp6.
+
+ - Kevin P. Fleming
+   2023-02: Fixed several examples in DHCPv6 section of the ARM.

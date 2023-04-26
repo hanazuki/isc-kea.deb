@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,7 +19,7 @@ prefix="@prefix@"
 
 # Include utilities. Use installed version if available and
 # use build version if it isn't.
-if [ -e @datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh ]; then
+if test -f "@datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh"; then
     . "@datarootdir@/@PACKAGE_NAME@/scripts/admin-utils.sh"
 else
     . "@abs_top_builddir@/src/bin/admin/admin-utils.sh"

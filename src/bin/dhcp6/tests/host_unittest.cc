@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -332,8 +332,13 @@ const char* CONFIGS[] = {
         "\"reservations\": [ \n"
         "{ \n"
         "   \"duid\": \"01:02:03:04\", \n"
-        "   \"hostname\": \"duid-host-fixed\", \n"
-        "   \"ip-addresses\": [ \"3001::1\" ] \n"
+        "   \"hostname\": \"duid-host-fixed-out-of-range\", \n"
+        "   \"ip-addresses\": [ \"2001:db8:1::1\" ] \n"
+        "}, \n"
+        "{ \n"
+        "   \"duid\": \"02:02:03:04\", \n"
+        "   \"hostname\": \"duid-host-fixed-in-range\", \n"
+        "   \"ip-addresses\": [ \"2001:db8:1::77\" ] \n"
         "}, \n"
         "{ \n"
         "   \"duid\": \"01:02:03:05\", \n"
@@ -1375,8 +1380,7 @@ HostTest::testOverrideVendorOptions(const uint16_t msg_type) {
     // Client needs to include Vendor Specific Information option
     // with ORO suboption, which the server will use to determine
     // which suboptions should be returned to the client.
-    OptionVendorPtr opt_vendor(new OptionVendor(Option::V6,
-                                                VENDOR_ID_CABLE_LABS));
+    OptionVendorPtr opt_vendor(new OptionVendor(Option::V6, VENDOR_ID_CABLE_LABS));
     // Include ORO with TFTP servers suboption code being requested.
     opt_vendor->addOption(OptionPtr(new OptionUint16(Option::V6, DOCSIS3_V6_ORO,
                                                      DOCSIS3_V6_TFTP_SERVERS)));
@@ -2365,11 +2369,19 @@ TEST_F(HostTest, globalReservationsNA) {
     ASSERT_EQ(2, subnets->size());
 
     {
-        SCOPED_TRACE("Global HR by DUID with reserved address");
+        SCOPED_TRACE("Global HR by DUID with in-range reserved address");
+        client.setDUID("02:02:03:04");
+        client.requestAddress(1234, IOAddress("::"));
+        // Should get global reserved address and reserved host name
+        ASSERT_NO_FATAL_FAILURE(sarrTest(client, "2001:db8:1::77", "duid-host-fixed-in-range"));
+    }
+
+    {
+        SCOPED_TRACE("Global HR by DUID with an out-of-range reserved address");
         client.setDUID("01:02:03:04");
         client.requestAddress(1234, IOAddress("::"));
         // Should get global reserved address and reserved host name
-        ASSERT_NO_FATAL_FAILURE(sarrTest(client, "3001::1", "duid-host-fixed"));
+        ASSERT_NO_FATAL_FAILURE(sarrTest(client, "2001:db8:1::1", "duid-host-fixed-out-of-range"));
     }
 
     {
@@ -2388,7 +2400,7 @@ TEST_F(HostTest, globalReservationsNA) {
         client.setLinkLocal(IOAddress("fe80::3a60:77ff:fed5:ffee"));
         client.requestAddress(1234, IOAddress("::"));
         // Should get dynamic address and hardware host name
-        ASSERT_NO_FATAL_FAILURE(sarrTest(client, "2001:db8:1::1", "hw-host"));
+        ASSERT_NO_FATAL_FAILURE(sarrTest(client, "2001:db8:1::2", "hw-host"));
     }
 
     {

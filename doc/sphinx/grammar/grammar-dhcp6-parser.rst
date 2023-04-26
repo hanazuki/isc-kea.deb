@@ -144,6 +144,7 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
                  | ddns_qualifying_suffix
                  | ddns_update_on_renew
                  | ddns_use_conflict_resolution
+                 | ddns_ttl_percent
                  | store_extended_info
                  | statistic_default_sample_count
                  | statistic_default_sample_age
@@ -153,6 +154,8 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
                  | reservations_lookup_first
                  | compatibility
                  | parked_packet_limit
+                 | allocator
+                 | pd_allocator
                  | unknown_map_entry
 
      data_directory ::= "data-directory" ":" STRING
@@ -207,6 +210,8 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
 
      ddns_use_conflict_resolution ::= "ddns-use-conflict-resolution" ":" BOOLEAN
 
+     ddns_ttl_percent ::= "ddns-ttl-percent" ":" FLOAT
+
      hostname_char_set ::= "hostname-char-set" ":" STRING
 
      hostname_char_replacement ::= "hostname-char-replacement" ":" STRING
@@ -220,6 +225,10 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
      server_tag ::= "server-tag" ":" STRING
 
      parked_packet_limit ::= "parked-packet-limit" ":" INTEGER
+
+     allocator ::= "allocator" ":" STRING
+
+     pd_allocator ::= "pd-allocator" ":" STRING
 
      early_global_reservations_lookup ::= "early-global-reservations-lookup" ":" BOOLEAN
 
@@ -283,6 +292,9 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
                        | lfc_interval
                        | readonly
                        | connect_timeout
+                       | read_timeout
+                       | write_timeout
+                       | tcp_user_timeout
                        | max_reconnect_tries
                        | reconnect_wait_time
                        | on_fail
@@ -317,6 +329,12 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
 
      connect_timeout ::= "connect-timeout" ":" INTEGER
 
+     read_timeout ::= "read-timeout" ":" INTEGER
+
+     write_timeout ::= "write-timeout" ":" INTEGER
+
+     tcp_user_timeout ::= "tcp-user-timeout" ":" INTEGER
+
      reconnect_wait_time ::= "reconnect-wait-time" ":" INTEGER
 
      on_fail ::= "on-fail" ":" on_fail_mode
@@ -344,8 +362,11 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
                          | sanity_checks_params ","
 
      sanity_checks_param ::= lease_checks
+                        | extended_info_checks
 
      lease_checks ::= "lease-checks" ":" STRING
+
+     extended_info_checks ::= "extended-info-checks" ":" STRING
 
      mac_sources ::= "mac-sources" ":" "[" mac_sources_list "]"
 
@@ -503,7 +524,10 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
                   | ddns_qualifying_suffix
                   | ddns_update_on_renew
                   | ddns_use_conflict_resolution
+                  | ddns_ttl_percent
                   | store_extended_info
+                  | allocator
+                  | pd_allocator
                   | unknown_map_entry
 
      subnet ::= "subnet" ":" STRING
@@ -586,7 +610,10 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
                          | ddns_qualifying_suffix
                          | ddns_update_on_renew
                          | ddns_use_conflict_resolution
+                         | ddns_ttl_percent
                          | store_extended_info
+                         | allocator
+                         | pd_allocator
                          | unknown_map_entry
 
      option_def_list ::= "option-def" ":" "[" option_def_list_content "]"
@@ -666,6 +693,7 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
                       | option_data_space
                       | option_data_csv_format
                       | option_data_always_send
+                      | option_data_never_send
                       | user_context
                       | comment
                       | unknown_map_entry
@@ -681,6 +709,8 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
      option_data_csv_format ::= "csv-format" ":" BOOLEAN
 
      option_data_always_send ::= "always-send" ":" BOOLEAN
+
+     option_data_never_send ::= "never-send" ":" BOOLEAN
 
      pools_list ::= "pools" ":" "[" pools_list_content "]"
 
@@ -822,6 +852,7 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
 
      client_class_param ::= client_class_name
                        | client_class_test
+                       | client_class_template_test
                        | only_if_required
                        | option_data_list
                        | user_context
@@ -837,6 +868,8 @@ This grammar is generated from ``dhcp6_parser.yy``. See :ref:`dhcp6` for more de
      client_class_name ::= name
 
      client_class_test ::= "test" ":" STRING
+
+     client_class_template_test ::= "template-test" ":" STRING
 
      only_if_required ::= "only-if-required" ":" BOOLEAN
 

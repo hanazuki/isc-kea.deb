@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2021-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,17 +10,24 @@
 
 #include <config.h>
 
+#include <dhcpsrv/cfgmgr.h>
 #include <hooks/hooks.h>
+#include <process/daemon.h>
 #include <pgsql_cb_impl.h>
 
 #include <pgsql_cb_dhcp4.h>
 #include <pgsql_cb_dhcp6.h>
 #include <pgsql_cb_log.h>
 
+#include <sstream>
+#include <string>
+
 using namespace isc::cb;
 using namespace isc::dhcp;
 using namespace isc::hooks;
 using namespace isc::log;
+using namespace isc::process;
+using namespace std;
 
 extern "C" {
 
@@ -30,6 +37,21 @@ extern "C" {
 /// @return 0 when initialization is successful, 1 otherwise
 
 int load(LibraryHandle& /* handle */) {
+    // Make the hook library not loadable by d2 or ca.
+    uint16_t family = CfgMgr::instance().getFamily();
+    const std::string& proc_name = Daemon::getProcName();
+    if (family == AF_INET) {
+        if (proc_name != "kea-dhcp4") {
+            isc_throw(isc::Unexpected, "Bad process name: " << proc_name
+                      << ", expected kea-dhcp4");
+        }
+    } else {
+        if (proc_name != "kea-dhcp6") {
+            isc_throw(isc::Unexpected, "Bad process name: " << proc_name
+                      << ", expected kea-dhcp6");
+        }
+    }
+
     LOG_INFO(pgsql_cb_logger, PGSQL_CB_INIT_OK);
     // Register PostgreSQL CB factories with CB Managers
     isc::dhcp::PgSqlConfigBackendDHCPv4::registerBackendType();
@@ -47,6 +69,12 @@ int load(LibraryHandle& /* handle */) {
 int dhcp4_srv_configured(CalloutHandle& handle) {
     isc::asiolink::IOServicePtr io_service;
     handle.getArgument("io_context", io_service);
+    if (!io_service) {
+        const string error("Error: io_context is null");
+        handle.setArgument("error", error);
+        handle.setStatus(isc::hooks::CalloutHandle::NEXT_STEP_DROP);
+        return (1);
+    }
     isc::dhcp::PgSqlConfigBackendImpl::setIOService(io_service);
     return (0);
 }
@@ -60,6 +88,12 @@ int dhcp4_srv_configured(CalloutHandle& handle) {
 int dhcp6_srv_configured(CalloutHandle& handle) {
     isc::asiolink::IOServicePtr io_service;
     handle.getArgument("io_context", io_service);
+    if (!io_service) {
+        const string error("Error: io_context is null");
+        handle.setArgument("error", error);
+        handle.setStatus(isc::hooks::CalloutHandle::NEXT_STEP_DROP);
+        return (1);
+    }
     isc::dhcp::PgSqlConfigBackendImpl::setIOService(io_service);
     return (0);
 }

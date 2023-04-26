@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2016-2023 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -70,6 +70,7 @@ using namespace std;
 
   SANITY_CHECKS "sanity-checks"
   LEASE_CHECKS "lease-checks"
+  EXTENDED_INFO_CHECKS "extended-info-checks"
 
   ECHO_CLIENT_ID "echo-client-id"
   MATCH_CLIENT_ID "match-client-id"
@@ -77,6 +78,7 @@ using namespace std;
   NEXT_SERVER "next-server"
   SERVER_HOSTNAME "server-hostname"
   BOOT_FILE_NAME "boot-file-name"
+  OFFER_LFT "offer-lifetime"
 
   LEASE_DATABASE "lease-database"
   HOSTS_DATABASE "hosts-database"
@@ -93,6 +95,9 @@ using namespace std;
   LFC_INTERVAL "lfc-interval"
   READONLY "readonly"
   CONNECT_TIMEOUT "connect-timeout"
+  READ_TIMEOUT "read-timeout"
+  WRITE_TIMEOUT "write-timeout"
+  TCP_USER_TIMEOUT "tcp-user-timeout"
   MAX_RECONNECT_TRIES "max-reconnect-tries"
   RECONNECT_WAIT_TIME "reconnect-wait-time"
   ON_FAIL "on-fail"
@@ -127,6 +132,7 @@ using namespace std;
   DDNS_QUALIFYING_SUFFIX "ddns-qualifying-suffix"
   DDNS_UPDATE_ON_RENEW "ddns-update-on-renew"
   DDNS_USE_CONFLICT_RESOLUTION "ddns-use-conflict-resolution"
+  DDNS_TTL_PERCENT "ddns-ttl-percent"
   STORE_EXTENDED_INFO "store-extended-info"
   SUBNET4 "subnet4"
   SUBNET_4O6_INTERFACE "4o6-interface"
@@ -140,10 +146,12 @@ using namespace std;
   SPACE "space"
   CSV_FORMAT "csv-format"
   ALWAYS_SEND "always-send"
+  NEVER_SEND "never-send"
   RECORD_TYPES "record-types"
   ENCAPSULATE "encapsulate"
   ARRAY "array"
   PARKED_PACKET_LIMIT "parked-packet-limit"
+  ALLOCATOR "allocator"
 
   SHARED_NETWORKS "shared-networks"
 
@@ -169,6 +177,7 @@ using namespace std;
   CLIENT_CLASSES "client-classes"
   REQUIRE_CLIENT_CLASSES "require-client-classes"
   TEST "test"
+  TEMPLATE_TEST "template-test"
   ONLY_IF_REQUIRED "only-if-required"
   CLIENT_CLASS "client-class"
 
@@ -250,6 +259,9 @@ using namespace std;
 
   COMPATIBILITY "compatibility"
   LENIENT_OPTION_PARSING "lenient-option-parsing"
+  IGNORE_DHCP_SERVER_ID "ignore-dhcp-server-identifier"
+  IGNORE_RAI_LINK_SEL "ignore-rai-link-selection"
+  EXCLUDE_FIRST_LAST_24 "exclude-first-last-24"
 
  // Not real tokens, just a way to signal what the parser is expected to
  // parse.
@@ -533,6 +545,7 @@ global_param: valid_lifetime
             | ddns_qualifying_suffix
             | ddns_update_on_renew
             | ddns_use_conflict_resolution
+            | ddns_ttl_percent
             | store_extended_info
             | statistic_default_sample_count
             | statistic_default_sample_age
@@ -542,6 +555,8 @@ global_param: valid_lifetime
             | reservations_lookup_first
             | compatibility
             | parked_packet_limit
+            | allocator
+            | offer_lifetime
             | unknown_map_entry
             ;
 
@@ -624,6 +639,15 @@ parked_packet_limit: PARKED_PACKET_LIMIT COLON INTEGER {
     ctx.unique("parked-packet-limit", ctx.loc2pos(@1));
     ElementPtr ppl(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("parked-packet-limit", ppl);
+};
+
+allocator: ALLOCATOR {
+    ctx.unique("allocator", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr al(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("allocator", al);
+    ctx.leave();
 };
 
 echo_client_id: ECHO_CLIENT_ID COLON BOOLEAN {
@@ -719,6 +743,12 @@ ddns_use_conflict_resolution: DDNS_USE_CONFLICT_RESOLUTION COLON BOOLEAN {
     ctx.stack_.back()->set("ddns-use-conflict-resolution", b);
 };
 
+ddns_ttl_percent: DDNS_TTL_PERCENT COLON FLOAT {
+    ctx.unique("ddns-ttl-percent", ctx.loc2pos(@1));
+    ElementPtr ttl(new DoubleElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("ddns-ttl-percent", ttl);
+};
+
 hostname_char_set: HOSTNAME_CHAR_SET {
     ctx.unique("hostname-char-set", ctx.loc2pos(@1));
     ctx.enter(ctx.NO_KEYWORD);
@@ -771,6 +801,12 @@ reservations_lookup_first: RESERVATIONS_LOOKUP_FIRST COLON BOOLEAN {
     ctx.unique("reservations-lookup-first", ctx.loc2pos(@1));
     ElementPtr first(new BoolElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("reservations-lookup-first", first);
+};
+
+offer_lifetime: OFFER_LFT COLON INTEGER {
+    ctx.unique("offer-lifetime", ctx.loc2pos(@1));
+    ElementPtr offer_lifetime(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("offer-lifetime", offer_lifetime);
 };
 
 interfaces_config: INTERFACES_CONFIG {
@@ -905,7 +941,9 @@ sanity_checks_params: sanity_checks_param
                         }
                     ;
 
-sanity_checks_param: lease_checks;
+sanity_checks_param: lease_checks
+                   | extended_info_checks
+                   ;
 
 lease_checks: LEASE_CHECKS {
     ctx.unique("lease-checks", ctx.loc2pos(@1));
@@ -923,6 +961,24 @@ lease_checks: LEASE_CHECKS {
     } else {
         error(@4, "Unsupported 'lease-checks value: " + string($4) +
               ", supported values are: none, warn, fix, fix-del, del");
+    }
+}
+
+extended_info_checks: EXTENDED_INFO_CHECKS {
+    ctx.unique("extended-info-checks", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+
+    if ( (string($4) == "none") ||
+         (string($4) == "fix") ||
+         (string($4) == "strict") ||
+         (string($4) == "pedantic")) {
+        ElementPtr user(new StringElement($4, ctx.loc2pos(@4)));
+        ctx.stack_.back()->set("extended-info-checks", user);
+        ctx.leave();
+    } else {
+        error(@4, "Unsupported 'extended-info-checks value: " + string($4) +
+              ", supported values are: none, fix, strict, pedantic");
     }
 }
 
@@ -988,6 +1044,9 @@ database_map_param: database_type
                   | lfc_interval
                   | readonly
                   | connect_timeout
+                  | read_timeout
+                  | write_timeout
+                  | tcp_user_timeout
                   | max_reconnect_tries
                   | reconnect_wait_time
                   | on_fail
@@ -1076,6 +1135,24 @@ connect_timeout: CONNECT_TIMEOUT COLON INTEGER {
     ctx.unique("connect-timeout", ctx.loc2pos(@1));
     ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("connect-timeout", n);
+};
+
+read_timeout: READ_TIMEOUT COLON INTEGER {
+    ctx.unique("read-timeout", ctx.loc2pos(@1));
+    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("read-timeout", n);
+};
+
+write_timeout: WRITE_TIMEOUT COLON INTEGER {
+    ctx.unique("write-timeout", ctx.loc2pos(@1));
+    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("write-timeout", n);
+};
+
+tcp_user_timeout: TCP_USER_TIMEOUT COLON INTEGER {
+    ctx.unique("tcp-user-timeout", ctx.loc2pos(@1));
+    ElementPtr n(new IntElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("tcp-user-timeout", n);
 };
 
 max_reconnect_tries: MAX_RECONNECT_TRIES COLON INTEGER {
@@ -1496,9 +1573,12 @@ subnet4_param: valid_lifetime
              | ddns_qualifying_suffix
              | ddns_update_on_renew
              | ddns_use_conflict_resolution
+             | ddns_ttl_percent
              | hostname_char_set
              | hostname_char_replacement
              | store_extended_info
+             | allocator
+             | offer_lifetime
              | unknown_map_entry
              ;
 
@@ -1682,9 +1762,12 @@ shared_network_param: name
                     | ddns_qualifying_suffix
                     | ddns_update_on_renew
                     | ddns_use_conflict_resolution
+                    | ddns_ttl_percent
                     | hostname_char_set
                     | hostname_char_replacement
                     | store_extended_info
+                    | allocator
+                    | offer_lifetime
                     | unknown_map_entry
                     ;
 
@@ -1911,6 +1994,7 @@ option_data_param: option_data_name
                  | option_data_space
                  | option_data_csv_format
                  | option_data_always_send
+                 | option_data_never_send
                  | user_context
                  | comment
                  | unknown_map_entry
@@ -1933,14 +2017,20 @@ option_data_space: space;
 
 option_data_csv_format: CSV_FORMAT COLON BOOLEAN {
     ctx.unique("csv-format", ctx.loc2pos(@1));
-    ElementPtr space(new BoolElement($3, ctx.loc2pos(@3)));
-    ctx.stack_.back()->set("csv-format", space);
+    ElementPtr csv(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("csv-format", csv);
 };
 
 option_data_always_send: ALWAYS_SEND COLON BOOLEAN {
     ctx.unique("always-send", ctx.loc2pos(@1));
     ElementPtr persist(new BoolElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("always-send", persist);
+};
+
+option_data_never_send: NEVER_SEND COLON BOOLEAN {
+    ctx.unique("never-send", ctx.loc2pos(@1));
+    ElementPtr cancel(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("never-send", cancel);
 };
 
 // ---- pools ------------------------------------
@@ -2313,6 +2403,7 @@ not_empty_client_class_params: client_class_param
 
 client_class_param: client_class_name
                   | client_class_test
+                  | client_class_template_test
                   | only_if_required
                   | option_def_list
                   | option_data_list
@@ -2325,6 +2416,7 @@ client_class_param: client_class_name
                   | valid_lifetime
                   | min_valid_lifetime
                   | max_valid_lifetime
+                  | offer_lifetime
                   ;
 
 client_class_name: name;
@@ -2335,6 +2427,15 @@ client_class_test: TEST {
 } COLON STRING {
     ElementPtr test(new StringElement($4, ctx.loc2pos(@4)));
     ctx.stack_.back()->set("test", test);
+    ctx.leave();
+};
+
+client_class_template_test: TEMPLATE_TEST {
+    ctx.unique("template-test", ctx.loc2pos(@1));
+    ctx.enter(ctx.NO_KEYWORD);
+} COLON STRING {
+    ElementPtr template_test(new StringElement($4, ctx.loc2pos(@4)));
+    ctx.stack_.back()->set("template-test", template_test);
     ctx.leave();
 };
 
@@ -2847,6 +2948,9 @@ compatibility_params: compatibility_param
                     ;
 
 compatibility_param: lenient_option_parsing
+                   | ignore_dhcp_server_identifier
+                   | ignore_rai_link_selection
+                   | exclude_first_last_24
                    | unknown_map_entry
                    ;
 
@@ -2854,6 +2958,24 @@ lenient_option_parsing: LENIENT_OPTION_PARSING COLON BOOLEAN {
     ctx.unique("lenient-option-parsing", ctx.loc2pos(@1));
     ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
     ctx.stack_.back()->set("lenient-option-parsing", b);
+};
+
+ignore_dhcp_server_identifier: IGNORE_DHCP_SERVER_ID COLON BOOLEAN {
+    ctx.unique("ignore-dhcp-server-identifier", ctx.loc2pos(@1));
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("ignore-dhcp-server-identifier", b);
+}
+
+ignore_rai_link_selection: IGNORE_RAI_LINK_SEL COLON BOOLEAN {
+    ctx.unique("ignore-rai-link-selection", ctx.loc2pos(@1));
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("ignore-rai-link-selection", b);
+}
+
+exclude_first_last_24: EXCLUDE_FIRST_LAST_24 COLON BOOLEAN {
+    ctx.unique("exclude-first-last-24", ctx.loc2pos(@1));
+    ElementPtr b(new BoolElement($3, ctx.loc2pos(@3)));
+    ctx.stack_.back()->set("exclude-first-last-24", b);
 };
 
 %%

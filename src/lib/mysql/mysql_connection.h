@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -711,6 +711,27 @@ public:
         const char* cipher = mysql_get_ssl_cipher(mysql_);
         return (cipher ? std::string(cipher) : "");
     }
+
+private:
+
+    /// @brief Convenience function parsing and setting an integer parameter,
+    /// if it exists.
+    ///
+    /// If the parameter is not present, this function doesn't change the @c value.
+    /// Otherwise, it tries to convert the parameter to the type @c T. Finally,
+    /// it checks if the converted number is within the specified range.
+    ///
+    /// @param name Parameter name.
+    /// @param min Expected minimal value.
+    /// @param max Expected maximal value.
+    /// @param [out] value Reference to a value returning the parsed parameter.
+    /// @tparam T Parameter type.
+    /// @throw BadValue if the parameter is not a valid number or if it is out
+    /// of range.
+    template<typename T>
+    void setIntParameterValue(const std::string& name, int64_t min, int64_t max, T& value);
+
+public:
 
     /// @brief Prepared statements
     ///

@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,13 +8,13 @@
 
 #include <perfdhcp/command_options.h>
 
+#include <asiolink/io_error.h>
 #include <exceptions/exceptions.h>
 #include <dhcp/iface_mgr.h>
 #include <dhcp/duid.h>
 #include <dhcp/option.h>
-#include <cfgrpt/config_report.h>
+#include <process/cfgrpt/config_report.h>
 #include <util/encode/hex.h>
-#include <asiolink/io_error.h>
 
 #include <boost/lexical_cast.hpp>
 #include <boost/date_time/posix_time/posix_time.hpp>
@@ -37,9 +37,6 @@ using namespace isc::dhcp;
 
 namespace isc {
 namespace perfdhcp {
-
-// Refer to config_report so it will be embedded in the binary
-const char* const* perfdhcp_config_report = isc::detail::config_report;
 
 CommandOptions::LeaseType::LeaseType()
     : type_(ADDRESS) {

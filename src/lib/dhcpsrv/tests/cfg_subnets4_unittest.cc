@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,6 +6,7 @@
 
 #include <config.h>
 
+#include <cc/data.h>
 #include <dhcp/classify.h>
 #include <dhcp/libdhcp++.h>
 #include <dhcp/option_custom.h>
@@ -18,6 +19,7 @@
 #include <dhcpsrv/parsers/dhcp_parsers.h>
 #include <dhcpsrv/cfg_shared_networks.h>
 #include <dhcpsrv/cfg_subnets4.h>
+#include <dhcpsrv/iterative_allocator.h>
 #include <dhcpsrv/shared_network.h>
 #include <dhcpsrv/subnet.h>
 #include <dhcpsrv/subnet_id.h>
@@ -25,6 +27,7 @@
 #include <dhcpsrv/cfg_hosts.h>
 #include <stats/stats_mgr.h>
 #include <testutils/gtest_utils.h>
+#include <testutils/log_utils.h>
 #include <testutils/test_to_element.h>
 #include <util/doubles.h>
 
@@ -33,6 +36,7 @@
 
 using namespace isc;
 using namespace isc::asiolink;
+using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::stats;
@@ -40,6 +44,30 @@ using namespace isc::test;
 using namespace isc::util;
 
 namespace {
+
+/// @brief An allocator recording calls to @c initAfterConfigure.
+class InitRecordingAllocator : public IterativeAllocator {
+public:
+
+    /// @brief Constructor.
+    ///
+    /// @param type specifies the type of allocated leases.
+    /// @param subnet weak pointer to the subnet owning the allocator.
+    InitRecordingAllocator(Lease::Type type, const WeakSubnetPtr& subnet)
+        : IterativeAllocator(type, subnet), callcount_(0) {
+    }
+
+    /// @brief Increases the call count of this function.
+    ///
+    /// The call count can be later examined to check whether or not
+    /// the function was called.
+    virtual void initAfterConfigure() {
+        ++callcount_;
+    };
+
+    /// @brief Call count of the @c initAllocatorsAfterConfigure.
+    int callcount_;
+};
 
 /// @brief Verifies that a set of subnets contains a given a subnet
 ///
@@ -59,7 +87,7 @@ void checkMergedSubnet(CfgSubnets4& cfg_subnets,
 
     // Make sure we have the one we expect.
     ASSERT_EQ(exp_subnet_id, subnet->getID()) << "subnet ID is wrong";
-    ASSERT_EQ(exp_valid, subnet->getValid()) << "subnet valid time is wrong";
+    ASSERT_EQ(exp_valid, subnet->getValid().get()) << "subnet valid time is wrong";
 
     SharedNetwork4Ptr shared_network;
     subnet->getSharedNetwork(shared_network);
@@ -285,7 +313,7 @@ TEST(CfgSubnets4Test, mergeSubnets) {
     std::string value("Yay!");
     OptionPtr option(new Option(Option::V4, 1));
     option->setData(value.begin(), value.end());
-    ASSERT_NO_THROW(subnet1b->getCfgOption()->add(option, false, "isc"));
+    ASSERT_NO_THROW(subnet1b->getCfgOption()->add(option, false, false, "isc"));
 
     // subnet 3b updates subnet 3 with different ID and removes it
     // from network 2
@@ -296,7 +324,7 @@ TEST(CfgSubnets4Test, mergeSubnets) {
     value = "Team!";
     option.reset(new Option(Option::V4, 1));
     option->setData(value.begin(), value.end());
-    ASSERT_NO_THROW(subnet3b->getCfgOption()->add(option, false, "isc"));
+    ASSERT_NO_THROW(subnet3b->getCfgOption()->add(option, false, false, "isc"));
 
     // subnet 4b updates subnet 4 and moves it from network2 to network 1
     Subnet4Ptr subnet4b(new Subnet4(IOAddress("192.0.4.0"),
@@ -314,7 +342,7 @@ TEST(CfgSubnets4Test, mergeSubnets) {
     value = "POOLS";
     option.reset(new Option(Option::V4, 1));
     option->setData(value.begin(), value.end());
-    ASSERT_NO_THROW(pool->getCfgOption()->add(option, false, "isc"));
+    ASSERT_NO_THROW(pool->getCfgOption()->add(option, false, false, "isc"));
     subnet5->addPool(pool);
 
     // Add pool 2
@@ -322,7 +350,7 @@ TEST(CfgSubnets4Test, mergeSubnets) {
     value ="RULE!";
     option.reset(new Option(Option::V4, 1));
     option->setData(value.begin(), value.end());
-    ASSERT_NO_THROW(pool->getCfgOption()->add(option, false, "isc"));
+    ASSERT_NO_THROW(pool->getCfgOption()->add(option, false, false, "isc"));
     subnet5->addPool(pool);
 
     // Add subnets to the merge from config.
@@ -1031,6 +1059,7 @@ TEST(CfgSubnets4Test, unparseSubnet) {
     subnet2->setValid(Triplet<uint32_t>(100));
     subnet2->setStoreExtendedInfo(true);
     subnet2->setCacheMaxAge(80);
+    subnet2->setOfferLft(99);
 
     subnet3->setIface("eth1");
     subnet3->requireClientClass("foo");
@@ -1103,7 +1132,8 @@ TEST(CfgSubnets4Test, unparseSubnet) {
         "    \"option-data\": [ ],\n"
         "    \"pools\": [ ],\n"
         "    \"store-extended-info\": true,\n"
-        "    \"cache-max-age\": 80\n"
+        "    \"cache-max-age\": 80,\n"
+        "    \"offer-lifetime\": 99\n"
         "},{\n"
         "    \"id\": 125,\n"
         "    \"subnet\": \"192.0.2.128/26\",\n"
@@ -1230,7 +1260,8 @@ TEST(CfgSubnets4Test, hasSubnetWithServerId) {
     OptionCustomPtr opt_server_id(new OptionCustom(*def, Option::V4));
     opt_server_id->writeAddress(IOAddress("1.2.3.4"));
     Subnet4Ptr subnet(new Subnet4(IOAddress("192.0.2.0"), 26, 1, 2, 3, 100));
-    subnet->getCfgOption()->add(opt_server_id, false, DHCP4_OPTION_SPACE);
+    subnet->getCfgOption()->add(opt_server_id, false, false,
+                                DHCP4_OPTION_SPACE);
     cfg.add(subnet);
 
     EXPECT_TRUE(cfg.hasSubnetWithServerId(IOAddress("1.2.3.4")));
@@ -1400,7 +1431,7 @@ TEST(CfgSubnets4Test, validLifetimeValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         ASSERT_TRUE(subnet);
         EXPECT_FALSE(subnet->getValid().unspecified());
-        EXPECT_EQ(100, subnet->getValid());
+        EXPECT_EQ(100, subnet->getValid().get());
         EXPECT_EQ(100, subnet->getValid().getMin());
         EXPECT_EQ(100, subnet->getValid().getMax());
         data::ConstElementPtr repr = subnet->toElement();
@@ -1424,7 +1455,7 @@ TEST(CfgSubnets4Test, validLifetimeValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         ASSERT_TRUE(subnet);
         EXPECT_FALSE(subnet->getValid().unspecified());
-        EXPECT_EQ(100, subnet->getValid());
+        EXPECT_EQ(100, subnet->getValid().get());
         EXPECT_EQ(100, subnet->getValid().getMin());
         EXPECT_EQ(100, subnet->getValid().getMax());
         data::ConstElementPtr repr = subnet->toElement();
@@ -1448,7 +1479,7 @@ TEST(CfgSubnets4Test, validLifetimeValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         ASSERT_TRUE(subnet);
         EXPECT_FALSE(subnet->getValid().unspecified());
-        EXPECT_EQ(100, subnet->getValid());
+        EXPECT_EQ(100, subnet->getValid().get());
         EXPECT_EQ(100, subnet->getValid().getMin());
         EXPECT_EQ(100, subnet->getValid().getMax());
         data::ConstElementPtr repr = subnet->toElement();
@@ -1474,7 +1505,7 @@ TEST(CfgSubnets4Test, validLifetimeValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         ASSERT_TRUE(subnet);
         EXPECT_FALSE(subnet->getValid().unspecified());
-        EXPECT_EQ(200, subnet->getValid());
+        EXPECT_EQ(200, subnet->getValid().get());
         EXPECT_EQ(100, subnet->getValid().getMin());
         EXPECT_EQ(200, subnet->getValid().getMax());
         data::ConstElementPtr repr = subnet->toElement();
@@ -1500,7 +1531,7 @@ TEST(CfgSubnets4Test, validLifetimeValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         ASSERT_TRUE(subnet);
         EXPECT_FALSE(subnet->getValid().unspecified());
-        EXPECT_EQ(100, subnet->getValid());
+        EXPECT_EQ(100, subnet->getValid().get());
         EXPECT_EQ(100, subnet->getValid().getMin());
         EXPECT_EQ(200, subnet->getValid().getMax());
         data::ConstElementPtr repr = subnet->toElement();
@@ -1538,7 +1569,7 @@ TEST(CfgSubnets4Test, validLifetimeValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         ASSERT_TRUE(subnet);
         EXPECT_FALSE(subnet->getValid().unspecified());
-        EXPECT_EQ(200, subnet->getValid());
+        EXPECT_EQ(200, subnet->getValid().get());
         EXPECT_EQ(100, subnet->getValid().getMin());
         EXPECT_EQ(300, subnet->getValid().getMax());
         data::ConstElementPtr repr = subnet->toElement();
@@ -1588,7 +1619,7 @@ TEST(CfgSubnets4Test, validLifetimeValidation) {
         ASSERT_NO_THROW(subnet = parser.parse(copied));
         ASSERT_TRUE(subnet);
         EXPECT_FALSE(subnet->getValid().unspecified());
-        EXPECT_EQ(100, subnet->getValid());
+        EXPECT_EQ(100, subnet->getValid().get());
         EXPECT_EQ(100, subnet->getValid().getMin());
         EXPECT_EQ(100, subnet->getValid().getMax());
         data::ConstElementPtr repr = subnet->toElement();
@@ -2082,6 +2113,172 @@ TEST(CfgSubnets4Test, outOfRangeHost) {
     std::string msg = "specified reservation '10.2.2.1' is not within ";
     msg += "the IPv4 subnet '10.1.2.0/24'";
     EXPECT_THROW_MSG(parser.parse(elems), DhcpConfigError, msg);
+}
+
+// This test verifies that the getLinks tool works as expected.
+TEST(CfgSubnets4Test, getLinks) {
+    CfgSubnets4 cfg;
+
+    // Create 4 subnets.
+    Subnet4Ptr subnet0(new Subnet4(IOAddress("0.0.0.0"),
+                                   24, 1, 2, 3, SubnetID(111)));
+    Subnet4Ptr subnet1(new Subnet4(IOAddress("192.0.1.0"),
+                                   26, 1, 2, 3, SubnetID(1)));
+    Subnet4Ptr subnet2(new Subnet4(IOAddress("192.0.2.0"),
+                                   26, 1, 2, 3, SubnetID(2)));
+    Subnet4Ptr subnet3(new Subnet4(IOAddress("192.0.3.0"),
+                                   26, 1, 2, 3, SubnetID(3)));
+
+    // Add all subnets to the configuration.
+    ASSERT_NO_THROW(cfg.add(subnet0));
+    ASSERT_NO_THROW(cfg.add(subnet1));
+    ASSERT_NO_THROW(cfg.add(subnet2));
+    ASSERT_NO_THROW(cfg.add(subnet3));
+
+    // No 192.0.4.0 subnet.
+    SubnetIDSet links;
+    uint8_t link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("192.0.4.0"), link_len));
+    EXPECT_TRUE(links.empty());
+    EXPECT_EQ(111, link_len);
+
+    // A 192.0.2.0/26 subnet.
+    links.clear();
+    link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("192.0.2.0"), link_len));
+    SubnetIDSet expected = { 2 };
+    EXPECT_EQ(expected, links);
+    EXPECT_EQ(26, link_len);
+
+    // Check that any address in the subnet works.
+    links.clear();
+    link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("192.0.2.23"), link_len));
+    EXPECT_EQ(expected, links);
+    EXPECT_EQ(26, link_len);
+
+    // Check that an address outside the subnet does not work.
+    links.clear();
+    link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("192.0.2.123"), link_len));
+    EXPECT_TRUE(links.empty());
+    EXPECT_EQ(111, link_len);
+
+    // Add a second 192.0.2.0/26 subnet.
+    Subnet4Ptr subnet10(new Subnet4(IOAddress("192.0.2.10"),
+                                    26, 1, 2, 3, SubnetID(10)));
+    ASSERT_NO_THROW(cfg.add(subnet10));
+
+    // Now we should get 2 subnets.
+    links.clear();
+    link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("192.0.2.0"), link_len));
+    expected = { 2, 10 };
+    EXPECT_EQ(expected, links);
+    EXPECT_EQ(26, link_len);
+
+    // Add a larger subnet.
+    Subnet4Ptr subnet20(new Subnet4(IOAddress("192.0.2.20"),
+                                    24, 1, 2, 3, SubnetID(20)));
+    ASSERT_NO_THROW(cfg.add(subnet20));
+
+    // Now we should get 3 subnets and a smaller prefix length.
+    links.clear();
+    link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("192.0.2.0"), link_len));
+    expected = { 2, 10, 20 };
+    EXPECT_EQ(expected, links);
+    EXPECT_EQ(24, link_len);
+
+    // But only the larger subnet if the address is only in it.
+    links.clear();
+    link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("192.0.2.123"), link_len));
+    expected = { 20 };
+    EXPECT_EQ(expected, links);
+    EXPECT_EQ(24, link_len);
+
+    // Even it is not used for Bulk Leasequery, it works for 0.0.0.0 too.
+    links.clear();
+    link_len = 111;
+    EXPECT_NO_THROW(links = cfg.getLinks(IOAddress("0.0.0.0"), link_len));
+    expected = { 111 };
+    EXPECT_EQ(expected, links);
+    EXPECT_EQ(24, link_len);
+}
+
+// This test verifies that for each subnet in the configuration it calls
+// the initAllocatorAfterConfigure function.
+TEST(CfgSubnets4Test, initAllocatorsAfterConfigure) {
+    CfgSubnets4 cfg;
+
+    // Create 4 subnets.
+    Subnet4Ptr subnet0(new Subnet4(IOAddress("0.0.0.0"),
+                                   24, 1, 2, 3, SubnetID(111)));
+    Subnet4Ptr subnet1(new Subnet4(IOAddress("192.0.1.0"),
+                                   26, 1, 2, 3, SubnetID(1)));
+    Subnet4Ptr subnet2(new Subnet4(IOAddress("192.0.2.0"),
+                                   26, 1, 2, 3, SubnetID(2)));
+    Subnet4Ptr subnet3(new Subnet4(IOAddress("192.0.3.0"),
+                                   26, 1, 2, 3, SubnetID(3)));
+
+    auto allocator0 = boost::make_shared<InitRecordingAllocator>(Lease::TYPE_V4, subnet0);
+    subnet0->setAllocator(Lease::TYPE_V4, allocator0);
+
+    auto allocator2 = boost::make_shared<InitRecordingAllocator>(Lease::TYPE_V4, subnet2);
+    subnet2->setAllocator(Lease::TYPE_V4, allocator2);
+
+    cfg.add(subnet0);
+    cfg.add(subnet1);
+    cfg.add(subnet2);
+    cfg.add(subnet3);
+
+    EXPECT_EQ(0, allocator0->callcount_);
+    EXPECT_EQ(0, allocator2->callcount_);
+
+    cfg.initAllocatorsAfterConfigure();
+
+    EXPECT_EQ(1, allocator0->callcount_);
+    EXPECT_EQ(1, allocator2->callcount_);
+}
+
+/// @brief Test fixture for parsing v4 Subnets that can verify log output.
+class Subnet4ParserTest : public LogContentTest {
+public:
+
+    /// @brief virtual destructor
+    virtual ~Subnet4ParserTest() = default;
+};
+
+// This test verifies that subnet parser for IPv4 works properly
+// when using invalid renew and rebind timers.
+TEST_F(Subnet4ParserTest, parseWithInvalidRenewRebind) {
+    std::string config =
+        "{\n"
+        "    \"id\": 1,\n"
+        "    \"subnet\": \"10.1.2.0/24\",\n"
+        "    \"valid-lifetime\": 399,\n"
+        "    \"rebind-timer\": 199,\n"
+        "    \"renew-timer\": 200\n"
+        "}";
+
+    // Basic configuration for subnet4 but with a renew-timer value
+    // larger than rebind-timer.
+    ElementPtr config_element = Element::fromJSON(config);
+
+    // Parse configuration specified above.
+    Subnet4ConfigParser parser(false);
+    Subnet4Ptr subnet;
+
+    // Parser should not throw.
+    ASSERT_NO_THROW(subnet = parser.parse(config_element));
+    ASSERT_TRUE(subnet);
+
+    // Veriy we emitted the proper log message.
+    addString("DHCPSRV_CFGMGR_RENEW_GTR_REBIND in subnet-id 1,"
+              " the value of renew-timer 200 is greater than the value"
+              " of rebind-timer 199, ignoring renew-timer");
+    EXPECT_TRUE(checkFile());
 }
 
 } // end of anonymous namespace

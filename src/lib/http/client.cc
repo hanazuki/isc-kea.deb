@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,6 +8,7 @@
 
 #include <asiolink/asio_wrapper.h>
 #include <asiolink/interval_timer.h>
+#include <asiolink/io_service_thread_pool.h>
 #include <asiolink/tls_socket.h>
 #include <http/client.h>
 #include <http/http_log.h>
@@ -1789,13 +1790,13 @@ public:
             // Create our own private IOService.
             thread_io_service_.reset(new IOService());
 
-            // Create the thread pool.
-            thread_pool_.reset(new HttpThreadPool(thread_io_service_, thread_pool_size_,
-                                                  defer_thread_start));
-
             // Create the connection pool. Note that we use the thread_pool_size
             // as the maximum connections per URL value.
             conn_pool_.reset(new ConnectionPool(*thread_io_service_, thread_pool_size_));
+
+            // Create the thread pool.
+            thread_pool_.reset(new IoServiceThreadPool(thread_io_service_, thread_pool_size_,
+                                                       defer_thread_start));
 
             LOG_DEBUG(http_logger, isc::log::DBGLVL_TRACE_BASIC, HTTP_CLIENT_MT_STARTED)
                      .arg(thread_pool_size_);
@@ -1943,17 +1944,15 @@ private:
 
     /// @brief Pool of threads used to service connections in multi-threaded
     /// mode.
-    HttpThreadPoolPtr thread_pool_;
+    IoServiceThreadPoolPtr thread_pool_;
 };
 
-HttpClient::HttpClient(IOService& io_service, size_t thread_pool_size,
-                       bool defer_thread_start /* = false */) {
-    if (thread_pool_size > 0) {
-        if (!MultiThreadingMgr::instance().getMode()) {
-            isc_throw(InvalidOperation,
-                      "HttpClient thread_pool_size must be zero"
-                      "when Kea core multi-threading is disabled");
-        }
+HttpClient::HttpClient(IOService& io_service, bool multi_threading_enabled,
+                       size_t thread_pool_size, bool defer_thread_start) {
+    if (!multi_threading_enabled && thread_pool_size) {
+        isc_throw(InvalidOperation,
+                  "HttpClient thread_pool_size must be zero "
+                  "when Kea core multi-threading is disabled");
     }
 
     impl_.reset(new HttpClientImpl(io_service, thread_pool_size,

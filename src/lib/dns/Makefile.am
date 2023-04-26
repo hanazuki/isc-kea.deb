@@ -105,7 +105,7 @@ BUILT_SOURCES += rdataclass.h rdataclass.cc
 
 lib_LTLIBRARIES = libkea-dns++.la
 
-libkea_dns___la_LDFLAGS = -no-undefined -version-info 30:0:0
+libkea_dns___la_LDFLAGS = -no-undefined -version-info 41:0:0
 libkea_dns___la_LDFLAGS += $(AM_LDFLAGS) $(CRYPTO_LDFLAGS)
 
 libkea_dns___la_SOURCES =
@@ -156,7 +156,7 @@ libkea_dns___la_SOURCES += rdata/generic/detail/txt_like.h
 libkea_dns___la_SOURCES += rdata/generic/detail/ds_like.h
 
 libkea_dns___la_CPPFLAGS = $(AM_CPPFLAGS)
-libkea_dns___la_LIBADD = $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
+libkea_dns___la_LIBADD  = $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
 libkea_dns___la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_dns___la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_dns___la_LIBADD += $(CRYPTO_LIBS)

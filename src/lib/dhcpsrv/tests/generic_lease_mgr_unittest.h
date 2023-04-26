@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -8,7 +8,7 @@
 #define GENERIC_LEASE_MGR_UNITTEST_H
 
 #include <asiolink/io_service.h>
-#include <dhcpsrv/lease_mgr.h>
+#include <dhcpsrv/tracking_lease_mgr.h>
 #include <dhcpsrv/timer_mgr.h>
 
 #include <gtest/gtest.h>
@@ -35,6 +35,19 @@ class GenericLeaseMgrTest : public ::testing::Test {
 public:
     /// @brief Universe (V4 or V6).
     enum Universe { V4, V6 };
+
+    /// @brief A structure holding a single callback log entry.
+    ///
+    /// The @c logCallback function inserts logs of this type into the
+    /// @c logs vector. The vector can be later examined to see what
+    /// callbacks have been invoked.
+    typedef struct {
+        TrackingLeaseMgr::CallbackType type;
+        SubnetID subnet_id;
+        LeasePtr lease;
+        bool mt_safe;
+        bool locked;
+    } Log;
 
     /// @brief Default constructor.
     GenericLeaseMgrTest();
@@ -153,6 +166,31 @@ public:
                          const SubnetID& subnet_id,
                          const uint32_t state = Lease::STATE_DEFAULT,
                          const data::ConstElementPtr user_context = data::ConstElementPtr());
+
+    /// @brief Callback function recording its parameters.
+    ///
+    /// It is used in the unit tests that verify that appropriate callbacks
+    /// have been invoked.
+    ///
+    /// @param type callback type.
+    /// @param subnet_id subnet identifier.
+    /// @param lease lease instance.
+    /// @param mt a boolean flag indicating if the function has been called
+    /// in the thread-safe context.
+    void logCallback(TrackingLeaseMgr::CallbackType type, SubnetID subnet_id,
+                     LeasePtr lease, bool mt_safe);
+
+    /// @brief Counts log entries.
+    ///
+    /// It counts the logs associated with the specific callback type, subnet id
+    /// and lease type.
+    ///
+    /// @param type callback type.
+    /// @param subnet_id subnet identifier.
+    /// @return The number of callback logs associated with the specific type and
+    /// the subnet id.
+    int countLogs(TrackingLeaseMgr::CallbackType type, SubnetID subnet_id,
+                  Lease::Type lease_type) const;
 
     /// @brief checks that addLease, getLease4(addr) and deleteLease() works
     void testBasicLease4();
@@ -536,6 +574,101 @@ public:
     /// @brief Checks a few v6 lease limit checking scenarios.
     void testLeaseLimits6();
 
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv4 lease is added.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackAddLease4(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv6 address lease is added.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackAddLeaseNA(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv6 prefix lease is added.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackAddLeasePD(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv4 lease is updated.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackUpdateLease4(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv6 address lease is updated.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackUpdateLeaseNA(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv6 prefix lease is updated.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackUpdateLeasePD(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv4 lease is deleted.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackDeleteLease4(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv6 address lease is deleted.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackDeleteLeaseNA(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks if the backends call the callbacks when an
+    /// IPv6 prefix lease is deleted.
+    ///
+    /// @param expect_locked a boolean flag indicating if the test should
+    /// expect that the lease is locked before the callback.
+    /// @param expect_mt_safe a boolean flag indicating if the test should
+    /// expect that the callbacks are called in the MT-safe context.
+    void testTrackDeleteLeasePD(bool expect_locked, bool expect_mt_safe);
+
+    /// @brief Checks that the lease manager can be recreated and its
+    /// registered callbacks preserved, if desired.
+    ///
+    /// @param access database connection string used for recreating the
+    /// lease manager.
+    void testRecreateWithCallbacks(const std::string& access);
+
+    /// @brief Checks that the lease manager can be recreated without the
+    /// previously registered callbacks.
+    ///
+    /// @param access database connection string used for recreating the
+    /// lease manager.
+    void testRecreateWithoutCallbacks(const std::string& access);
+
     /// @brief String forms of IPv4 addresses
     std::vector<std::string> straddress4_;
 
@@ -551,8 +684,11 @@ public:
     /// @brief IOAddress forms of IPv6 addresses
     std::vector<isc::asiolink::IOAddress> ioaddress6_;
 
+    /// Recorded callback logs.
+    std::vector<Log> logs_;
+
     /// @brief Pointer to the lease manager
-    LeaseMgr* lmptr_;
+    TrackingLeaseMgr* lmptr_;
 };
 
 class LeaseMgrDbLostCallbackTest : public ::testing::Test {

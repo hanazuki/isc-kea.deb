@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -197,6 +197,14 @@ SharedNetwork4Parser::parse(const data::ConstElementPtr& shared_network_data) {
 
         // Parse lease cache parameters
         parseCacheParams(shared_network_data, network);
+
+        // Parse allocator params.
+        parseAllocatorParams(shared_network_data, network);
+
+        // Parse offer-lifetime parameter.
+        Network4Ptr network4 = boost::dynamic_pointer_cast<Network4>(shared_network);
+        parseOfferLft(shared_network_data, network4);
+
     } catch (const DhcpConfigError&) {
         // Position was already added
         throw;
@@ -377,6 +385,14 @@ SharedNetwork6Parser::parse(const data::ConstElementPtr& shared_network_data) {
 
         // Parse lease cache parameters
         parseCacheParams(shared_network_data, network);
+
+        // Parse allocator params.
+        parseAllocatorParams(shared_network_data, network);
+
+        // Parse prefix delegation allocator params.
+        auto network6 = boost::dynamic_pointer_cast<Network6>(shared_network);
+        parsePdAllocatorParams(shared_network_data, network6);
+
     } catch (const std::exception& ex) {
         isc_throw(DhcpConfigError, ex.what() << " ("
                   << shared_network_data->getPosition() << ")");

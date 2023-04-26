@@ -18,19 +18,19 @@ libkea_cfgclient_la_SOURCES += cmd_http_listener.cc cmd_http_listener.h
 libkea_cfgclient_la_SOURCES += cmd_response_creator.cc cmd_response_creator.h
 libkea_cfgclient_la_SOURCES += cmd_response_creator_factory.h
 
-libkea_cfgclient_la_LIBADD = $(top_builddir)/src/lib/http/libkea-http.la
+libkea_cfgclient_la_LIBADD  = $(top_builddir)/src/lib/http/libkea-http.la
 libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
-libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
+libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/cc/libkea-cc.la
+libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
-libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/log/libkea-log.la
 libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_cfgclient_la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_cfgclient_la_LIBADD += $(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) $(BOOST_LIBS)
 
-libkea_cfgclient_la_LDFLAGS = -no-undefined -version-info 36:0:0
+libkea_cfgclient_la_LDFLAGS = -no-undefined -version-info 49:0:0
 libkea_cfgclient_la_LDFLAGS += $(CRYPTO_LDFLAGS)
 
 # The message file should be in the distribution.

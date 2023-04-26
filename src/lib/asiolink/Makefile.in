@@ -96,12 +96,13 @@ subdir = src/lib/asiolink
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -158,12 +159,13 @@ am__libkea_asiolink_la_SOURCES_DIST = asiolink.h asio_wrapper.h \
 	io_acceptor.h io_address.cc io_address.h io_asio_socket.h \
 	io_endpoint.cc io_endpoint.h io_error.h io_service.h \
 	io_service.cc io_service_signal.cc io_service_signal.h \
-	io_socket.h io_socket.cc openssl_tls.h process_spawn.h \
-	process_spawn.cc tcp_acceptor.h tcp_endpoint.h tcp_socket.h \
-	tls_acceptor.h tls_socket.h udp_endpoint.h udp_socket.h \
-	unix_domain_socket.cc unix_domain_socket.h \
-	unix_domain_socket_acceptor.h unix_domain_socket_endpoint.h \
-	botan_boost_tls.cc botan_tls.cc openssl_tls.cc
+	io_service_thread_pool.cc io_service_thread_pool.h io_socket.h \
+	io_socket.cc openssl_tls.h process_spawn.h process_spawn.cc \
+	tcp_acceptor.h tcp_endpoint.h tcp_socket.h tls_acceptor.h \
+	tls_socket.h udp_endpoint.h udp_socket.h unix_domain_socket.cc \
+	unix_domain_socket.h unix_domain_socket_acceptor.h \
+	unix_domain_socket_endpoint.h botan_boost_tls.cc botan_tls.cc \
+	openssl_tls.cc
 @HAVE_BOTAN_BOOST_TRUE@@HAVE_BOTAN_TRUE@am__objects_1 = libkea_asiolink_la-botan_boost_tls.lo
 @HAVE_BOTAN_BOOST_FALSE@@HAVE_BOTAN_TRUE@am__objects_2 = libkea_asiolink_la-botan_tls.lo
 @HAVE_OPENSSL_TRUE@am__objects_3 = libkea_asiolink_la-openssl_tls.lo
@@ -174,6 +176,7 @@ am_libkea_asiolink_la_OBJECTS = libkea_asiolink_la-addr_utilities.lo \
 	libkea_asiolink_la-io_endpoint.lo \
 	libkea_asiolink_la-io_service.lo \
 	libkea_asiolink_la-io_service_signal.lo \
+	libkea_asiolink_la-io_service_thread_pool.lo \
 	libkea_asiolink_la-io_socket.lo \
 	libkea_asiolink_la-process_spawn.lo \
 	libkea_asiolink_la-unix_domain_socket.lo $(am__objects_1) \
@@ -212,6 +215,7 @@ am__depfiles_remade =  \
 	./$(DEPDIR)/libkea_asiolink_la-io_endpoint.Plo \
 	./$(DEPDIR)/libkea_asiolink_la-io_service.Plo \
 	./$(DEPDIR)/libkea_asiolink_la-io_service_signal.Plo \
+	./$(DEPDIR)/libkea_asiolink_la-io_service_thread_pool.Plo \
 	./$(DEPDIR)/libkea_asiolink_la-io_socket.Plo \
 	./$(DEPDIR)/libkea_asiolink_la-openssl_tls.Plo \
 	./$(DEPDIR)/libkea_asiolink_la-process_spawn.Plo \
@@ -358,11 +362,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -381,7 +392,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -399,6 +410,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -445,12 +466,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -522,7 +549,7 @@ AM_CXXFLAGS = $(KEA_CXXFLAGS) -Wno-non-virtual-dtor
 EXTRA_DIST = asiolink.dox
 CLEANFILES = *.gcno *.gcda
 lib_LTLIBRARIES = libkea-asiolink.la
-libkea_asiolink_la_LDFLAGS = -no-undefined -version-info 40:0:0 \
+libkea_asiolink_la_LDFLAGS = -no-undefined -version-info 54:0:0 \
 	$(CRYPTO_LDFLAGS)
 libkea_asiolink_la_SOURCES = asiolink.h asio_wrapper.h \
 	addr_utilities.cc addr_utilities.h botan_boost_tls.h \
@@ -531,12 +558,13 @@ libkea_asiolink_la_SOURCES = asiolink.h asio_wrapper.h \
 	io_acceptor.h io_address.cc io_address.h io_asio_socket.h \
 	io_endpoint.cc io_endpoint.h io_error.h io_service.h \
 	io_service.cc io_service_signal.cc io_service_signal.h \
-	io_socket.h io_socket.cc openssl_tls.h process_spawn.h \
-	process_spawn.cc tcp_acceptor.h tcp_endpoint.h tcp_socket.h \
-	tls_acceptor.h tls_socket.h udp_endpoint.h udp_socket.h \
-	unix_domain_socket.cc unix_domain_socket.h \
-	unix_domain_socket_acceptor.h unix_domain_socket_endpoint.h \
-	$(am__append_1) $(am__append_2) $(am__append_3)
+	io_service_thread_pool.cc io_service_thread_pool.h io_socket.h \
+	io_socket.cc openssl_tls.h process_spawn.h process_spawn.cc \
+	tcp_acceptor.h tcp_endpoint.h tcp_socket.h tls_acceptor.h \
+	tls_socket.h udp_endpoint.h udp_socket.h unix_domain_socket.cc \
+	unix_domain_socket.h unix_domain_socket_acceptor.h \
+	unix_domain_socket_endpoint.h $(am__append_1) $(am__append_2) \
+	$(am__append_3)
 
 # Note: the ordering matters: -Wno-... must follow -Wextra (defined in
 # KEA_CXXFLAGS)
@@ -567,6 +595,7 @@ libkea_asiolink_include_HEADERS = \
 	io_error.h \
 	io_service.h \
 	io_service_signal.h \
+	io_service_thread_pool.h \
 	io_socket.h \
 	openssl_tls.h \
 	process_spawn.h \
@@ -668,6 +697,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_asiolink_la-io_endpoint.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_asiolink_la-io_service.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_asiolink_la-io_service_signal.Plo@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_asiolink_la-io_service_thread_pool.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_asiolink_la-io_socket.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_asiolink_la-openssl_tls.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_asiolink_la-process_spawn.Plo@am__quote@ # am--include-marker
@@ -748,6 +778,13 @@ libkea_asiolink_la-io_service_signal.lo: io_service_signal.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='io_service_signal.cc' object='libkea_asiolink_la-io_service_signal.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_asiolink_la_CPPFLAGS) $(CPPFLAGS) $(libkea_asiolink_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_asiolink_la-io_service_signal.lo `test -f 'io_service_signal.cc' || echo '$(srcdir)/'`io_service_signal.cc
+
+libkea_asiolink_la-io_service_thread_pool.lo: io_service_thread_pool.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_asiolink_la_CPPFLAGS) $(CPPFLAGS) $(libkea_asiolink_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_asiolink_la-io_service_thread_pool.lo -MD -MP -MF $(DEPDIR)/libkea_asiolink_la-io_service_thread_pool.Tpo -c -o libkea_asiolink_la-io_service_thread_pool.lo `test -f 'io_service_thread_pool.cc' || echo '$(srcdir)/'`io_service_thread_pool.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libkea_asiolink_la-io_service_thread_pool.Tpo $(DEPDIR)/libkea_asiolink_la-io_service_thread_pool.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='io_service_thread_pool.cc' object='libkea_asiolink_la-io_service_thread_pool.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_asiolink_la_CPPFLAGS) $(CPPFLAGS) $(libkea_asiolink_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_asiolink_la-io_service_thread_pool.lo `test -f 'io_service_thread_pool.cc' || echo '$(srcdir)/'`io_service_thread_pool.cc
 
 libkea_asiolink_la-io_socket.lo: io_socket.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_asiolink_la_CPPFLAGS) $(CPPFLAGS) $(libkea_asiolink_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_asiolink_la-io_socket.lo -MD -MP -MF $(DEPDIR)/libkea_asiolink_la-io_socket.Tpo -c -o libkea_asiolink_la-io_socket.lo `test -f 'io_socket.cc' || echo '$(srcdir)/'`io_socket.cc
@@ -1029,6 +1066,7 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_endpoint.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_service.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_service_signal.Plo
+	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_service_thread_pool.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_socket.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-openssl_tls.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-process_spawn.Plo
@@ -1087,6 +1125,7 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_endpoint.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_service.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_service_signal.Plo
+	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_service_thread_pool.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-io_socket.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-openssl_tls.Plo
 	-rm -f ./$(DEPDIR)/libkea_asiolink_la-process_spawn.Plo

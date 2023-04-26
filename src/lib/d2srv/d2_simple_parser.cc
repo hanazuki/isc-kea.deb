@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -82,7 +82,7 @@ namespace d2 {
 const SimpleDefaults D2SimpleParser::D2_GLOBAL_DEFAULTS = {
     { "ip-address",         Element::string, "127.0.0.1" },
     { "port",               Element::integer, "53001" },
-    { "dns-server-timeout", Element::integer, "100" }, // in milliseconds
+    { "dns-server-timeout", Element::integer, "500" }, // in milliseconds
     { "ncr-protocol",       Element::string, "UDP" },
     { "ncr-format",         Element::string, "JSON" }
 };
@@ -286,7 +286,7 @@ void D2SimpleParser::parse(const D2CfgContextPtr& ctx,
     if (hooks) {
         HooksLibrariesParser hooks_parser;
         hooks_parser.parse(libraries, hooks);
-        libraries.verifyLibraries(hooks->getPosition());
+        libraries.verifyLibraries(hooks->getPosition(), false);
     }
 
     // Attempt to create the new client config. This ought to fly as
@@ -302,7 +302,7 @@ void D2SimpleParser::parse(const D2CfgContextPtr& ctx,
         // change causes problems when trying to roll back.
         HooksManager::prepareUnloadLibraries();
         static_cast<void>(HooksManager::unloadLibraries());
-        libraries.loadLibraries();
+        libraries.loadLibraries(false);
     }
 }
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -21,7 +21,8 @@ namespace isc {
 namespace dhcp {
 
 ElementPtr
-DHCPQueueControlParser::parse(const ConstElementPtr& control_elem) {
+DHCPQueueControlParser::parse(const ConstElementPtr& control_elem,
+                              bool multi_threading_enabled) {
     // All we really do here is verify that it is a map that
     // contains at least queue-type.  All other content depends
     // on the packet queue implementation of that type.
@@ -47,9 +48,10 @@ DHCPQueueControlParser::parse(const ConstElementPtr& control_elem) {
     ElementPtr result = data::copy(control_elem);
 
     // Currently not compatible with multi-threading.
-    if (MultiThreadingMgr::instance().getMode()) {
+    if (multi_threading_enabled) {
         // Silently disable it.
         result->set("enable-queue", Element::create(false));
+        LOG_WARN(dhcpsrv_logger, DHCPSRV_MT_DISABLED_QUEUE_CONTROL);
     }
 
     return (result);

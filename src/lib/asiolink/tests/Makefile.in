@@ -104,12 +104,13 @@ subdir = src/lib/asiolink/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -133,6 +134,7 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 	tcp_endpoint_unittest.cc tcp_socket_unittest.cc \
 	udp_endpoint_unittest.cc udp_socket_unittest.cc \
 	io_service_unittest.cc io_service_signal_unittests.cc \
+	io_service_thread_pool_unittests.cc \
 	dummy_io_callback_unittest.cc tcp_acceptor_unittest.cc \
 	unix_domain_socket_unittest.cc process_spawn_unittest.cc \
 	tls_unittest.cc tls_acceptor_unittest.cc \
@@ -157,6 +159,7 @@ am__run_unittests_SOURCES_DIST = run_unittests.cc \
 @HAVE_GTEST_TRUE@	run_unittests-udp_socket_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-io_service_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-io_service_signal_unittests.$(OBJEXT) \
+@HAVE_GTEST_TRUE@	run_unittests-io_service_thread_pool_unittests.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-dummy_io_callback_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-tcp_acceptor_unittest.$(OBJEXT) \
 @HAVE_GTEST_TRUE@	run_unittests-unix_domain_socket_unittest.$(OBJEXT) \
@@ -204,6 +207,7 @@ am__depfiles_remade =  \
 	./$(DEPDIR)/run_unittests-io_address_unittest.Po \
 	./$(DEPDIR)/run_unittests-io_endpoint_unittest.Po \
 	./$(DEPDIR)/run_unittests-io_service_signal_unittests.Po \
+	./$(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Po \
 	./$(DEPDIR)/run_unittests-io_service_unittest.Po \
 	./$(DEPDIR)/run_unittests-io_socket_unittest.Po \
 	./$(DEPDIR)/run_unittests-process_spawn_unittest.Po \
@@ -321,11 +325,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -344,7 +355,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -362,6 +373,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -408,12 +429,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -489,9 +516,7 @@ AM_CXXFLAGS = $(KEA_CXXFLAGS)
 CLEANFILES = *.gcno *.gcda test-socket
 DISTCLEANFILES = process_spawn_app.sh
 noinst_SCRIPTS = process_spawn_app.sh
-TESTS_ENVIRONMENT = \
-	$(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
-
+TESTS_ENVIRONMENT = $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 @HAVE_GTEST_TRUE@run_unittests_SOURCES = run_unittests.cc \
 @HAVE_GTEST_TRUE@	addr_utilities_unittest.cc \
 @HAVE_GTEST_TRUE@	io_address_unittest.cc \
@@ -503,6 +528,7 @@ TESTS_ENVIRONMENT = \
 @HAVE_GTEST_TRUE@	udp_endpoint_unittest.cc \
 @HAVE_GTEST_TRUE@	udp_socket_unittest.cc io_service_unittest.cc \
 @HAVE_GTEST_TRUE@	io_service_signal_unittests.cc \
+@HAVE_GTEST_TRUE@	io_service_thread_pool_unittests.cc \
 @HAVE_GTEST_TRUE@	dummy_io_callback_unittest.cc \
 @HAVE_GTEST_TRUE@	tcp_acceptor_unittest.cc \
 @HAVE_GTEST_TRUE@	unix_domain_socket_unittest.cc \
@@ -585,6 +611,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-io_address_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-io_endpoint_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-io_service_signal_unittests.Po@am__quote@ # am--include-marker
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-io_service_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-io_socket_unittest.Po@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/run_unittests-process_spawn_unittest.Po@am__quote@ # am--include-marker
@@ -807,6 +834,20 @@ run_unittests-io_service_signal_unittests.obj: io_service_signal_unittests.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='io_service_signal_unittests.cc' object='run_unittests-io_service_signal_unittests.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(run_unittests_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-io_service_signal_unittests.obj `if test -f 'io_service_signal_unittests.cc'; then $(CYGPATH_W) 'io_service_signal_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/io_service_signal_unittests.cc'; fi`
+
+run_unittests-io_service_thread_pool_unittests.o: io_service_thread_pool_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(run_unittests_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-io_service_thread_pool_unittests.o -MD -MP -MF $(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Tpo -c -o run_unittests-io_service_thread_pool_unittests.o `test -f 'io_service_thread_pool_unittests.cc' || echo '$(srcdir)/'`io_service_thread_pool_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Tpo $(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='io_service_thread_pool_unittests.cc' object='run_unittests-io_service_thread_pool_unittests.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(run_unittests_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-io_service_thread_pool_unittests.o `test -f 'io_service_thread_pool_unittests.cc' || echo '$(srcdir)/'`io_service_thread_pool_unittests.cc
+
+run_unittests-io_service_thread_pool_unittests.obj: io_service_thread_pool_unittests.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(run_unittests_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-io_service_thread_pool_unittests.obj -MD -MP -MF $(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Tpo -c -o run_unittests-io_service_thread_pool_unittests.obj `if test -f 'io_service_thread_pool_unittests.cc'; then $(CYGPATH_W) 'io_service_thread_pool_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/io_service_thread_pool_unittests.cc'; fi`
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Tpo $(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Po
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='io_service_thread_pool_unittests.cc' object='run_unittests-io_service_thread_pool_unittests.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(run_unittests_CXXFLAGS) $(CXXFLAGS) -c -o run_unittests-io_service_thread_pool_unittests.obj `if test -f 'io_service_thread_pool_unittests.cc'; then $(CYGPATH_W) 'io_service_thread_pool_unittests.cc'; else $(CYGPATH_W) '$(srcdir)/io_service_thread_pool_unittests.cc'; fi`
 
 run_unittests-dummy_io_callback_unittest.o: dummy_io_callback_unittest.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(run_unittests_CPPFLAGS) $(CPPFLAGS) $(run_unittests_CXXFLAGS) $(CXXFLAGS) -MT run_unittests-dummy_io_callback_unittest.o -MD -MP -MF $(DEPDIR)/run_unittests-dummy_io_callback_unittest.Tpo -c -o run_unittests-dummy_io_callback_unittest.o `test -f 'dummy_io_callback_unittest.cc' || echo '$(srcdir)/'`dummy_io_callback_unittest.cc
@@ -1140,6 +1181,7 @@ distclean: distclean-am
 	-rm -f ./$(DEPDIR)/run_unittests-io_address_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_endpoint_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_service_signal_unittests.Po
+	-rm -f ./$(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_service_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_socket_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-process_spawn_unittest.Po
@@ -1205,6 +1247,7 @@ maintainer-clean: maintainer-clean-am
 	-rm -f ./$(DEPDIR)/run_unittests-io_address_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_endpoint_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_service_signal_unittests.Po
+	-rm -f ./$(DEPDIR)/run_unittests-io_service_thread_pool_unittests.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_service_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-io_socket_unittest.Po
 	-rm -f ./$(DEPDIR)/run_unittests-process_spawn_unittest.Po

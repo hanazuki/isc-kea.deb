@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,10 +6,11 @@
 
 #include <config.h>
 
+#include <gtest/gtest.h>
+
+#include <dhcpsrv/subnet_id.h>
 #include <testutils/gtest_utils.h>
 #include <yang/adaptor_subnet.h>
-
-#include <gtest/gtest.h>
 
 using namespace std;
 using namespace isc;
@@ -210,4 +211,4 @@ TEST(AdaptorSubnetTest, updateRelayAddress) {
 
 // It does not make sense to have both ip-address and ip-addresses...
 
-}; // end of anonymous namespace
+}  // anonymous namespace

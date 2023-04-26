@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,6 +20,9 @@
 #include <hooks/hooks.h>
 #include <process/daemon.h>
 
+#include <sstream>
+#include <string>
+
 namespace isc {
 namespace ha {
 
@@ -34,6 +37,7 @@ using namespace isc::dhcp;
 using namespace isc::ha;
 using namespace isc::hooks;
 using namespace isc::process;
+using namespace std;
 
 extern "C" {
 
@@ -44,6 +48,13 @@ int dhcp4_srv_configured(CalloutHandle& handle) {
     try {
         isc::asiolink::IOServicePtr io_service;
         handle.getArgument("io_context", io_service);
+        if (!io_service) {
+            // Should not happen!
+            handle.setStatus(isc::hooks::CalloutHandle::NEXT_STEP_DROP);
+            const string error("Error: io_context is null");
+            handle.setArgument("error", error);
+            return (1);
+        }
         isc::dhcp::NetworkStatePtr network_state;
         handle.getArgument("network_state", network_state);
         impl->startService(io_service, network_state, HAServerType::DHCPv4);
@@ -51,6 +62,11 @@ int dhcp4_srv_configured(CalloutHandle& handle) {
     } catch (const std::exception& ex) {
         LOG_ERROR(ha_logger, HA_DHCP4_START_SERVICE_FAILED)
             .arg(ex.what());
+        handle.setStatus(isc::hooks::CalloutHandle::NEXT_STEP_DROP);
+        ostringstream os;
+        os << "Error: " << ex.what();
+        string error(os.str());
+        handle.setArgument("error", error);
         return (1);
     }
     return (0);
@@ -106,6 +122,13 @@ int dhcp6_srv_configured(CalloutHandle& handle) {
     try {
         isc::asiolink::IOServicePtr io_service;
         handle.getArgument("io_context", io_service);
+        if (!io_service) {
+            // Should not happen!
+            handle.setStatus(isc::hooks::CalloutHandle::NEXT_STEP_DROP);
+            const string error("Error: io_context is null");
+            handle.setArgument("error", error);
+            return (1);
+        }
         isc::dhcp::NetworkStatePtr network_state;
         handle.getArgument("network_state", network_state);
         impl->startService(io_service, network_state, HAServerType::DHCPv6);
@@ -113,6 +136,11 @@ int dhcp6_srv_configured(CalloutHandle& handle) {
     } catch (const std::exception& ex) {
         LOG_ERROR(ha_logger, HA_DHCP6_START_SERVICE_FAILED)
             .arg(ex.what());
+        handle.setStatus(isc::hooks::CalloutHandle::NEXT_STEP_DROP);
+        ostringstream os;
+        os << "Error: " << ex.what();
+        string error(os.str());
+        handle.setArgument("error", error);
         return (1);
     }
     return (0);

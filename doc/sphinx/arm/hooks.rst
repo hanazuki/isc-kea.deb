@@ -22,7 +22,7 @@ to load those libraries.
 
 Hook libraries are loaded by individual Kea processes, not by Kea as a
 whole. This means, among other things, that it is possible to associate one set
-of libraries with the DHCP4 server and a different set with the DHCP6
+of libraries with the DHCPv4 server and a different set with the DHCPv6
 server.
 
 It is also possible for a process to load
@@ -305,14 +305,14 @@ The DDNS-Tuning Hook uses user-context to configure per subnet behavior. Example
     "subnet4": [{
         "subnet": "192.0.2.0/24",
         "pools": [{
-            "pool": "192.0.2.10 - 192.0.2.20",
+            "pool": "192.0.2.10 - 192.0.2.20"
         } ],
         "user-context": {
-            "ddns-tuning:" {
+            "ddns-tuning": {
                 "hostname-expr": "'guest-'+Int8ToText(substring(pkt4.yiaddr, 0,1))+'-' \
                                           +Int8ToText(substring(pkt4.yiaddr, 1,2))+'-' \
                                           +Int8ToText(substring(pkt4.yiaddr, 2,3))+'-' \
-                                          +Int8ToText(substring(pkt4.yiaddr, 3,4))",
+                                          +Int8ToText(substring(pkt4.yiaddr, 3,4))"
             },
             "last-modified": "2017-09-04 13:32",
             "phones": [ "x1234", "x2345" ],
@@ -393,12 +393,6 @@ loaded by which Kea processes. It is a common mistake to configure the
 loaded by the ``kea-dhcp4`` or ``kea-dhcp6`` processes. If a library
 from ISC does not work as expected, please make sure that it has been
 loaded by the correct process per the table below.
-
-.. warning::
-
-   While the Kea Control Agent includes the "hooks" functionality, (i.e.
-   hook libraries can be loaded by this process), none of ISC's current
-   hook libraries should be loaded by the Control Agent.
 
 .. tabularcolumns:: |p{0.1\linewidth}|p{0.1\linewidth}|p{0.8\linewidth}|
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -38,7 +38,8 @@ void
 ExpressionParser::parse(ExpressionPtr& expression,
                         ConstElementPtr expression_cfg,
                         uint16_t family,
-                        EvalContext::CheckDefined check_defined) {
+                        EvalContext::CheckDefined check_defined,
+                        EvalContext::ParserType parser_type) {
     if (expression_cfg->getType() != Element::string) {
         isc_throw(DhcpConfigError, "expression ["
             << expression_cfg->str() << "] must be a string, at ("
@@ -49,18 +50,24 @@ ExpressionParser::parse(ExpressionPtr& expression,
     // by str() enclosed in quotes.
     std::string value;
     expression_cfg->getValue(value);
+
+    if (parser_type == EvalContext::PARSER_STRING && value.empty()) {
+        isc_throw(DhcpConfigError, "expression can not be empty at ("
+            << expression_cfg->getPosition() << ")");
+    }
+
     try {
         EvalContext eval_ctx(family == AF_INET ? Option::V4 : Option::V6,
                              check_defined);
-        eval_ctx.parseString(value);
+        eval_ctx.parseString(value, parser_type);
         expression.reset(new Expression());
         *expression = eval_ctx.expression;
     } catch (const std::exception& ex) {
         // Append position if there is a failure.
         isc_throw(DhcpConfigError,
                   "expression: [" << value
-                  <<  "] error: " << ex.what() << " at ("
-                  <<  expression_cfg->getPosition() << ")");
+                  << "] error: " << ex.what() << " at ("
+                  << expression_cfg->getPosition() << ")");
     }
 }
 
@@ -80,21 +87,36 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
                   << getPosition("name", class_def_cfg) << ")");
     }
 
+    EvalContext::ParserType parser_type = EvalContext::PARSER_BOOL;
+
+    // Let's try to parse the template-test expression
+    bool is_template = false;
+
     // Parse matching expression
     ExpressionPtr match_expr;
     ConstElementPtr test_cfg = class_def_cfg->get("test");
+    ConstElementPtr template_test_cfg = class_def_cfg->get("template-test");
+    if (test_cfg && template_test_cfg) {
+        isc_throw(DhcpConfigError, "can not use both 'test' and 'template-test' ("
+                  << test_cfg->getPosition() << ") and ("
+                  << template_test_cfg->getPosition() << ")");
+    }
     std::string test;
     bool depend_on_known = false;
+    EvalContext::CheckDefined check_defined = EvalContext::acceptAll;
+    if (template_test_cfg) {
+        test_cfg = template_test_cfg;
+        parser_type = EvalContext::PARSER_STRING;
+        is_template = true;
+    } else {
+        check_defined = [&class_dictionary, &depend_on_known, check_dependencies](const ClientClass& cclass) {
+            return (!check_dependencies || isClientClassDefined(class_dictionary, depend_on_known, cclass));
+        };
+    }
+
     if (test_cfg) {
         ExpressionParser parser;
-        auto check_defined =
-            [&class_dictionary, &depend_on_known, check_dependencies]
-            (const ClientClass& cclass) {
-                return (!check_dependencies || isClientClassDefined(class_dictionary,
-                                                                    depend_on_known,
-                                                                    cclass));
-        };
-        parser.parse(match_expr, test_cfg, family, check_defined);
+        parser.parse(match_expr, test_cfg, family, check_defined, parser_type);
         test = test_cfg->stringValue();
     }
 
@@ -205,7 +227,18 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
                       << filename.length() << " ("
                       << getPosition("boot-file-name", class_def_cfg) << ")");
         }
+    }
 
+    Optional<uint32_t> offer_lft;
+    if (class_def_cfg->contains("offer-lifetime")) {
+        auto value = getInteger(class_def_cfg, "offer-lifetime");
+        if (value < 0) {
+            isc_throw(DhcpConfigError, "the value of offer-lifetime '"
+                      << value << "' must be a positive number ("
+                      << getPosition("offer-lifetime", class_def_cfg) << ")");
+        }
+
+        offer_lft = value;
     }
 
     // Parse valid lifetime triplet.
@@ -245,7 +278,7 @@ ClientClassDefParser::parse(ClientClassDictionaryPtr& class_dictionary,
         class_dictionary->addClass(name, match_expr, test, required,
                                    depend_on_known, options, defs,
                                    user_context, next_server, sname, filename,
-                                   valid_lft, preferred_lft);
+                                   valid_lft, preferred_lft, is_template, offer_lft);
     } catch (const std::exception& ex) {
         std::ostringstream s;
         s << "Can't add class: " << ex.what();
@@ -273,8 +306,8 @@ ClientClassDefParser::checkParametersSupported(const ConstElementPtr& class_def_
                                                       "only-if-required",
                                                       "valid-lifetime",
                                                       "min-valid-lifetime",
-                                                      "max-valid-lifetime" };
-
+                                                      "max-valid-lifetime",
+                                                      "template-test"};
 
     // The v4 client class supports additional parameters.
     static std::set<std::string> supported_params_v4 = { "option-def",

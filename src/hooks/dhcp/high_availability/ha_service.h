@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -470,13 +470,20 @@ protected:
     bool shouldPartnerDown() const;
 
     /// @brief Indicates if the server should transition to the terminated
-    /// state as a result of high clock skew.
+    /// state.
     ///
-    /// It indicates that the server should transition to the terminated
-    /// state because of the clock skew being too high. If the clock skew is
-    /// is higher than 30 seconds but lower than 60 seconds this method
-    /// only logs a warning. In case, the clock skew exceeds 60 seconds, this
-    /// method logs a warning and returns true.
+    /// There are two reasons for the server to transition to the terminated
+    /// state. First, when the clock skew being too high. Second, when the
+    /// server monitors rejected lease updates and the maximum configured
+    /// rejected updates have been exceeded.
+    ///
+    /// If the clock skew is is higher than 30 seconds but lower than 60
+    /// seconds this method only logs a warning. In case, the clock skew
+    /// exceeds 60 seconds, this method logs a warning and returns true.
+    ///
+    /// If the clock skew is acceptable the function can cause the transition
+    /// to the terminated state when the number of recorded rejected lease
+    /// updates exceeded the configured threshold.
     ///
     /// @return true if the server should transition to the terminated state,
     /// false otherwise.
@@ -1092,6 +1099,10 @@ protected:
     /// @return Pointer to the response arguments.
     /// @throw CtrlChannelError if response is invalid or contains an error.
     /// @throw CommandUnsupportedError if sent command is unsupported.
+    /// @throw ConflictError if the response comprises the conflict status
+    /// code or it contains an empty status code in response to the
+    /// lease6-bulk-apply and there are leases with the conflict status
+    /// codes listed in the response.
     data::ConstElementPtr verifyAsyncResponse(const http::HttpResponsePtr& response,
                                               int& rcode);
 

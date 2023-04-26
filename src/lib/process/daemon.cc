@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -87,11 +87,10 @@ Daemon::getVerbose() {
 
 void Daemon::loggerInit(const char* name, bool verbose) {
 
-    setenv("KEA_LOGGER_DESTINATION",  "stdout", 0);
+    setenv("KEA_LOGGER_DESTINATION", "stdout", 0);
 
     // Initialize logger system
-    isc::log::initLogger(name, isc::log::DEBUG, isc::log::MAX_DEBUG_LEVEL,
-                         NULL);
+    isc::log::initLogger(name, isc::log::DEBUG, isc::log::MAX_DEBUG_LEVEL, 0);
 
     // Apply default configuration (log INFO or DEBUG to stdout)
     isc::log::setDefaultLoggingOutput(verbose);

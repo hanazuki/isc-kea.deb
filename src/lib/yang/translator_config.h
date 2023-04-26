@@ -8,12 +8,11 @@
 #define ISC_TRANSLATOR_CONFIG_H 1
 
 #include <yang/translator.h>
+#include <yang/translator_class.h>
 #include <yang/translator_control_socket.h>
 #include <yang/translator_database.h>
-#include <yang/translator_class.h>
-#include <yang/translator_shared_network.h>
 #include <yang/translator_logger.h>
-#include <list>
+#include <yang/translator_shared_network.h>
 
 namespace isc {
 namespace yang {
@@ -408,30 +407,27 @@ class TranslatorConfig : virtual public TranslatorControlSocket,
     virtual public TranslatorSharedNetworks,
     virtual public TranslatorLoggers {
 public:
-
     /// @brief Constructor.
     ///
     /// @param session Sysrepo session.
     /// @param model Model name.
-    TranslatorConfig(sysrepo::S_Session session, const std::string& model);
+    TranslatorConfig(sysrepo::Session session, const std::string& model);
 
     /// @brief Destructor.
-    virtual ~TranslatorConfig();
+    virtual ~TranslatorConfig() = default;
 
-    /// @brief Get and translate the whole DHCP server configuration
-    /// from YANG to JSON.
+    /// @brief Translate the whole DHCP server configuration from YANG to JSON.
     ///
     /// @return JSON representation of the config.
-    /// @throw SysrepoError when sysrepo raises an error.
+    /// @throw NetconfError when sysrepo raises an error.
     isc::data::ElementPtr getConfig();
 
-    /// @brief Translate and sets the DHCP server configuration
-    /// from JSON to YANG.
+    /// @brief Translate and set the DHCP server configuration from JSON to YANG.
     ///
     /// Null elem argument removes the config containers.
     ///
     /// @param elem The JSON element.
-    void setConfig(isc::data::ConstElementPtr elem);
+    void setConfig(isc::data::ElementPtr elem);
 
 protected:
     /// @brief getConfig for ietf-dhcpv6-server.
@@ -440,7 +436,7 @@ protected:
     /// only partially and nothing else.
     ///
     /// @return JSON representation of the config.
-    /// @throw SysrepoError when sysrepo raises an error.
+    /// @throw NetconfError when sysrepo raises an error.
     isc::data::ElementPtr getConfigIetf6();
 
     /// @brief delConfig for ietf-dhcpv6-server.
@@ -458,31 +454,32 @@ protected:
     /// @brief getConfig for kea-dhcp4-server.
     ///
     /// @return JSON representation of the config.
-    /// @throw SysrepoError when sysrepo raises an error.
+    /// @throw NetconfError when sysrepo raises an error.
     isc::data::ElementPtr getConfigKea4();
 
     /// @brief getConfig for kea-dhcp6-server.
     ///
     /// @return JSON representation of the config.
-    /// @throw SysrepoError when sysrepo raises an error.
+    /// @throw NetconfError when sysrepo raises an error.
     isc::data::ElementPtr getConfigKea6();
 
     /// @brief getServer common part for kea-dhcp[46]-server:config.
     ///
-    /// @param xpath The xpath of the server.
+    /// @param data_node the YANG node representing the server configuration
+    ///
     /// @return JSON representation of the server.
-    isc::data::ElementPtr getServerKeaDhcpCommon(const std::string& xpath);
+    isc::data::ElementPtr getServerKeaDhcpCommon(libyang::DataNode const& data_node);
 
     /// @brief getServer for kea-dhcp4-server:config.
     ///
     /// @return JSON representation of the config.
-    /// @throw SysrepoError when sysrepo raises an error.
+    /// @throw NetconfError when sysrepo raises an error.
     isc::data::ElementPtr getServerKeaDhcp4();
 
     /// @brief getServer for kea-dhcp6-server:config.
     ///
     /// @return JSON representation of the config.
-    /// @throw SysrepoError when sysrepo raises an error.
+    /// @throw NetconfError when sysrepo raises an error.
     isc::data::ElementPtr getServerKeaDhcp6();
 
     /// @brief delConfig for kea-dhcp[46]-server.
@@ -505,31 +502,42 @@ protected:
     void setServerKeaDhcpCommon(const std::string& xpath,
                                 isc::data::ConstElementPtr elem);
 
-    isc::data::ElementPtr getHook(const std::string& xpath);
+    isc::data::ElementPtr getHook(libyang::DataNode const& data_node);
 
     /// @brief Retrieves hooks configuration from sysrepo.
     ///
-    /// @param xpath path to hooks configuration.
+    /// @param data_node the YANG node representing the hook libraries
+    ///
     /// @return ElementList with hooks configuration.
-    isc::data::ElementPtr getHooksKea(const std::string& xpath);
+    isc::data::ElementPtr getHooksKea(libyang::DataNode const& data_node);
 
     /// @brief Retrieves expired leases processing parameters from sysrepo.
     ///
-    /// @param xpath path to expired leases configuration.
+    /// @param data_node the YANG node representing the configuration for expired lease processing
+    ///
     /// @return ElementList with expired leases configuration.
-    isc::data::ElementPtr getExpiredKea(const std::string& xpath);
+    isc::data::ElementPtr getExpiredKea(libyang::DataNode const& data_node);
 
     /// @brief Retrieves DDNS configuration from sysrepo
     ///
-    /// @param xpath path to dhcp-ddns configuration.
+    /// @param data_node the YANG node representing dhcp-ddns configuration
+    ///
     /// @return ElementList with dhcp-ddns configuration.
-    isc::data::ElementPtr getDdnsKea(const std::string& xpath);
+    isc::data::ElementPtr getDdnsKea(libyang::DataNode const& data_node);
 
     /// @brief Retrieves configuration control from sysrepo.
     ///
-    /// @param xpath path to configuration control.
+    /// @param data_node the YANG node representing configuration control
+    ///
     /// @return ElementMap with configuration control.
-    isc::data::ElementPtr getConfigControlKea(const std::string& xpath);
+    isc::data::ElementPtr getConfigControlKea(libyang::DataNode const& data_node);
+
+    /// @brief Retrieves interfaces configuration from sysrepo.
+    ///
+    /// @param data_node the YANG node representing the interfaces configuration
+    ///
+    /// @return ElementMap with configuration control.
+    isc::data::ElementPtr getInterfacesKea(libyang::DataNode const& data_node);
 
     /// @brief setServer for kea-dhcp4-server:config.
     ///
@@ -540,9 +548,9 @@ protected:
     ///
     /// @param elem The JSON element.
     void setServerKeaDhcp6(isc::data::ConstElementPtr elem);
-};
+};  // TranslatorConfig
 
-}  // end of namespace isc::yang
-}  // end of namespace isc
+}  // namespace yang
+}  // namespace isc
 
-#endif // ISC_TRANSLATOR_CONFIG_H
+#endif  // ISC_TRANSLATOR_CONFIG_H

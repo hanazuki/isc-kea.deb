@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -398,7 +398,7 @@ ProcessSpawnImpl::waitForProcess(int) {
 void
 ProcessSpawnImpl::clearState(const pid_t pid) {
     if (isRunning(pid)) {
-        isc_throw(InvalidOperation, "unable to remove the status for the"
+        isc_throw(InvalidOperation, "unable to remove the status for the "
                   "process (pid: " << pid << ") which is still running");
     }
     lock_guard<std::mutex> lk(mutex_);

@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2019 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -228,7 +228,7 @@ TEST_F(SimpleParser6Test, optionDataDefaults6) {
     ASSERT_TRUE(option);
 
     // we should have appropriate default value set. See
-    // SimpleParser4::OPTION4_DEFAULTS for a list of default values.
+    // SimpleParser6::OPTION6_DEFAULTS for a list of default values.
     checkStringValue(option, "space", "dhcp6");
     checkBoolValue(option, "csv-format", true);
 }
@@ -251,12 +251,11 @@ TEST_F(SimpleParser6Test, optionDefDefaults6) {
     ASSERT_TRUE(def);
 
     // we should have appropriate default value set. See
-    // SimpleParser4::OPTION4_DEFAULTS for a list of default values.
+    // SimpleParser6::OPTION6_DEFAULTS for a list of default values.
     checkStringValue(def, "record-types", "");
     checkStringValue(def, "space", "dhcp6");
     checkStringValue(def, "encapsulate", "");
     checkBoolValue(def, "array", false);
 }
 
-
-};
+}

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -55,6 +55,7 @@ public:
     /// in the DHCPv6 options have 2 byte long length fields, the tuples carried
     /// in DHCPv4 options have 1 byte long length fields.
     enum LengthFieldType {
+        LENGTH_EMPTY = -1,
         LENGTH_1_BYTE,
         LENGTH_2_BYTES
     };

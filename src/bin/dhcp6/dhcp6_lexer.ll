@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2016-2023 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -518,6 +518,15 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
     }
 }
 
+\"extended-info-checks\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::SANITY_CHECKS:
+        return isc::dhcp::Dhcp6Parser::make_EXTENDED_INFO_CHECKS(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("extended-info-checks", driver.loc_);
+    }
+}
+
 \"lease-database\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser6Context::DHCP6:
@@ -696,6 +705,39 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp6Parser::make_CONNECT_TIMEOUT(driver.loc_);
     default:
         return isc::dhcp::Dhcp6Parser::make_STRING("connect-timeout", driver.loc_);
+    }
+}
+
+\"read-timeout\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::LEASE_DATABASE:
+    case isc::dhcp::Parser6Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser6Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp6Parser::make_READ_TIMEOUT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("read-timeout", driver.loc_);
+    }
+}
+
+\"write-timeout\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::LEASE_DATABASE:
+    case isc::dhcp::Parser6Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser6Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp6Parser::make_WRITE_TIMEOUT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("write-timeout", driver.loc_);
+    }
+}
+
+\"tcp-user-timeout\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::LEASE_DATABASE:
+    case isc::dhcp::Parser6Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser6Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp6Parser::make_TCP_USER_TIMEOUT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("tcp-user-timeout", driver.loc_);
     }
 }
 
@@ -933,6 +975,28 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
     }
 }
 
+\"allocator\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::DHCP6:
+    case isc::dhcp::Parser6Context::SUBNET6:
+    case isc::dhcp::Parser6Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp6Parser::make_ALLOCATOR(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("allocator", driver.loc_);
+    }
+}
+
+\"pd-allocator\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::DHCP6:
+    case isc::dhcp::Parser6Context::SUBNET6:
+    case isc::dhcp::Parser6Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp6Parser::make_PD_ALLOCATOR(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("pd-allocator", driver.loc_);
+    }
+}
+
 \"statistic-default-sample-count\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser6Context::DHCP6:
@@ -1039,6 +1103,16 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
     }
 }
 
+\"ddns-ttl-percent\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::DHCP6:
+    case isc::dhcp::Parser6Context::SUBNET6:
+    case isc::dhcp::Parser6Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp6Parser::make_DDNS_TTL_PERCENT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("ddns-ttl-percent", driver.loc_);
+    }
+}
 
 \"subnet6\" {
     switch(driver.ctx_) {
@@ -1125,6 +1199,15 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp6Parser::make_ALWAYS_SEND(driver.loc_);
     default:
         return isc::dhcp::Dhcp6Parser::make_STRING("always-send", driver.loc_);
+    }
+}
+
+\"never-send\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::OPTION_DATA:
+        return isc::dhcp::Dhcp6Parser::make_NEVER_SEND(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("never-send", driver.loc_);
     }
 }
 
@@ -1599,6 +1682,15 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp6Parser::make_TEST(driver.loc_);
     default:
         return isc::dhcp::Dhcp6Parser::make_STRING("test", driver.loc_);
+    }
+}
+
+\"template-test\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser6Context::CLIENT_CLASSES:
+        return isc::dhcp::Dhcp6Parser::make_TEMPLATE_TEST(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp6Parser::make_STRING("template-test", driver.loc_);
     }
 }
 

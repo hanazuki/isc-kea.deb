@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -47,7 +47,9 @@ SrvConfig::SrvConfig()
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
       d2_client_config_(new D2ClientConfig()),
       configured_globals_(new CfgGlobals()), cfg_consist_(new CfgConsistency()),
-      lenient_option_parsing_(false), reservations_lookup_first_(false) {
+      lenient_option_parsing_(false), ignore_dhcp_server_identifier_(false),
+      ignore_rai_link_selection_(false), exclude_first_last_24_(false),
+      reservations_lookup_first_(false) {
 }
 
 SrvConfig::SrvConfig(const uint32_t sequence)
@@ -65,7 +67,9 @@ SrvConfig::SrvConfig(const uint32_t sequence)
       decline_timer_(0), echo_v4_client_id_(true), dhcp4o6_port_(0),
       d2_client_config_(new D2ClientConfig()),
       configured_globals_(new CfgGlobals()), cfg_consist_(new CfgConsistency()),
-      lenient_option_parsing_(false), reservations_lookup_first_(false) {
+      lenient_option_parsing_(false), ignore_dhcp_server_identifier_(false),
+      ignore_rai_link_selection_(false), exclude_first_last_24_(false),
+      reservations_lookup_first_(false) {
 }
 
 std::string
@@ -630,6 +634,24 @@ SrvConfig::toElement() const {
         }
     }
 
+    // Set compatibility flags.
+    ElementPtr compatibility = Element::createMap();
+    if (getLenientOptionParsing()) {
+        compatibility->set("lenient-option-parsing", Element::create(true));
+    }
+    if (getIgnoreServerIdentifier()) {
+        compatibility->set("ignore-dhcp-server-identifier", Element::create(true));
+    }
+    if (getIgnoreRAILinkSelection()) {
+        compatibility->set("ignore-rai-link-selection", Element::create(true));
+    }
+    if (getExcludeFirstLast24()) {
+        compatibility->set("exclude-first-last-24", Element::create(true));
+    }
+    if (compatibility->size() > 0) {
+        dhcp->set("compatibility", compatibility);
+    }
+
     // Set decline-probation-period
     dhcp->set("decline-probation-period",
               Element::create(static_cast<long long>(decline_timer_)));
@@ -1007,6 +1029,15 @@ DdnsParams::getUseConflictResolution() const {
     }
 
     return (subnet_->getDdnsUseConflictResolution().get());
+}
+
+util::Optional<double>
+DdnsParams::getTtlPercent() const {
+    if (!subnet_) {
+        return (util::Optional<double>());
+    }
+
+    return (subnet_->getDdnsTtlPercent());
 }
 
 } // namespace dhcp

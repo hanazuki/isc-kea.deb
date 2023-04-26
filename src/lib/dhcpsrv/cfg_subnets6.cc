@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -382,6 +382,24 @@ CfgSubnets6::getSubnet(const SubnetID id) const {
     return (Subnet6Ptr());
 }
 
+SubnetIDSet
+CfgSubnets6::getLinks(const IOAddress& link_addr, uint8_t& link_len) const {
+    SubnetIDSet links;
+    bool link_len_set = false;
+    for (auto const& subnet : subnets_) {
+        if (!subnet->inRange(link_addr)) {
+            continue;
+        }
+        uint8_t plen = subnet->get().second;
+        if (!link_len_set || (plen < link_len)) {
+            link_len_set = true;
+            link_len = plen;
+        }
+        links.insert(subnet->getID());
+    }
+    return (links);
+}
+
 void
 CfgSubnets6::removeStatistics() {
     using namespace isc::stats;
@@ -452,6 +470,13 @@ CfgSubnets6::updateStatistics() {
     // Only recount the stats if we have subnets.
     if (subnets_.begin() != subnets_.end()) {
         LeaseMgrFactory::instance().recountLeaseStats6();
+    }
+}
+
+void
+CfgSubnets6::initAllocatorsAfterConfigure() {
+    for (auto subnet : subnets_) {
+        subnet->initAllocatorsAfterConfigure();
     }
 }
 

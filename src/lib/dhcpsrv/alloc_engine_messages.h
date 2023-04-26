@@ -8,6 +8,8 @@
 namespace isc {
 namespace dhcp {
 
+extern const isc::log::MessageID ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS;
+extern const isc::log::MessageID ALLOC_ENGINE_IGNORING_UNSUITABLE_GLOBAL_ADDRESS6;
 extern const isc::log::MessageID ALLOC_ENGINE_LEASE_RECLAIMED;
 extern const isc::log::MessageID ALLOC_ENGINE_REMOVAL_NCR_FAILED;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_ALLOC_ERROR;
@@ -20,6 +22,7 @@ extern const isc::log::MessageID ALLOC_ENGINE_V4_DECLINED_RECOVERED;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_ADDRESS_CONFLICT;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_DISCOVER_HR;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_COMPLETE;
+extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_FAILED;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_SLOW;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_START;
 extern const isc::log::MessageID ALLOC_ENGINE_V4_LEASES_RECLAMATION_TIMEOUT;
@@ -65,6 +68,7 @@ extern const isc::log::MessageID ALLOC_ENGINE_V6_HINT_RESERVED;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_HR_ADDR_GRANTED;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_HR_PREFIX_GRANTED;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_COMPLETE;
+extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_FAILED;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_SLOW;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_START;
 extern const isc::log::MessageID ALLOC_ENGINE_V6_LEASES_RECLAMATION_TIMEOUT;

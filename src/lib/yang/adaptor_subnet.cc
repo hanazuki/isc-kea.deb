@@ -6,6 +6,7 @@
 
 #include <config.h>
 
+#include <dhcpsrv/subnet_id.h>
 #include <yang/adaptor_subnet.h>
 
 using namespace std;
@@ -14,12 +15,6 @@ using namespace isc::dhcp;
 
 namespace isc {
 namespace yang {
-
-AdaptorSubnet::AdaptorSubnet() {
-}
-
-AdaptorSubnet::~AdaptorSubnet() {
-}
 
 bool
 AdaptorSubnet::collectID(ConstElementPtr subnet, SubnetIDSet& set) {
@@ -69,5 +64,5 @@ AdaptorSubnet::updateRelay(ElementPtr subnet) {
     }
 }
 
-}  // end of namespace isc::yang
-}  // end of namespace isc
+}  // namespace yang
+}  // namespace isc

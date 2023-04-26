@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -132,7 +132,7 @@ void Dhcp6to4Ipc::handler(int /* fd */) {
                                        *callout_handle);
 
             // Callouts decided to skip the next processing step. The next
-            // processing step would to parse the packet, so skip at this
+            // processing step would be to parse the packet, so skip at this
             // stage means drop.
             if ((callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP) ||
                 (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_DROP)) {

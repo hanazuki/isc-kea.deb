@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -20,8 +20,15 @@
 #include <dhcpsrv/d2_client_cfg.h>
 #include <util/triplet.h>
 #include <util/optional.h>
+
+#include <boost/multi_index/hashed_index.hpp>
+#include <boost/multi_index/identity.hpp>
+#include <boost/multi_index/indexed_by.hpp>
+#include <boost/multi_index/sequenced_index.hpp>
+#include <boost/multi_index_container.hpp>
 #include <boost/shared_ptr.hpp>
 #include <boost/weak_ptr.hpp>
+
 #include <cstdint>
 #include <functional>
 #include <string>
@@ -35,9 +42,31 @@ inline void unused(Args const& ...) {}
 namespace isc {
 namespace dhcp {
 
-/// List of IOAddresses
-typedef std::vector<isc::asiolink::IOAddress> IOAddressList;
+/// @brief Tag for the list of IO addresses as a list.
+struct IOAddressListListTag { };
 
+/// @brief Tag for the list of IO addresses as a set.
+struct IOAddressListSetTag { };
+
+/// @brief List of IO addresses
+typedef boost::multi_index_container<
+    // Multi index container holds IO addresses.
+    asiolink::IOAddress,
+    // Indexes.
+    boost::multi_index::indexed_by<
+        // First and default index allows for in order iteration.
+        boost::multi_index::sequenced<
+            boost::multi_index::tag<IOAddressListListTag>
+        >,
+        // Second index allows for checking existence.
+        boost::multi_index::hashed_unique<
+            boost::multi_index::tag<IOAddressListSetTag>,
+            boost::multi_index::identity<asiolink::IOAddress>
+        >
+    >
+> IOAddressList;
+
+// @brief Forward declaration of the Network class.
 class Network;
 
 /// @brief Pointer to the @ref Network object.
@@ -190,7 +219,7 @@ public:
           ddns_replace_client_name_mode_(), ddns_generated_prefix_(), ddns_qualifying_suffix_(),
           hostname_char_set_(), hostname_char_replacement_(), store_extended_info_(),
           cache_threshold_(), cache_max_age_(), ddns_update_on_renew_(),
-          ddns_use_conflict_resolution_() {
+          ddns_use_conflict_resolution_(), ddns_ttl_percent_() {
     }
 
     /// @brief Virtual destructor.
@@ -634,6 +663,23 @@ public:
         ddns_qualifying_suffix_ = ddns_qualifying_suffix;
     }
 
+    /// @brief Returns ddns-ttl-percent
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<double>
+    getDdnsTtlPercent(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getDdnsTtlPercent,
+                                     ddns_ttl_percent_, inheritance,
+                                     CfgGlobals::DDNS_TTL_PERCENT));
+    }
+
+    /// @brief Sets new ddns-ttl-percent
+    ///
+    /// @param ddns_ttl_percent New value to use.
+    void setDdnsTtlPercent(const util::Optional<double>& ddns_ttl_percent) {
+        ddns_ttl_percent_ = ddns_ttl_percent;
+    }
+
     /// @brief Return the char set regexp used to sanitize client hostnames.
     util::Optional<std::string>
     getHostnameCharSet(const Inheritance& inheritance = Inheritance::ALL) const {
@@ -750,10 +796,39 @@ public:
         ddns_use_conflict_resolution_ = ddns_use_conflict_resolution;
     }
 
+    /// @brief Returns allocator type.
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<std::string>
+    getAllocatorType(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network>(&Network::getAllocatorType,
+                                     allocator_type_,
+                                     inheritance,
+                                     CfgGlobals::ALLOCATOR));
+    }
+
+    /// @brief Sets new allocator type.
+    ///
+    /// It doesn't set the actual allocator instance. It merely remembers the
+    /// value specified in the configuration, so it can be output in the
+    /// @c toElement call.
+    ///
+    /// @param allocator_type new allocator type to use.
+    void setAllocatorType(const util::Optional<std::string>& allocator_type) {
+        allocator_type_ = allocator_type;
+    }
+
     /// @brief Unparses network object.
     ///
     /// @return A pointer to unparsed network configuration.
     virtual data::ElementPtr toElement() const;
+
+    /// @brief Generates an identifying label for logging.
+    ///
+    /// @return string containing the label
+    virtual std::string getLabel() const {
+        return ("base-network");
+    }
 
 protected:
 
@@ -1134,6 +1209,12 @@ protected:
     /// @brief Used to to tell kea-dhcp-ddns whether or not to use conflict resolution.
     util::Optional<bool> ddns_use_conflict_resolution_;
 
+    /// @brief Allocator used for IP address allocations.
+    util::Optional<std::string> allocator_type_;
+
+    /// @brief Percentage of the lease lifetime to use for DNS TTL.
+    util::Optional<double> ddns_ttl_percent_;
+
     /// @brief Pointer to another network that this network belongs to.
     ///
     /// The most common case is that this instance is a subnet which belongs
@@ -1154,7 +1235,7 @@ public:
     /// @brief Constructor.
     Network4()
         : Network(), match_client_id_(true, true), authoritative_(),
-          siaddr_(), sname_(), filename_() {
+          siaddr_(), sname_(), filename_(), offer_lft_() {
     }
 
     /// @brief Returns the flag indicating if the client identifiers should
@@ -1249,6 +1330,24 @@ public:
                                       CfgGlobals::BOOT_FILE_NAME));
     }
 
+    /// @brief Sets offer lifetime for the network.
+    ///
+    /// @param offer_lft the offer lifetime assigned to the class (may be empty if not defined)
+    void setOfferLft(const util::Optional<uint32_t>& offer_lft) {
+        offer_lft_ = offer_lft;
+    }
+
+    /// @brief Returns offer lifetime for the network
+    ///
+    /// @param inheritance inheritance mode to be used.
+    /// @return offer lifetime value
+    util::Optional<uint32_t>
+    getOfferLft(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network4>(&Network4::getOfferLft, offer_lft_,
+                                      inheritance,
+                                      CfgGlobals::OFFER_LIFETIME));
+    }
+
     /// @brief Unparses network object.
     ///
     /// @return A pointer to unparsed network configuration.
@@ -1269,15 +1368,26 @@ private:
     /// @brief Should requests for unknown IP addresses be rejected.
     util::Optional<bool> authoritative_;
 
-    /// @brief siaddr value for this subnet
+    /// @brief siaddr value for this network
     util::Optional<asiolink::IOAddress> siaddr_;
 
-    /// @brief server hostname for this subnet
+    /// @brief server hostname for this network
     util::Optional<std::string> sname_;
 
-    /// @brief boot file name for this subnet
+    /// @brief boot file name for this network
     util::Optional<std::string> filename_;
+
+    /// @brief offer lifetime for this network
+    util::Optional<uint32_t> offer_lft_;
 };
+
+/// @brief Pointer to the @ref Network4 object.
+typedef boost::shared_ptr<Network4> Network4Ptr;
+
+class Network6;
+
+/// @brief Pointer to the @ref Network6 object.
+typedef boost::shared_ptr<Network6> Network6Ptr;
 
 /// @brief Specialization of the @ref Network object for DHCPv6 case.
 class Network6 : public virtual Network {
@@ -1346,6 +1456,28 @@ public:
         rapid_commit_ = rapid_commit;
     };
 
+    /// @brief Returns allocator type for prefix delegation.
+    ///
+    /// @param inheritance inheritance mode to be used.
+    util::Optional<std::string>
+    getPdAllocatorType(const Inheritance& inheritance = Inheritance::ALL) const {
+        return (getProperty<Network6>(&Network6::getPdAllocatorType,
+                                      pd_allocator_type_,
+                                      inheritance,
+                                      CfgGlobals::PD_ALLOCATOR));
+    }
+
+    /// @brief Sets new allocator type for prefix delegation.
+    ///
+    /// It doesn't set the actual allocator instance. It merely remembers the
+    /// value specified in the configuration, so it can be output in the
+    /// @c toElement call.
+    ///
+    /// @param allocator_type new allocator type to use.
+    void setPdAllocatorType(const util::Optional<std::string>& allocator_type) {
+        pd_allocator_type_ = allocator_type;
+    }
+
     /// @brief Unparses network object.
     ///
     /// @return A pointer to unparsed network configuration.
@@ -1365,6 +1497,9 @@ private:
     /// It's default value is false, which indicates that the Rapid
     /// Commit is disabled for the subnet.
     util::Optional<bool> rapid_commit_;
+
+    /// @brief Allocator used for prefix delegation.
+    util::Optional<std::string> pd_allocator_type_;
 };
 
 } // end of namespace isc::dhcp

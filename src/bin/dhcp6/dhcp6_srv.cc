@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -53,7 +53,7 @@
 #include <util/range_utilities.h>
 #include <log/logger.h>
 #include <cryptolink/cryptolink.h>
-#include <cfgrpt/config_report.h>
+#include <process/cfgrpt/config_report.h>
 
 #ifdef HAVE_MYSQL
 #include <dhcpsrv/mysql_lease_mgr.h>
@@ -76,6 +76,7 @@
 #include <iomanip>
 #include <fstream>
 #include <sstream>
+#include <map>
 #include <set>
 
 using namespace isc;
@@ -239,7 +240,7 @@ Dhcpv6Srv::Dhcpv6Srv(uint16_t server_port, uint16_t client_port)
         // Instantiate allocation engine. The number of allocation attempts equal
         // to zero indicates that the allocation engine will use the number of
         // attempts depending on the pool size.
-        alloc_engine_.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE, 0));
+        alloc_engine_.reset(new AllocEngine(0));
 
         /// @todo call loadLibraries() when handling configuration changes
 
@@ -568,6 +569,13 @@ Dhcpv6Srv::initContext(const Pkt6Ptr& pkt,
     // Perform second pass of classification.
     evaluateClasses(pkt, true);
 
+    const ClientClasses& classes = pkt->getClasses();
+    if (!classes.empty()) {
+        LOG_DEBUG(dhcp6_logger, DBG_DHCP6_BASIC, DHCP6_CLASS_ASSIGNED)
+            .arg(pkt->getLabel())
+            .arg(classes.toText());
+    }
+
     // Check the DROP special class.
     if (pkt->inClass("DROP")) {
         LOG_DEBUG(packet6_logger, DBGLVL_PKT_HANDLING, DHCP6_PACKET_DROP_DROP_CLASS2)
@@ -718,6 +726,9 @@ Dhcpv6Srv::processPacketAndSendResponse(Pkt6Ptr& query) {
 
 void
 Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
+    // All packets belong to ALL.
+    query->addClass("ALL");
+
     bool skip_unpack = false;
 
     // The packet has just been received so contains the uninterpreted wire
@@ -741,7 +752,7 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
         HooksManager::callCallouts(Hooks.hook_index_buffer6_receive_, *callout_handle);
 
         // Callouts decided to skip the next processing step. The next
-        // processing step would to parse the packet, so skip at this
+        // processing step would be to parse the packet, so skip at this
         // stage means that callouts did the parsing already, so server
         // should skip parsing.
         if (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP) {
@@ -860,7 +871,7 @@ Dhcpv6Srv::processPacket(Pkt6Ptr& query, Pkt6Ptr& rsp) {
         HooksManager::callCallouts(Hooks.hook_index_pkt6_receive_, *callout_handle);
 
         // Callouts decided to skip the next processing step. The next
-        // processing step would to process the packet, so skip at this
+        // processing step would be to process the packet, so skip at this
         // stage means drop.
         if ((callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP) ||
             (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_DROP)) {
@@ -1109,7 +1120,8 @@ Dhcpv6Srv::processDhcp6Query(Pkt6Ptr& query, Pkt6Ptr& rsp) {
                     bool in_new = false;
                     for (auto const& new_lease : ctx.new_leases_) {
                         if ((new_lease->addr_ == old_lease->addr_) &&
-                            (new_lease->prefixlen_ == old_lease->prefixlen_)) {
+                            ((new_lease->type_ != Lease::TYPE_PD) ||
+                             (new_lease->prefixlen_ == old_lease->prefixlen_))) {
                             in_new = true;
                             break;
                         }
@@ -1250,7 +1262,7 @@ Dhcpv6Srv::processPacketPktSend(hooks::CalloutHandlePtr& callout_handle,
         HooksManager::callCallouts(Hooks.hook_index_pkt6_send_, *callout_handle);
 
         // Callouts decided to skip the next processing step. The next
-        // processing step would to pack the packet (create wire data).
+        // processing step would be to pack the packet (create wire data).
         // That step will be skipped if any callout sets skip flag.
         // It essentially means that the callout already did packing,
         // so the server does not have to do it again.
@@ -1311,7 +1323,7 @@ Dhcpv6Srv::processPacketBufferSend(CalloutHandlePtr& callout_handle,
                                        *callout_handle);
 
             // Callouts decided to skip the next processing step. The next
-            // processing step would to parse the packet, so skip at this
+            // processing step would be to parse the packet, so skip at this
             // stage means drop.
             if ((callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP) ||
                 (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_DROP)) {
@@ -1412,15 +1424,13 @@ Dhcpv6Srv::buildCfgOptionList(const Pkt6Ptr& question,
                 co_list.push_back(pool->getCfgOption());
             }
         }
-    };
 
-    if (ctx.subnet_) {
-        // Next, subnet configured options.
+        // Thirdly, subnet configured options.
         if (!ctx.subnet_->getCfgOption()->empty()) {
             co_list.push_back(ctx.subnet_->getCfgOption());
         }
 
-        // Then, shared network specific options.
+        // Fourthly, shared network specific options.
         SharedNetwork6Ptr network;
         ctx.subnet_->getSharedNetwork(network);
         if (network && !network->getCfgOption()->empty()) {
@@ -1463,55 +1473,159 @@ Dhcpv6Srv::buildCfgOptionList(const Pkt6Ptr& question,
 void
 Dhcpv6Srv::appendRequestedOptions(const Pkt6Ptr& question, Pkt6Ptr& answer,
                                   const CfgOptionList& co_list) {
-
     // Unlikely short cut
     if (co_list.empty()) {
         return;
     }
 
-    std::vector<uint16_t> requested_opts;
+    set<uint16_t> requested_opts;
 
     // Client requests some options using ORO option. Try to
     // get this option from client's message.
-    boost::shared_ptr<OptionIntArray<uint16_t> > option_oro =
-        boost::dynamic_pointer_cast<OptionIntArray<uint16_t> >
-        (question->getOption(D6O_ORO));
+    OptionUint16ArrayPtr option_oro = boost::dynamic_pointer_cast<
+        OptionUint16Array>(question->getOption(D6O_ORO));
 
     // Get the list of options that client requested.
     if (option_oro) {
-        requested_opts = option_oro->getValues();
+        for (uint16_t code : option_oro->getValues()) {
+            static_cast<void>(requested_opts.insert(code));
+        }
     }
-    // Iterate on the configured option list to add persistent options
-    for (CfgOptionList::const_iterator copts = co_list.begin();
-         copts != co_list.end(); ++copts) {
-        const OptionContainerPtr& opts = (*copts)->getAll(DHCP6_OPTION_SPACE);
+
+    set<uint16_t> cancelled_opts;
+
+    // Iterate on the configured option list to add persistent and
+    // cancelled options.
+    for (auto const& copts : co_list) {
+        const OptionContainerPtr& opts = copts->getAll(DHCP6_OPTION_SPACE);
         if (!opts) {
             continue;
         }
-        // Get persistent options
-        const OptionContainerPersistIndex& idx = opts->get<2>();
-        const OptionContainerPersistRange& range = idx.equal_range(true);
-        for (OptionContainerPersistIndex::const_iterator desc = range.first;
-             desc != range.second; ++desc) {
-            // Add the persistent option code to requested options
+        // Get persistent options.
+        const OptionContainerPersistIndex& pidx = opts->get<2>();
+        const OptionContainerPersistRange& prange = pidx.equal_range(true);
+        for (OptionContainerPersistIndex::const_iterator desc = prange.first;
+             desc != prange.second; ++desc) {
+            // Add the persistent option code to requested options.
             if (desc->option_) {
-                requested_opts.push_back(desc->option_->getType());
+                uint16_t code = desc->option_->getType();
+                static_cast<void>(requested_opts.insert(code));
+            }
+        }
+        // Get cancelled options.
+        const OptionContainerCancelIndex& cidx = opts->get<5>();
+        const OptionContainerCancelRange& crange = cidx.equal_range(true);
+        for (OptionContainerCancelIndex::const_iterator desc = crange.first;
+             desc != crange.second; ++desc) {
+            // Add the cancelled option code to the cancelled options.
+            if (desc->option_) {
+                uint16_t code = desc->option_->getType();
+                static_cast<void>(cancelled_opts.insert(code));
             }
         }
     }
 
+    // For each requested option code get the first instance of the option
+    // to be returned to the client.
     for (uint16_t opt : requested_opts) {
+        // Skip if cancelled.
+        if (cancelled_opts.count(opt) > 0) {
+            continue;
+        }
         // Add nothing when it is already there.
+        // Skip special cases: D6O_VENDOR_OPTS
+        if (opt == D6O_VENDOR_OPTS) {
+            continue;
+        }
         if (!answer->getOption(opt)) {
             // Iterate on the configured option list
-            for (CfgOptionList::const_iterator copts = co_list.begin();
-                 copts != co_list.end(); ++copts) {
-                OptionDescriptor desc = (*copts)->get(DHCP6_OPTION_SPACE, opt);
+            for (auto const& copts : co_list) {
+                OptionDescriptor desc = copts->get(DHCP6_OPTION_SPACE, opt);
                 // Got it: add it and jump to the outer loop
                 if (desc.option_) {
                     answer->addOption(desc.option_);
                     break;
                 }
+            }
+        }
+    }
+
+    // Special cases for vendor class and options which are identified
+    // by the code/type and the vendor/enterprise id vs. the code/type only.
+    if ((requested_opts.count(D6O_VENDOR_CLASS) > 0) &&
+        (cancelled_opts.count(D6O_VENDOR_CLASS) == 0)) {
+        // Keep vendor ids which are already in the response to insert
+        // D6O_VENDOR_CLASS options at most once per vendor.
+        set<uint32_t> vendor_ids;
+        // Get what already exists in the response.
+        for (auto opt : answer->getOptions(D6O_VENDOR_CLASS)) {
+            OptionVendorClassPtr vendor_class;
+            vendor_class = boost::dynamic_pointer_cast<OptionVendorClass>(opt.second);
+            if (vendor_class) {
+                uint32_t vendor_id = vendor_class->getVendorId();
+                static_cast<void>(vendor_ids.insert(vendor_id));
+            }
+        }
+        // Iterate on the configured option list.
+        for (auto const& copts : co_list) {
+            for (OptionDescriptor desc : copts->getList(DHCP6_OPTION_SPACE,
+                                                        D6O_VENDOR_CLASS)) {
+                if (!desc.option_) {
+                    continue;
+                }
+                OptionVendorClassPtr vendor_class =
+                    boost::dynamic_pointer_cast<OptionVendorClass>(desc.option_);
+                if (!vendor_class) {
+                    continue;
+                }
+                // Is the vendor id already in the response?
+                uint32_t vendor_id = vendor_class->getVendorId();
+                if (vendor_ids.count(vendor_id) > 0) {
+                    continue;
+                }
+                // Got it: add it.
+                answer->addOption(desc.option_);
+                static_cast<void>(vendor_ids.insert(vendor_id));
+            }
+        }
+    }
+
+    if ((requested_opts.count(D6O_VENDOR_OPTS) > 0) &&
+        (cancelled_opts.count(D6O_VENDOR_OPTS) == 0)) {
+        // Keep vendor ids which are already in the response to insert
+        // D6O_VENDOR_OPTS options at most once per vendor.
+        set<uint32_t> vendor_ids;
+        // Get what already exists in the response.
+        for (auto opt : answer->getOptions(D6O_VENDOR_OPTS)) {
+            OptionVendorPtr vendor_opts;
+            vendor_opts = boost::dynamic_pointer_cast<OptionVendor>(opt.second);
+            if (vendor_opts) {
+                uint32_t vendor_id = vendor_opts->getVendorId();
+                static_cast<void>(vendor_ids.insert(vendor_id));
+            }
+        }
+        // Iterate on the configured option list
+        for (auto const& copts : co_list) {
+            for (OptionDescriptor desc : copts->getList(DHCP6_OPTION_SPACE,
+                                                        D6O_VENDOR_OPTS)) {
+                if (!desc.option_) {
+                    continue;
+                }
+                OptionVendorPtr vendor_opts =
+                    boost::dynamic_pointer_cast<OptionVendor>(desc.option_);
+                if (!vendor_opts) {
+                    continue;
+                }
+                // Is the vendor id already in the response?
+                uint32_t vendor_id = vendor_opts->getVendorId();
+                if (vendor_ids.count(vendor_id) > 0) {
+                    continue;
+                }
+                // Append a fresh vendor option as the next method should
+                // add suboptions to it.
+                vendor_opts.reset(new OptionVendor(Option::V6, vendor_id));
+                answer->addOption(vendor_opts);
+                static_cast<void>(vendor_ids.insert(vendor_id));
             }
         }
     }
@@ -1534,51 +1648,59 @@ Dhcpv6Srv::appendRequestedVendorOptions(const Pkt6Ptr& question,
         return;
     }
 
-    uint32_t vendor_id = 0;
+    set<uint32_t> vendor_ids;
 
     // The server could have provided the option using client classification or
-    // hooks. If there's a vendor info option in the response already, use that.
-    OptionVendorPtr vendor_rsp(boost::dynamic_pointer_cast<OptionVendor>(
-        answer->getOption(D6O_VENDOR_OPTS)));
-    if (vendor_rsp) {
-        vendor_id = vendor_rsp->getVendorId();
+    // hooks. If there're vendor info options in the response already, use them.
+    map<uint32_t, OptionVendorPtr> vendor_rsps;
+    for (auto opt : answer->getOptions(D6O_VENDOR_OPTS)) {
+        OptionVendorPtr vendor_rsp;
+        vendor_rsp = boost::dynamic_pointer_cast<OptionVendor>(opt.second);
+        if (vendor_rsp) {
+            uint32_t vendor_id = vendor_rsp->getVendorId();
+            vendor_rsps[vendor_id] = vendor_rsp;
+            static_cast<void>(vendor_ids.insert(vendor_id));
+        }
     }
 
-    // Otherwise, try to get the vendor-id from the client packet's
+    // Next, try to get the vendor-id from the client packet's
     // vendor-specific information option (17).
-    OptionVendorPtr vendor_req;
-    if (vendor_id == 0) {
-        vendor_req = boost::dynamic_pointer_cast<OptionVendor>(
-            question->getOption(D6O_VENDOR_OPTS));
+    map<uint32_t, OptionVendorPtr> vendor_reqs;
+    for (auto opt : question->getOptions(D6O_VENDOR_OPTS)) {
+        OptionVendorPtr vendor_req;
+        vendor_req = boost::dynamic_pointer_cast<OptionVendor>(opt.second);
         if (vendor_req) {
-            vendor_id = vendor_req->getVendorId();
+            uint32_t vendor_id = vendor_req->getVendorId();
+            vendor_reqs[vendor_id] = vendor_req;
+            static_cast<void>(vendor_ids.insert(vendor_id));
         }
     }
 
     // Finally, try to get the vendor-id from the client packet's vendor-class
     // option (16).
-    if (vendor_id == 0) {
-        OptionVendorClassPtr vendor_class(
-            boost::dynamic_pointer_cast<OptionVendorClass>(
-                question->getOption(D6O_VENDOR_CLASS)));
+    for (auto opt : question->getOptions(D6O_VENDOR_CLASS)) {
+        OptionVendorClassPtr vendor_class;
+        vendor_class = boost::dynamic_pointer_cast<OptionVendorClass>(opt.second);
         if (vendor_class) {
-            vendor_id = vendor_class->getVendorId();
+            uint32_t vendor_id = vendor_class->getVendorId();
+            static_cast<void>(vendor_ids.insert(vendor_id));
         }
     }
 
     // If there's no vendor option in either request or response, then there's no way
-    // to figure out what the vendor-id value is and we give up.
-    if (vendor_id == 0) {
+    // to figure out what the vendor-id values are and we give up.
+    if (vendor_ids.empty()) {
         return;
     }
 
-    std::vector<uint16_t> requested_opts;
+    map<uint32_t, set<uint16_t> > requested_opts;
 
     // Let's try to get ORO within that vendor-option.
     // This is specific to vendor-id=4491 (Cable Labs). Other vendors may have
     // different policies.
     OptionUint16ArrayPtr oro;
-    if (vendor_id == VENDOR_ID_CABLE_LABS && vendor_req) {
+    if (vendor_reqs.count(VENDOR_ID_CABLE_LABS) > 0) {
+        OptionVendorPtr vendor_req = vendor_reqs[VENDOR_ID_CABLE_LABS];
         OptionPtr oro_generic = vendor_req->getOption(DOCSIS3_V6_ORO);
         if (oro_generic) {
             // Vendor ID 4491 makes Kea look at DOCSIS3_V6_OPTION_DEFINITIONS
@@ -1586,63 +1708,94 @@ Dhcpv6Srv::appendRequestedVendorOptions(const Pkt6Ptr& question,
             // created as an OptionUint16Array, but might not be for other
             // vendor IDs.
             oro = boost::dynamic_pointer_cast<OptionUint16Array>(oro_generic);
-            if (oro) {
-                requested_opts = oro->getValues();
+        }
+        if (oro) {
+            set<uint16_t> oro_req_opts;
+            for (uint16_t code : oro->getValues()) {
+                static_cast<void>(oro_req_opts.insert(code));
             }
+            requested_opts[VENDOR_ID_CABLE_LABS] = oro_req_opts;
         }
     }
 
-    // Iterate on the configured option list to add persistent options
-    for (CfgOptionList::const_iterator copts = co_list.begin();
-         copts != co_list.end(); ++copts) {
-        const OptionContainerPtr& opts = (*copts)->getAll(vendor_id);
-        if (!opts) {
+    map<uint32_t, set<uint16_t> > cancelled_opts;
+
+    // Iterate on the configured option list to add persistent and
+    // cancelled options.
+    for (uint32_t vendor_id : vendor_ids) {
+        for (auto const& copts : co_list) {
+            const OptionContainerPtr& opts = copts->getAll(vendor_id);
+            if (!opts) {
+                continue;
+            }
+            // Get persistent options.
+            const OptionContainerPersistIndex& pidx = opts->get<2>();
+            const OptionContainerPersistRange& prange = pidx.equal_range(true);
+            for (OptionContainerPersistIndex::const_iterator desc = prange.first;
+                 desc != prange.second; ++desc) {
+                if (!desc->option_) {
+                    continue;
+                }
+                // Add the persistent option code to requested options
+                uint16_t code = desc->option_->getType();
+                static_cast<void>(requested_opts[vendor_id].insert(code));
+            }
+            // Get cancelled options.
+            const OptionContainerCancelIndex& cidx = opts->get<5>();
+            const OptionContainerCancelRange& crange = cidx.equal_range(true);
+            for (OptionContainerCancelIndex::const_iterator desc = crange.first;
+                 desc != crange.second; ++desc) {
+                if (!desc->option_) {
+                    continue;
+                }
+                // Add the cancelled option code to cancelled options
+                uint16_t code = desc->option_->getType();
+                static_cast<void>(cancelled_opts[vendor_id].insert(code));
+            }
+        }
+
+        // If there is nothing to add don't do anything with this vendor.
+        // This will explicitly not echo back vendor options from the request
+        // that either correspond to a vendor not known to Kea even if the
+        // option encapsulates data or there are no persistent options
+        // configured for this vendor so Kea does not send any option back.
+        if (requested_opts[vendor_id].empty()) {
             continue;
         }
-        // Get persistent options
-        const OptionContainerPersistIndex& idx = opts->get<2>();
-        const OptionContainerPersistRange& range = idx.equal_range(true);
-        for (OptionContainerPersistIndex::const_iterator desc = range.first;
-             desc != range.second; ++desc) {
-            // Add the persistent option code to requested options
-            if (desc->option_) {
-                requested_opts.push_back(desc->option_->getType());
-            }
-        }
-    }
 
-    // If there is nothing to add don't do anything then.
-    if (requested_opts.empty()) {
-        return;
-    }
-
-    if (!vendor_rsp) {
         // It's possible that the vendor opts option was inserted already
         // by client class or a hook. If that is so, let's use it.
-        vendor_rsp.reset(new OptionVendor(Option::V6, vendor_id));
-    }
+        OptionVendorPtr vendor_rsp;
+        if (vendor_rsps.count(vendor_id) > 0) {
+            vendor_rsp = vendor_rsps[vendor_id];
+        } else {
+            vendor_rsp.reset(new OptionVendor(Option::V6, vendor_id));
+        }
 
-    // Get the list of options that client requested.
-    bool added = false;
+        // Get the list of options that client requested.
+        bool added = false;
 
-    for (uint16_t opt : requested_opts) {
-        if (!vendor_rsp->getOption(opt)) {
-            for (CfgOptionList::const_iterator copts = co_list.begin();
-                 copts != co_list.end(); ++copts) {
-                OptionDescriptor desc = (*copts)->get(vendor_id, opt);
-                if (desc.option_) {
-                    vendor_rsp->addOption(desc.option_);
-                    added = true;
-                    break;
+        for (uint16_t opt : requested_opts[vendor_id]) {
+            if (cancelled_opts[vendor_id].count(opt) > 0) {
+                continue;
+            }
+            if (!vendor_rsp->getOption(opt)) {
+                for (auto const& copts : co_list) {
+                    OptionDescriptor desc = copts->get(vendor_id, opt);
+                    if (desc.option_) {
+                        vendor_rsp->addOption(desc.option_);
+                        added = true;
+                        break;
+                    }
                 }
             }
         }
-    }
 
-    // If we added some sub-options and the vendor opts option is not in
-    // the response already, then add it.
-    if (added && !answer->getOption(D6O_VENDOR_OPTS)) {
-        answer->addOption(vendor_rsp);
+        // If we added some sub-options and the vendor opts option is not in
+        // the response already, then add it.
+        if (added && (vendor_rsps.count(vendor_id) == 0)) {
+            answer->addOption(vendor_rsp);
+        }
     }
 }
 
@@ -2130,7 +2283,9 @@ Dhcpv6Srv::createNameChangeRequests(const Pkt6Ptr& answer,
                                         do_fwd, do_rev,
                                         opt_fqdn->getDomainName(),
                                         iaaddr->getAddress().toText(),
-                                        dhcid, 0, calculateDdnsTtl(iaaddr->getValid()),
+                                        dhcid, 0,
+                                        calculateDdnsTtl(iaaddr->getValid(),
+                                                         ctx.getDdnsParams()->getTtlPercent()),
                                         ctx.getDdnsParams()->getUseConflictResolution()));
         LOG_DEBUG(ddns6_logger, DBG_DHCP6_DETAIL,
                   DHCP6_DDNS_CREATE_ADD_NAME_CHANGE_REQUEST).arg(ncr->toText());
@@ -2334,7 +2489,7 @@ Dhcpv6Srv::assignIA_PD(const Pkt6Ptr& query,
     if (hint_opt) {
         ctx.currentIA().addHint(hint_opt);
     } else {
-        ctx.currentIA().addHint(hint);
+        ctx.currentIA().addHint(hint, 0);
     }
     ctx.currentIA().type_ = Lease::TYPE_PD;
 
@@ -2528,8 +2683,8 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query,
             min_preferred_lft = (*l)->preferred_lft_;
         }
 
-        // Now remove this prefix from the hints list.
-        AllocEngine::Resource hint_type((*l)->addr_, (*l)->prefixlen_);
+        // Now remove this address from the hints list.
+        AllocEngine::Resource hint_type((*l)->addr_);
         hints.erase(std::remove(hints.begin(), hints.end(), hint_type),
                     hints.end());
     }
@@ -2548,7 +2703,7 @@ Dhcpv6Srv::extendIA_NA(const Pkt6Ptr& query,
         }
 
         // Now remove this address from the hints list.
-        AllocEngine::Resource hint_type((*l)->addr_, 128);
+        AllocEngine::Resource hint_type((*l)->addr_);
         hints.erase(std::remove(hints.begin(), hints.end(), hint_type), hints.end());
 
         // If the new FQDN settings have changed for the lease, we need to
@@ -3011,7 +3166,7 @@ Dhcpv6Srv::releaseIA_NA(const DuidPtr& duid, const Pkt6Ptr& query,
         HooksManager::callCallouts(Hooks.hook_index_lease6_release_, *callout_handle);
 
         // Callouts decided to skip the next processing step. The next
-        // processing step would to send the packet, so skip at this
+        // processing step would be to send the packet, so skip at this
         // stage means "drop response".
         if ((callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP) ||
             (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_DROP)) {
@@ -3023,9 +3178,25 @@ Dhcpv6Srv::releaseIA_NA(const DuidPtr& duid, const Pkt6Ptr& query,
 
     // Ok, we've passed all checks. Let's release this address.
     bool success = false; // was the removal operation successful?
+    bool expired = false; // explicitly expired instead of removed?
+    auto expiration_cfg = CfgMgr::instance().getCurrentCfg()->getCfgExpiration();
 
+    // Callout didn't indicate to skip the release process. Let's release
+    // the lease.
     if (!skip) {
-        success = LeaseMgrFactory::instance().deleteLease(lease);
+        // Delete lease only if affinity is disabled.
+        if (expiration_cfg->getFlushReclaimedTimerWaitTime() &&
+            expiration_cfg->getHoldReclaimedTime() &&
+            lease->valid_lft_ != Lease::INFINITY_LFT) {
+            // Expire the lease.
+            lease->valid_lft_ = 0;
+            lease->preferred_lft_ = 0;
+            LeaseMgrFactory::instance().updateLease6(lease);
+            expired = true;
+            success = true;
+        } else {
+            success = LeaseMgrFactory::instance().deleteLease(lease);
+        }
     }
 
     // Here the success should be true if we removed lease successfully
@@ -3053,15 +3224,27 @@ Dhcpv6Srv::releaseIA_NA(const DuidPtr& duid, const Pkt6Ptr& query,
         ia_rsp->addOption(createStatusCode(*query, *ia_rsp, STATUS_Success,
                           "Lease released. Thank you, please come again."));
 
-        // Need to decrease statistic for assigned addresses.
-        StatsMgr::instance().addValue(
-            StatsMgr::generateName("subnet", lease->subnet_id_, "assigned-nas"),
-            static_cast<int64_t>(-1));
+        if (expired) {
+            LOG_INFO(lease6_logger, DHCP6_RELEASE_NA_EXPIRED)
+                .arg(query->getLabel())
+                .arg(lease->addr_.toText())
+                .arg(lease->iaid_);
+        } else {
+            LOG_INFO(lease6_logger, DHCP6_RELEASE_NA_DELETED)
+                .arg(query->getLabel())
+                .arg(lease->addr_.toText())
+                .arg(lease->iaid_);
 
-        // Check if a lease has flags indicating that the FQDN update has
-        // been performed. If so, create NameChangeRequest which removes
-        // the entries.
-        queueNCR(CHG_REMOVE, lease);
+            // Need to decrease statistic for assigned addresses.
+            StatsMgr::instance().addValue(
+                StatsMgr::generateName("subnet", lease->subnet_id_, "assigned-nas"),
+                static_cast<int64_t>(-1));
+
+            // Check if a lease has flags indicating that the FQDN update has
+            // been performed. If so, create NameChangeRequest which removes
+            // the entries.
+            queueNCR(CHG_REMOVE, lease);
+        }
 
         return (ia_rsp);
     }
@@ -3176,20 +3359,38 @@ Dhcpv6Srv::releaseIA_PD(const DuidPtr& duid, const Pkt6Ptr& query,
         // Call all installed callouts
         HooksManager::callCallouts(Hooks.hook_index_lease6_release_, *callout_handle);
 
-        skip = callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP;
+        // Callouts decided to skip the next processing step. The next
+        // processing step would be to send the packet, so skip at this
+        // stage means "drop response".
+        if ((callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP) ||
+            (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_DROP)) {
+            skip = true;
+            LOG_DEBUG(hooks_logger, DBG_DHCP6_HOOKS, DHCP6_HOOK_LEASE6_RELEASE_PD_SKIP)
+                .arg(query->getLabel());
+        }
     }
 
     // Ok, we've passed all checks. Let's release this prefix.
     bool success = false; // was the removal operation successful?
+    bool expired = false; // explicitly expired instead of removed?
+    auto expiration_cfg = CfgMgr::instance().getCurrentCfg()->getCfgExpiration();
 
+    // Callout didn't indicate to skip the release process. Let's release
+    // the lease.
     if (!skip) {
-        success = LeaseMgrFactory::instance().deleteLease(lease);
-    } else {
-        // Callouts decided to skip the next processing step. The next
-        // processing step would to send the packet, so skip at this
-        // stage means "drop response".
-        LOG_DEBUG(hooks_logger, DBG_DHCP6_HOOKS, DHCP6_HOOK_LEASE6_RELEASE_PD_SKIP)
-            .arg(query->getLabel());
+        // Delete lease only if affinity is disabled.
+        if (expiration_cfg->getFlushReclaimedTimerWaitTime() &&
+            expiration_cfg->getHoldReclaimedTime() &&
+            lease->valid_lft_ != Lease::INFINITY_LFT) {
+            // Expire the lease.
+            lease->valid_lft_ = 0;
+            lease->preferred_lft_ = 0;
+            LeaseMgrFactory::instance().updateLease6(lease);
+            expired = true;
+            success = true;
+        } else {
+            success = LeaseMgrFactory::instance().deleteLease(lease);
+        }
     }
 
     // Here the success should be true if we removed lease successfully
@@ -3218,10 +3419,24 @@ Dhcpv6Srv::releaseIA_PD(const DuidPtr& duid, const Pkt6Ptr& query,
         ia_rsp->addOption(createStatusCode(*query, *ia_rsp, STATUS_Success,
                           "Lease released. Thank you, please come again."));
 
-        // Need to decrease statistic for assigned prefixes.
-        StatsMgr::instance().addValue(
-            StatsMgr::generateName("subnet", lease->subnet_id_, "assigned-pds"),
-            static_cast<int64_t>(-1));
+        if (expired) {
+            LOG_INFO(lease6_logger, DHCP6_RELEASE_PD_EXPIRED)
+                .arg(query->getLabel())
+                .arg(lease->addr_.toText())
+                .arg(static_cast<int>(lease->prefixlen_))
+                .arg(lease->iaid_);
+        } else {
+            LOG_INFO(lease6_logger, DHCP6_RELEASE_PD_DELETED)
+                .arg(query->getLabel())
+                .arg(lease->addr_.toText())
+                .arg(static_cast<int>(lease->prefixlen_))
+                .arg(lease->iaid_);
+
+            // Need to decrease statistic for assigned prefixes.
+            StatsMgr::instance().addValue(
+                StatsMgr::generateName("subnet", lease->subnet_id_, "assigned-pds"),
+                static_cast<int64_t>(-1));
+        }
     }
 
     return (ia_rsp);
@@ -3753,7 +3968,7 @@ Dhcpv6Srv::declineLease(const Pkt6Ptr& decline, const Lease6Ptr lease,
                                    *callout_handle);
 
         // Callouts decided to SKIP the next processing step. The next
-        // processing step would to actually decline the lease, so we'll
+        // processing step would be to actually decline the lease, so we'll
         // keep the lease as is.
         if (callout_handle->getStatus() == CalloutHandle::NEXT_STEP_SKIP) {
             LOG_DEBUG(hooks_logger, DBG_DHCP6_DETAIL, DHCP6_HOOK_DECLINE_SKIP)
@@ -3870,35 +4085,32 @@ Dhcpv6Srv::processDhcp4Query(const Pkt6Ptr& dhcp4_query) {
     // the response via Dhcp6To4Ipc.
 }
 
-void Dhcpv6Srv::classifyByVendor(const Pkt6Ptr& pkt, std::string& classes) {
-    OptionVendorClassPtr vclass = boost::dynamic_pointer_cast<
-        OptionVendorClass>(pkt->getOption(D6O_VENDOR_CLASS));
+void Dhcpv6Srv::classifyByVendor(const Pkt6Ptr& pkt) {
+    OptionVendorClassPtr vclass;
+    for (auto opt : pkt->getOptions(D6O_VENDOR_CLASS)) {
+        vclass = boost::dynamic_pointer_cast<OptionVendorClass>(opt.second);
+        if (!vclass || vclass->getTuplesNum() == 0) {
+            continue;
+        }
 
-    if (!vclass || vclass->getTuplesNum() == 0) {
-        return;
-    }
+        if (vclass->hasTuple(DOCSIS3_CLASS_MODEM)) {
+            pkt->addClass(VENDOR_CLASS_PREFIX + DOCSIS3_CLASS_MODEM);
 
-    if (vclass->hasTuple(DOCSIS3_CLASS_MODEM)) {
-        pkt->addClass(VENDOR_CLASS_PREFIX + DOCSIS3_CLASS_MODEM);
-        classes += VENDOR_CLASS_PREFIX + DOCSIS3_CLASS_MODEM + " ";
+        } else if (vclass->hasTuple(DOCSIS3_CLASS_EROUTER)) {
+            pkt->addClass(VENDOR_CLASS_PREFIX + DOCSIS3_CLASS_EROUTER);
 
-    } else if (vclass->hasTuple(DOCSIS3_CLASS_EROUTER)) {
-        pkt->addClass(VENDOR_CLASS_PREFIX + DOCSIS3_CLASS_EROUTER);
-        classes += VENDOR_CLASS_PREFIX + DOCSIS3_CLASS_EROUTER + " ";
-
-    } else {
-        pkt->addClass(VENDOR_CLASS_PREFIX + vclass->getTuple(0).getText());
-        classes + VENDOR_CLASS_PREFIX + vclass->getTuple(0).getText() + " ";
+        } else {
+            pkt->addClass(VENDOR_CLASS_PREFIX + vclass->getTuple(0).getText());
+        }
     }
 }
 
 void Dhcpv6Srv::classifyPacket(const Pkt6Ptr& pkt) {
-    // All packets belongs to ALL
+    // All packets belong to ALL.
     pkt->addClass("ALL");
-    string classes = "ALL ";
 
     // First: built-in vendor class processing
-    classifyByVendor(pkt, classes);
+    classifyByVendor(pkt);
 
     // Run match expressions on classes not depending on KNOWN/UNKNOWN.
     evaluateClasses(pkt, false);
@@ -3925,30 +4137,7 @@ void Dhcpv6Srv::evaluateClasses(const Pkt6Ptr& pkt, bool depend_on_known) {
         if ((*it)->getDependOnKnown() != depend_on_known) {
             continue;
         }
-        // Evaluate the expression which can return false (no match),
-        // true (match) or raise an exception (error)
-        try {
-            bool status = evaluateBool(*expr_ptr, *pkt);
-            if (status) {
-                LOG_INFO(dhcp6_logger, EVAL_RESULT)
-                    .arg((*it)->getName())
-                    .arg(status);
-                // Matching: add the class
-                pkt->addClass((*it)->getName());
-            } else {
-                LOG_DEBUG(dhcp6_logger, DBG_DHCP6_DETAIL, EVAL_RESULT)
-                    .arg((*it)->getName())
-                    .arg(status);
-            }
-        } catch (const Exception& ex) {
-            LOG_ERROR(dhcp6_logger, EVAL_RESULT)
-                .arg((*it)->getName())
-                .arg(ex.what());
-        } catch (...) {
-            LOG_ERROR(dhcp6_logger, EVAL_RESULT)
-                .arg((*it)->getName())
-                .arg("get exception?");
-        }
+        (*it)->test(pkt, expr_ptr);
     }
 }
 
@@ -4243,9 +4432,6 @@ Dhcpv6Srv::d2ClientErrorHandler(const
     /// them off.
     CfgMgr::instance().getD2ClientMgr().suspendUpdates();
 }
-
-// Refer to config_report so it will be embedded in the binary
-const char* const* dhcp6_config_report = isc::detail::config_report;
 
 std::string
 Dhcpv6Srv::getVersion(bool extended) {

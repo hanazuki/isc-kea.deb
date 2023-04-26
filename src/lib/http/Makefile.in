@@ -93,12 +93,13 @@ subdir = src/lib/http
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -146,8 +147,8 @@ LTLIBRARIES = $(lib_LTLIBRARIES)
 am__DEPENDENCIES_1 =
 libkea_http_la_DEPENDENCIES =  \
 	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
-	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 	$(top_builddir)/src/lib/cc/libkea-cc.la \
+	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
@@ -167,8 +168,7 @@ am_libkea_http_la_OBJECTS = libkea_http_la-client.lo \
 	libkea_http_la-response_json.lo libkea_http_la-url.lo \
 	libkea_http_la-auth_log.lo libkea_http_la-auth_messages.lo \
 	libkea_http_la-basic_auth_config.lo \
-	libkea_http_la-basic_auth.lo \
-	libkea_http_la-http_thread_pool.lo
+	libkea_http_la-basic_auth.lo
 libkea_http_la_OBJECTS = $(am_libkea_http_la_OBJECTS)
 AM_V_lt = $(am__v_lt_@AM_V@)
 am__v_lt_ = $(am__v_lt_@AM_DEFAULT_V@)
@@ -206,7 +206,6 @@ am__depfiles_remade = ./$(DEPDIR)/libkea_http_la-auth_log.Plo \
 	./$(DEPDIR)/libkea_http_la-http_message.Plo \
 	./$(DEPDIR)/libkea_http_la-http_message_parser_base.Plo \
 	./$(DEPDIR)/libkea_http_la-http_messages.Plo \
-	./$(DEPDIR)/libkea_http_la-http_thread_pool.Plo \
 	./$(DEPDIR)/libkea_http_la-listener.Plo \
 	./$(DEPDIR)/libkea_http_la-listener_impl.Plo \
 	./$(DEPDIR)/libkea_http_la-post_request.Plo \
@@ -360,11 +359,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -383,7 +389,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -401,6 +407,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -447,12 +463,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -541,14 +563,14 @@ libkea_http_la_SOURCES = client.cc client.h connection.cc connection.h \
 	response_json.h url.cc url.h auth_config.h auth_log.cc \
 	auth_log.h auth_messages.cc auth_messages.h \
 	basic_auth_config.cc basic_auth_config.h basic_auth.cc \
-	basic_auth.h http_thread_pool.cc http_thread_pool.h
+	basic_auth.h
 libkea_http_la_CXXFLAGS = $(AM_CXXFLAGS)
 libkea_http_la_CPPFLAGS = $(AM_CPPFLAGS)
 libkea_http_la_LDFLAGS = $(AM_LDFLAGS) -no-undefined -version-info \
-	42:0:0
+	55:0:0
 libkea_http_la_LIBADD = $(top_builddir)/src/lib/hooks/libkea-hooks.la \
-	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 	$(top_builddir)/src/lib/cc/libkea-cc.la \
+	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 	$(top_builddir)/src/lib/log/libkea-log.la \
 	$(top_builddir)/src/lib/util/libkea-util.la \
 	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
@@ -573,7 +595,6 @@ libkea_http_include_HEADERS = \
 	http_message.h \
 	http_message_parser_base.h \
 	http_messages.h \
-	http_thread_pool.h \
 	http_types.h \
 	listener.h \
 	listener_impl.h \
@@ -681,7 +702,6 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_http_la-http_message.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_http_la-http_message_parser_base.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_http_la-http_messages.Plo@am__quote@ # am--include-marker
-@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_http_la-http_thread_pool.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_http_la-listener.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_http_la-listener_impl.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libkea_http_la-post_request.Plo@am__quote@ # am--include-marker
@@ -888,13 +908,6 @@ libkea_http_la-basic_auth.lo: basic_auth.cc
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='basic_auth.cc' object='libkea_http_la-basic_auth.lo' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_http_la_CPPFLAGS) $(CPPFLAGS) $(libkea_http_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_http_la-basic_auth.lo `test -f 'basic_auth.cc' || echo '$(srcdir)/'`basic_auth.cc
-
-libkea_http_la-http_thread_pool.lo: http_thread_pool.cc
-@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_http_la_CPPFLAGS) $(CPPFLAGS) $(libkea_http_la_CXXFLAGS) $(CXXFLAGS) -MT libkea_http_la-http_thread_pool.lo -MD -MP -MF $(DEPDIR)/libkea_http_la-http_thread_pool.Tpo -c -o libkea_http_la-http_thread_pool.lo `test -f 'http_thread_pool.cc' || echo '$(srcdir)/'`http_thread_pool.cc
-@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libkea_http_la-http_thread_pool.Tpo $(DEPDIR)/libkea_http_la-http_thread_pool.Plo
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='http_thread_pool.cc' object='libkea_http_la-http_thread_pool.lo' libtool=yes @AMDEPBACKSLASH@
-@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
-@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libkea_http_la_CPPFLAGS) $(CPPFLAGS) $(libkea_http_la_CXXFLAGS) $(CXXFLAGS) -c -o libkea_http_la-http_thread_pool.lo `test -f 'http_thread_pool.cc' || echo '$(srcdir)/'`http_thread_pool.cc
 
 mostlyclean-libtool:
 	-rm -f *.lo
@@ -1138,7 +1151,6 @@ distclean: distclean-recursive
 	-rm -f ./$(DEPDIR)/libkea_http_la-http_message.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-http_message_parser_base.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-http_messages.Plo
-	-rm -f ./$(DEPDIR)/libkea_http_la-http_thread_pool.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-listener.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-listener_impl.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-post_request.Plo
@@ -1208,7 +1220,6 @@ maintainer-clean: maintainer-clean-recursive
 	-rm -f ./$(DEPDIR)/libkea_http_la-http_message.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-http_message_parser_base.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-http_messages.Plo
-	-rm -f ./$(DEPDIR)/libkea_http_la-http_thread_pool.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-listener.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-listener_impl.Plo
 	-rm -f ./$(DEPDIR)/libkea_http_la-post_request.Plo

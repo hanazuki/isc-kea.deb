@@ -11,6 +11,14 @@
 {
     // Kea DHCPv6 server configuration begins here.
     "Dhcp6": {
+        // Global flag selecting an IP address allocation strategy for all
+        // subnets.
+        "allocator": "iterative",
+
+        // Global flag selecting a delegated prefix allocation strategy
+        // for all subnets.
+        "pd-allocator": "random",
+
         // Ordered list of client classes used by the DHCPv6 server.
         "client-classes": [
             {
@@ -66,6 +74,14 @@
 
                 // Class selection expression.
                 "test": "member('ALL')"
+            },
+            {
+                // Fourth class name.
+                "name": "my-template-class",
+
+                // Template class flag that holds the expression used to generate the names for all
+                // the spawned subclasses. In this case, the classes are named after the client ID.
+                "template-test": "substring(option[1].hex, 0, all)"
             }
         ],
 
@@ -148,6 +164,10 @@
         // It may be specified at the global, shared-network and subnet levels.
         "ddns-use-conflict-resolution": true,
 
+        // When greater than 0.0, it is the percent of the lease's lifetime
+        // to use for the DNS TTL.
+        "ddns-ttl-percent": 0.75,
+
         // Time in seconds specifying how long a declined lease should be
         // excluded from DHCP assignments. The default value is 24 hours.
         "decline-probation-period": 86400,
@@ -213,10 +233,18 @@
         "expired-leases-processing": {
             // Specifies the number of seconds since last removal of
             // the expired leases when next removal should occur.
+            // If both "flush-reclaimed-timer-wait-time" and
+            // "hold-reclaimed-time" are not 0, when the client sends a release
+            // message the lease is expired instead of being deleted from the
+            // lease storage.
             "flush-reclaimed-timer-wait-time": 25,
 
             // Specifies the time period in seconds to keep expired
             // leases in the lease database (lease affinity).
+            // If both "flush-reclaimed-timer-wait-time" and
+            // "hold-reclaimed-time" are not 0, when the client sends a release
+            // message the lease is expired instead of being deleted from the
+            // lease storage.
             "hold-reclaimed-time": 3600,
 
             // Specifies the maximum number of expired leases that can be
@@ -308,7 +336,11 @@
                 "type": "postgresql",
 
                 // User name to be used to access the database.
-                "user": "keatest"
+                "user": "keatest",
+
+                // TCP user timeout while communicating with the database.
+                // It is specified in seconds.
+                "tcp-user-timeout": 100
             },
             {
                 // Name of the database to connect to.
@@ -340,8 +372,14 @@
                 // serve-retry-continue
                 "on-fail": "stop-retry-exit",
 
-                // Connection connect timeout.
-                "connect-timeout": 100
+                // Connection connect timeout in seconds.
+                "connect-timeout": 100,
+
+                // Data read from the database timeout in seconds.
+                "read-timeout": 120,
+
+                // Data write to the database timeout in seconds.
+                "write-timeout": 180
             }
         ],
 
@@ -463,7 +501,7 @@
         "option-data": [
             {
                 // Boolean flag indicating if the given option is always
-                // send in response or only when requested. The default
+                // sent in response or only when requested. The default
                 // value of false indicates that it is only sent when
                 // requested.
                 "always-send": false,
@@ -483,6 +521,13 @@
                 // Option name. It is not required of the option code is
                 // provided.
                 "name": "dns-servers",
+
+                // Boolean flag indicating if the given option is never
+                // sent in response. The default value of false indicates
+                // that it is sent when it should. When true the option
+                // is not sent despite of any other setting, i.e. it is
+                // a final flag.
+                "never-send": false,
 
                 // Option space. The default is the "dhcp6" option space which
                 // groups top level DHCPv6 options.
@@ -601,7 +646,17 @@
             // to "fix" but delete the lease if no suitable subnet found),
             // "del" (delete the lease if the lease has invalid subnet
             // identifier value).
-            "lease-checks": "warn"
+            "lease-checks": "warn",
+
+            // Specifies how Kea DHCPv4 server should behave when invalid
+            // extended info is read for a lease from the lease file, or
+            // whether to upgrade from old format. The following values
+            // are supported "none" (don't attempt to correct or upgrade
+            // the extended info), "fix" (fix common inconsistencies and
+            // upgrade from old format, this is the default), "strict"
+            // (fix inconsistencies with an impact on Lease Query),
+            // "pedantic" (enforce full Kea code format).
+            "extended-info-checks": "fix"
         },
 
         // Custom DUID used by the DHCPv6 server.
@@ -624,6 +679,14 @@
         // networks group subnets together.
         "shared-networks": [
             {
+                // A flag selecting an IP address allocation strategy for all
+                // subnets in this shared network.
+                "allocator": "random",
+
+                // A flag selecting a delegated prefix allocation strategy for
+                // all subnets in this shared network.
+                "pd-allocator": "iterative",
+
                 // Restricts this shared network to allow only clients
                 // that belong to the particular client class. If an
                 // empty string is provided, no restriction is applied.
@@ -652,6 +715,9 @@
 
                 // Shared network level value. See description at the global level.
                 "ddns-use-conflict-resolution": true,
+
+                // Shared network level value. See description at the global level.
+                "ddns-ttl-percent": 0.65,
 
                 // Shared network level value. See description at the global level.
                 "hostname-char-replacement": "x",
@@ -747,6 +813,14 @@
                 // List of IPv6 subnets belonging to this shared network.
                 "subnet6": [
                     {
+                        // A flag selecting an IP address allocation strategy for
+                        // the subnet.
+                        "allocator": "iterative",
+
+                        // A flag selecting a delegated prefix allocation strategy
+                        // for the subnet.
+                        "pd-allocator": "iterative",
+
                         // Restricts this subnet to allow only clients that belong
                         // to the particular client class. If an empty string is
                         // provided, no restriction is applied.
@@ -775,6 +849,9 @@
 
                         // Subnet level value. See description at the global level.
                         "ddns-use-conflict-resolution": true,
+
+                        // Subnet level value. See description at the global level.
+                        "ddns-ttl-percent": 0.55,
 
                         // Subnet level value. See description at the global level.
                         "hostname-char-replacement": "x",
@@ -818,6 +895,10 @@
 
                                 // Option name.
                                 "name": "preference",
+
+                                // Boolean flag indicating if the given option is never
+                                // sent in response.
+                                "never-send": false,
 
                                 // Option space. The default value "dhcp6" designates the
                                 // top level option space.
