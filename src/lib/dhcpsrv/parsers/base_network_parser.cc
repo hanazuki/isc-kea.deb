@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,6 +6,7 @@
 
 #include <config.h>
 #include <util/triplet.h>
+#include <dhcpsrv/dhcpsrv_log.h>
 #include <dhcpsrv/parsers/base_network_parser.h>
 #include <util/optional.h>
 #include <util/strutil.h>
@@ -114,9 +115,13 @@ BaseNetworkParser::parseCommon(const ConstElementPtr& network_data,
     }
 
     if (has_renew && has_rebind && (renew > rebind)) {
-        isc_throw(DhcpConfigError, "the value of renew-timer (" << renew
-                  << ") is greater than the value of rebind-timer ("
-                  << rebind << ")");
+        // The renew-timer value is too large and server logic
+        // later on will end up not sending it. Warn the user but
+        // allow the configuration to pass.
+        LOG_WARN(dhcpsrv_logger, DHCPSRV_CFGMGR_RENEW_GTR_REBIND)
+                 .arg(network->getLabel())
+                 .arg(renew)
+                 .arg(rebind);
     }
 
     network->setValid(parseIntTriplet(network_data, "valid-lifetime"));
@@ -265,7 +270,53 @@ BaseNetworkParser::parseDdnsParams(const data::ConstElementPtr& network_data,
     if (network_data->contains("ddns-use-conflict-resolution")) {
         network->setDdnsUseConflictResolution(getBoolean(network_data, "ddns-use-conflict-resolution"));
     }
+
+    if (network_data->contains("ddns-ttl-percent")) {
+        network->setDdnsTtlPercent(getDouble(network_data, "ddns-ttl-percent"));
+    }
 }
+
+void
+BaseNetworkParser::parseAllocatorParams(const data::ConstElementPtr& network_data,
+                                        NetworkPtr& network) {
+    if (network_data->contains("allocator")) {
+        auto allocator_type = getString(network_data, "allocator");
+        if ((allocator_type != "iterative") && (allocator_type != "random")) {
+            // Unsupported allocator type used.
+            isc_throw(DhcpConfigError, "supported allocators are: iterative and random");
+        }
+        network->setAllocatorType(allocator_type);
+    }
+}
+
+void
+BaseNetworkParser::parsePdAllocatorParams(const data::ConstElementPtr& network_data,
+                                          Network6Ptr& network) {
+    if (network_data->contains("pd-allocator")) {
+        auto allocator_type = getString(network_data, "pd-allocator");
+        if ((allocator_type != "iterative") && (allocator_type != "random")) {
+            // Unsupported allocator type used.
+            isc_throw(DhcpConfigError, "supported allocators are: iterative and random");
+        }
+        network->setPdAllocatorType(allocator_type);
+    }
+}
+
+void
+BaseNetworkParser::parseOfferLft(const data::ConstElementPtr& network_data,
+                                        Network4Ptr& network) {
+    if (network_data->contains("offer-lifetime")) {
+        auto value = getInteger(network_data, "offer-lifetime");
+        if (value < 0) {
+            isc_throw(DhcpConfigError, "the value of offer-lifetime '"
+                      << value << "' must be a positive number ("
+                      << getPosition("offer-lifetime", network_data) << ")");
+        }
+
+        network->setOfferLft(value);
+    }
+}
+
 
 } // end of namespace isc::dhcp
 } // end of namespace isc

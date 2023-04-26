@@ -66,6 +66,14 @@
 
                 // Class selection expression.
                 "test": "member('ALL')"
+            },
+            {
+                // Fourth class name.
+                "name": "my-template-class",
+
+                // Template class flag that holds the expression used to generate the names for all
+                // the spawned subclasses. In this case, the classes are named after the client ID.
+                "template-test": "substring(option[1].hex, 0, all)"
             }
         ],
 
@@ -213,10 +221,18 @@
         "expired-leases-processing": {
             // Specifies the number of seconds since last removal of
             // the expired leases when next removal should occur.
+            // If both "flush-reclaimed-timer-wait-time" and
+            // "hold-reclaimed-time" are not 0, when the client sends a release
+            // message the lease is expired instead of being deleted from the
+            // lease storage.
             "flush-reclaimed-timer-wait-time": 25,
 
             // Specifies the time period in seconds to keep expired
             // leases in the lease database (lease affinity).
+            // If both "flush-reclaimed-timer-wait-time" and
+            // "hold-reclaimed-time" are not 0, when the client sends a release
+            // message the lease is expired instead of being deleted from the
+            // lease storage.
             "hold-reclaimed-time": 3600,
 
             // Specifies the maximum number of expired leases that can be
@@ -447,7 +463,7 @@
         "option-data": [
             {
                 // Boolean flag indicating if the given option is always
-                // send in response or only when requested. The default
+                // sent in response or only when requested. The default
                 // value of false indicates that it is only sent when
                 // requested.
                 "always-send": false,
@@ -467,6 +483,13 @@
                 // Option name. It is not required of the option code is
                 // provided.
                 "name": "dns-servers",
+
+                // Boolean flag indicating if the given option is never
+                // sent in response. The default value of false indicates
+                // that it is sent when it should. When true the option
+                // is not sent despite of any other setting, i.e. it is
+                // a final flag.
+                "never-send": false,
 
                 // Option space. The default is the "dhcp6" option space which
                 // groups top level DHCPv6 options.
@@ -585,7 +608,17 @@
             // to "fix" but delete the lease if no suitable subnet found),
             // "del" (delete the lease if the lease has invalid subnet
             // identifier value).
-            "lease-checks": "warn"
+            "lease-checks": "warn",
+
+            // Specifies how Kea DHCPv4 server should behave when invalid
+            // extended info is read for a lease from the lease file, or
+            // whether to upgrade from old format. The following values
+            // are supported "none" (don't attempt to correct or upgrade
+            // the extended info), "fix" (fix common inconsistencies and
+            // upgrade from old format, this is the default), "strict"
+            // (fix inconsistencies with an impact on Lease Query),
+            // "pedantic" (enforce full Kea code format).
+            "extended-info-checks": "fix"
         },
 
         // Custom DUID used by the DHCPv6 server.
@@ -802,6 +835,10 @@
 
                                 // Option name.
                                 "name": "preference",
+
+                                // Boolean flag indicating if the given option is never
+                                // sent in response.
+                                "never-send": false,
 
                                 // Option space. The default value "dhcp6" designates the
                                 // top level option space.

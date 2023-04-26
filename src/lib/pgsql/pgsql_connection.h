@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,7 +18,7 @@ namespace isc {
 namespace db {
 
 /// @brief Define the PostgreSQL backend version.
-const uint32_t PGSQL_SCHEMA_VERSION_MAJOR = 13;
+const uint32_t PGSQL_SCHEMA_VERSION_MAJOR = 14;
 const uint32_t PGSQL_SCHEMA_VERSION_MINOR = 0;
 
 // Maximum number of parameters that can be used a statement
@@ -265,14 +265,60 @@ public:
     void prepareStatements(const PgSqlTaggedStatement* start_statement,
                            const PgSqlTaggedStatement* end_statement);
 
-    /// @brief Open Database
+    /// @brief Creates connection string from specified parameters.
+    ///
+    /// This function is called from the unit tests.
+    ///
+    /// @return connection string for @c openDatabase.
+    /// @throw NoDatabaseName Mandatory database name not given
+    /// @throw DbInvalidTimeout when the database timeout is wrong.
+    std::string getConnParameters();
+
+private:
+
+    /// @brief Creates connection string from the specified parameters.
+    ///
+    /// This is an internal implemenation of the @c getConnParameters that
+    /// allows for controlling logging. In some cases, a caller can disable
+    /// logging warnings to avoid duplication of the log messages emitted
+    /// when the invocation is a result of calling  @c getVersion before
+    /// opening the connection for the normal server operation.
+    ///
+    /// @param logging boolean parameter controlling if logging should be
+    /// enabled (when true) or disabled (when false).
+    ///
+    /// @return connection string for @c openDatabase.
+    /// @throw NoDatabaseName Mandatory database name not given
+    /// @throw DbInvalidTimeout when the database timeout is wrong.
+    std::string getConnParametersInternal(bool logging);
+
+public:
+
+    /// @brief Open database with logging.
     ///
     /// Opens the database using the information supplied in the parameters
-    /// passed to the constructor.
+    /// passed to the constructor. It logs warnings resulting from the
+    /// @c getConnParameters.
     ///
     /// @throw NoDatabaseName Mandatory database name not given
     /// @throw DbOpenError Error opening the database
     void openDatabase();
+
+private:
+
+    /// @brief Internal implementation of the database opening.
+    ///
+    /// It allows for controlling if the @c getConnParameterInternal function
+    /// should log the warnings.
+    ///
+    /// @param logging boolean parameter controlling if logging should be
+    /// enabled (when true) or disabled (when false).
+    ///
+    /// @throw NoDatabaseName Mandatory database name not given
+    /// @throw DbOpenError Error opening the database
+    void openDatabaseInternal(bool logging);
+
+public:
 
     /// @brief Starts new transaction
     ///
@@ -499,6 +545,27 @@ public:
     operator bool() const {
         return (conn_);
     }
+
+private:
+
+    /// @brief Convenience function parsing and setting an integer parameter,
+    /// if it exists.
+    ///
+    /// If the parameter is not present, this function doesn't change the @c value.
+    /// Otherwise, it tries to convert the parameter to the type @c T. Finally,
+    /// it checks if the converted number is within the specified range.
+    ///
+    /// @param name Parameter name.
+    /// @param min Expected minimal value.
+    /// @param max Expected maximal value.
+    /// @param [out] value Reference to a value returning the parsed parameter.
+    /// @tparam T Parameter type.
+    /// @throw BadValue if the parameter is not a valid number or if it is out
+    /// of range.
+    template<typename T>
+    void setIntParameterValue(const std::string& name, int64_t min, int64_t max, T& value);
+
+public:
 
     /// @brief Accessor function which returns the IOService that can be used to
     /// recover the connection.

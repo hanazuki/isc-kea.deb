@@ -821,7 +821,7 @@ protected:
     /// @brief Assigns incoming packet to zero or more classes.
     ///
     /// @note This is done in two phases: first the content of the
-    /// vendor-class-identifier option is used as a class, by
+    /// vendor-class-identifier options are used as classes, by
     /// calling @ref classifyByVendor(). Second, the classification match
     /// expressions are evaluated. The resulting classes will be stored
     /// in the packet (see @ref isc::dhcp::Pkt6::classes_ and
@@ -1041,14 +1041,12 @@ public:
 
 private:
 
-    /// @public
-    /// @brief Assign class using vendor-class-identifier option
+    /// @brief Assign class using vendor-class-identifier options
     ///
     /// @note This is the first part of @ref classifyPacket
     ///
     /// @param pkt packet to be classified
-    /// @param classes a reference to added class names for logging
-    void classifyByVendor(const Pkt6Ptr& pkt, std::string& classes);
+    void classifyByVendor(const Pkt6Ptr& pkt);
 
     /// @brief Update FQDN based on the reservations in the current subnet.
     ///

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -142,7 +142,6 @@ public:
     ///
     /// See fake_received_ field for description
     virtual Pkt4Ptr receivePacket(int /*timeout*/) {
-
         // If there is anything prepared as fake incoming traffic, use it
         if (!fake_received_.empty()) {
             Pkt4Ptr pkt = fake_received_.front();
@@ -163,12 +162,8 @@ public:
     /// Pretend to send a packet, but instead just store it in fake_send_ list
     /// where test can later inspect server's response.
     virtual void sendPacket(const Pkt4Ptr& pkt) {
-        if (isc::util::MultiThreadingMgr::instance().getMode()) {
-            std::lock_guard<std::mutex> lk(mutex_);
-            fake_sent_.push_back(pkt);
-        } else {
-            fake_sent_.push_back(pkt);
-        }
+        isc::util::MultiThreadingLock lock(mutex_);
+        fake_sent_.push_back(pkt);
     }
 
     /// @brief fake receive packet from server
@@ -177,25 +172,17 @@ public:
     ///
     /// @return The received packet.
     Pkt4Ptr receiveOneMsg() {
-        if (isc::util::MultiThreadingMgr::instance().getMode()) {
-            std::lock_guard<std::mutex> lk(mutex_);
-            return (receiveOneMsgInternal());
-        } else {
-            return (receiveOneMsgInternal());
-        }
-    }
+        // Make sure the server processed all packets.
+        isc::util::MultiThreadingMgr::instance().getThreadPool().wait(2);
 
-    /// @brief fake receive packet from server
-    ///
-    /// The client uses this packet as a reply from the server.
-    /// This function should be called in a thread safe context.
-    ///
-    /// @return The received packet.
-    Pkt4Ptr receiveOneMsgInternal() {
+        // Lock the mutex for the rest of the function.
+        isc::util::MultiThreadingLock lock(mutex_);
+
         // Return empty pointer if server hasn't responded.
         if (fake_sent_.empty()) {
             return (Pkt4Ptr());
         }
+
         Pkt4Ptr msg = fake_sent_.front();
         fake_sent_.pop_front();
         return (msg);
@@ -329,10 +316,16 @@ private:
 
 class Dhcpv4SrvTest : public BaseServerTest {
 public:
-
+    /// @brief Specifies expected outcome
     enum ExpectedResult {
         SHOULD_PASS, // pass = accept decline, move lease to declined state.
         SHOULD_FAIL  // fail = reject the decline
+    };
+
+    /// @brief Specifies if lease affinity is enabled or disabled
+    enum LeaseAffinity {
+        LEASE_AFFINITY_ENABLED,
+        LEASE_AFFINITY_DISABLED
     };
 
     class Dhcpv4SrvMTTestGuard {
@@ -368,6 +361,17 @@ public:
     ///
     /// @param pkt packet to add PRL option to.
     void addPrlOption(Pkt4Ptr& pkt);
+
+    /// @brief Used to configure a server for tests.
+    ///
+    /// A wrapper over configureDhcp4Server() to which any other
+    /// simulations of production code are added.
+    ///
+    /// @brief server the server being tested
+    /// @brief config the configuration the server is configured with
+    ///
+    /// @return a JSON-formatted status of the reconfiguration
+    static ConstElementPtr configure(Dhcpv4Srv& server, isc::data::ConstElementPtr config);
 
     /// @brief Configures options being requested in the PRL option.
     ///
@@ -559,13 +563,16 @@ public:
     /// @param create_managers A boolean flag indicating if managers should be
     /// recreated.
     /// @param test A boolean flag which indicates if only testing config.
+    /// @param lease_affinity A flag which indicates if lease affinity should
+    /// be enabled or disabled.
     void configure(const std::string& config,
                    const bool commit = true,
                    const bool open_sockets = true,
                    const bool create_managers = true,
-                   const bool test = false);
+                   const bool test = false,
+                   const LeaseAffinity lease_affinity = LEASE_AFFINITY_DISABLED);
 
-    /// @brief Configure specified DHCP server using JSON string.
+    /// @brief Configure the DHCPv4 server using the JSON string.
     ///
     /// @param config String holding server configuration in JSON format.
     /// @param srv Instance of the server to be configured.
@@ -576,12 +583,15 @@ public:
     /// @param create_managers A boolean flag indicating if managers should be
     /// recreated.
     /// @param test A boolean flag which indicates if only testing config.
+    /// @param lease_affinity A flag which indicates if lease affinity should
+    /// be enabled or disabled.
     void configure(const std::string& config,
                    NakedDhcpv4Srv& srv,
                    const bool commit = true,
                    const bool open_sockets = true,
                    const bool create_managers = true,
-                   const bool test = false);
+                   const bool test = false,
+                   const LeaseAffinity lease_affinity = LEASE_AFFINITY_DISABLED);
 
     /// @brief Configure specified DHCP server using JSON string.
     ///

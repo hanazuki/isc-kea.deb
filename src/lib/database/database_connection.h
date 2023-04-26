@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -65,6 +65,15 @@ public:
 class DbInvalidTimeout : public Exception {
 public:
     DbInvalidTimeout(const char* file, size_t line, const char* what) :
+        isc::Exception(file, line, what) {}
+};
+
+/// @brief Invalid port number
+///
+/// Thrown when the port number specified for the database connection is invalid.
+class DbInvalidPort : public Exception {
+public:
+    DbInvalidPort(const char* file, size_t line, const char* what) :
         isc::Exception(file, line, what) {}
 };
 

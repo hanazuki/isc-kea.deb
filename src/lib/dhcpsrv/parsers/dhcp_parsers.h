@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -880,8 +880,8 @@ protected:
     /// @param addr is the subnet address
     /// @todo A means to know the correct logger and perhaps a common
     /// message would allow this message to be emitted by the base class.
-    virtual void duplicate_option_warning(uint32_t code,
-                                         asiolink::IOAddress& addr);
+    virtual void duplicateOptionWarning(uint32_t code,
+                                        asiolink::IOAddress& addr);
 
     /// @brief Instantiates the IPv6 Subnet based on a given IPv6 address
     /// and prefix length.

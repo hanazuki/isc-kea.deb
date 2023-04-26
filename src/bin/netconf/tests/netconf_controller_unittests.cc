@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,23 +6,20 @@
 
 #include <config.h>
 
+#include <gtest/gtest.h>
+
 #include <asiolink/testutils/timed_signal.h>
+#include <cc/data.h>
 #include <netconf/netconf_controller.h>
 #include <netconf/netconf_process.h>
-#include <cc/data.h>
 #include <process/testutils/d_test_stubs.h>
 #include <testutils/gtest_utils.h>
-
-#include <boost/pointer_cast.hpp>
-
-#include <sstream>
 
 using namespace isc::asiolink::test;
 using namespace isc::netconf;
 using namespace isc::data;
 using namespace isc::http;
 using namespace isc::process;
-using namespace boost::posix_time;
 using namespace std;
 
 namespace {
@@ -55,7 +52,6 @@ const char* valid_netconf_config =
 /// has extensive set of unit tests that are independent from Netconf.
 class NetconfControllerTest : public DControllerTest {
 public:
-
     /// @brief Constructor.
     NetconfControllerTest()
         : DControllerTest(NetconfController::instance) {
@@ -83,7 +79,7 @@ public:
         }
         return (p);
     }
-};
+};  // NetconfControllerTest
 
 // Basic Controller instantiation testing.
 // Verifies that the controller singleton gets created and that the
@@ -108,7 +104,6 @@ TEST_F(NetconfControllerTest, basicInstanceTesting) {
     EXPECT_FALSE(checkProcess());
 }
 
-
 // Tests basic command line processing.
 // Verifies that:
 // 1. Standard command line options are supported.
@@ -124,7 +119,7 @@ TEST_F(NetconfControllerTest, commandLineArgs) {
     EXPECT_TRUE(checkVerbose(false));
 
     // Verify that standard options can be parsed without error.
-    EXPECT_NO_THROW(parseArgs(argc, argv));
+    EXPECT_NO_THROW_LOG(parseArgs(argc, argv));
 
     // Verify that verbose flag is true.
     EXPECT_TRUE(checkVerbose(true));
@@ -136,7 +131,7 @@ TEST_F(NetconfControllerTest, commandLineArgs) {
     char* argv2[] = { const_cast<char*>("progName"),
                       const_cast<char*>("-x") };
     argc = 2;
-    EXPECT_THROW(parseArgs(argc, argv2), InvalidUsage);
+    EXPECT_THROW_MSG(parseArgs(argc, argv2), InvalidUsage, "unsupported option: [x] ");
 }
 
 // Tests application process creation and initialization.

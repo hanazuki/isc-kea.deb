@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -49,6 +49,13 @@ public:
         CtrlChannelError(file, line, what) {}
 };
 
+/// @brief Exception thrown when conflict status code has been returned.
+class ConflictError : public CtrlChannelError {
+public:
+    ConflictError(const char* file, size_t line, const char* what) :
+        CtrlChannelError(file, line, what) {}
+};
+
 }
 
 namespace isc {
@@ -86,10 +93,10 @@ HAService::HAService(const IOServicePtr& io_service, const NetworkStatePtr& netw
     // Create the client and(or) listener as appropriate.
     if (!config_->getEnableMultiThreading()) {
         // Not configured for multi-threading, start a client in ST mode.
-        client_.reset(new HttpClient(*io_service_, 0));
+        client_.reset(new HttpClient(*io_service_, false));
     } else {
         // Create an MT-mode client.
-        client_.reset(new HttpClient(*io_service_,
+        client_.reset(new HttpClient(*io_service_, true,
                       config_->getHttpClientThreads(), true));
 
         // If we're configured to use our own listener create and start it.
@@ -474,6 +481,7 @@ HAService::partnerDownStateHandler() {
             query_filter_.serveDefaultScopes();
         }
         adjustNetworkState();
+        communication_state_->clearRejectedLeaseUpdates();
 
         // Log if the state machine is paused.
         conditionalLogPausedState();
@@ -608,6 +616,7 @@ HAService::readyStateHandler() {
     if (doOnEntry()) {
         query_filter_.serveNoScopes();
         adjustNetworkState();
+        communication_state_->clearRejectedLeaseUpdates();
 
         // Log if the state machine is paused.
         conditionalLogPausedState();
@@ -687,6 +696,7 @@ HAService::syncingStateHandler() {
     if (doOnEntry()) {
         query_filter_.serveNoScopes();
         adjustNetworkState();
+        communication_state_->clearRejectedLeaseUpdates();
 
         // Log if the state machine is paused.
         conditionalLogPausedState();
@@ -776,6 +786,7 @@ HAService::terminatedStateHandler() {
     if (doOnEntry()) {
         query_filter_.serveDefaultScopes();
         adjustNetworkState();
+        communication_state_->clearRejectedLeaseUpdates();
 
         // In the terminated state we don't send heartbeat.
         communication_state_->stopHeartbeat();
@@ -797,6 +808,7 @@ HAService::waitingStateHandler() {
     if (doOnEntry()) {
         query_filter_.serveNoScopes();
         adjustNetworkState();
+        communication_state_->clearRejectedLeaseUpdates();
 
         // Log if the state machine is paused.
         conditionalLogPausedState();
@@ -1101,6 +1113,9 @@ HAService::shouldTerminate() const {
     // If not issue a warning if it's getting large.
     if (!should_terminate) {
         communication_state_->clockSkewShouldWarn();
+        // Check if we should terminate because the number of rejected leases
+        // has been exceeded.
+        should_terminate = communication_state_->rejectedLeaseUpdatesShouldTerminate();
     }
 
     return (should_terminate);
@@ -1363,13 +1378,16 @@ HAService::asyncSendLeaseUpdate(const QueryPtrType& query,
                           " HA peer. This is programmatic error");
             }
 
-            // There are three possible groups of errors during the lease update.
+            // There are four possible groups of errors during the lease update.
             // One is the IO error causing issues in communication with the peer.
-            // Another one is an HTTP parsing error. The last type of error is
-            // when non-success error code is returned in the response carried
-            // in the HTTP message or if the JSON response is otherwise broken.
+            // Another one is an HTTP parsing error. The third type occurs when
+            // the partner receives the command but it is invalid or there is
+            // an internal processing error. Finally, the forth type is when the
+            // conflict status code is returned in the response indicating that
+            // the lease update does not match the partner's configuration.
 
             bool lease_update_success = true;
+            bool lease_update_conflict = false;
 
             // Handle first two groups of errors.
             if (ec || !error_str.empty()) {
@@ -1384,7 +1402,6 @@ HAService::asyncSendLeaseUpdate(const QueryPtrType& query,
 
             } else {
 
-                // Handle third group of errors.
                 try {
                     int rcode = 0;
                     auto args = verifyAsyncResponse(response, rcode);
@@ -1392,7 +1409,19 @@ HAService::asyncSendLeaseUpdate(const QueryPtrType& query,
                     // updates and we should log them.
                     logFailedLeaseUpdates(query, args);
 
+                } catch (const ConflictError& ex) {
+                    // Handle forth group of errors.
+                    lease_update_conflict = true;
+                    lease_update_success = false;
+                    communication_state_->reportRejectedLeaseUpdate(query);
+
+                    LOG_WARN(ha_logger, HA_LEASE_UPDATE_CONFLICT)
+                        .arg(query->getLabel())
+                        .arg(config->getLogLabel())
+                        .arg(ex.what());
+
                 } catch (const std::exception& ex) {
+                    // Handle third group of errors.
                     LOG_WARN(ha_logger, HA_LEASE_UPDATE_FAILED)
                         .arg(query->getLabel())
                         .arg(config->getLogLabel())
@@ -1405,10 +1434,22 @@ HAService::asyncSendLeaseUpdate(const QueryPtrType& query,
 
             // We don't care about the result of the lease update to the backup server.
             // It is a best effort update.
-            if ((config->getRole() != HAConfig::PeerConfig::BACKUP) && !lease_update_success) {
-                // If we were unable to communicate with the partner we set partner's
+            if (config->getRole() != HAConfig::PeerConfig::BACKUP) {
+                // If the lease update was unsuccessful we may need to set the partner
                 // state as unavailable.
-                communication_state_->setPartnerState("unavailable");
+                if (!lease_update_success) {
+                    // Do not set it as unavailable if it was a conflict because the
+                    // partner actually responded.
+                    if (!lease_update_conflict) {
+                        // If we were unable to communicate with the partner we set partner's
+                        // state as unavailable.
+                        communication_state_->setPartnerState("unavailable");
+                    }
+                } else {
+                    // Lease update successful and we may need to clear some previously
+                    // rejected lease updates.
+                    communication_state_->reportSuccessfulLeaseUpdate(query);
+                }
             }
 
             // It is possible to configure the server to not wait for a response from
@@ -2222,7 +2263,7 @@ int
 HAService::synchronize(std::string& status_message, const std::string& server_name,
                        const unsigned int max_period) {
     IOService io_service;
-    HttpClient client(io_service);
+    HttpClient client(io_service, false);
 
     asyncSyncLeases(client, server_name, max_period, Lease4Ptr(),
                     [&](const bool success, const std::string& error_message,
@@ -2427,7 +2468,7 @@ HAService::sendLeaseUpdatesFromBacklog() {
     }
 
     IOService io_service;
-    HttpClient client(io_service);
+    HttpClient client(io_service, false);
     auto remote_config = config_->getFailoverPeerConfig();
     bool updates_successful = true;
 
@@ -2512,7 +2553,7 @@ HAService::asyncSendHAReset(HttpClient& http_client,
 bool
 HAService::sendHAReset() {
     IOService io_service;
-    HttpClient client(io_service);
+    HttpClient client(io_service, false);
     auto remote_config = config_->getFailoverPeerConfig();
     bool reset_successful = true;
 
@@ -2615,7 +2656,7 @@ HAService::processMaintenanceStart() {
     HttpResponseJsonPtr response = boost::make_shared<HttpResponseJson>();
 
     IOService io_service;
-    HttpClient client(io_service);
+    HttpClient client(io_service, false);
 
     boost::system::error_code captured_ec;
     std::string captured_error_message;
@@ -2739,7 +2780,7 @@ HAService::processMaintenanceCancel() {
     HttpResponseJsonPtr response = boost::make_shared<HttpResponseJson>();
 
     IOService io_service;
-    HttpClient client(io_service);
+    HttpClient client(io_service, false);
 
     std::string error_message;
 
@@ -2946,23 +2987,83 @@ HAService::verifyAsyncResponse(const HttpResponsePtr& response, int& rcode) {
     // Check if the status code of the first response. We don't support multiple
     // at this time, because we always send a request to a single location.
     ConstElementPtr args = parseAnswer(rcode, body->get(0));
-    if ((rcode != CONTROL_RESULT_SUCCESS) &&
-        (rcode != CONTROL_RESULT_EMPTY)) {
-        std::ostringstream s;
-        // Include an error text if available.
-        if (args && args->getType() == Element::string) {
-            s << args->stringValue() << ", ";
-        }
-        // Include an error code.
-        s << "error code " << rcode;
-
-        if (rcode == CONTROL_RESULT_COMMAND_UNSUPPORTED) {
-            isc_throw(CommandUnsupportedError, s.str());
-        } else {
-            isc_throw(CtrlChannelError, s.str());
-        }
+    if (rcode == CONTROL_RESULT_SUCCESS) {
+        return (args);
     }
 
+    std::ostringstream s;
+
+    // The empty status can occur for the lease6-bulk-apply command. In that
+    // case, the response may contain conflicted or erred leases within the
+    // arguments, rather than globally. For other error cases let's construct
+    // the error message from the global values.
+    if (rcode != CONTROL_RESULT_EMPTY) {
+        // Include an error text if available.
+        if (args && args->getType() == Element::string) {
+            s << args->stringValue() << " (";
+        }
+        // Include an error code.
+        s << "error code " << rcode << ")";
+    }
+
+    switch (rcode) {
+    case CONTROL_RESULT_COMMAND_UNSUPPORTED:
+        isc_throw(CommandUnsupportedError, s.str());
+
+    case CONTROL_RESULT_CONFLICT:
+        isc_throw(ConflictError, s.str());
+
+    case CONTROL_RESULT_EMPTY:
+        // Handle the lease6-bulk-apply error cases.
+        if (args && (args->getType() == Element::map)) {
+            auto failed_leases = args->get("failed-leases");
+            if (!failed_leases || (failed_leases->getType() != Element::list)) {
+                // If there are no failed leases there is nothing to do.
+                break;
+            }
+            auto conflict = false;
+            ConstElementPtr conflict_error_message;
+            for (auto i = 0; i < failed_leases->size(); ++i) {
+                auto lease = failed_leases->get(i);
+                if (!lease || lease->getType() != Element::map) {
+                    continue;
+                }
+                auto result = lease->get("result");
+                if (!result || result->getType() != Element::integer) {
+                    continue;
+                }
+                auto error_message = lease->get("error-message");
+                // Error status code takes precedence over the conflict.
+                if (result->intValue() == CONTROL_RESULT_ERROR) {
+                    if (error_message && error_message->getType()) {
+                        s << error_message->stringValue() << " (";
+                    }
+                    s << "error code " << result->intValue() << ")";
+                    isc_throw(CtrlChannelError, s.str());
+                }
+                if (result->intValue() == CONTROL_RESULT_CONFLICT) {
+                    // Let's record the conflict but there may still be some
+                    // leases with an error status code, so do not throw the
+                    // conflict exception yet.
+                    conflict = true;
+                    conflict_error_message = error_message;
+                }
+            }
+            if (conflict) {
+                // There are no errors. There are only conflicts. Throw
+                // appropriate exception.
+                if (conflict_error_message &&
+                    (conflict_error_message->getType() == Element::string)) {
+                    s << conflict_error_message->stringValue() << " (";
+                }
+                s << "error code " << CONTROL_RESULT_CONFLICT << ")";
+                isc_throw(ConflictError, s.str());
+            }
+        }
+        break;
+    default:
+        isc_throw(CtrlChannelError, s.str());
+    }
     return (args);
 }
 

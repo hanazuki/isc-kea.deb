@@ -1,16 +1,18 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
 // file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
 #include <config.h>
-#include <sstream>
 
 #include <asiolink/io_address.h>
 #include <cc/command_interpreter.h>
 #include <config/command_mgr.h>
 #include <config_backend/base_config_backend.h>
+#include <dhcp4/dhcp4_log.h>
+#include <dhcp4/dhcp4_srv.h>
+#include <dhcp4/json_config_parser.h>
 #include <dhcp4/tests/dhcp4_test_utils.h>
 #include <dhcp4/tests/dhcp4_client.h>
 #include <dhcp/tests/pkt_captures.h>
@@ -25,9 +27,6 @@
 #include <dhcp/pkt_filter.h>
 #include <dhcp/pkt_filter_inet.h>
 #include <dhcp/tests/iface_mgr_test_config.h>
-#include <dhcp4/dhcp4_srv.h>
-#include <dhcp4/dhcp4_log.h>
-#include <dhcp4/json_config_parser.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/lease_mgr.h>
 #include <dhcpsrv/lease_mgr_factory.h>
@@ -36,13 +35,23 @@
 #include <stats/stats_mgr.h>
 #include <testutils/gtest_utils.h>
 #include <util/encode/hex.h>
+
+#ifdef HAVE_MYSQL
+#include <mysql/testutils/mysql_schema.h>
+#endif
+
+#ifdef HAVE_PGSQL
+#include <pgsql/testutils/pgsql_schema.h>
+#endif
+
 #include <boost/scoped_ptr.hpp>
 
 #include <iostream>
 #include <cstdlib>
-#include <dirent.h>
+#include <sstream>
 
 #include <arpa/inet.h>
+#include <dirent.h>
 
 using namespace std;
 using namespace isc;
@@ -126,6 +135,39 @@ const char* CONFIGS[] = {
     "}",
 
     // Configuration 3:
+    // - 1 subnet with never-send option
+    // - 2 global options (one forced with always-send)
+    "{"
+    "    \"interfaces-config\": {"
+    "    \"interfaces\": [ \"*\" ] }, "
+    "    \"rebind-timer\": 2000, "
+    "    \"renew-timer\": 1000, "
+    "    \"valid-lifetime\": 4000, "
+    "    \"subnet4\": [ {"
+    "        \"pools\": [ { \"pool\": \"192.0.2.1 - 192.0.2.100\" } ], "
+    "        \"subnet\": \"192.0.2.0/24\","
+    "        \"option-data\": ["
+    "            {"
+    "                \"name\": \"ip-forwarding\", "
+    "                \"never-send\": true"
+    "            }"
+    "        ]"
+    "    } ], "
+    "    \"option-data\": ["
+    "        {"
+    "            \"name\": \"default-ip-ttl\", "
+    "            \"data\": \"FF\", "
+    "            \"csv-format\": false"
+    "        }, "
+    "        {"
+    "            \"name\": \"ip-forwarding\", "
+    "            \"data\": \"false\", "
+    "            \"always-send\": true"
+    "        }"
+    "    ]"
+    "}",
+
+    // Configuration 4:
     // - one subnet, with one pool
     // - user-contexts defined in both subnet and pool
     "{"
@@ -1222,10 +1264,10 @@ TEST_F(Dhcpv4SrvTest, DiscoverValidLifetime) {
     // Recreate subnet
     Triplet<uint32_t> unspecified;
     Triplet<uint32_t> valid_lft(500, 1000, 1500);
-    subnet_.reset(new Subnet4(IOAddress("192.0.2.0"), 24,
+    subnet_ = Subnet4::create(IOAddress("192.0.2.0"), 24,
                               unspecified,
                               unspecified,
-                              valid_lft));
+                              valid_lft);
 
     pool_ = Pool4Ptr(new Pool4(IOAddress("192.0.2.100"),
                                IOAddress("192.0.2.110")));
@@ -1302,10 +1344,10 @@ TEST_F(Dhcpv4SrvTest, DiscoverTimers) {
     // Recreate subnet
     Triplet<uint32_t> unspecified;
     Triplet<uint32_t> valid_lft(1000);
-    subnet_.reset(new Subnet4(IOAddress("192.0.2.0"), 24,
+    subnet_ = Subnet4::create(IOAddress("192.0.2.0"), 24,
                               unspecified,
                               unspecified,
-                              valid_lft));
+                              valid_lft);
 
     pool_ = Pool4Ptr(new Pool4(IOAddress("192.0.2.100"),
                                IOAddress("192.0.2.110")));
@@ -1453,10 +1495,10 @@ TEST_F(Dhcpv4SrvTest, calculateTeeTimers) {
     // Recreate subnet
     Triplet<uint32_t> unspecified;
     Triplet<uint32_t> valid_lft(1000);
-    subnet_.reset(new Subnet4(IOAddress("192.0.2.0"), 24,
+    subnet_ = Subnet4::create(IOAddress("192.0.2.0"), 24,
                               unspecified,
                               unspecified,
-                              valid_lft));
+                              valid_lft);
 
     pool_ = Pool4Ptr(new Pool4(IOAddress("192.0.2.100"),
                                IOAddress("192.0.2.110")));
@@ -1834,10 +1876,10 @@ TEST_F(Dhcpv4SrvTest, RequestNoTimers) {
     req->setIndex(ETH1_INDEX);
 
     // Recreate a subnet but set T1 and T2 to "unspecified".
-    subnet_.reset(new Subnet4(IOAddress("192.0.2.0"), 24,
+    subnet_ = Subnet4::create(IOAddress("192.0.2.0"), 24,
                               Triplet<uint32_t>(),
                               Triplet<uint32_t>(),
-                              3000));
+                              3000);
     pool_ = Pool4Ptr(new Pool4(IOAddress("192.0.2.100"),
                                IOAddress("192.0.2.110")));
     subnet_->addPool(pool_);
@@ -2424,6 +2466,9 @@ TEST_F(Dhcpv4SrvTest, buildCfgOptionsList) {
 // identifiers used by a server is accepted,
 // - a message with a server identifier which doesn't match any server
 // identifier used by a server, is not accepted.
+// - a message with a server identifier which doesn't match any server
+// identifier used by a server is accepted when the DHCP Server Identifier
+// option is configured to be ignored.
 TEST_F(Dhcpv4SrvTest, acceptServerId) {
     configureServerIdentifier();
     IfaceMgrTestConfig test_config(true);
@@ -2447,6 +2492,15 @@ TEST_F(Dhcpv4SrvTest, acceptServerId) {
     OptionCustomPtr other_serverid(new OptionCustom(def, Option::V4));
     other_serverid->writeAddress(IOAddress("10.1.2.3"));
     pkt->addOption(other_serverid);
+    EXPECT_FALSE(srv.acceptServerId(pkt));
+
+    // Configure the DHCP Server Identifier to be ignored.
+    ASSERT_FALSE(CfgMgr::instance().getCurrentCfg()->getIgnoreServerIdentifier());
+    CfgMgr::instance().getCurrentCfg()->setIgnoreServerIdentifier(true);
+    EXPECT_TRUE(srv.acceptServerId(pkt));
+
+    // Restore the ignore-dhcp-server-identifier compatibility flag.
+    CfgMgr::instance().getCurrentCfg()->setIgnoreServerIdentifier(false);
     EXPECT_FALSE(srv.acceptServerId(pkt));
 
     // Remove the server identifier.
@@ -2772,6 +2826,22 @@ Dhcpv4SrvTest::portsServerPort() {
     EXPECT_EQ(srv.server_port_, offer->getLocalPort());
 }
 
+/// @brief Remove TLS parameters from configuration element.
+void removeTlsParameters(ConstElementPtr elem) {
+    if (elem) {
+        ElementPtr mutable_elem = boost::const_pointer_cast<Element>(elem);
+        std::vector<std::string> tls_parameters= {
+            "trust-anchor",
+            "cert-file",
+            "key-file",
+            "cipher-list"
+        };
+        for (auto const& parameter : tls_parameters) {
+            mutable_elem->remove(parameter);
+        }
+    }
+}
+
 void
 Dhcpv4SrvTest::loadConfigFile(const string& path) {
     CfgMgr::instance().clear();
@@ -2816,6 +2886,15 @@ Dhcpv4SrvTest::loadConfigFile(const string& path) {
     ASSERT_TRUE(dhcp4);
     ElementPtr mutable_config = boost::const_pointer_cast<Element>(dhcp4);
     mutable_config->set(string("hooks-libraries"), Element::createList());
+    // Remove TLS parameters
+    ConstElementPtr hosts = dhcp4->get("hosts-database");
+    removeTlsParameters(hosts);
+    hosts = dhcp4->get("hosts-databases");
+    if (hosts) {
+        for (auto& host : hosts->listValue()) {
+            removeTlsParameters(host);
+        }
+    }
     ASSERT_NO_THROW(Dhcpv4SrvTest::configure(dhcp4->str(), true, true, true, true));
 
     LeaseMgrFactory::destroy();
@@ -2836,13 +2915,44 @@ Dhcpv4SrvTest::loadConfigFile(const string& path) {
     HostMgr::setIOService(IOServicePtr());
 }
 
+/// @brief Class which handles initialization of database
+/// backend for testing configurations.
+class DBInitializer {
+    public:
+        /// @brief Constructor.
+        ///
+        /// Created database schema.
+        DBInitializer() {
+#if defined (HAVE_MYSQL)
+            db::test::createMySQLSchema();
+#endif
+#if defined (HAVE_PGSQL)
+            db::test::createPgSQLSchema();
+#endif
+        }
+
+        /// @brief Destructor.
+        ///
+        /// Destroys database schema.
+        ~DBInitializer() {
+#if defined (HAVE_MYSQL)
+            db::test::destroyMySQLSchema();
+#endif
+#if defined (HAVE_PGSQL)
+            db::test::destroyPgSQLSchema();
+#endif
+        }
+};
+
 void
 Dhcpv4SrvTest::checkConfigFiles() {
+    DBInitializer dbi;
     IfaceMgrTestConfig test_config(true);
     string path = CFG_EXAMPLES;
     vector<string> examples = {
         "advanced.json",
 #if defined (HAVE_MYSQL) && defined (HAVE_PGSQL)
+        "all-keys.json",
         "all-keys-netconf.json",
         "all-options.json",
 #endif
@@ -2855,7 +2965,8 @@ Dhcpv4SrvTest::checkConfigFiles() {
 #endif
         "dhcpv4-over-dhcpv6.json",
         "global-reservations.json",
-        "ha-load-balancing-primary.json",
+        "ha-load-balancing-server1-mt-with-tls.json",
+        "ha-load-balancing-server2-mt.json",
         "hooks.json",
         "hooks-radius.json",
         "leases-expiration.json",
@@ -2928,7 +3039,7 @@ TEST_F(Dhcpv4SrvTest, portsServerPort) {
     portsServerPort();
 }
 
-TEST_F(Dhcpv4SrvTest, portsServerPortMultiTHreading) {
+TEST_F(Dhcpv4SrvTest, portsServerPortMultiThreading) {
     Dhcpv4SrvMTTestGuard guard(*this, true);
     portsServerPort();
 }
@@ -3032,7 +3143,7 @@ TEST_F(Dhcpv4SrvTest, nextServerOverride) {
     ConstElementPtr json;
     ASSERT_NO_THROW(json = parseDHCP4(config, true));
 
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
 
     CfgMgr::instance().commit();
 
@@ -3094,7 +3205,7 @@ TEST_F(Dhcpv4SrvTest, nextServerGlobal) {
     ConstElementPtr json;
     ASSERT_NO_THROW(json = parseDHCP4(config, true));
 
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
 
     CfgMgr::instance().commit();
 
@@ -3150,14 +3261,19 @@ TEST_F(Dhcpv4SrvTest, matchClassification) {
         "    \"option-data\": ["
         "        {    \"name\": \"ip-forwarding\", "
         "             \"data\": \"true\" } ], "
-        "    \"test\": \"option[12].text == 'foo'\" } ] }";
+        "    \"test\": \"option[12].text == 'foo'\" },"
+        "{   \"name\": \"template-client-id\","
+        "    \"template-test\": \"substring(option[61].hex,0,3)\" },"
+        "{   \"name\": \"SPAWN_template-hostname_foo\" },"
+        "{   \"name\": \"template-hostname\","
+        "    \"template-test\": \"option[12].text\"} ] }";
 
     ConstElementPtr json;
     ASSERT_NO_THROW(json = parseDHCP4(config));
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3201,10 +3317,34 @@ TEST_F(Dhcpv4SrvTest, matchClassification) {
     srv.classifyPacket(query2);
     srv.classifyPacket(query3);
 
+    EXPECT_EQ(query1->classes_.size(), 6);
+    EXPECT_EQ(query2->classes_.size(), 3);
+    EXPECT_EQ(query3->classes_.size(), 6);
+
+    EXPECT_TRUE(query1->inClass("ALL"));
+    EXPECT_TRUE(query2->inClass("ALL"));
+    EXPECT_TRUE(query3->inClass("ALL"));
+
     // Packets with the exception of the second should be in the router class
     EXPECT_TRUE(query1->inClass("router"));
     EXPECT_FALSE(query2->inClass("router"));
     EXPECT_TRUE(query3->inClass("router"));
+
+    EXPECT_TRUE(query1->inClass("template-hostname"));
+    EXPECT_FALSE(query2->inClass("template-hostname"));
+    EXPECT_TRUE(query3->inClass("template-hostname"));
+
+    EXPECT_TRUE(query1->inClass("SPAWN_template-hostname_foo"));
+    EXPECT_FALSE(query2->inClass("SPAWN_template-hostname_foo"));
+    EXPECT_TRUE(query3->inClass("SPAWN_template-hostname_foo"));
+
+    EXPECT_TRUE(query1->inClass("template-client-id"));
+    EXPECT_TRUE(query2->inClass("template-client-id"));
+    EXPECT_TRUE(query3->inClass("template-client-id"));
+
+    EXPECT_TRUE(query1->inClass("SPAWN_template-client-id_def"));
+    EXPECT_TRUE(query2->inClass("SPAWN_template-client-id_def"));
+    EXPECT_TRUE(query3->inClass("SPAWN_template-client-id_def"));
 
     // Process queries
     Pkt4Ptr response1 = srv.processDiscover(query1);
@@ -3247,7 +3387,7 @@ TEST_F(Dhcpv4SrvTest, matchClassificationOptionName) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3298,7 +3438,7 @@ TEST_F(Dhcpv4SrvTest, matchClassificationOptionDef) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3354,7 +3494,7 @@ TEST_F(Dhcpv4SrvTest, subnetClassPriority) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3428,7 +3568,7 @@ TEST_F(Dhcpv4SrvTest, subnetGlobalPriority) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3501,7 +3641,7 @@ TEST_F(Dhcpv4SrvTest, classGlobalPriority) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3584,7 +3724,7 @@ TEST_F(Dhcpv4SrvTest, classGlobalPersistency) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3718,7 +3858,7 @@ TEST_F(Dhcpv4SrvTest, clientPoolClassify) {
     ASSERT_NO_THROW(json = parseDHCP4(config, true));
 
     ConstElementPtr status;
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
 
     CfgMgr::instance().commit();
 
@@ -3786,7 +3926,7 @@ TEST_F(Dhcpv4SrvTest, clientPoolClassifyKnown) {
     ASSERT_NO_THROW(json = parseDHCP4(config, true));
 
     ConstElementPtr status;
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
 
     CfgMgr::instance().commit();
 
@@ -3842,7 +3982,7 @@ TEST_F(Dhcpv4SrvTest, clientPoolClassifyUnknown) {
     ASSERT_NO_THROW(json = parseDHCP4(config, true));
 
     ConstElementPtr status;
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
 
     CfgMgr::instance().commit();
 
@@ -3906,7 +4046,7 @@ TEST_F(Dhcpv4SrvTest, privateOption) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -3974,7 +4114,7 @@ TEST_F(Dhcpv4SrvTest, privateOption) {
     EXPECT_EQ(12345678, opt32->getValue());
 }
 
-// Checks effect of persistency (aka always-true) flag on the PRL
+// Checks effect of persistency (aka always-send) flag on the PRL.
 TEST_F(Dhcpv4SrvTest, prlPersistency) {
     IfaceMgrTestConfig test_config(true);
 
@@ -4024,6 +4164,59 @@ TEST_F(Dhcpv4SrvTest, prlPersistency) {
     // and now a default-ip-ttl
     ASSERT_TRUE(response->getOption(DHO_DEFAULT_IP_TTL));
     // and still no arp-cache-timeout
+    ASSERT_FALSE(response->getOption(DHO_ARP_CACHE_TIMEOUT));
+}
+
+// Checks effect of cancellation (aka never-send) flag.
+TEST_F(Dhcpv4SrvTest, neverSend) {
+    IfaceMgrTestConfig test_config(true);
+
+    ASSERT_NO_THROW(configure(CONFIGS[3]));
+
+    // Create a packet with enough to select the subnet and go through
+    // the DISCOVER processing
+    Pkt4Ptr query(new Pkt4(DHCPDISCOVER, 1234));
+    query->setRemoteAddr(IOAddress("192.0.2.1"));
+    OptionPtr clientid = generateClientId();
+    query->addOption(clientid);
+    query->setIface("eth1");
+    query->setIndex(ETH1_INDEX);
+
+    // Create and add a PRL option for another option
+    OptionUint8ArrayPtr prl(new OptionUint8Array(Option::V4,
+                                                 DHO_DHCP_PARAMETER_REQUEST_LIST));
+    ASSERT_TRUE(prl);
+    prl->addValue(DHO_ARP_CACHE_TIMEOUT);
+    query->addOption(prl);
+
+    // Create and add a host-name option to the query
+    OptionStringPtr hostname(new OptionString(Option::V4, 12, "foo"));
+    ASSERT_TRUE(hostname);
+    query->addOption(hostname);
+
+    // Let the server process it.
+    Pkt4Ptr response = srv_.processDiscover(query);
+
+    // Processing should not add an ip-forwarding option
+    ASSERT_FALSE(response->getOption(DHO_IP_FORWARDING));
+    // And no default-ip-ttl
+    ASSERT_FALSE(response->getOption(DHO_DEFAULT_IP_TTL));
+    // Nor an arp-cache-timeout
+    ASSERT_FALSE(response->getOption(DHO_ARP_CACHE_TIMEOUT));
+
+    // Reset PRL adding default-ip-ttl
+    query->delOption(DHO_DHCP_PARAMETER_REQUEST_LIST);
+    prl->addValue(DHO_DEFAULT_IP_TTL);
+    query->addOption(prl);
+
+    // Let the server process it again.
+    response = srv_.processDiscover(query);
+
+    // Processing should not add an ip-forwarding option
+    ASSERT_FALSE(response->getOption(DHO_IP_FORWARDING));
+    // And now a default-ip-ttl
+    ASSERT_TRUE(response->getOption(DHO_DEFAULT_IP_TTL));
+    // And still no arp-cache-timeout
     ASSERT_FALSE(response->getOption(DHO_ARP_CACHE_TIMEOUT));
 }
 
@@ -4307,6 +4500,140 @@ TEST_F(Dhcpv4SrvTest, relayLinkSelect) {
     rai->addOption(ols);
     dis->addOption(rai);
     EXPECT_FALSE(srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+}
+
+// Checks if a RAI link selection compatibility preferences work as expected
+TEST_F(Dhcpv4SrvTest, relayIgnoreLinkSelect) {
+
+    // We have 3 subnets defined.
+    string config = "{ \"interfaces-config\": {"
+                    "    \"interfaces\": [ \"*\" ]"
+                    "},"
+                    "\"rebind-timer\": 2000, "
+                    "\"renew-timer\": 1000, "
+                    "\"compatibility\": { \"ignore-rai-link-selection\": true },"
+                    "\"subnet4\": [ "
+                    "{   \"pools\": [ { \"pool\": \"192.0.2.2 - 192.0.2.100\" } ],"
+                    "    \"relay\": { "
+                    "        \"ip-address\": \"192.0.5.1\""
+                    "    },"
+                    "    \"subnet\": \"192.0.2.0/24\" }, "
+                    "{   \"pools\": [ { \"pool\": \"192.0.3.1 - 192.0.3.100\" } ],"
+                    "    \"subnet\": \"192.0.3.0/24\" }, "
+                    "{   \"pools\": [ { \"pool\": \"192.0.4.1 - 192.0.4.100\" } ],"
+                    "    \"client-class\": \"foo\", "
+                    "    \"subnet\": \"192.0.4.0/24\" } "
+                    "],"
+                    "\"valid-lifetime\": 4000 }";
+
+    // Use this config to set up the server
+    ASSERT_NO_THROW(configure(config, true, false));
+
+    // Let's get the subnet configuration objects
+    const Subnet4Collection* subnets =
+        CfgMgr::instance().getCurrentCfg()->getCfgSubnets4()->getAll();
+    ASSERT_EQ(3, subnets->size());
+
+    // Let's get them for easy reference
+    auto subnet_it = subnets->begin();
+    Subnet4Ptr subnet1 = *subnet_it;
+    ++subnet_it;
+    Subnet4Ptr subnet2 = *subnet_it;
+    ++subnet_it;
+    Subnet4Ptr subnet3 = *subnet_it;
+    ASSERT_TRUE(subnet1);
+    ASSERT_TRUE(subnet2);
+    ASSERT_TRUE(subnet3);
+
+    // Let's create a packet.
+    Pkt4Ptr dis = Pkt4Ptr(new Pkt4(DHCPDISCOVER, 1234));
+    dis->setRemoteAddr(IOAddress("192.0.2.1"));
+    dis->setIface("eth0");
+    dis->setIndex(ETH0_INDEX);
+    dis->setHops(1);
+    OptionPtr clientid = generateClientId();
+    dis->addOption(clientid);
+
+    // Let's create a Relay Agent Information option
+    OptionDefinitionPtr rai_def = LibDHCP::getOptionDef(DHCP4_OPTION_SPACE,
+                                                        DHO_DHCP_AGENT_OPTIONS);
+    ASSERT_TRUE(rai_def);
+    OptionCustomPtr rai(new OptionCustom(*rai_def, Option::V4));
+    ASSERT_TRUE(rai);
+    IOAddress addr("192.0.3.2");
+    OptionPtr ols(new Option(Option::V4,
+                             RAI_OPTION_LINK_SELECTION,
+                             addr.toBytes()));
+    ASSERT_TRUE(ols);
+    rai->addOption(ols);
+
+    // This is just a sanity check, we're using regular method: ciaddr 192.0.3.1
+    // belongs to the second subnet, so it is selected
+    dis->setGiaddr(IOAddress("192.0.3.1"));
+    bool drop = false;
+    EXPECT_TRUE(subnet2 == srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+
+    // Setup a relay override for the first subnet as it has a high precedence
+    dis->setGiaddr(IOAddress("192.0.5.1"));
+    EXPECT_TRUE(subnet1 == srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+
+    // Put a RAI to select back the second subnet as it has
+    // the highest precedence, but it should be ignored due
+    // to the ignore-rai-link-selection compatibility config
+    dis->addOption(rai);
+    EXPECT_TRUE(subnet1 == srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+
+    // Subnet select option has a lower precedence, but will succeed
+    // because RAI link selection suboptions are being ignored
+    OptionDefinitionPtr sbnsel_def = LibDHCP::getOptionDef(DHCP4_OPTION_SPACE,
+                                                           DHO_SUBNET_SELECTION);
+    ASSERT_TRUE(sbnsel_def);
+    OptionCustomPtr sbnsel(new OptionCustom(*sbnsel_def, Option::V4));
+    ASSERT_TRUE(sbnsel);
+    sbnsel->writeAddress(IOAddress("192.0.2.3"));
+    dis->addOption(sbnsel);
+    EXPECT_TRUE(subnet1 == srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+
+    // But, when RAI exists without the link selection option, we should
+    // fall back to the subnet selection option.
+    rai->delOption(RAI_OPTION_LINK_SELECTION);
+    dis->delOption(DHO_DHCP_AGENT_OPTIONS);
+    dis->addOption(rai);
+    dis->setGiaddr(IOAddress("192.0.4.1"));
+    EXPECT_TRUE(subnet1 == srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+
+    // Check client-classification still applies
+    IOAddress addr_foo("192.0.4.2");
+    ols.reset(new Option(Option::V4, RAI_OPTION_LINK_SELECTION,
+                         addr_foo.toBytes()));
+    dis->delOption(DHO_SUBNET_SELECTION);
+    dis->delOption(DHO_DHCP_AGENT_OPTIONS);
+    rai->addOption(ols);
+    dis->addOption(rai);
+
+    // Note it shall fail (vs. try the next criterion).
+    EXPECT_FALSE(srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+    // Add the packet to the class and check again: now it shall succeed
+    dis->addClass("foo");
+    EXPECT_TRUE(subnet3 == srv_.selectSubnet(dis, drop));
+    EXPECT_FALSE(drop);
+
+    // Check it succeeds even with a bad address in the sub-option
+    IOAddress addr_bad("10.0.0.1");
+    ols.reset(new Option(Option::V4, RAI_OPTION_LINK_SELECTION,
+                         addr_bad.toBytes()));
+    rai->delOption(RAI_OPTION_LINK_SELECTION);
+    dis->delOption(DHO_DHCP_AGENT_OPTIONS);
+    rai->addOption(ols);
+    dis->addOption(rai);
+    EXPECT_TRUE(srv_.selectSubnet(dis, drop));
     EXPECT_FALSE(drop);
 }
 
@@ -4675,8 +5002,7 @@ TEST_F(Dhcpv4SrvTest, userContext) {
 
     // This config has one subnet with user-context with one
     // pool (also with context). Make sure the configuration could be accepted.
-    cout << CONFIGS[3] << endl;
-    EXPECT_NO_THROW(configure(CONFIGS[3]));
+    EXPECT_NO_THROW(configure(CONFIGS[4]));
 
     // Now make sure the data was not lost.
     ConstSrvConfigPtr cfg = CfgMgr::instance().getCurrentCfg();
@@ -4771,7 +5097,7 @@ TEST_F(Dhcpv4SrvTest, fixedFieldsInClassOrder) {
     ConstElementPtr status;
 
     // Configure the server and make sure the config is accepted
-    EXPECT_NO_THROW(status = configureDhcp4Server(srv, json));
+    EXPECT_NO_THROW(status = Dhcpv4SrvTest::configure(srv, json));
     ASSERT_TRUE(status);
     comment_ = config::parseAnswer(rcode_, status);
     ASSERT_EQ(0, rcode_);
@@ -4823,6 +5149,8 @@ TEST_F(Dhcpv4SrvTest, fixedFieldsInClassOrder) {
 
             HWAddrPtr hw_addr(new HWAddr(HWAddr::fromText(scenario.hw_str_, 10)));
             query->setHWAddr(hw_addr);
+
+            srv.classifyPacket(query);
 
             // Process it.
             Pkt4Ptr response = srv.processDiscover(query);

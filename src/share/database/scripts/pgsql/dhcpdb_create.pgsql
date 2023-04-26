@@ -1,4 +1,4 @@
--- Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+-- Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 
 -- This Source Code Form is subject to the terms of the Mozilla Public
 -- License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -5625,6 +5625,29 @@ UPDATE schema_version
     SET version = '13', minor = '0';
 
 -- This line concludes the schema upgrade to version 13.
+
+-- This line starts the schema upgrade to version 14.
+
+-- Add cancelled (aka never-send) column to option tables.
+
+ALTER TABLE dhcp4_options ADD COLUMN cancelled BOOLEAN NOT NULL DEFAULT 'f';
+ALTER TABLE dhcp6_options ADD COLUMN cancelled BOOLEAN NOT NULL DEFAULT 'f';
+
+-- Add offer_lifetime column to v4 tables.
+ALTER TABLE dhcp4_shared_network
+    ADD COLUMN offer_lifetime BIGINT DEFAULT NULL;
+
+ALTER TABLE dhcp4_subnet
+    ADD COLUMN offer_lifetime BIGINT DEFAULT NULL;
+
+ALTER TABLE dhcp4_client_class
+    ADD COLUMN offer_lifetime BIGINT DEFAULT NULL;
+
+-- Update the schema version number.
+UPDATE schema_version
+    SET version = '14', minor = '0';
+
+-- This line concludes the schema upgrade to version 14.
 
 -- Commit the script transaction.
 COMMIT;

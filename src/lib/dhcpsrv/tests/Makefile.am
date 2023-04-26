@@ -16,8 +16,7 @@ endif
 CLEANFILES = *.gcno *.gcda
 DISTCLEANFILES = test_libraries.h
 
-TESTS_ENVIRONMENT = \
-        $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
+TESTS_ENVIRONMENT = $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 
 TESTS =
 if HAVE_GTEST
@@ -62,6 +61,7 @@ libdhcpsrv_unittests_SOURCES += alloc_engine_expiration_unittest.cc
 libdhcpsrv_unittests_SOURCES += alloc_engine_hooks_unittest.cc
 libdhcpsrv_unittests_SOURCES += alloc_engine4_unittest.cc
 libdhcpsrv_unittests_SOURCES += alloc_engine6_unittest.cc
+libdhcpsrv_unittests_SOURCES += allocation_state_unittest.cc
 libdhcpsrv_unittests_SOURCES += callout_handle_store_unittest.cc
 libdhcpsrv_unittests_SOURCES += cb_ctl_dhcp_unittest.cc
 libdhcpsrv_unittests_SOURCES += cfg_db_access_unittest.cc
@@ -100,11 +100,14 @@ libdhcpsrv_unittests_SOURCES += host_reservations_list_parser_unittest.cc
 libdhcpsrv_unittests_SOURCES += ifaces_config_parser_unittest.cc
 libdhcpsrv_unittests_SOURCES += ip_range_unittest.cc
 libdhcpsrv_unittests_SOURCES += ip_range_permutation_unittest.cc
+libdhcpsrv_unittests_SOURCES += iterative_allocation_state_unittest.cc
+libdhcpsrv_unittests_SOURCES += iterative_allocator_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_file_loader_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_mgr_factory_unittest.cc
 libdhcpsrv_unittests_SOURCES += lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += generic_lease_mgr_unittest.cc generic_lease_mgr_unittest.h
+libdhcpsrv_unittests_SOURCES += memfile_lease_extended_info_unittest.cc
 libdhcpsrv_unittests_SOURCES += memfile_lease_limits_unittest.cc
 libdhcpsrv_unittests_SOURCES += memfile_lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += multi_threading_config_parser_unittest.cc
@@ -119,6 +122,8 @@ libdhcpsrv_unittests_SOURCES += pgsql_lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += pgsql_host_data_source_unittest.cc
 endif
 libdhcpsrv_unittests_SOURCES += pool_unittest.cc
+libdhcpsrv_unittests_SOURCES += random_allocation_state_unittest.cc
+libdhcpsrv_unittests_SOURCES += random_allocator_unittest.cc
 libdhcpsrv_unittests_SOURCES += resource_handler_unittest.cc
 libdhcpsrv_unittests_SOURCES += sanity_checks_unittest.cc
 libdhcpsrv_unittests_SOURCES += shared_network_parser_unittest.cc
@@ -128,6 +133,7 @@ libdhcpsrv_unittests_SOURCES += srv_config_unittest.cc
 libdhcpsrv_unittests_SOURCES += subnet_unittest.cc
 libdhcpsrv_unittests_SOURCES += test_get_callout_handle.cc test_get_callout_handle.h
 libdhcpsrv_unittests_SOURCES += timer_mgr_unittest.cc
+libdhcpsrv_unittests_SOURCES += tracking_lease_mgr_unittest.cc
 libdhcpsrv_unittests_SOURCES += network_state_unittest.cc
 libdhcpsrv_unittests_SOURCES += network_unittest.cc
 
@@ -150,7 +156,6 @@ libdhcpsrv_unittests_LDFLAGS  += $(PGSQL_LIBS)
 endif
 
 libdhcpsrv_unittests_LDADD  = $(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la
-
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/process/libkea-process.la
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/eval/libkea-eval.la
@@ -162,13 +167,14 @@ libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/dhcp/tests/libdhcptest.la
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 
-if HAVE_MYSQL
-libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/mysql/libkea-mysql.la
-libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la
-endif
 if HAVE_PGSQL
-libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la
+libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
+endif
+
+if HAVE_MYSQL
+libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la
+libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/mysql/libkea-mysql.la
 endif
 
 libdhcpsrv_unittests_LDADD += $(top_builddir)/src/lib/database/testutils/libdatabasetest.la

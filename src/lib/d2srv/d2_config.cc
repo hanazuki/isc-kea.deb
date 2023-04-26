@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,7 +42,7 @@ D2Params::D2Params(const isc::asiolink::IOAddress& ip_address,
 
 D2Params::D2Params()
     : ip_address_(isc::asiolink::IOAddress("127.0.0.1")),
-     port_(53001), dns_server_timeout_(100),
+     port_(53001), dns_server_timeout_(500),
      ncr_protocol_(dhcp_ddns::NCR_UDP),
      ncr_format_(dhcp_ddns::FMT_JSON) {
     validateContents();

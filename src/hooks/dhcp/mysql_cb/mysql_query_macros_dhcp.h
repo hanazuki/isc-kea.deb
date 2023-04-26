@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -81,6 +81,7 @@ namespace {
     "  x.formatted_value," \
     "  x.space," \
     "  x.persistent," \
+    "  x.cancelled," \
     "  x.dhcp4_subnet_id," \
     "  x.scope_id," \
     "  x.user_context," \
@@ -93,6 +94,7 @@ namespace {
     "  o.formatted_value," \
     "  o.space," \
     "  o.persistent," \
+    "  o.cancelled," \
     "  o.dhcp4_subnet_id," \
     "  o.scope_id," \
     "  o.user_context," \
@@ -118,6 +120,7 @@ namespace {
     "  s.reservations_out_of_pool," \
     "  s.cache_threshold," \
     "  s.cache_max_age," \
+    "  s.offer_lifetime, " \
     "  srv.tag " \
     "FROM dhcp4_subnet AS s " \
     server_join \
@@ -187,6 +190,7 @@ namespace {
     "  x.formatted_value," \
     "  x.space," \
     "  x.persistent," \
+    "  x.cancelled," \
     "  x.dhcp6_subnet_id," \
     "  x.scope_id," \
     "  x.user_context," \
@@ -200,6 +204,7 @@ namespace {
     "  y.formatted_value," \
     "  y.space," \
     "  y.persistent," \
+    "  y.cancelled," \
     "  y.dhcp6_subnet_id," \
     "  y.scope_id," \
     "  y.user_context," \
@@ -213,6 +218,7 @@ namespace {
     "  o.formatted_value," \
     "  o.space," \
     "  o.persistent," \
+    "  o.cancelled," \
     "  o.dhcp6_subnet_id," \
     "  o.scope_id," \
     "  o.user_context," \
@@ -299,6 +305,7 @@ namespace {
       "  x.formatted_value," \
       "  x.space," \
       "  x.persistent," \
+      "  x.cancelled," \
       "  x.dhcp4_subnet_id," \
       "  x.scope_id," \
       "  x.user_context," \
@@ -339,6 +346,7 @@ namespace {
     "  x.formatted_value," \
     "  x.space," \
     "  x.persistent," \
+    "  x.cancelled," \
     "  x.dhcp6_subnet_id," \
     "  x.scope_id," \
     "  x.user_context," \
@@ -383,6 +391,7 @@ namespace {
     "  x.formatted_value," \
     "  x.space," \
     "  x.persistent," \
+    "  x.cancelled," \
     "  x.dhcp6_subnet_id," \
     "  x.scope_id," \
     "  x.user_context," \
@@ -429,6 +438,7 @@ namespace {
     "  o.formatted_value," \
     "  o.space," \
     "  o.persistent," \
+    "  o.cancelled," \
     "  o.dhcp4_subnet_id," \
     "  o.scope_id," \
     "  o.user_context," \
@@ -454,6 +464,7 @@ namespace {
     "  n.reservations_out_of_pool," \
     "  n.cache_threshold," \
     "  n.cache_max_age," \
+    "  n.offer_lifetime, " \
     "  s.tag " \
     "FROM dhcp4_shared_network AS n " \
     server_join \
@@ -509,6 +520,7 @@ namespace {
     "  o.formatted_value," \
     "  o.space," \
     "  o.persistent," \
+    "  o.cancelled," \
     "  o.dhcp6_subnet_id," \
     "  o.scope_id," \
     "  o.user_context," \
@@ -598,6 +610,7 @@ namespace {
     "  o.formatted_value," \
     "  o.space," \
     "  o.persistent," \
+    "  o.cancelled," \
     "  o." #table_prefix "_subnet_id," \
     "  o.scope_id," \
     "  o.user_context," \
@@ -676,6 +689,7 @@ namespace {
     "  o.depend_on_known_indirectly, " \
     "  c.modification_ts," \
     "  c.user_context," \
+    "  c.offer_lifetime," \
     "  d.id," \
     "  d.code," \
     "  d.name," \
@@ -692,6 +706,7 @@ namespace {
     "  x.formatted_value," \
     "  x.space," \
     "  x.persistent," \
+    "  x.cancelled," \
     "  x.dhcp4_subnet_id," \
     "  x.scope_id," \
     "  x.user_context," \
@@ -755,6 +770,7 @@ namespace {
     "  x.formatted_value," \
     "  x.space," \
     "  x.persistent," \
+    "  x.cancelled," \
     "  x.dhcp6_subnet_id," \
     "  x.scope_id," \
     "  x.user_context," \
@@ -909,6 +925,7 @@ namespace {
     "  formatted_value," \
     "  space," \
     "  persistent," \
+    "  cancelled," \
     "  dhcp_client_class," \
     " " #table_prefix "_subnet_id," \
     "  scope_id," \
@@ -917,7 +934,7 @@ namespace {
     "  pool_id," \
     "  modification_ts" \
     pd_pool_id \
-    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?" last ")"
+    ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?" last ")"
 
 #define MYSQL_INSERT_OPTION4() \
     MYSQL_INSERT_OPTION_COMMON(dhcp4, "", "")
@@ -1014,7 +1031,7 @@ namespace {
     "  d.encapsulate = ?," \
     "  d.record_types = ?," \
     "  d.user_context = ? " \
-    "WHERE d.class_id = (SELECT id FROM dhcp4_client_class WHERE name = ?) " \
+    "WHERE d.class_id = (SELECT id FROM " #table_prefix "_client_class WHERE name = ?) " \
     "  AND s.tag = ? AND d.code = ? AND d.space = ?"
 #endif
 
@@ -1028,6 +1045,7 @@ namespace {
     "  o.formatted_value = ?," \
     "  o.space = ?," \
     "  o.persistent = ?," \
+    "  o.cancelled = ?," \
     "  o.dhcp_client_class = ?," \
     "  o." #table_prefix "_subnet_id = ?," \
     "  o.scope_id = ?," \
@@ -1076,7 +1094,8 @@ namespace {
     "  depend_on_known_directly = ?," \
     follow_class_name_set \
     "  modification_ts = ?, " \
-    "  user_context = ? " \
+    "  user_context = ?," \
+    "  offer_lifetime = ? "\
     "WHERE name = ?"
 #endif
 

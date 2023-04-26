@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -225,7 +225,7 @@ public:
     /// @return true if the client class is defined, false if not
     bool isClientClassDefined(const ClientClass& client_class);
 
- private:
+private:
     /// @brief Flag determining scanner debugging.
     bool trace_scanning_;
 

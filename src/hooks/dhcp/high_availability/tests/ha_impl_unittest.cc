@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -207,8 +207,8 @@ TEST_F(HAImplTest, buffer4Receive) {
     };
 
     // Provide DHCP message type option, truncated vendor option and domain name.
-    // Parsing this message should be successful but domain name following the
-    // truncated vendor option should be skipped.
+    // Parsing this message should be successful but vendor option should be
+    // skipped.
     std::vector<uint8_t> options = {
         53, 1, 1, // Message type = DHCPDISCOVER
         125, 6, // vendor options
@@ -234,15 +234,16 @@ TEST_F(HAImplTest, buffer4Receive) {
 
     // The client class should be assigned to the message to indicate that the
     // server1 should process this message.
-    ASSERT_EQ(2, query4->getClasses().size());
-    EXPECT_TRUE(query4->inClass("ALL"));
+    ASSERT_EQ(1, query4->getClasses().size());
     EXPECT_TRUE(query4->inClass("HA_server1"));
 
     // Check that the message has been parsed. The DHCP message type should
     // be set in this case.
     EXPECT_EQ(DHCPDISCOVER, static_cast<int>(query4->getType()));
-    // Domain name should be skipped because the vendor option was truncated.
-    EXPECT_FALSE(query4->getOption(DHO_DOMAIN_NAME));
+    // Vendor option should be skipped because it was truncated.
+    EXPECT_FALSE(query4->getOption(DHO_VIVSO_SUBOPTIONS));
+    // Domain name should not be skipped because the vendor option was truncated.
+    EXPECT_TRUE(query4->getOption(DHO_DOMAIN_NAME));
 }
 
 // Tests for buffer6_receive callout implementation.
@@ -323,8 +324,7 @@ TEST_F(HAImplTest, buffer6Receive) {
 
     // The client class should be assigned to the message to indicate that the
     // server1 should process this message.
-    ASSERT_EQ(2, query6->getClasses().size());
-    EXPECT_TRUE(query6->inClass("ALL"));
+    ASSERT_EQ(1, query6->getClasses().size());
     EXPECT_TRUE(query6->inClass("HA_server1"));
 
     // Check that the message has been parsed. The DHCP message type should

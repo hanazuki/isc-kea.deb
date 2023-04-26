@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,10 @@
 #include <cc/command_interpreter.h>
 #include <config/command_mgr.h>
 #include <config_backend/base_config_backend.h>
+#include <dhcp6/json_config_parser.h>
+#include <dhcp6/tests/dhcp6_test_utils.h>
+#include <dhcp6/tests/dhcp6_client.h>
+#include <dhcp/tests/pkt_captures.h>
 #include <dhcp/dhcp6.h>
 #include <dhcp/duid.h>
 #include <dhcp/option.h>
@@ -27,23 +31,29 @@
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/host_mgr.h>
 #include <dhcpsrv/utils.h>
-#include <dhcp6/json_config_parser.h>
+#include <stats/stats_mgr.h>
+#include <testutils/gtest_utils.h>
 #include <util/buffer.h>
 #include <util/range_utilities.h>
 #include <util/encode/hex.h>
-#include <stats/stats_mgr.h>
-#include <dhcp6/tests/dhcp6_test_utils.h>
-#include <dhcp6/tests/dhcp6_client.h>
-#include <dhcp/tests/pkt_captures.h>
+
+#ifdef HAVE_MYSQL
+#include <mysql/testutils/mysql_schema.h>
+#endif
+
+#ifdef HAVE_PGSQL
+#include <pgsql/testutils/pgsql_schema.h>
+#endif
 
 #include <boost/pointer_cast.hpp>
 #include <boost/scoped_ptr.hpp>
-#include <gtest/gtest.h>
-#include <unistd.h>
+
 #include <fstream>
 #include <iostream>
 #include <sstream>
+
 #include <dirent.h>
+#include <unistd.h>
 
 using namespace isc;
 using namespace isc::asiolink;
@@ -113,6 +123,7 @@ const char* CONFIGS[] = {
     "    \"renew-timer\": 1000, "
     "    \"valid-lifetime\": 4000, "
     "    \"subnet6\": [ {"
+    "       \"interface\": \"eth0\", "
     "       \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ], "
     "       \"subnet\": \"2001:db8:1::/48\""
     "    } ], "
@@ -130,6 +141,38 @@ const char* CONFIGS[] = {
     "}",
 
     // Configuration 3:
+    // - a single subnet with one option cancelled with never-send.
+    // - two global options (one enforced with always-send)
+    "{"
+    "    \"interfaces-config\": { \"interfaces\": [ \"*\" ] }, "
+    "    \"preferred-lifetime\": 3000, "
+    "    \"rebind-timer\": 2000, "
+    "    \"renew-timer\": 1000, "
+    "    \"valid-lifetime\": 4000, "
+    "    \"subnet6\": [ {"
+    "       \"interface\": \"eth0\", "
+    "       \"pools\": [ { \"pool\": \"2001:db8:1::/64\" } ], "
+    "       \"subnet\": \"2001:db8:1::/48\", "
+    "       \"option-data\": ["
+    "       {"
+    "           \"name\": \"subscriber-id\", "
+    "           \"never-send\": true"
+    "       } ]"
+    "    } ], "
+    "    \"option-data\": ["
+    "    {"
+    "        \"name\": \"dns-servers\", "
+    "        \"data\": \"2001:db8:1234:FFFF::1\""
+    "    }, "
+    "    {"
+    "        \"name\": \"subscriber-id\", "
+    "         \"data\": \"1234\", "
+    "         \"always-send\": true"
+    "    }"
+    "    ]"
+    "}",
+
+    // Configuration 4:
     // - one subnet with one address pool and one prefix pool
     // - user-contexts defined in subnet and each pool
     "{"
@@ -155,6 +198,22 @@ const char* CONFIGS[] = {
 namespace isc {
 namespace dhcp {
 namespace test {
+
+/// @brief Remove TLS parameters from configuration element.
+void removeTlsParameters(ConstElementPtr elem) {
+    if (elem) {
+        ElementPtr mutable_elem = boost::const_pointer_cast<Element>(elem);
+        std::vector<std::string> tls_parameters= {
+            "trust-anchor",
+            "cert-file",
+            "key-file",
+            "cipher-list"
+        };
+        for (auto const& parameter : tls_parameters) {
+            mutable_elem->remove(parameter);
+        }
+    }
+}
 
 void
 Dhcpv6SrvTest::loadConfigFile(const string& path) {
@@ -200,6 +259,15 @@ Dhcpv6SrvTest::loadConfigFile(const string& path) {
     ASSERT_TRUE(dhcp6);
     ElementPtr mutable_config = boost::const_pointer_cast<Element>(dhcp6);
     mutable_config->set(string("hooks-libraries"), Element::createList());
+    // Remove TLS parameters
+    ConstElementPtr hosts = dhcp6->get("hosts-database");
+    removeTlsParameters(hosts);
+    hosts = dhcp6->get("hosts-databases");
+    if (hosts) {
+        for (auto& host : hosts->listValue()) {
+            removeTlsParameters(host);
+        }
+    }
     ASSERT_NO_THROW(Dhcpv6SrvTest::configure(dhcp6->str(), true, true, true, true));
 
     LeaseMgrFactory::destroy();
@@ -220,13 +288,44 @@ Dhcpv6SrvTest::loadConfigFile(const string& path) {
     HostMgr::setIOService(IOServicePtr());
 }
 
+/// @brief Class which handles initialization of database
+/// backend for testing configurations.
+class DBInitializer {
+    public:
+        /// @brief Constructor.
+        ///
+        /// Created database schema.
+        DBInitializer() {
+#if defined (HAVE_MYSQL)
+            db::test::createMySQLSchema();
+#endif
+#if defined (HAVE_PGSQL)
+            db::test::createPgSQLSchema();
+#endif
+        }
+
+        /// @brief Destructor.
+        ///
+        /// Destroys database schema.
+        ~DBInitializer() {
+#if defined (HAVE_MYSQL)
+            db::test::destroyMySQLSchema();
+#endif
+#if defined (HAVE_PGSQL)
+            db::test::destroyPgSQLSchema();
+#endif
+        }
+};
+
 void
 Dhcpv6SrvTest::checkConfigFiles() {
+    DBInitializer dbi;
     IfaceMgrTestConfig test_config(true);
     string path = CFG_EXAMPLES;
     vector<string> examples = {
         "advanced.json",
 #if defined (HAVE_MYSQL) && defined (HAVE_PGSQL)
+        "all-keys.json",
         "all-keys-netconf.json",
         "all-options.json",
 #endif
@@ -240,7 +339,8 @@ Dhcpv6SrvTest::checkConfigFiles() {
         "dhcpv4-over-dhcpv6.json",
         "duid.json",
         "global-reservations.json",
-        "ha-hot-standby.json",
+        "ha-hot-standby-server1-with-tls.json",
+        "ha-hot-standby-server2.json",
         "hooks.json",
         "iPXE.json",
         "leases-expiration.json",
@@ -629,7 +729,7 @@ TEST_F(Dhcpv6SrvTest, SolicitBasic) {
 
     // check that IA_NA was returned and that there's an address included
     boost::shared_ptr<Option6IAAddr> addr = checkIA_NA(reply, 234, subnet_->getT1(),
-                                                subnet_->getT2());
+                                                       subnet_->getT2());
     ASSERT_TRUE(addr);
 
     // Check that the assigned address is indeed from the configured pool
@@ -1955,7 +2055,50 @@ TEST_F(Dhcpv6SrvTest, pdRenewCache) {
 // - assigned-nas stats counter is properly decremented
 TEST_F(Dhcpv6SrvTest, ReleaseBasic) {
     testReleaseBasic(Lease::TYPE_NA, IOAddress("2001:db8:1:1::cafe:babe"),
-                     IOAddress("2001:db8:1:1::cafe:babe"));
+                     IOAddress("2001:db8:1:1::cafe:babe"), LEASE_AFFINITY_DISABLED);
+}
+
+// This test verifies that incoming (positive) RELEASE with address can be
+// handled properly, that a REPLY is generated, that the response has status
+// code and that the lease is expired and not removed from the database.
+//
+// expected:
+// - returned REPLY message has copy of client-id
+// - returned REPLY message has server-id
+// - returned REPLY message has IA_NA that does not include an IAADDR
+// - lease is actually expired instead of being removed from LeaseMgr
+// - assigned-nas stats counter is unchanged
+TEST_F(Dhcpv6SrvTest, ReleaseBasicNoDelete) {
+    testReleaseBasic(Lease::TYPE_NA, IOAddress("2001:db8:1:1::cafe:babe"),
+                     IOAddress("2001:db8:1:1::cafe:babe"), LEASE_AFFINITY_ENABLED);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a SOLICIT does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, ReleaseBasicNoDeleteSolicit) {
+    testReleaseNoDelete(Lease::TYPE_NA, IOAddress("2001:db8:1:1::cafe:babe"),
+                        DHCPV6_SOLICIT);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a REQUEST does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, ReleaseBasicNoDeleteRequest) {
+    testReleaseNoDelete(Lease::TYPE_NA, IOAddress("2001:db8:1:1::cafe:babe"),
+                        DHCPV6_REQUEST);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a RENEW does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, ReleaseBasicNoDeleteRenew) {
+    testReleaseNoDelete(Lease::TYPE_NA, IOAddress("2001:db8:1:1::cafe:babe"),
+                        DHCPV6_REQUEST);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a REBIND does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, ReleaseBasicNoDeleteRebind) {
+    testReleaseNoDelete(Lease::TYPE_NA, IOAddress("2001:db8:1:1::cafe:babe"),
+                        DHCPV6_REBIND);
 }
 
 // This test verifies that incoming (positive) RELEASE with prefix can be
@@ -1970,7 +2113,50 @@ TEST_F(Dhcpv6SrvTest, ReleaseBasic) {
 // - assigned-pds stats counter is properly decremented
 TEST_F(Dhcpv6SrvTest, pdReleaseBasic) {
     testReleaseBasic(Lease::TYPE_PD, IOAddress("2001:db8:1:2::"),
-                     IOAddress("2001:db8:1:2::"));
+                     IOAddress("2001:db8:1:2::"), LEASE_AFFINITY_DISABLED);
+}
+
+// This test verifies that incoming (positive) RELEASE with prefix can be
+// handled properly, that a REPLY is generated, that the response has
+// status code and that the lease is expired and not removed from the database.
+//
+// expected:
+// - returned REPLY message has copy of client-id
+// - returned REPLY message has server-id
+// - returned REPLY message has IA_PD that does not include an IAPREFIX
+// - lease is actually expired instead of being removed from LeaseMgr
+// - assigned-pds stats counter is unchanged
+TEST_F(Dhcpv6SrvTest, pdReleaseBasicNoDelete) {
+    testReleaseBasic(Lease::TYPE_PD, IOAddress("2001:db8:1:2::"),
+                     IOAddress("2001:db8:1:2::"), LEASE_AFFINITY_ENABLED);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a SOLICIT does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, pdReleaseBasicNoDeleteSolicit) {
+    testReleaseNoDelete(Lease::TYPE_PD, IOAddress("2001:db8:1:2::"),
+                        DHCPV6_REQUEST);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a REQUEST does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, pdReleaseBasicNoDeleteRequest) {
+    testReleaseNoDelete(Lease::TYPE_PD, IOAddress("2001:db8:1:2::"),
+                        DHCPV6_REQUEST);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a RENEW does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, pdReleaseBasicNoDeleteRenew) {
+    testReleaseNoDelete(Lease::TYPE_PD, IOAddress("2001:db8:1:2::"),
+                        DHCPV6_REQUEST);
+}
+
+// This test verifies that after a RELEASE which expired a lease the response
+// to a REBIND does not get zero lifetimes.
+TEST_F(Dhcpv6SrvTest, pdReleaseBasicNoDeleteRebind) {
+    testReleaseNoDelete(Lease::TYPE_PD, IOAddress("2001:db8:1:2::"),
+                        DHCPV6_REBIND);
 }
 
 // This test verifies that incoming (invalid) RELEASE with an address
@@ -1991,8 +2177,8 @@ TEST_F(Dhcpv6SrvTest, ReleaseReject) {
     testReleaseReject(Lease::TYPE_NA, IOAddress("2001:db8:1:1::dead"));
 }
 
-// This test verifies that incoming (invalid) RELEASE with a prefix
-// can be handled properly.
+// This test verifies that incoming (invalid) RELEASE with a prefix can be
+// handled properly.
 //
 // This test checks 3 scenarios:
 // 1. there is no such lease at all
@@ -2231,9 +2417,9 @@ TEST_F(Dhcpv6SrvTest, testUnicast) {
 TEST_F(Dhcpv6SrvTest, selectSubnetAddr) {
     NakedDhcpv6Srv srv(0);
 
-    Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet2(new Subnet6(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet3(new Subnet6(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4));
+    auto subnet1 = Subnet6::create(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4);
+    auto subnet2 = Subnet6::create(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4);
+    auto subnet3 = Subnet6::create(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4);
 
     // CASE 1: We have only one subnet defined and we received local traffic.
     // The only available subnet used to be picked, but not anymore
@@ -2303,9 +2489,9 @@ TEST_F(Dhcpv6SrvTest, selectSubnetAddr) {
 TEST_F(Dhcpv6SrvTest, selectSubnetIface) {
     NakedDhcpv6Srv srv(0);
 
-    Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet2(new Subnet6(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet3(new Subnet6(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4));
+    auto subnet1 = Subnet6::create(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4);
+    auto subnet2 = Subnet6::create(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4);
+    auto subnet3 = Subnet6::create(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4);
 
     subnet1->setIface("eth0");
     subnet3->setIface("wifi1");
@@ -2368,9 +2554,9 @@ TEST_F(Dhcpv6SrvTest, selectSubnetIface) {
 TEST_F(Dhcpv6SrvTest, selectSubnetRelayLinkaddr) {
     NakedDhcpv6Srv srv(0);
 
-    Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet2(new Subnet6(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet3(new Subnet6(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4));
+    auto subnet1 = Subnet6::create(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4);
+    auto subnet2 = Subnet6::create(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4);
+    auto subnet3 = Subnet6::create(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4);
 
     Pkt6::RelayInfo relay;
     relay.linkaddr_ = IOAddress("2001:db8:2::1234");
@@ -2491,9 +2677,9 @@ TEST_F(Dhcpv6SrvTest, selectSubnetRelayLinkaddr) {
 TEST_F(Dhcpv6SrvTest, selectSubnetRelayInterfaceId) {
     NakedDhcpv6Srv srv(0);
 
-    Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet2(new Subnet6(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4));
-    Subnet6Ptr subnet3(new Subnet6(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4));
+    auto subnet1 = Subnet6::create(IOAddress("2001:db8:1::"), 48, 1, 2, 3, 4);
+    auto subnet2 = Subnet6::create(IOAddress("2001:db8:2::"), 48, 1, 2, 3, 4);
+    auto subnet3 = Subnet6::create(IOAddress("2001:db8:3::"), 48, 1, 2, 3, 4);
 
     subnet1->setInterfaceId(generateInterfaceId("relay1"));
     subnet2->setInterfaceId(generateInterfaceId("relay2"));
@@ -2737,7 +2923,7 @@ TEST_F(Dhcpv6SrvTest, relaySourcePort) {
     EXPECT_TRUE(adv->getRelayOption(D6O_RELAY_SOURCE_PORT, 0));
 }
 
-// Checks effect of persistency (aka always-true) flag on the ORO
+// Checks effect of persistency (aka always-send) flag on the ORO
 TEST_F(Dhcpv6SrvTest, prlPersistency) {
     IfaceMgrTestConfig test_config(true);
 
@@ -2815,6 +3001,87 @@ TEST_F(Dhcpv6SrvTest, prlPersistency) {
     const OptionCollection& sifs = response->getOptions(D6O_SUBSCRIBER_ID);
     ASSERT_EQ(1, sifs.size());
     // But no dns-servers
+    ASSERT_FALSE(response->getOption(D6O_NAME_SERVERS));
+    // Nor a sntp-servers
+    ASSERT_FALSE(response->getOption(D6O_SNTP_SERVERS));
+}
+
+// Checks effect of cancellation (aka never-send) flag.
+TEST_F(Dhcpv6SrvTest, neverSend) {
+    IfaceMgrTestConfig test_config(true);
+
+    ASSERT_NO_THROW(configure(CONFIGS[3]));
+
+    // Create a packet with enough to select the subnet and go through
+    // the SOLICIT processing
+    Pkt6Ptr sol(new Pkt6(DHCPV6_SOLICIT, 1234));
+    sol->setRemoteAddr(IOAddress("fe80::abcd"));
+    sol->setIface("eth0");
+    sol->setIndex(ETH0_INDEX);
+    sol->addOption(generateIA(D6O_IA_NA, 234, 1500, 3000));
+    OptionPtr clientid = generateClientId();
+    sol->addOption(clientid);
+
+    // Create and add an ORO for another option
+    OptionUint16ArrayPtr oro(new OptionUint16Array(Option::V6, D6O_ORO));
+    ASSERT_TRUE(oro);
+    oro->addValue(D6O_SNTP_SERVERS);
+    sol->addOption(oro);
+
+    // Let the server process it and generate a response.
+    AllocEngine::ClientContext6 ctx;
+    bool drop = !srv_.earlyGHRLookup(sol, ctx);
+    ASSERT_FALSE(drop);
+    srv_.initContext(sol, ctx, drop);
+    ASSERT_FALSE(drop);
+    Pkt6Ptr response = srv_.processSolicit(ctx);
+
+    // The server should not add a subscriber-id option
+    ASSERT_FALSE(response->getOption(D6O_SUBSCRIBER_ID));
+    // And no dns-servers
+    ASSERT_FALSE(response->getOption(D6O_NAME_SERVERS));
+    // Nor a sntp-servers
+    ASSERT_FALSE(response->getOption(D6O_SNTP_SERVERS));
+
+    // Reset ORO adding dns-servers
+    sol->delOption(D6O_ORO);
+    oro->addValue(D6O_NAME_SERVERS);
+    sol->addOption(oro);
+
+    // Let the server process it again. This time the name-servers
+    // option should be present.
+    AllocEngine::ClientContext6 ctx2;
+    drop = !srv_.earlyGHRLookup(sol, ctx2);
+    ASSERT_FALSE(drop);
+    srv_.initContext(sol, ctx2, drop);
+    ASSERT_FALSE(drop);
+    response = srv_.processSolicit(ctx2);
+
+    // Processing should not add a subscriber-id option
+    ASSERT_FALSE(response->getOption(D6O_SUBSCRIBER_ID));
+    // But now a dns-servers
+    ASSERT_TRUE(response->getOption(D6O_NAME_SERVERS));
+    // And still no sntp-servers
+    ASSERT_FALSE(response->getOption(D6O_SNTP_SERVERS));
+
+    // Reset ORO adding subscriber-id
+    sol->delOption(D6O_ORO);
+    OptionUint16ArrayPtr oro2(new OptionUint16Array(Option::V6, D6O_ORO));
+    ASSERT_TRUE(oro2);
+    oro2->addValue(D6O_SUBSCRIBER_ID);
+    sol->addOption(oro2);
+
+    // Let the server process it again.
+    AllocEngine::ClientContext6 ctx3;
+    drop = !srv_.earlyGHRLookup(sol, ctx3);
+    ASSERT_FALSE(drop);
+    srv_.initContext(sol, ctx3, drop);
+    ASSERT_FALSE(drop);
+    response = srv_.processSolicit(ctx3);
+
+    // The subscriber-id option should still not be present.
+    ASSERT_FALSE(response->getOption(D6O_SUBSCRIBER_ID));
+    // And no dns-servers
     ASSERT_FALSE(response->getOption(D6O_NAME_SERVERS));
     // Nor a sntp-servers
     ASSERT_FALSE(response->getOption(D6O_SNTP_SERVERS));
@@ -3389,7 +3656,7 @@ TEST_F(Dhcpv6SrvTest, userContext) {
 
     // This config has one subnet with user-context with one
     // pool (also with context). Make sure the configuration could be accepted.
-    EXPECT_NO_THROW(configure(CONFIGS[3]));
+    EXPECT_NO_THROW(configure(CONFIGS[4]));
 
     // Now make sure the data was not lost.
     ConstSrvConfigPtr cfg = CfgMgr::instance().getCurrentCfg();

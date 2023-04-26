@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -30,6 +30,7 @@
 #include <cc/data.h>
 #include <cc/user_context.h>
 #include <cc/simple_parser.h>
+#include <util/optional.h>
 #include <util/strutil.h>
 
 #include <boost/shared_ptr.hpp>
@@ -148,6 +149,14 @@ public:
     ///
     /// @return True if conflict resolution should be used.
     bool getUseConflictResolution() const;
+
+    /// @brief Returns percent of lease lifetime to use for TTL
+    ///
+    /// This value, if greater than zero, is used to calculate the lease lifetime
+    /// passed to D2 in the NCR.  Otherwise the value is calculated per RFC 4702.
+    ///
+    /// @return TTL percent as an Optional.
+    util::Optional<double> getTtlPercent() const;
 
     /// @brief Returns the subnet-id of the subnet associated with these parameters
     ///
@@ -491,10 +500,17 @@ public:
         return (cfg_host_operations6_);
     }
 
+    /// @brief Returns non-const pointer to object holding sanity checks flags
+    ///
+    /// @return Pointer to object holding sanity checks flags
+    CfgConsistencyPtr getConsistency() {
+        return (cfg_consist_);
+    }
+
     /// @brief Returns const pointer to object holding sanity checks flags
     ///
     /// @return Const pointer to object holding sanity checks flags
-    CfgConsistencyPtr getConsistency() {
+    ConstCfgConsistencyPtr getConsistency() const {
         return (cfg_consist_);
     }
 
@@ -984,6 +1000,51 @@ public:
         return lenient_option_parsing_;
     }
 
+    /// @brief Set ignore DHCP Server Identifier compatibility flag.
+    ///
+    /// @param value the boolean value to be set when configuring DHCP
+    /// Server Identifier usage preferences.
+    void setIgnoreServerIdentifier(bool const value) {
+        ignore_dhcp_server_identifier_ = value;
+    }
+
+    /// @brief Get ignore DHCP Server Identifier compatibility flag.
+    ///
+    /// @return the configured value for DHCP Server Identifier usage preferences.
+    bool getIgnoreServerIdentifier() const {
+        return (ignore_dhcp_server_identifier_);
+    }
+
+    /// @brief Set ignore RAI Link Selection compatibility flag.
+    ///
+    /// @param value the boolean value to be set when configuring RAI Link
+    /// Selection usage preferences
+    void setIgnoreRAILinkSelection(bool const value) {
+        ignore_rai_link_selection_ = value;
+    }
+
+    /// @brief Get ignore RAI Link Selection compatibility flag.
+    ///
+    /// @return the configured value for RAI Link Selection usage preferences
+    bool getIgnoreRAILinkSelection() const {
+        return ignore_rai_link_selection_;
+    }
+
+    /// @brief Set exclude .0 and .255 addresses in subnets bigger than /24 flag.
+    ///
+    /// @param value the boolean value to be set when excluding .0 .255 from
+    /// subnets bigger than /24.
+    void setExcludeFirstLast24(bool const value) {
+        exclude_first_last_24_ = value;
+    }
+
+    /// @brief Get exclude .0 and .255 addresses in subnets bigger than /24 flag.
+    ///
+    /// @return the configured value for exclude .0 and .255 flag.
+    bool getExcludeFirstLast24() const {
+        return exclude_first_last_24_;
+    }
+
     /// @brief Convenience method to propagate configuration parameters through
     /// inversion of control.
     ///
@@ -1145,10 +1206,18 @@ private:
     /// @brief Pointer to the configuration consistency settings
     CfgConsistencyPtr cfg_consist_;
 
-    /// @brief Compatibility flags
-    /// @{
+    /// @name Compatibility flags
+    ///
+    //@{
+    /// @brief Indicates whether lenient option parsing is enabled
     bool lenient_option_parsing_;
-    /// @}
+    /// @brief Indicates whether DHCP server identifier option will be ignored
+    bool ignore_dhcp_server_identifier_;
+    /// @brief Indicates whether RAI link-selection suboptions will be ignored
+    bool ignore_rai_link_selection_;
+    /// @brief Indicates whether exclude .0 .255 from subnets bigger than /24.
+    bool exclude_first_last_24_;
+    //@}
 
     /// @brief Flag which indicates if the server should do host reservations
     /// lookup before lease lookup. This parameter has effect only when

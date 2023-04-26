@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -309,6 +309,44 @@ TEST_F(SrvConfigTest, echoClientId) {
     EXPECT_TRUE(conf1.getEchoClientId());
 }
 
+// This test verifies that compatibility flags are correctly managed.
+TEST_F(SrvConfigTest, compatibility) {
+    SrvConfig conf;
+
+    // Check that defaults are false.
+    EXPECT_FALSE(conf.getLenientOptionParsing());
+    EXPECT_FALSE(conf.getIgnoreServerIdentifier());
+    EXPECT_FALSE(conf.getIgnoreRAILinkSelection());
+    EXPECT_FALSE(conf.getExcludeFirstLast24());
+
+    // Check that they can be modified to true.
+    conf.setLenientOptionParsing(true);
+    conf.setIgnoreServerIdentifier(true);
+    conf.setIgnoreRAILinkSelection(true);
+    conf.setExcludeFirstLast24(true);
+    EXPECT_TRUE(conf.getLenientOptionParsing());
+    EXPECT_TRUE(conf.getIgnoreServerIdentifier());
+    EXPECT_TRUE(conf.getIgnoreRAILinkSelection());
+    EXPECT_TRUE(conf.getExcludeFirstLast24());
+
+    // Check that default values can be restored.
+    conf.setLenientOptionParsing(false);
+    conf.setIgnoreServerIdentifier(false);
+    conf.setIgnoreRAILinkSelection(false);
+    conf.setExcludeFirstLast24(false);
+    EXPECT_FALSE(conf.getLenientOptionParsing());
+    EXPECT_FALSE(conf.getIgnoreServerIdentifier());
+    EXPECT_FALSE(conf.getIgnoreRAILinkSelection());
+    EXPECT_FALSE(conf.getExcludeFirstLast24());
+
+    // Check the other constructor has the same default.
+    SrvConfig conf1(1);
+    EXPECT_FALSE(conf1.getLenientOptionParsing());
+    EXPECT_FALSE(conf.getIgnoreServerIdentifier());
+    EXPECT_FALSE(conf1.getIgnoreRAILinkSelection());
+    EXPECT_FALSE(conf1.getExcludeFirstLast24());
+}
+
 // This test verifies that host reservations lookup first flag can be configured.
 TEST_F(SrvConfigTest, reservationsLookupFirst) {
     SrvConfig conf;
@@ -353,7 +391,7 @@ TEST_F(SrvConfigTest, copy) {
 
     // Add an option.
     OptionPtr option(new Option(Option::V6, 1000, OptionBuffer(10, 0xFF)));
-    conf1.getCfgOption()->add(option, true, DHCP6_OPTION_SPACE);
+    conf1.getCfgOption()->add(option, true, false, DHCP6_OPTION_SPACE);
 
     // Add a class dictionary
     conf1.setClientClassDictionary(ref_dictionary_);
@@ -426,12 +464,12 @@ TEST_F(SrvConfigTest, equality) {
 
     // Differ by option data.
     OptionPtr option(new Option(Option::V6, 1000, OptionBuffer(1, 0xFF)));
-    conf1.getCfgOption()->add(option, false, "isc");
+    conf1.getCfgOption()->add(option, false, false, "isc");
 
     EXPECT_FALSE(conf1 == conf2);
     EXPECT_TRUE(conf1 != conf2);
 
-    conf2.getCfgOption()->add(option, false, "isc");
+    conf2.getCfgOption()->add(option, false, false, "isc");
 
     EXPECT_TRUE(conf1 == conf2);
     EXPECT_FALSE(conf1 != conf2);
@@ -560,7 +598,8 @@ TEST_F(SrvConfigTest, unparse) {
     defaults += "\"lease-database\": { \"type\": \"memfile\" },\n";
     defaults += "\"hooks-libraries\": [ ],\n";
     defaults += "\"sanity-checks\": {\n";
-    defaults += "    \"lease-checks\": \"none\"\n";
+    defaults += "    \"lease-checks\": \"none\",\n";
+    defaults += "    \"extended-info-checks\": \"fix\"\n";
     defaults += "    },\n";
     defaults += "\"dhcp-ddns\": \n";
 
@@ -599,10 +638,19 @@ TEST_F(SrvConfigTest, unparse) {
     CfgMgr::instance().setFamily(AF_INET);
     conf.setEchoClientId(false);
     conf.setDhcp4o6Port(6767);
+    // Add compatibility flags.
+    conf.setLenientOptionParsing(true);
+    conf.setIgnoreRAILinkSelection(true);
+    conf.setExcludeFirstLast24(true);
+    params  = "\"compatibility\": {\n";
+    params += " \"lenient-option-parsing\": true,\n";
+    params += " \"ignore-rai-link-selection\": true,\n";
+    params += " \"exclude-first-last-24\": true\n";
+    params += "},\n";
     // Add "configured globals"
     conf.addConfiguredGlobal("renew-timer", Element::create(777));
     conf.addConfiguredGlobal("comment", Element::create("bar"));
-    params = "\"echo-client-id\": false,\n";
+    params += "\"echo-client-id\": false,\n";
     params += "\"dhcp4o6-port\": 6767,\n";
     params += "\"renew-timer\": 777,\n";
     params += "\"comment\": \"bar\"\n";
@@ -611,7 +659,14 @@ TEST_F(SrvConfigTest, unparse) {
 
     // Verify direct non-default parameters and configured globals
     CfgMgr::instance().setFamily(AF_INET6);
-    params = ",\"dhcp4o6-port\": 6767,\n";
+    // Add compatibility flag.
+    conf.setIgnoreRAILinkSelection(false);
+    conf.setExcludeFirstLast24(false);
+    params  = ",\"compatibility\": {\n";
+    params += " \"lenient-option-parsing\": true\n";
+    params += "},\n";
+    // Add "configured globals"
+    params += "\"dhcp4o6-port\": 6767,\n";
     params += "\"renew-timer\": 777,\n";
     params += "\"comment\": \"bar\"\n";
     isc::test::runToElementTest<SrvConfig>
@@ -1398,6 +1453,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
     // Enable conflict resolution globally.
     conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(true));
+    // Configure TTL percent globally.
+    conf.addConfiguredGlobal("ddns-ttl-percent", Element::create(20.0));
 
     // Add a plain subnet
     Triplet<uint32_t> def_triplet;
@@ -1437,6 +1494,7 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     subnet2->setHostnameCharSet("");
     subnet2->setDdnsUpdateOnRenew(true);
     subnet2->setDdnsUseConflictResolution(false);
+    subnet2->setDdnsTtlPercent(Optional<double>(40.0));
 
     // Get DDNS params for subnet1.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
@@ -1452,6 +1510,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     EXPECT_EQ("x", params->getHostnameCharReplacement());
     EXPECT_FALSE(params->getUpdateOnRenew());
     EXPECT_TRUE(params->getUseConflictResolution());
+    EXPECT_FALSE(params->getTtlPercent().unspecified());
+    EXPECT_EQ(20.0, params->getTtlPercent().get());
 
     // We inherited a non-blank hostname_char_set so we
     // should get a sanitizer instance.
@@ -1474,6 +1534,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     EXPECT_EQ("x", params->getHostnameCharReplacement());
     EXPECT_TRUE(params->getUpdateOnRenew());
     EXPECT_FALSE(params->getUseConflictResolution());
+    EXPECT_FALSE(params->getTtlPercent().unspecified());
+    EXPECT_EQ(40.0, params->getTtlPercent().get());
 
     // We have a blank hostname-char-set so we should not get a sanitizer instance.
     ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
@@ -1496,6 +1558,14 @@ TEST_F(SrvConfigTest, getDdnsParamsTest4) {
     // Make sure subnet1 updates are now enabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
     EXPECT_TRUE(params->getEnableUpdates());
+
+    subnet1->setFetchGlobalsFn([]() -> ConstCfgGlobalsPtr {
+        return (ConstCfgGlobalsPtr());
+    });
+
+    subnet2->setFetchGlobalsFn([]() -> ConstCfgGlobalsPtr {
+        return (ConstCfgGlobalsPtr());
+    });
 }
 
 // Verifies that the fallback values for DDNS parameters when
@@ -1521,6 +1591,7 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest4) {
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
     conf.addConfiguredGlobal("ddns-update-on-renew", Element::create(true));
     conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(false));
+    conf.addConfiguredGlobal("ddns-ttl-percent", Element::create(77.0));
 
     // Get DDNS params for no subnet.
     Subnet4Ptr subnet4;
@@ -1537,6 +1608,7 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest4) {
     EXPECT_TRUE(params->getHostnameCharReplacement().empty());
     EXPECT_FALSE(params->getUpdateOnRenew());
     EXPECT_TRUE(params->getUseConflictResolution());
+    EXPECT_TRUE(params->getTtlPercent().unspecified());
 }
 
 // Verifies that the scoped values for DDNS parameters can be fetched
@@ -1558,6 +1630,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
     // Enable conflict resolution globally.
     conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(true));
+    // Configure TTL percent globally.
+    conf.addConfiguredGlobal("ddns-ttl-percent", Element::create(25.0));
 
     // Add a plain subnet
     Triplet<uint32_t> def_triplet;
@@ -1597,6 +1671,7 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     subnet2->setHostnameCharSet("");
     subnet2->setDdnsUpdateOnRenew(true);
     subnet2->setDdnsUseConflictResolution(false);
+    subnet2->setDdnsTtlPercent(Optional<double>(45.0));
 
     // Get DDNS params for subnet1.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
@@ -1612,6 +1687,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     EXPECT_EQ("x", params->getHostnameCharReplacement());
     EXPECT_FALSE(params->getUpdateOnRenew());
     EXPECT_TRUE(params->getUseConflictResolution());
+    EXPECT_FALSE(params->getTtlPercent().unspecified());
+    EXPECT_EQ(25.0, params->getTtlPercent().get());
 
     // We inherited a non-blank hostname_char_set so we
     // should get a sanitizer instance.
@@ -1634,6 +1711,8 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     EXPECT_EQ("x", params->getHostnameCharReplacement());
     EXPECT_TRUE(params->getUpdateOnRenew());
     EXPECT_FALSE(params->getUseConflictResolution());
+    EXPECT_FALSE(params->getTtlPercent().unspecified());
+    EXPECT_EQ(45.0, params->getTtlPercent().get());
 
     // We have a blank hostname-char-set so we should not get a sanitizer instance.
     ASSERT_NO_THROW(sanitizer = params->getHostnameSanitizer());
@@ -1656,6 +1735,14 @@ TEST_F(SrvConfigTest, getDdnsParamsTest6) {
     // Make sure subnet1 updates are now enabled.
     ASSERT_NO_THROW(params = conf_.getDdnsParams(subnet1));
     EXPECT_TRUE(params->getEnableUpdates());
+
+    subnet1->setFetchGlobalsFn([]() -> ConstCfgGlobalsPtr {
+        return (ConstCfgGlobalsPtr());
+    });
+
+    subnet2->setFetchGlobalsFn([]() -> ConstCfgGlobalsPtr {
+        return (ConstCfgGlobalsPtr());
+    });
 }
 
 // Verifies that the fallback values for DDNS parameters when
@@ -1681,6 +1768,7 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest6) {
     conf.addConfiguredGlobal("hostname-char-replacement", Element::create("x"));
     conf.addConfiguredGlobal("ddns-update-on-renew", Element::create(true));
     conf.addConfiguredGlobal("ddns-use-conflict-resolution", Element::create(false));
+    conf.addConfiguredGlobal("ddns-ttl-percent", Element::create(77.0));
 
     // Get DDNS params for no subnet.
     Subnet6Ptr subnet6;
@@ -1695,6 +1783,9 @@ TEST_F(SrvConfigTest, getDdnsParamsNoSubnetTest6) {
     EXPECT_TRUE(params->getQualifyingSuffix().empty());
     EXPECT_TRUE(params->getHostnameCharSet().empty());
     EXPECT_TRUE(params->getHostnameCharReplacement().empty());
+    EXPECT_FALSE(params->getUpdateOnRenew());
+    EXPECT_TRUE(params->getUseConflictResolution());
+    EXPECT_TRUE(params->getTtlPercent().unspecified());
 }
 
 // Verifies that adding multi threading settings works

@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -408,7 +408,8 @@ TEST_F(LibDhcpTest, packOptions6) {
                                    OptionBuffer(v6packed + 46, v6packed + 50)));
 
     boost::shared_ptr<OptionInt<uint32_t> >
-        vsi(new OptionInt<uint32_t>(Option::V6, D6O_VENDOR_OPTS, 4491));
+        vsi(new OptionInt<uint32_t>(Option::V6, D6O_VENDOR_OPTS,
+                                    VENDOR_ID_CABLE_LABS));
     vsi->addOption(cm_mac);
     vsi->addOption(cmts_caps);
 
@@ -451,7 +452,7 @@ TEST_F(LibDhcpTest, unpackOptions6) {
     ASSERT_EQ(5, x->second->getData().size());
     EXPECT_EQ(0, memcmp(&x->second->getData()[0], v6packed + 4, 5)); // data len=5
 
-        x = options.find(2);
+    x = options.find(2);
     ASSERT_FALSE(x == options.end()); // option 2 should exist
     EXPECT_EQ(2, x->second->getType());  // this should be option 2
     ASSERT_EQ(7, x->second->len()); // it should be of length 7
@@ -510,15 +511,19 @@ TEST_F(LibDhcpTest, unpackOptions6) {
     EXPECT_EQ(D6O_VENDOR_OPTS, x->second->getType());
     EXPECT_EQ(26, x->second->len());
 
+    OptionVendorPtr vendor = boost::dynamic_pointer_cast<OptionVendor>(x->second);
+    ASSERT_TRUE(vendor);
+    ASSERT_EQ(vendor->getVendorId(), VENDOR_ID_CABLE_LABS);
+
     // CM MAC Address Option
-    OptionPtr cm_mac = x->second->getOption(OPTION_CM_MAC);
+    OptionPtr cm_mac = vendor->getOption(OPTION_CM_MAC);
     ASSERT_TRUE(cm_mac);
     EXPECT_EQ(OPTION_CM_MAC, cm_mac->getType());
     ASSERT_EQ(10, cm_mac->len());
     EXPECT_EQ(0, memcmp(&cm_mac->getData()[0], v6packed + 54, 6));
 
     // CMTS Capabilities
-    OptionPtr cmts_caps = x->second->getOption(OPTION_CMTS_CAPS);
+    OptionPtr cmts_caps = vendor->getOption(OPTION_CMTS_CAPS);
     ASSERT_TRUE(cmts_caps);
     EXPECT_EQ(OPTION_CMTS_CAPS, cmts_caps->getType());
     ASSERT_EQ(8, cmts_caps->len());
@@ -1076,30 +1081,182 @@ TEST_F(LibDhcpTest, fuseLongOptionWithLongSuboption) {
     }
 }
 
+// This test checks that the server can receive multiple vendor options
+// (code 124) with some using the same enterprise ID and some using a different
+// enterprise ID. It should also be able to extend one option which contains
+// multiple enterprise IDs in multiple instances of OptionVendor.
+// The extendVendorOptions4 should be able to create one instance for each
+// enterprise ID, each with it's respective tuples.
+// Some of the test scenarios are not following RFCs, but people out there are
+// like to do it anyway. We want Kea to be robust and handle such scenarios,
+// therefore we're testing also for non-conformant behavior.
+TEST_F(LibDhcpTest, extendVivco) {
+    OptionBuffer data1 = {
+        0, 0, 0, 1,                        // enterprise id 1
+        5,                                 // length 5
+        0x66, 0x69, 0x72, 0x73, 0x74,      // 'first'
+        0, 0, 0, 1,                        // enterprise id 1
+        6,                                 // length 6
+        0x73, 0x65, 0x63, 0x6f, 0x6e, 0x64 // 'second'
+    };
+    OptionPtr opt1(new Option(Option::V4, DHO_VIVCO_SUBOPTIONS,
+                              data1.cbegin(), data1.cend()));
+    OptionBuffer data2 = {
+        0, 0, 0, 2,                   // enterprise id 2
+        5,                            // length 5
+        0x65, 0x78, 0x74, 0x72, 0x61  // 'extra'
+    };
+    OptionPtr opt2(new Option(Option::V4, DHO_VIVCO_SUBOPTIONS,
+                              data2.cbegin(), data2.cend()));
+    OptionBuffer data3 = {
+        0, 0, 0, 1,                   // enterprise id 1
+        5,                            // length 5
+        0x74, 0x68, 0x69, 0x72, 0x64  // 'third'
+    };
+    OptionPtr opt3(new Option(Option::V4, DHO_VIVCO_SUBOPTIONS,
+                              data3.cbegin(), data3.cend()));
+    OptionCollection options;
+    options.insert(make_pair(DHO_VIVCO_SUBOPTIONS, opt1));
+    options.insert(make_pair(DHO_VIVCO_SUBOPTIONS, opt2));
+    options.insert(make_pair(DHO_VIVCO_SUBOPTIONS, opt3));
+    EXPECT_EQ(options.size(), 3);
+    EXPECT_NO_THROW(LibDHCP::fuseOptions4(options));
+    EXPECT_EQ(options.size(), 1);
+    EXPECT_NO_THROW(LibDHCP::extendVendorOptions4(options));
+    EXPECT_EQ(options.size(), 2);
+    EXPECT_EQ(options.count(DHO_VIVCO_SUBOPTIONS), 2);
+    for (auto const& option : options) {
+        ASSERT_EQ(option.second->getType(), DHO_VIVCO_SUBOPTIONS);
+        OptionVendorClassPtr vendor =
+            boost::dynamic_pointer_cast<OptionVendorClass>(option.second);
+        ASSERT_TRUE(vendor);
+        if (vendor->getVendorId() == 1) {
+            ASSERT_EQ(vendor->getTuplesNum(), 3);
+            OpaqueDataTuple tuple(OpaqueDataTuple::LENGTH_1_BYTE);
+            ASSERT_NO_THROW(tuple = vendor->getTuple(0));
+            EXPECT_EQ(5, tuple.getLength());
+            EXPECT_EQ("first", tuple.getText());
+            ASSERT_NO_THROW(tuple = vendor->getTuple(1));
+            EXPECT_EQ(6, tuple.getLength());
+            EXPECT_EQ("second", tuple.getText());
+            ASSERT_NO_THROW(tuple = vendor->getTuple(2));
+            EXPECT_EQ(5, tuple.getLength());
+            EXPECT_EQ("third",  tuple.getText());
+        } else if (vendor->getVendorId() == 2) {
+            ASSERT_EQ(vendor->getTuplesNum(), 1);
+            OpaqueDataTuple tuple(OpaqueDataTuple::LENGTH_1_BYTE);
+            ASSERT_NO_THROW(tuple = vendor->getTuple(0));
+            EXPECT_EQ(5, tuple.getLength());
+            EXPECT_EQ("extra", tuple.getText());
+        } else {
+            FAIL() << "unexpected vendor type: " << vendor->getVendorId();
+        }
+    }
+}
+
+// This test checks that the server can receive multiple vendor options
+// (code 125) with some using the same enterprise ID and some using a different
+// enterprise ID. It should also be able to extend one option which contains
+// multiple enterprise IDs in multiple instances of OptionVendor.
+// The extendVendorOptions4 should be able to create one instance for each
+// enterprise ID, each with it's respective suboptions.
+// Some of the test scenarios are not following RFCs, but people out there are
+// like to do it anyway. We want Kea to be robust and handle such scenarios,
+// therefore we're testing also for non-conformant behavior.
+TEST_F(LibDhcpTest, extendVivso) {
+    OptionPtr suboption;
+    OptionVendorPtr opt1(new OptionVendor(Option::V4, 1));
+    suboption.reset(new OptionString(Option::V4, 16, "first"));
+    opt1->addOption(suboption);
+    OptionVendorPtr opt2(new OptionVendor(Option::V4, 1));
+    suboption.reset(new OptionString(Option::V4, 32, "second"));
+    opt2->addOption(suboption);
+    OptionVendorPtr opt3(new OptionVendor(Option::V4, 2));
+    suboption.reset(new OptionString(Option::V4, 128, "extra"));
+    opt3->addOption(suboption);
+    OptionVendorPtr opt4(new OptionVendor(Option::V4, 1));
+    suboption.reset(new OptionString(Option::V4, 64, "third"));
+    opt4->addOption(suboption);
+    OptionCollection container;
+    container.insert(make_pair(DHO_VIVSO_SUBOPTIONS, opt1));
+    container.insert(make_pair(DHO_VIVSO_SUBOPTIONS, opt2));
+    OptionCollection options;
+    for (auto const& option : container) {
+        const OptionBuffer& buffer = option.second->toBinary();
+        options.insert(make_pair(option.second->getType(),
+                                 OptionPtr(new Option(Option::V4,
+                                                      option.second->getType(),
+                                                      buffer))));
+    }
+    ASSERT_NO_THROW(LibDHCP::fuseOptions4(options));
+    ASSERT_EQ(options.size(), 1);
+    ASSERT_EQ(options.count(DHO_VIVSO_SUBOPTIONS), 1);
+    ASSERT_EQ(options.find(DHO_VIVSO_SUBOPTIONS)->second->getType(), DHO_VIVSO_SUBOPTIONS);
+    container.clear();
+    container.insert(make_pair(DHO_VIVSO_SUBOPTIONS, options.begin()->second));
+    container.insert(make_pair(DHO_VIVSO_SUBOPTIONS, opt3));
+    container.insert(make_pair(DHO_VIVSO_SUBOPTIONS, opt4));
+    ASSERT_EQ(container.size(), 3);
+    options.clear();
+    for (auto const& option : container) {
+        const OptionBuffer& buffer = option.second->toBinary();
+        options.insert(make_pair(option.second->getType(),
+                                 OptionPtr(new Option(Option::V4,
+                                                      option.second->getType(),
+                                                      buffer))));
+    }
+    ASSERT_EQ(options.size(), 3);
+    LibDHCP::extendVendorOptions4(options);
+    ASSERT_EQ(options.size(), 2);
+    ASSERT_EQ(options.count(DHO_VIVSO_SUBOPTIONS), 2);
+    for (auto const& option : options) {
+        ASSERT_EQ(option.second->getType(), DHO_VIVSO_SUBOPTIONS);
+        OptionCollection suboptions = option.second->getOptions();
+        OptionPtr suboption;
+        OptionVendorPtr vendor = boost::dynamic_pointer_cast<OptionVendor>(option.second);
+        ASSERT_TRUE(vendor);
+        if (vendor->getVendorId() == 1) {
+            ASSERT_EQ(suboptions.size(), 3);
+            suboption = option.second->getOption(16);
+            ASSERT_TRUE(suboption);
+            suboption = option.second->getOption(32);
+            ASSERT_TRUE(suboption);
+            suboption = option.second->getOption(64);
+            ASSERT_TRUE(suboption);
+        } else if (vendor->getVendorId() == 2) {
+            ASSERT_EQ(suboptions.size(), 1);
+            suboption = option.second->getOption(128);
+            ASSERT_TRUE(suboption);
+        } else {
+            FAIL() << "unexpected vendor type: " << vendor->getVendorId();
+        }
+    }
+}
+
 // This test verifies that pack options for v4 is working correctly.
 TEST_F(LibDhcpTest, packOptions4) {
 
     vector<uint8_t> payload[5];
     for (unsigned i = 0; i < 5; i++) {
         payload[i].resize(3);
-        payload[i][0] = i*10;
-        payload[i][1] = i*10+1;
-        payload[i][2] = i*10+2;
+        payload[i][0] = i * 10;
+        payload[i][1] = i * 10 + 1;
+        payload[i][2] = i * 10 + 2;
     }
 
     OptionPtr opt1(new Option(Option::V4, 12, payload[0]));
     OptionPtr opt2(new Option(Option::V4, 60, payload[1]));
     OptionPtr opt3(new Option(Option::V4, 14, payload[2]));
-    OptionPtr opt4(new Option(Option::V4,254, payload[3]));
-    OptionPtr opt5(new Option(Option::V4,128, payload[4]));
+    OptionPtr opt4(new Option(Option::V4, 254, payload[3]));
+    OptionPtr opt5(new Option(Option::V4, 128, payload[4]));
 
     // Create vendor option instance with DOCSIS3.0 enterprise id.
-    OptionVendorPtr vivsi(new OptionVendor(Option::V4, 4491));
+    OptionVendorPtr vivsi(new OptionVendor(Option::V4, VENDOR_ID_CABLE_LABS));
     vivsi->addOption(OptionPtr(new Option4AddrLst(DOCSIS3_V4_TFTP_SERVERS,
                                                   IOAddress("10.0.0.10"))));
 
     OptionPtr vsi(new Option(Option::V4, DHO_VENDOR_ENCAPSULATED_OPTIONS,
-                              OptionBuffer()));
+                             OptionBuffer()));
     vsi->addOption(OptionPtr(new Option(Option::V4, 0xDC, OptionBuffer())));
 
     // Add RAI option, which comprises 3 sub-options.
@@ -1199,6 +1356,8 @@ TEST_F(LibDhcpTest, unpackOptions4) {
                                 deferred, false);
     );
 
+    ASSERT_NO_THROW(LibDHCP::extendVendorOptions4(options));
+
     isc::dhcp::OptionCollection::const_iterator x = options.find(12);
     ASSERT_FALSE(x == options.end()); // option 1 should exist
     // Option 12 holds a string so let's cast it to an appropriate type.
@@ -1245,7 +1404,7 @@ TEST_F(LibDhcpTest, unpackOptions4) {
     OptionVendorPtr vivsi = boost::dynamic_pointer_cast<OptionVendor>(x->second);
     ASSERT_TRUE(vivsi);
     EXPECT_EQ(DHO_VIVSO_SUBOPTIONS, vivsi->getType());
-    EXPECT_EQ(4491, vivsi->getVendorId());
+    EXPECT_EQ(VENDOR_ID_CABLE_LABS, vivsi->getVendorId());
     OptionCollection suboptions = vivsi->getOptions();
 
     // There should be one suboption of V-I VSI.
@@ -1276,22 +1435,25 @@ TEST_F(LibDhcpTest, unpackOptions4) {
     // space called "dhcp4" and other option spaces. These sub-options do not
     // belong to standard option space and should be parsed using different
     // option definitions.
-    // @todo Currently, definitions for option space "dhcp-agent-options-space"
-    // are not defined. Therefore all suboptions will be represented here by
-    // the generic Option class.
 
     // Check that Circuit ID option is among parsed options.
     OptionPtr rai_option = rai->getOption(RAI_OPTION_AGENT_CIRCUIT_ID);
     ASSERT_TRUE(rai_option);
-    EXPECT_EQ(RAI_OPTION_AGENT_CIRCUIT_ID, rai_option->getType());
-    ASSERT_EQ(6, rai_option->len());
-    EXPECT_EQ(0, memcmp(&rai_option->getData()[0], v4_opts + 46, 4));
+    boost::shared_ptr<OptionString> circuit_id =
+        boost::dynamic_pointer_cast<OptionString>(rai_option);
+    ASSERT_TRUE(circuit_id);
+    EXPECT_EQ(RAI_OPTION_AGENT_CIRCUIT_ID, circuit_id->getType());
+    ASSERT_EQ(6, circuit_id->len());
+    EXPECT_EQ(0, memcmp(&circuit_id->getData()[0], v4_opts + 46, 4));
 
     // Check that Remote ID option is among parsed options.
     rai_option = rai->getOption(RAI_OPTION_REMOTE_ID);
     ASSERT_TRUE(rai_option);
-    EXPECT_EQ(RAI_OPTION_REMOTE_ID, rai_option->getType());
-    ASSERT_EQ(8, rai_option->len());
+    boost::shared_ptr<OptionString> remote_id =
+        boost::dynamic_pointer_cast<OptionString>(rai_option);
+    ASSERT_TRUE(remote_id);
+    EXPECT_EQ(RAI_OPTION_REMOTE_ID, remote_id->getType());
+    ASSERT_EQ(8, remote_id->len());
     EXPECT_EQ(0, memcmp(&rai_option->getData()[0], v4_opts + 52, 6));
 
     // Check that Vendor Specific Information option is among parsed options.
@@ -2091,7 +2253,6 @@ TEST_F(LibDhcpTest, stdOptionDefs4) {
     LibDhcpTest::testStdOptionDefs4(DHO_VIVCO_SUBOPTIONS, vivco_buf.begin(),
                                     vivco_buf.end(), typeid(OptionVendorClass));
 
-
     LibDhcpTest::testStdOptionDefs4(DHO_VIVSO_SUBOPTIONS, vivsio_buf.begin(),
                                     vivsio_buf.end(), typeid(OptionVendor));
 
@@ -2120,6 +2281,18 @@ TEST_F(LibDhcpTest, stdOptionDefs4) {
                                     fqdn_buf.end(),
                                     typeid(OptionCustom));
 
+    // V4_SZTP_REDIRECT is using an array of tuples so let's create example data
+    const char opaque_tuple_data[] = {
+        0, 3, 1, 2, 3  // first 2 bytes are opaque data length, the rest is opaque data
+    };
+    std::vector<uint8_t> opaque_tuple_buf(opaque_tuple_data,
+                                          opaque_tuple_data + sizeof(opaque_tuple_data));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_V4_SZTP_REDIRECT,
+                                    opaque_tuple_buf.begin(),
+                                    opaque_tuple_buf.end(),
+                                    typeid(OptionOpaqueDataTuples));
+
     std::vector<uint8_t> rdnss1_buf(begin, begin + 9);
     rdnss1_buf.insert(rdnss1_buf.end(), fqdn1_buf.begin(), fqdn1_buf.end());
 
@@ -2133,6 +2306,35 @@ TEST_F(LibDhcpTest, stdOptionDefs4) {
     LibDhcpTest::testStdOptionDefs4(DHO_RDNSS_SELECT, rdnss_buf.begin(),
                                     rdnss_buf.end(),
                                     typeid(OptionCustom));
+
+    // Initialize test buffer for Vendor Class option.
+    const char status_code_data[] = {
+        0x02, 0x65, 0x72, 0x72, 0x6f, 0x72
+    };
+    std::vector<uint8_t> status_code_buf(status_code_data,
+                                         status_code_data + sizeof(status_code_data));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_STATUS_CODE, status_code_buf.begin(),
+                                    status_code_buf.end(),
+                                    typeid(OptionCustom));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_BASE_TIME, begin, begin + 4,
+                                    typeid(OptionInt<uint32_t>));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_START_TIME_OF_STATE, begin, begin + 4,
+                                    typeid(OptionInt<uint32_t>));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_QUERY_START_TIME, begin, begin + 4,
+                                    typeid(OptionInt<uint32_t>));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_QUERY_END_TIME, begin, begin + 4,
+                                    typeid(OptionInt<uint32_t>));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_DHCP_STATE, begin, begin + 1,
+                                    typeid(OptionInt<uint8_t>));
+
+    LibDhcpTest::testStdOptionDefs4(DHO_DATA_SOURCE, begin, begin + 1,
+                                    typeid(OptionInt<uint8_t>));
 
     LibDhcpTest::testStdOptionDefs4(DHO_V4_PORTPARAMS, begin, begin + 4,
                                     typeid(OptionCustom));
@@ -2206,14 +2408,14 @@ TEST_F(LibDhcpTest, stdOptionDefs6) {
         0x00, 0x01, 0x02
     };
     std::vector<uint8_t> vclass_buf(vclass_data,
-                                    vclass_data + sizeof(vclass_data));;
+                                    vclass_data + sizeof(vclass_data));
 
     // Initialize test buffer for Bootfile Param option.
     const char bparam_data[] = {
         0x00, 0x01, 0x02
     };
     std::vector<uint8_t> bparam_buf(bparam_data,
-                                    bparam_data + sizeof(bparam_data));;
+                                    bparam_data + sizeof(bparam_data));
 
     // The actual test starts here for all supported option codes.
     LibDhcpTest::testStdOptionDefs6(D6O_CLIENTID, begin, end,
@@ -2447,6 +2649,18 @@ TEST_F(LibDhcpTest, stdOptionDefs6) {
 
     LibDhcpTest::testStdOptionDefs6(D6O_RELAY_SOURCE_PORT, begin, begin + 2,
                                     typeid(OptionInt<uint16_t>));
+
+    // V6_SZTP_REDIRECT is using an array of tuples so let's create example data
+    const char opaque_tuple_data[] = {
+        0, 3, 1, 2, 3  // first 2 bytes are opaque data length, the rest is opaque data
+    };
+    std::vector<uint8_t> opaque_tuple_buf(opaque_tuple_data,
+                                          opaque_tuple_data + sizeof(opaque_tuple_data));
+
+    LibDhcpTest::testStdOptionDefs6(D60_V6_SZTP_REDIRECT,
+                                    opaque_tuple_buf.begin(),
+                                    opaque_tuple_buf.end(),
+                                    typeid(OptionOpaqueDataTuples));
 
     LibDhcpTest::testStdOptionDefs6(D6O_IPV6_ADDRESS_ANDSF, begin, end,
                                     typeid(Option6AddrLst));
@@ -2691,7 +2905,7 @@ TEST_F(LibDhcpTest, vendorClass6) {
     // Let's investigate if the option content is correct
 
     // 3 fields expected: vendor-id, data-len and data
-    EXPECT_EQ(4491, vclass->getVendorId());
+    EXPECT_EQ(VENDOR_ID_CABLE_LABS, vclass->getVendorId());
     EXPECT_EQ(20, vclass->len());
     ASSERT_EQ(1, vclass->getTuplesNum());
     EXPECT_EQ("eRouter1.0", vclass->getTuple(0).getText());

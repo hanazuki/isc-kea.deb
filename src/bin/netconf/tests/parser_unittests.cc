@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,18 +6,20 @@
 
 #include <config.h>
 
+#include <gtest/gtest.h>
+
 #include <cc/data.h>
 #include <cc/dhcp_config_error.h>
 #include <netconf/parser_context.h>
 #include <testutils/gtest_utils.h>
 #include <testutils/io_utils.h>
 #include <testutils/log_utils.h>
+#include <testutils/test_to_element.h>
 #include <testutils/user_context_utils.h>
 
-#include <gtest/gtest.h>
-
+#include <iostream>
 #include <fstream>
-#include <set>
+#include <vector>
 
 #include <boost/algorithm/string.hpp>
 
@@ -38,7 +40,11 @@ namespace test {
 void compareJSON(ConstElementPtr a, ConstElementPtr b) {
     ASSERT_TRUE(a);
     ASSERT_TRUE(b);
-    EXPECT_EQ(a->str(), b->str());
+    EXPECT_EQ(a->str(), b->str())
+#ifdef HAVE_CREATE_UNIFIED_DIFF
+        << "\nDiff:\n" << generateDiff(prettyPrint(a), prettyPrint(b)) << "\n"
+#endif
+    ;
 }
 
 /// @brief Tests if the input string can be parsed with specific parser
@@ -52,16 +58,16 @@ void compareJSON(ConstElementPtr a, ConstElementPtr b) {
 /// @param txt text to be compared
 /// @param parser_type bison parser type to be instantiated
 /// @param compare whether to compare the output with legacy JSON parser
-void testParser(const std::string& txt, ParserContext::ParserType parser_type,
+void testParser(const string& txt, ParserContext::ParserType parser_type,
     bool compare = true) {
-    SCOPED_TRACE("\n=== tested config ===\n" + txt + "=====================");
+    SCOPED_TRACE("\n* Tested config: \n---\n" + txt + "\n---");
 
     ConstElementPtr test_json;
     ASSERT_NO_THROW_LOG({
             try {
                 ParserContext ctx;
                 test_json = ctx.parseString(txt, parser_type);
-            } catch (const std::exception &e) {
+            } catch (exception const &e) {
                 cout << "EXCEPTION: " << e.what() << endl;
                 throw;
             }
@@ -348,7 +354,7 @@ TEST(ParserTest, embbededComments) {
 /// to legacy parser (as legacy support for comments is very limited).
 ///
 /// @param fname name of the file to be loaded
-void testFile(const std::string& fname) {
+void testFile(const string& fname) {
     ElementPtr json;
     ElementPtr reference_json;
     ConstElementPtr test_json;
@@ -357,17 +363,17 @@ void testFile(const std::string& fname) {
 
     cout << "Parsing file " << fname << "(" << decommented << ")" << endl;
 
-    EXPECT_NO_THROW(json = Element::fromJSONFile(decommented, true));
+    EXPECT_NO_THROW_LOG(json = Element::fromJSONFile(decommented, true));
     reference_json = moveComments(json);
 
     // remove the temporary file
-    EXPECT_NO_THROW(::remove(decommented.c_str()));
+    EXPECT_NO_THROW_LOG(::remove(decommented.c_str()));
 
-    EXPECT_NO_THROW(
+    EXPECT_NO_THROW_LOG(
     try {
         ParserContext ctx;
         test_json = ctx.parseFile(fname, ParserContext::PARSER_NETCONF);
-    } catch (const std::exception &x) {
+    } catch (exception const &x) {
         cout << "EXCEPTION: " << x.what() << endl;
         throw;
     });
@@ -398,23 +404,13 @@ TEST(ParserTest, file) {
 /// @param txt text to be parsed
 /// @param parser_type type of the parser to be used in the test
 /// @param msg expected content of the exception
-void testError(const std::string& txt,
+void testError(const string& txt,
                ParserContext::ParserType parser_type,
-               const std::string& msg) {
-    SCOPED_TRACE("\n=== tested config ===\n" + txt + "=====================");
+               const string& msg) {
+    SCOPED_TRACE("\n* Tested config: \n---\n" + txt + "\n---");
 
-    try {
-        ParserContext ctx;
-        ConstElementPtr parsed = ctx.parseString(txt, parser_type);
-        FAIL() << "Expected ParseError but nothing was raised (expected: "
-               << msg << ")";
-    }
-    catch (const ParseError& ex) {
-        EXPECT_EQ(msg, ex.what());
-    }
-    catch (...) {
-        FAIL() << "Expected ParseError but something else was raised";
-    }
+    ParserContext ctx;
+    EXPECT_THROW_MSG(ctx.parseString(txt, parser_type), ParseError, msg);
 }
 
 // Verify that error conditions are handled correctly.
@@ -740,7 +736,7 @@ TEST(ParserTest, unicodeEscapes) {
         try {
             ParserContext ctx;
             result = ctx.parseString(json, ParserContext::PARSER_JSON);
-        } catch (const std::exception &x) {
+        } catch (exception const &x) {
             cout << "EXCEPTION: " << x.what() << endl;
             throw;
         });
@@ -758,7 +754,7 @@ TEST(ParserTest, unicodeSlash) {
     try {
         ParserContext ctx;
         result = ctx.parseString(json, ParserContext::PARSER_JSON);
-    } catch (const std::exception &x) {
+    } catch (exception const &x) {
         cout << "EXCEPTION: " << x.what() << endl;
         throw;
     });
@@ -773,7 +769,7 @@ TEST(ParserTest, unicodeSlash) {
 void loadFile(const string& fname, ElementPtr list) {
     ParserContext ctx;
     ElementPtr json;
-    EXPECT_NO_THROW(json = ctx.parseFile(fname, ParserContext::PARSER_NETCONF));
+    EXPECT_NO_THROW_LOG(json = ctx.parseFile(fname, ParserContext::PARSER_NETCONF));
     ASSERT_TRUE(json);
     list->add(json);
 }
@@ -781,7 +777,7 @@ void loadFile(const string& fname, ElementPtr list) {
 // This test checks that all map entries are in the sample file.
 TEST(ParserTest, mapEntries) {
     // Type of keyword set.
-    typedef set<string> KeywordSet;
+    using KeywordSet = set<string>;
 
     // Get keywords from the syntax file (netconf_parser.yy).
     ifstream syntax_file(SYNTAX_FILE);
@@ -860,14 +856,14 @@ TEST(ParserTest, mapEntries) {
 /// @param json the JSON configuration with the duplicate entry.
 void testDuplicate(ConstElementPtr json) {
     string config = json->str();
+    SCOPED_TRACE("\n* Tested config: \n---\n" + json->str() + "\n---");
+
     size_t where = config.find("DDDD");
     ASSERT_NE(string::npos, where);
     string before = config.substr(0, where);
     string after = config.substr(where + 4, string::npos);
     ParserContext ctx;
-    EXPECT_THROW(ctx.parseString(before + after,
-                                 ParserContext::PARSER_NETCONF),
-                 ParseError) << "config: " << config;
+    EXPECT_THROW(ctx.parseString(before + after, ParserContext::PARSER_NETCONF), ParseError);
 }
 
 // This test checks that duplicate entries make parsing to fail.
@@ -877,7 +873,7 @@ TEST(ParserTest, duplicateMapEntries) {
     sample_fname += "/simple-dhcp6.json";
     ParserContext ctx;
     ElementPtr sample_json;
-    EXPECT_NO_THROW(sample_json =
+    EXPECT_NO_THROW_LOG(sample_json =
         ctx.parseFile(sample_fname, ParserContext::PARSER_NETCONF));
     ASSERT_TRUE(sample_json);
 
@@ -898,6 +894,8 @@ TEST(ParserTest, duplicateMapEntries) {
                         continue;
                     }
 
+                    SCOPED_TRACE("\n* Tested duplicate element: " + elem.first);
+
                     // Perform tests.
                     string dup = elem.first + "DDDD";
                     json->set(dup, elem.second);
@@ -906,8 +904,8 @@ TEST(ParserTest, duplicateMapEntries) {
                     ++cnt;
 
                     // Recursive call.
-                    ElementPtr mutable_json =
-                        boost::const_pointer_cast<Element>(elem.second);
+                    ElementPtr mutable_json(copy(elem.second, 0));
+                    json->set(elem.first, mutable_json);
                     ASSERT_TRUE(mutable_json);
                     test(config, mutable_json, cnt);
                 }
@@ -915,7 +913,7 @@ TEST(ParserTest, duplicateMapEntries) {
         };
     size_t cnt = 0;
     test(sample_json, sample_json, cnt);
-    cout << "checked " << cnt << " duplicated map entries\n";
+    cout << "Checked " << cnt << " duplicated map entries.\n";
 }
 
 /// @brief Test fixture for trailing commas.
@@ -925,13 +923,13 @@ public:
     ///
     /// @param loc Location of the trailing comma.
     void addLog(const string& loc) {
-        string log = "NETCONF_CONFIG_SYNTAX_WARNING Netconf ";
+        string log = "NETCONF_CONFIG_SYNTAX_WARNING NETCONF ";
         log += "configuration syntax warning: " + loc;
         log += ": Extraneous comma. ";
         log += "A piece of configuration may have been omitted.";
         addString(log);
     }
-};
+};  // TrailingCommasTest
 
 // Test that trailing commas are allowed.
 TEST_F(TrailingCommasTest, tests) {

@@ -1,4 +1,4 @@
-// Copyright (C) 2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2021-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -481,7 +481,9 @@ public:
         }
 
         // Create an MT client with num_threads
-        ASSERT_NO_THROW_LOG(client_.reset(new HttpClient(io_service_, num_threads)));
+        ASSERT_NO_THROW_LOG(client_.reset(new HttpClient(io_service_,
+                                                         num_threads ? true : false,
+                                                         num_threads, true)));
         ASSERT_TRUE(client_);
 
         if (num_threads_ == 0) {
@@ -491,10 +493,6 @@ public:
             // If we multi-threaded client should have it's own IOService.
             ASSERT_TRUE(client_->getThreadIOService());
         }
-
-        // Verify the pool size and number of threads are as expected.
-        ASSERT_EQ(client_->getThreadPoolSize(), num_threads);
-        ASSERT_EQ(client_->getThreadCount(), num_threads);
 
         // Start the requisite number of requests:
         //   batch * listeners * threads.
@@ -506,6 +504,12 @@ public:
                 }
             }
         }
+
+        client_->start();
+
+        // Verify the pool size and number of threads are as expected.
+        ASSERT_EQ(client_->getThreadPoolSize(), num_threads);
+        ASSERT_EQ(client_->getThreadCount(), num_threads);
 
         // Loop until the clients are done, an error occurs, or the time runs out.
         runIOService(expected_requests_);
@@ -645,17 +649,8 @@ public:
         }
 
         // Create an instant start, MT client with num_threads
-        ASSERT_NO_THROW_LOG(client_.reset(new HttpClient(io_service_, num_threads)));
+        ASSERT_NO_THROW_LOG(client_.reset(new HttpClient(io_service_, true, num_threads, true)));
         ASSERT_TRUE(client_);
-
-        // Client should be running. Check convenience functions.
-        ASSERT_TRUE(client_->isRunning());
-        ASSERT_FALSE(client_->isPaused());
-        ASSERT_FALSE(client_->isStopped());
-
-        // Verify the pool size and number of threads are as expected.
-        ASSERT_EQ(client_->getThreadPoolSize(), num_threads);
-        ASSERT_EQ(client_->getThreadCount(), num_threads);
 
         // Start the requisite number of requests:
         //   batch * listeners * threads.
@@ -667,6 +662,17 @@ public:
                 }
             }
         }
+
+        client_->start();
+
+        // Client should be running. Check convenience functions.
+        ASSERT_TRUE(client_->isRunning());
+        ASSERT_FALSE(client_->isPaused());
+        ASSERT_FALSE(client_->isStopped());
+
+        // Verify the pool size and number of threads are as expected.
+        ASSERT_EQ(client_->getThreadPoolSize(), num_threads);
+        ASSERT_EQ(client_->getThreadCount(), num_threads);
 
         size_t rr_count = 0;
         while (rr_count < total_requests) {
@@ -826,11 +832,10 @@ public:
 // Verifies we can construct and destruct, in both single
 // and multi-threaded modes.
 TEST_F(MultiThreadingHttpClientTest, basics) {
-    MultiThreadingMgr::instance().setMode(false);
     HttpClientPtr client;
 
     // Value of 0 for thread_pool_size means single-threaded.
-    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, 0)));
+    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, false)));
     ASSERT_TRUE(client);
 
     ASSERT_FALSE(client->getThreadIOService());
@@ -841,16 +846,13 @@ TEST_F(MultiThreadingHttpClientTest, basics) {
     ASSERT_NO_THROW_LOG(client.reset());
 
     // Non-zero thread-pool-size means multi-threaded mode, should throw.
-    ASSERT_THROW_MSG(client.reset(new HttpClient(io_service_, 1)), InvalidOperation,
-                                  "HttpClient thread_pool_size must be zero"
+    ASSERT_THROW_MSG(client.reset(new HttpClient(io_service_, false, 1)), InvalidOperation,
+                                  "HttpClient thread_pool_size must be zero "
                                   "when Kea core multi-threading is disabled");
     ASSERT_FALSE(client);
 
-    // Enable Kea core multi-threading.
-    MultiThreadingMgr::instance().setMode(true);
-
     // Multi-threaded construction should work now.
-    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, 3)));
+    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, true, 3)));
     ASSERT_TRUE(client);
 
     // Verify that it has an internal IOService and that thread pool size
@@ -886,7 +888,7 @@ TEST_F(MultiThreadingHttpClientTest, basics) {
     ASSERT_NO_THROW_LOG(client.reset());
 
     // Create another multi-threaded instance.
-    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, 3)));
+    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, true, 3)));
 
     // Make sure destruction doesn't throw.
     ASSERT_NO_THROW_LOG(client.reset());
@@ -894,12 +896,11 @@ TEST_F(MultiThreadingHttpClientTest, basics) {
 
 // Verifies we can construct with deferred start.
 TEST_F(MultiThreadingHttpClientTest, deferredStart) {
-    MultiThreadingMgr::instance().setMode(true);
     HttpClientPtr client;
     size_t thread_pool_size = 3;
 
     // Create MT client with deferred start.
-    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, thread_pool_size, true)));
+    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, true, thread_pool_size, true)));
     ASSERT_TRUE(client);
 
     // Client should be STOPPED, with no threads.
@@ -938,12 +939,11 @@ TEST_F(MultiThreadingHttpClientTest, deferredStart) {
 
 // Verifies we can restart after stop.
 TEST_F(MultiThreadingHttpClientTest, restartAfterStop) {
-    MultiThreadingMgr::instance().setMode(true);
     HttpClientPtr client;
     size_t thread_pool_size = 3;
 
     // Create MT client with instant start.
-    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, thread_pool_size)));
+    ASSERT_NO_THROW_LOG(client.reset(new HttpClient(io_service_, true, thread_pool_size)));
     ASSERT_TRUE(client);
 
     // Verify we're started.

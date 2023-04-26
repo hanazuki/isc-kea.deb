@@ -9,17 +9,13 @@
 #include <yang/adaptor_pool.h>
 #include <yang/yang_models.h>
 
+#include <vector>
+
 using namespace std;
 using namespace isc::data;
 
 namespace isc {
 namespace yang {
-
-AdaptorPool::AdaptorPool() {
-}
-
-AdaptorPool::~AdaptorPool() {
-}
 
 void
 AdaptorPool::canonizePool(ElementPtr pool) {
@@ -83,5 +79,5 @@ AdaptorPool::toSubnetIetf6(ElementPtr subnet, ConstElementPtr pools) {
     Adaptor::toParent("rebind-timer", subnet, pools);
 }
 
-}  // end of namespace isc::yang
-}  // end of namespace isc
+}  // namespace yang
+}  // namespace isc

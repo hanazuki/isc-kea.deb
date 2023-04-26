@@ -9,7 +9,7 @@ CLEANFILES = *.gcno *.gcda
 
 lib_LTLIBRARIES = libkea-asiodns.la
 
-libkea_asiodns_la_LDFLAGS = -no-undefined -version-info 24:0:0
+libkea_asiodns_la_LDFLAGS = -no-undefined -version-info 35:0:0
 
 libkea_asiodns_la_SOURCES = io_fetch.cc io_fetch.h
 libkea_asiodns_la_SOURCES += logger.h logger.cc
@@ -23,8 +23,8 @@ libkea_asiodns_la_CXXFLAGS = $(AM_CXXFLAGS)
 libkea_asiodns_la_CPPFLAGS = $(AM_CPPFLAGS)
 libkea_asiodns_la_LIBADD  = $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
 libkea_asiodns_la_LIBADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
-libkea_asiodns_la_LIBADD += $(top_builddir)/src/lib/log/libkea-log.la
 libkea_asiodns_la_LIBADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
+libkea_asiodns_la_LIBADD += $(top_builddir)/src/lib/log/libkea-log.la
 libkea_asiodns_la_LIBADD += $(top_builddir)/src/lib/util/libkea-util.la
 libkea_asiodns_la_LIBADD += $(top_builddir)/src/lib/exceptions/libkea-exceptions.la
 libkea_asiodns_la_LIBADD += $(BOOST_LIBS)

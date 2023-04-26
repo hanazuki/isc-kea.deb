@@ -95,6 +95,10 @@ This library provides the following commands:
 -  ``lease6-resend-ddns`` - resends a request to update DNS entries for
    an existing lease.
 
+-  ``lease4-write`` - writes the IPv4 memfile lease database into a file.
+
+-  ``lease6-write`` - writes the IPv6 memfile lease database into a file.
+
 All commands use JSON syntax and can be issued either using the control
 channel (see :ref:`ctrl-channel`) or Control Agent (see
 :ref:`kea-ctrl-agent`).
@@ -779,7 +783,7 @@ The ``lease4-del``, ``lease6-del`` Commands
 
 ``lease4-del`` and ``lease6-del`` can be used to delete a lease from the lease database.
 There are two types of parameters these commands support, similar to the
-``lease4-get``and ``lease6-get`` commands: (``address``) for both v4 and v6, (``subnet-id``,
+``lease4-get`` and ``lease6-get`` commands: (``address``) for both v4 and v6, (``subnet-id``,
 ``identifier-type``, ``identifier``) for v4, and (``subnet-id``, ``identifier-type``,
 ``identifier``, ``type``, ``IAID``) for v6. The first type of query is used when the
 address (either IPv4 or IPv6) is known, but the details of the lease are
@@ -1003,3 +1007,27 @@ Here's an example of a result returned when the lease was found:
      "result": 0,
      "text": "NCR generated for: 2001:db8:1::1, hostname: example.com."
    }
+
+.. _command-lease4-write:
+
+.. _command-lease6-write:
+
+The ``lease4-write``, ``lease6-write`` Commands
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+``lease4-write`` and ``lease6-write`` can be used to recover emergency
+situations where the memfile lease file is damage, e.g. removed by
+accident or truncated by a full file system but the in memory database
+is still valid. These commands are supported only by the memfile database
+backend and write the lease database into a CSV file. They take the path
+of the file as the ``filename`` argument. If the specified output file
+is the same as the configured memfile one the backend close and reopen
+the file in an attempt to synchronize both file and in memory images
+of the lease database. The previous file is renamed by appending ``.bak``
+to its name.
+
+.. note::
+
+   These commands do not replace the LFC mechanism: they should be used
+   only in exceptional circumstances, such as when recovering after
+   running out of disk space.

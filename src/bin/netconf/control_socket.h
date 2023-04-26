@@ -10,8 +10,8 @@
 #ifndef CONTROL_SOCKET_H
 #define CONTROL_SOCKET_H
 
-#include <netconf/netconf_config.h>
 #include <exceptions/exceptions.h>
+#include <netconf/netconf_config.h>
 
 namespace isc {
 namespace netconf {
@@ -20,8 +20,8 @@ namespace netconf {
 class ControlSocketError : public isc::Exception {
 public:
     ControlSocketError(const char* file, size_t line, const char* what) :
-        isc::Exception(file, line, what) { };
-};
+        isc::Exception(file, line, what) { }
+};  // ControlSocketError
 
 /// @brief Base class for control socket communication.
 ///
@@ -31,7 +31,6 @@ public:
 /// communicate with other Kea daemons.
 class ControlSocketBase {
 public:
-
     /// @brief Constructor.
     ///
     /// @param ctrl_sock The control socket configuration.
@@ -44,8 +43,7 @@ public:
     }
 
     /// @brief Destructor (does nothing).
-    virtual ~ControlSocketBase() {
-    }
+    virtual ~ControlSocketBase() = default;
 
     /// @brief Getter which returns the socket type.
     ///
@@ -85,7 +83,7 @@ public:
     /// @param service The target service (used by http).
     /// @return The JSON element answer of config-test.
     /// @throw ControlSocketError when a communication error occurs.
-    virtual data::ConstElementPtr configTest(data::ConstElementPtr config,
+    virtual data::ConstElementPtr configTest(data::ElementPtr config,
                                              const std::string& service) = 0;
 
     /// @brief Set configuration.
@@ -96,15 +94,15 @@ public:
     /// @param service The target service (used by http).
     /// @return The JSON element answer of config-set.
     /// @throw ControlSocketError when a communication error occurs.
-    virtual data::ConstElementPtr configSet(data::ConstElementPtr config,
+    virtual data::ConstElementPtr configSet(data::ElementPtr config,
                                             const std::string& service) = 0;
 
     /// @brief The control socket configuration.
     CfgControlSocketPtr socket_cfg_;
-};
+};  // ControlSocketBase
 
 /// @brief Type definition for the pointer to the @c ControlSocketBase.
-typedef boost::shared_ptr<ControlSocketBase> ControlSocketBasePtr;
+using ControlSocketBasePtr = std::shared_ptr<ControlSocketBase>;
 
 /// @brief Factory template for control sockets.
 ///
@@ -125,7 +123,7 @@ createControlSocket(CfgControlSocketPtr ctrl_sock) {
 ControlSocketBasePtr
 controlSocketFactory(CfgControlSocketPtr ctrl_sock);
 
-} // namespace netconf
-} // namespace isc
+}  // namespace netconf
+}  // namespace isc
 
-#endif // CONTROL_SOCKET_H
+#endif  // CONTROL_SOCKET_H

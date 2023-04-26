@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -407,7 +407,7 @@ Dhcp6Client::createMsg(const uint8_t msg_type) {
         OptionUint16ArrayPtr vendor_oro(new OptionUint16Array(Option::V6,
                                                               DOCSIS3_V6_ORO));
         vendor_oro->setValues(docsis_oro_);
-        OptionPtr vendor(new OptionVendor(Option::V6, 4491));
+        OptionVendorPtr vendor(new OptionVendor(Option::V6, VENDOR_ID_CABLE_LABS));
         vendor->addOption(vendor_oro);
         msg->addOption(vendor);
     }

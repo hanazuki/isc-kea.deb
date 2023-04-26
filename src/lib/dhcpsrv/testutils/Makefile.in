@@ -90,22 +90,23 @@ build_triplet = @build@
 host_triplet = @host@
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_1 = mysql_generic_backend_unittest.cc mysql_generic_backend_unittest.h
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_2 = pgsql_generic_backend_unittest.cc pgsql_generic_backend_unittest.h
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_3 = $(MYSQL_CPPFLAGS)
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_4 = $(top_builddir)/src/lib/mysql/libkea-mysql.la
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_5 = $(PGSQL_CPPFLAGS)
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_6 = $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_3 = $(PGSQL_CPPFLAGS)
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_4 = $(top_builddir)/src/lib/pgsql/libkea-pgsql.la
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_5 = $(MYSQL_CPPFLAGS)
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_6 = $(top_builddir)/src/lib/mysql/libkea-mysql.la
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_7 = $(MYSQL_LIBS)
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_8 = $(PGSQL_LIBS)
 subdir = src/lib/dhcpsrv/testutils
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -125,7 +126,8 @@ LTLIBRARIES = $(noinst_LTLIBRARIES)
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la
-am__libdhcpsrvtest_la_SOURCES_DIST = config_result_check.cc \
+am__libdhcpsrvtest_la_SOURCES_DIST = concrete_lease_mgr.cc \
+	concrete_lease_mgr.h config_result_check.cc \
 	config_result_check.h dhcp4o6_test_ipc.cc dhcp4o6_test_ipc.h \
 	host_data_source_utils.cc host_data_source_utils.h \
 	memory_host_data_source.cc memory_host_data_source.h \
@@ -146,6 +148,7 @@ am__libdhcpsrvtest_la_SOURCES_DIST = config_result_check.cc \
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__objects_1 = libdhcpsrvtest_la-mysql_generic_backend_unittest.lo
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__objects_2 = libdhcpsrvtest_la-pgsql_generic_backend_unittest.lo
 @HAVE_GTEST_TRUE@am_libdhcpsrvtest_la_OBJECTS =  \
+@HAVE_GTEST_TRUE@	libdhcpsrvtest_la-concrete_lease_mgr.lo \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-config_result_check.lo \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-dhcp4o6_test_ipc.lo \
 @HAVE_GTEST_TRUE@	libdhcpsrvtest_la-host_data_source_utils.lo \
@@ -186,6 +189,7 @@ DEFAULT_INCLUDES = -I.@am__isrc@ -I$(top_builddir)
 depcomp = $(SHELL) $(top_srcdir)/depcomp
 am__maybe_remake_depfiles = depfiles
 am__depfiles_remade =  \
+	./$(DEPDIR)/libdhcpsrvtest_la-concrete_lease_mgr.Plo \
 	./$(DEPDIR)/libdhcpsrvtest_la-config_result_check.Plo \
 	./$(DEPDIR)/libdhcpsrvtest_la-dhcp4o6_test_ipc.Plo \
 	./$(DEPDIR)/libdhcpsrvtest_la-generic_backend_unittest.Plo \
@@ -342,11 +346,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -365,7 +376,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -383,6 +394,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -429,12 +450,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -506,7 +533,8 @@ AM_CPPFLAGS = -I$(top_builddir)/src/lib -I$(top_srcdir)/src/lib \
 AM_CXXFLAGS = $(KEA_CXXFLAGS)
 CLEANFILES = *.gcno *.gcda
 @HAVE_GTEST_TRUE@noinst_LTLIBRARIES = libdhcpsrvtest.la
-@HAVE_GTEST_TRUE@libdhcpsrvtest_la_SOURCES = config_result_check.cc \
+@HAVE_GTEST_TRUE@libdhcpsrvtest_la_SOURCES = concrete_lease_mgr.cc \
+@HAVE_GTEST_TRUE@	concrete_lease_mgr.h config_result_check.cc \
 @HAVE_GTEST_TRUE@	config_result_check.h dhcp4o6_test_ipc.cc \
 @HAVE_GTEST_TRUE@	dhcp4o6_test_ipc.h host_data_source_utils.cc \
 @HAVE_GTEST_TRUE@	host_data_source_utils.h \
@@ -594,6 +622,7 @@ mostlyclean-compile:
 distclean-compile:
 	-rm -f *.tab.c
 
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-concrete_lease_mgr.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-config_result_check.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-dhcp4o6_test_ipc.Plo@am__quote@ # am--include-marker
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/libdhcpsrvtest_la-generic_backend_unittest.Plo@am__quote@ # am--include-marker
@@ -636,6 +665,13 @@ am--depfiles: $(am__depfiles_remade)
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='$<' object='$@' libtool=yes @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LTCXXCOMPILE) -c -o $@ $<
+
+libdhcpsrvtest_la-concrete_lease_mgr.lo: concrete_lease_mgr.cc
+@am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrvtest_la-concrete_lease_mgr.lo -MD -MP -MF $(DEPDIR)/libdhcpsrvtest_la-concrete_lease_mgr.Tpo -c -o libdhcpsrvtest_la-concrete_lease_mgr.lo `test -f 'concrete_lease_mgr.cc' || echo '$(srcdir)/'`concrete_lease_mgr.cc
+@am__fastdepCXX_TRUE@	$(AM_V_at)$(am__mv) $(DEPDIR)/libdhcpsrvtest_la-concrete_lease_mgr.Tpo $(DEPDIR)/libdhcpsrvtest_la-concrete_lease_mgr.Plo
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	$(AM_V_CXX)source='concrete_lease_mgr.cc' object='libdhcpsrvtest_la-concrete_lease_mgr.lo' libtool=yes @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCXX_FALSE@	DEPDIR=$(DEPDIR) $(CXXDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCXX_FALSE@	$(AM_V_CXX@am__nodep@)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -c -o libdhcpsrvtest_la-concrete_lease_mgr.lo `test -f 'concrete_lease_mgr.cc' || echo '$(srcdir)/'`concrete_lease_mgr.cc
 
 libdhcpsrvtest_la-config_result_check.lo: config_result_check.cc
 @am__fastdepCXX_TRUE@	$(AM_V_CXX)$(LIBTOOL) $(AM_V_lt) --tag=CXX $(AM_LIBTOOLFLAGS) $(LIBTOOLFLAGS) --mode=compile $(CXX) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libdhcpsrvtest_la_CPPFLAGS) $(CPPFLAGS) $(libdhcpsrvtest_la_CXXFLAGS) $(CXXFLAGS) -MT libdhcpsrvtest_la-config_result_check.lo -MD -MP -MF $(DEPDIR)/libdhcpsrvtest_la-config_result_check.Tpo -c -o libdhcpsrvtest_la-config_result_check.lo `test -f 'config_result_check.cc' || echo '$(srcdir)/'`config_result_check.cc
@@ -947,7 +983,8 @@ clean-am: clean-generic clean-libtool clean-noinstLTLIBRARIES \
 	mostlyclean-am
 
 distclean: distclean-recursive
-		-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-config_result_check.Plo
+		-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-concrete_lease_mgr.Plo
+	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-config_result_check.Plo
 	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-dhcp4o6_test_ipc.Plo
 	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-generic_backend_unittest.Plo
 	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-generic_cb_dhcp4_unittest.Plo
@@ -1007,7 +1044,8 @@ install-ps-am:
 installcheck-am:
 
 maintainer-clean: maintainer-clean-recursive
-		-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-config_result_check.Plo
+		-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-concrete_lease_mgr.Plo
+	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-config_result_check.Plo
 	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-dhcp4o6_test_ipc.Plo
 	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-generic_backend_unittest.Plo
 	-rm -f ./$(DEPDIR)/libdhcpsrvtest_la-generic_cb_dhcp4_unittest.Plo

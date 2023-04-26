@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,12 +11,14 @@
 #include <cc/command_interpreter.h>
 #include <config/command_mgr.h>
 #include <database/dbaccess_parser.h>
-#include <dhcp6/json_config_parser.h>
+#include <dhcp6/ctrl_dhcp6_srv.h>
 #include <dhcp6/dhcp6_log.h>
 #include <dhcp6/dhcp6_srv.h>
+#include <dhcp6/json_config_parser.h>
 #include <dhcp/libdhcp++.h>
 #include <dhcp/iface_mgr.h>
 #include <dhcpsrv/cb_ctl_dhcp4.h>
+#include <dhcpsrv/cfg_multi_threading.h>
 #include <dhcpsrv/cfg_option.h>
 #include <dhcpsrv/cfgmgr.h>
 #include <dhcpsrv/db_type.h>
@@ -266,7 +268,7 @@ public:
     /// in the future.
     ///
     /// @param cfg - the parsed structure
-    /// @param global global Dhcp4 scope
+    /// @param global global Dhcp6 scope
     /// @throw DhcpConfigError in case of issues found
     void
     sanityChecks(const SrvConfigPtr& cfg, const ConstElementPtr& global) {
@@ -416,7 +418,7 @@ void configureCommandChannel() {
         if (sock_cfg) {
             // This will create a control socket and install the external
             // socket in IfaceMgr. That socket will be monitored when
-            // Dhcp4Srv::receivePacket() calls IfaceMgr::receive4() and
+            // Dhcp6Srv::receivePacket() calls IfaceMgr::receive6() and
             // callback in CommandMgr will be called, if necessary.
             isc::config::CommandMgr::instance().openCommandSocket(sock_cfg);
         }
@@ -424,28 +426,10 @@ void configureCommandChannel() {
 }
 
 isc::data::ConstElementPtr
-configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
-                     bool check_only) {
-    if (!config_set) {
-        ConstElementPtr answer = isc::config::createAnswer(CONTROL_RESULT_ERROR,
-                                 string("Can't parse NULL config"));
-        return (answer);
-    }
-
-    LOG_DEBUG(dhcp6_logger, DBG_DHCP6_COMMAND, DHCP6_CONFIG_START)
-        .arg(server.redactConfig(config_set)->str());
-
+processDhcp6Config(isc::data::ConstElementPtr config_set) {
     // Before starting any subnet operations, let's reset the subnet-id counter,
     // so newly recreated configuration starts with first subnet-id equal 1.
     Subnet::resetSubnetID();
-
-    // Close DHCP sockets and remove any existing timers.
-    if (!check_only) {
-        IfaceMgr::instance().closeSockets();
-        TimerMgr::instance()->unregisterTimers();
-        server.discardPackets();
-        server.getCBControl()->reset();
-    }
 
     // Revert any runtime option definitions configured so far and not committed.
     LibDHCP::revertRuntimeOptionDefs();
@@ -458,9 +442,7 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
 
     // Answer will hold the result.
     ConstElementPtr answer;
-    // Rollback informs whether error occurred and original data
-    // have to be restored to global storages.
-    bool rollback = false;
+
     // Global parameter name in case of an error.
     string parameter_name;
     ElementPtr mutable_cfg;
@@ -548,19 +530,25 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
             parser.parse(*srv_config, multi_threading);
         }
 
+        bool multi_threading_enabled = true;
+        uint32_t thread_count = 0;
+        uint32_t queue_size = 0;
+        CfgMultiThreading::extract(CfgMgr::instance().getStagingCfg()->getDHCPMultiThreading(),
+                                   multi_threading_enabled, thread_count, queue_size);
+
         /// depends on "multi-threading" being enabled, so it must come after.
         ConstElementPtr queue_control = mutable_cfg->get("dhcp-queue-control");
         if (queue_control) {
             parameter_name = "dhcp-queue-control";
             DHCPQueueControlParser parser;
-            srv_config->setDHCPQueueControl(parser.parse(queue_control));
+            srv_config->setDHCPQueueControl(parser.parse(queue_control, multi_threading_enabled));
         }
 
         /// depends on "multi-threading" being enabled, so it must come after.
         ConstElementPtr reservations_lookup_first = mutable_cfg->get("reservations-lookup-first");
         if (reservations_lookup_first) {
             parameter_name = "reservations-lookup-first";
-            if (MultiThreadingMgr::instance().getMode()) {
+            if (multi_threading_enabled) {
                 LOG_WARN(dhcp6_logger, DHCP6_RESERVATIONS_LOOKUP_FIRST_ENABLED);
             }
             srv_config->setReservationsLookupFirst(reservations_lookup_first->boolValue());
@@ -585,7 +573,7 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
         ConstElementPtr ifaces_config = mutable_cfg->get("interfaces-config");
         if (ifaces_config) {
             parameter_name = "interfaces-config";
-            IfacesConfigParser parser(AF_INET6, check_only);
+            IfacesConfigParser parser(AF_INET6, true);
             CfgIfacePtr cfg_iface = srv_config->getCfgIface();
             parser.parse(cfg_iface, ifaces_config);
         }
@@ -614,7 +602,8 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
             HooksLibrariesParser hooks_parser;
             HooksConfig& libraries = srv_config->getHooksConfig();
             hooks_parser.parse(libraries, hooks_libraries);
-            libraries.verifyLibraries(hooks_libraries->getPosition());
+            libraries.verifyLibraries(hooks_libraries->getPosition(),
+                                      multi_threading_enabled);
         }
 
         // D2 client configuration.
@@ -727,9 +716,20 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
         ConstElementPtr compatibility = mutable_cfg->get("compatibility");
         if (compatibility) {
             for (auto kv : compatibility->mapValue()) {
+                if (!kv.second || (kv.second->getType() != Element::boolean)) {
+                    isc_throw(DhcpConfigError,
+                              "compatibility parameter values must be "
+                              << "boolean (" << kv.first << " at "
+                              << kv.second->getPosition() << ")");
+                }
                 if (kv.first == "lenient-option-parsing") {
                     CfgMgr::instance().getStagingCfg()->setLenientOptionParsing(
                         kv.second->boolValue());
+                } else {
+                    isc_throw(DhcpConfigError,
+                              "unsupported compatibility parameter: "
+                              << kv.first << " (" << kv.second->getPosition()
+                              << ")");
                 }
             }
         }
@@ -812,13 +812,16 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
                  (config_pair.first == "ddns-qualifying-suffix") ||
                  (config_pair.first == "ddns-update-on-renew") ||
                  (config_pair.first == "ddns-use-conflict-resolution") ||
+                 (config_pair.first == "ddns-ttl-percent") ||
                  (config_pair.first == "store-extended-info") ||
                  (config_pair.first == "statistic-default-sample-count") ||
                  (config_pair.first == "statistic-default-sample-age") ||
                  (config_pair.first == "early-global-reservations-lookup") ||
                  (config_pair.first == "ip-reservations-unique") ||
                  (config_pair.first == "reservations-lookup-first") ||
-                 (config_pair.first == "parked-packet-limit")) {
+                 (config_pair.first == "parked-packet-limit") ||
+                 (config_pair.first == "allocator") ||
+                 (config_pair.first == "pd-allocator") ) {
                 CfgMgr::instance().getStagingCfg()->addConfiguredGlobal(config_pair.first,
                                                                         config_pair.second);
                 continue;
@@ -856,25 +859,128 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
         LOG_ERROR(dhcp6_logger, DHCP6_PARSER_FAIL)
                   .arg(parameter_name).arg(ex.what());
         answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, ex.what());
-
-        // An error occurred, so make sure that we restore original data.
-        rollback = true;
     } catch (...) {
         // For things like bad_cast in boost::lexical_cast
         LOG_ERROR(dhcp6_logger, DHCP6_PARSER_EXCEPTION).arg(parameter_name);
-        answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, "undefined configuration"
-                                           " processing error");
-
-        // An error occurred, so make sure that we restore original data.
-        rollback = true;
+        answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, "undefined configuration "
+                                           "processing error");
     }
 
-    if (check_only) {
-        rollback = true;
-        if (!answer) {
-            answer = isc::config::createAnswer(CONTROL_RESULT_SUCCESS,
-            "Configuration seems sane. Control-socket, hook-libraries, and D2 "
-            "configuration were sanity checked, but not applied.");
+    if (!answer) {
+        answer = isc::config::createAnswer(CONTROL_RESULT_SUCCESS, "Configuration seems sane. "
+                                           "Control-socket, hook-libraries, and D2 configuration "
+                                           "were sanity checked, but not applied.");
+    }
+
+    return (answer);
+}
+
+isc::data::ConstElementPtr
+configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
+                     bool check_only, bool extra_checks) {
+    if (!config_set) {
+        ConstElementPtr answer = isc::config::createAnswer(CONTROL_RESULT_ERROR,
+                                                           "Can't parse NULL config");
+        return (answer);
+    }
+
+    LOG_DEBUG(dhcp6_logger, DBG_DHCP6_COMMAND, DHCP6_CONFIG_START)
+        .arg(server.redactConfig(config_set)->str());
+
+    auto answer = processDhcp6Config(config_set);
+
+    int status_code = CONTROL_RESULT_SUCCESS;
+    isc::config::parseAnswer(status_code, answer);
+
+    SrvConfigPtr srv_config;
+
+    if (status_code == CONTROL_RESULT_SUCCESS) {
+        if (check_only) {
+            if (extra_checks) {
+                // Re-open lease and host database with new parameters.
+                try {
+                    // Get the staging configuration.
+                    srv_config = CfgMgr::instance().getStagingCfg();
+
+                    CfgDbAccessPtr cfg_db = CfgMgr::instance().getStagingCfg()->getCfgDbAccess();
+                    string params = "universe=6 persist=false";
+                    if (cfg_db->getExtendedInfoTablesEnabled()) {
+                        params += " extended-info-tables=true";
+                    }
+                    cfg_db->setAppendedParameters(params);
+                    cfg_db->createManagers();
+                } catch (const std::exception& ex) {
+                    answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, ex.what());
+                    status_code = CONTROL_RESULT_ERROR;
+                }
+
+                if (status_code == CONTROL_RESULT_SUCCESS) {
+                    std::ostringstream err;
+                    // Configure DHCP packet queueing
+                    try {
+                        data::ConstElementPtr qc;
+                        qc = CfgMgr::instance().getStagingCfg()->getDHCPQueueControl();
+                        if (IfaceMgr::instance().configureDHCPPacketQueue(AF_INET6, qc)) {
+                            LOG_INFO(dhcp6_logger, DHCP6_CONFIG_PACKET_QUEUE)
+                                     .arg(IfaceMgr::instance().getPacketQueue6()->getInfoStr());
+                        }
+
+                    } catch (const std::exception& ex) {
+                        err << "Error setting packet queue controls after server reconfiguration: "
+                            << ex.what();
+                        answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, err.str());
+                        status_code = CONTROL_RESULT_ERROR;
+                    }
+                }
+            }
+        } else {
+            string parameter_name;
+            ElementPtr mutable_cfg;
+
+            // disable multi-threading (it will be applied by new configuration)
+            // this must be done in order to properly handle MT to ST transition
+            // when 'multi-threading' structure is missing from new config and
+            // to properly drop any task items stored in the thread pool which
+            // might reference some handles to loaded hooks, preventing them
+            // from being unloaded.
+            MultiThreadingMgr::instance().apply(false, 0, 0);
+
+            // Close DHCP sockets and remove any existing timers.
+            IfaceMgr::instance().closeSockets();
+            TimerMgr::instance()->unregisterTimers();
+            server.discardPackets();
+            server.getCBControl()->reset();
+
+            try {
+
+                // Get the staging configuration.
+                srv_config = CfgMgr::instance().getStagingCfg();
+
+                // This is a way to convert ConstElementPtr to ElementPtr.
+                // We need a config that can be edited, because we will insert
+                // default values and will insert derived values as well.
+                mutable_cfg = boost::const_pointer_cast<Element>(config_set);
+
+                ConstElementPtr ifaces_config = mutable_cfg->get("interfaces-config");
+                if (ifaces_config) {
+                    parameter_name = "interfaces-config";
+                    IfacesConfigParser parser(AF_INET6, false);
+                    CfgIfacePtr cfg_iface = srv_config->getCfgIface();
+                    cfg_iface->reset();
+                    parser.parse(cfg_iface, ifaces_config);
+                }
+            } catch (const isc::Exception& ex) {
+                LOG_ERROR(dhcp6_logger, DHCP6_PARSER_FAIL)
+                          .arg(parameter_name).arg(ex.what());
+                answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, ex.what());
+                status_code = CONTROL_RESULT_ERROR;
+            } catch (...) {
+                // For things like bad_cast in boost::lexical_cast
+                LOG_ERROR(dhcp6_logger, DHCP6_PARSER_EXCEPTION).arg(parameter_name);
+                answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, "undefined configuration"
+                                                   " processing error");
+                status_code = CONTROL_RESULT_ERROR;
+            }
         }
     }
 
@@ -882,12 +988,26 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
     // configuration. This will add created subnets and option values into
     // the server's configuration.
     // This operation should be exception safe but let's make sure.
-    if (!rollback) {
+    if (status_code == CONTROL_RESULT_SUCCESS && (!check_only || extra_checks)) {
         try {
 
             // Setup the command channel.
             configureCommandChannel();
+        } catch (const isc::Exception& ex) {
+            LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_FAIL).arg(ex.what());
+            answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, ex.what());
+            status_code = CONTROL_RESULT_ERROR;
+        } catch (...) {
+            // For things like bad_cast in boost::lexical_cast
+            LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_EXCEPTION);
+            answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, "undefined configuration"
+                                               " parsing error");
+            status_code = CONTROL_RESULT_ERROR;
+        }
+    }
 
+    if (status_code == CONTROL_RESULT_SUCCESS && (!check_only || extra_checks)) {
+        try {
             // No need to commit interface names as this is handled by the
             // CfgMgr::commit() function.
 
@@ -895,7 +1015,21 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
             D2ClientConfigPtr cfg;
             cfg = CfgMgr::instance().getStagingCfg()->getD2ClientConfig();
             CfgMgr::instance().setD2ClientConfig(cfg);
+        } catch (const isc::Exception& ex) {
+            LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_FAIL).arg(ex.what());
+            answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, ex.what());
+            status_code = CONTROL_RESULT_ERROR;
+        } catch (...) {
+            // For things like bad_cast in boost::lexical_cast
+            LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_EXCEPTION);
+            answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, "undefined configuration"
+                                               " parsing error");
+            status_code = CONTROL_RESULT_ERROR;
+        }
+    }
 
+    if (status_code == CONTROL_RESULT_SUCCESS && (!check_only || extra_checks)) {
+        try {
             // This occurs last as if it succeeds, there is no easy way to
             // revert it.  As a result, the failure to commit a subsequent
             // change causes problems when trying to roll back.
@@ -903,28 +1037,28 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
             static_cast<void>(HooksManager::unloadLibraries());
             const HooksConfig& libraries =
                 CfgMgr::instance().getStagingCfg()->getHooksConfig();
-            libraries.loadLibraries();
+            bool multi_threading_enabled = true;
+            uint32_t thread_count = 0;
+            uint32_t queue_size = 0;
+            CfgMultiThreading::extract(CfgMgr::instance().getStagingCfg()->getDHCPMultiThreading(),
+                                       multi_threading_enabled, thread_count, queue_size);
+            libraries.loadLibraries(multi_threading_enabled);
         } catch (const isc::Exception& ex) {
             LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_FAIL).arg(ex.what());
             answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, ex.what());
-
-            // An error occurred, so make sure to restore the original data.
-            rollback = true;
+            status_code = CONTROL_RESULT_ERROR;
         } catch (...) {
             // For things like bad_cast in boost::lexical_cast
             LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_EXCEPTION);
             answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, "undefined configuration"
                                                " parsing error");
-
-            // An error occurred, so make sure to restore the original data.
-            rollback = true;
+            status_code = CONTROL_RESULT_ERROR;
         }
     }
 
     // Moved from the commit block to add the config backend indication.
-    if (!rollback) {
+    if (status_code == CONTROL_RESULT_SUCCESS && (!check_only || extra_checks)) {
         try {
-
             // If there are config backends, fetch and merge into staging config
             server.getCBControl()->databaseConfigFetch(srv_config,
                                                        CBControlDHCPv6::FetchMode::FETCH_ALL);
@@ -933,9 +1067,7 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
             err << "during update from config backend database: " << ex.what();
             LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_FAIL).arg(err.str());
             answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, err.str());
-
-            // An error occurred, so make sure to restore the original data.
-            rollback = true;
+            status_code = CONTROL_RESULT_ERROR;
         } catch (...) {
             // For things like bad_cast in boost::lexical_cast
             std::ostringstream err;
@@ -943,17 +1075,23 @@ configureDhcp6Server(Dhcpv6Srv& server, isc::data::ConstElementPtr config_set,
                 << "undefined configuration parsing error";
             LOG_ERROR(dhcp6_logger, DHCP6_PARSER_COMMIT_FAIL).arg(err.str());
             answer = isc::config::createAnswer(CONTROL_RESULT_ERROR, err.str());
-
-            // An error occurred, so make sure to restore the original data.
-            rollback = true;
+            status_code = CONTROL_RESULT_ERROR;
         }
     }
 
     // Rollback changes as the configuration parsing failed.
-    if (rollback) {
+    if (check_only || status_code != CONTROL_RESULT_SUCCESS) {
         // Revert to original configuration of runtime option definitions
         // in the libdhcp++.
         LibDHCP::revertRuntimeOptionDefs();
+
+        if (status_code == CONTROL_RESULT_SUCCESS && extra_checks) {
+            auto notify_libraries = ControlledDhcpv6Srv::finishConfigHookLibraries(config_set);
+            if (notify_libraries) {
+                return (notify_libraries);
+            }
+        }
+
         return (answer);
     }
 

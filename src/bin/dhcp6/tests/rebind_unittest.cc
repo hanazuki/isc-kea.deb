@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -1068,8 +1068,7 @@ TEST_F(RebindTest, docsisORO) {
     opt = client.config_.findOption(D6O_VENDOR_OPTS);
     ASSERT_TRUE(opt);
     // The vendor option must be a OptionVendor object.
-    boost::shared_ptr<OptionVendor> vendor =
-        boost::dynamic_pointer_cast<OptionVendor>(opt);
+    OptionVendorPtr vendor = boost::dynamic_pointer_cast<OptionVendor>(opt);
     ASSERT_TRUE(vendor);
     // The vendor-id should be DOCSIS.
     EXPECT_EQ(VENDOR_ID_CABLE_LABS, vendor->getVendorId());

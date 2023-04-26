@@ -16,6 +16,7 @@
 #include <dhcpsrv/resource_handler.h>
 #include <cc/command_interpreter.h>
 #include <cc/data.h>
+#include <process/daemon.h>
 #include <stats/stats_mgr.h>
 #include <testutils/user_context_utils.h>
 #include <testutils/multi_threading_utils.h>
@@ -47,6 +48,16 @@ public:
     /// Removes files that may be left over from previous tests
     virtual ~LibLoadTest() {
         unloadLibs();
+    }
+
+    /// @brief Set family.
+    void setFamily(uint16_t family) {
+        isc::dhcp::CfgMgr::instance().setFamily(family);
+        if (family == AF_INET) {
+            isc::process::Daemon::setProcName("kea-dhcp4");
+        } else {
+            isc::process::Daemon::setProcName("kea-dhcp6");
+        }
     }
 
     /// @brief Adds library/parameters to list of libraries to be loaded
@@ -378,7 +389,12 @@ public:
     void initLeaseMgr(bool v6, bool insert_lease, bool declined = false) {
         isc::dhcp::LeaseMgrFactory::destroy();
         std::ostringstream s;
-        s << "type=memfile persist=false " << (v6 ? "universe=6" : "universe=4");
+        s << "type=memfile persist=false ";
+        if (v6) {
+            s << "universe=6 extended-info-tables=true";
+        } else {
+            s <<  "universe=4";
+        }
         isc::dhcp::LeaseMgrFactory::create(s.str());
 
         lmptr_ = &(isc::dhcp::LeaseMgrFactory::instance());

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -33,15 +33,17 @@ GenericBackendTest::~GenericBackendTest() {
 OptionDescriptor
 GenericBackendTest::createEmptyOption(const Option::Universe& universe,
                                       const uint16_t option_type,
-                                      const bool persist) const {
+                                      const bool persist,
+                                      const bool cancel) const {
     OptionPtr option(new Option(universe, option_type));
-    OptionDescriptor desc(option, persist);
+    OptionDescriptor desc(option, persist, cancel);
     return (desc);
 }
 
 OptionDescriptor
 GenericBackendTest::createVendorOption(const Option::Universe& universe,
                                        const bool persist,
+                                       const bool cancel,
                                        const bool formatted,
                                        const uint32_t vendor_id) const {
     OptionVendorPtr option(new OptionVendor(universe, vendor_id));
@@ -53,7 +55,7 @@ GenericBackendTest::createVendorOption(const Option::Universe& universe,
         s << vendor_id;
     }
 
-    OptionDescriptor desc(option, persist, s.str());
+    OptionDescriptor desc(option, persist, cancel, s.str());
     return (desc);
 }
 
@@ -102,6 +104,7 @@ GenericBackendTest::testOptionsEquivalent(const OptionDescriptor& ref_option,
     // option when an option definition is available.
     EXPECT_EQ(ref_option.formatted_value_, tested_option.formatted_value_);
     EXPECT_EQ(ref_option.persistent_, tested_option.persistent_);
+    EXPECT_EQ(ref_option.cancelled_, tested_option.cancelled_);
     EXPECT_EQ(ref_option.space_name_, tested_option.space_name_);
 }
 

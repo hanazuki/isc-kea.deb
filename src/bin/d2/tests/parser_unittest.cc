@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <d2/tests/parser_unittest.h>
 #include <testutils/io_utils.h>
 #include <testutils/log_utils.h>
+#include <testutils/test_to_element.h>
 #include <testutils/user_context_utils.h>
 
 #include <gtest/gtest.h>
@@ -38,7 +39,11 @@ namespace test {
 void compareJSON(ConstElementPtr a, ConstElementPtr b) {
     ASSERT_TRUE(a);
     ASSERT_TRUE(b);
-    EXPECT_EQ(a->str(), b->str());
+    EXPECT_EQ(a->str(), b->str())
+#ifdef HAVE_CREATE_UNIFIED_DIFF
+        << "\nDiff:\n" << generateDiff(prettyPrint(a), prettyPrint(b)) << "\n"
+#endif
+    ;
 }
 
 /// @brief Tests if the input string can be parsed with specific parser

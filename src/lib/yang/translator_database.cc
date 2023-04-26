@@ -7,74 +7,77 @@
 #include <config.h>
 
 #include <yang/translator_database.h>
-#include <yang/adaptor.h>
 #include <yang/yang_models.h>
+
 #include <sstream>
 
 using namespace std;
 using namespace isc::data;
+using namespace libyang;
 using namespace sysrepo;
 
 namespace isc {
 namespace yang {
 
-TranslatorDatabase::TranslatorDatabase(S_Session session, const string& model)
-    : TranslatorBasic(session, model) {
-}
-
-TranslatorDatabase::~TranslatorDatabase() {
+TranslatorDatabase::TranslatorDatabase(Session session, const string& model)
+    : Translator(session, model) {
 }
 
 ElementPtr
-TranslatorDatabase::getDatabase(const string& xpath) {
+TranslatorDatabase::getDatabase(DataNode const& data_node) {
     try {
         if ((model_ == KEA_DHCP4_SERVER) ||
             (model_ == KEA_DHCP6_SERVER)) {
-            return (getDatabaseKea(xpath));
+            return (getDatabaseKea(data_node));
         }
-    } catch (const sysrepo_exception& ex) {
-        isc_throw(SysrepoError,
-                  "sysrepo error getting database access at '" << xpath
-                  << "': " << ex.what());
+    } catch (Error const& ex) {
+        isc_throw(NetconfError,
+                  "getting database access: " << ex.what());
     }
     isc_throw(NotImplemented,
               "getDatabase not implemented for the model: " << model_);
 }
 
 ElementPtr
-TranslatorDatabase::getDatabaseKea(const string& xpath) {
-    ConstElementPtr type = getItem(xpath + "/database-type");
-    if (!type) {
-        return (ElementPtr());
+TranslatorDatabase::getDatabaseFromAbsoluteXpath(string const& xpath) {
+    try {
+        return getDatabase(findXPath(xpath));
+    } catch (NetconfError const&) {
+        return ElementPtr();
     }
+}
+
+ElementPtr
+TranslatorDatabase::getDatabaseKea(DataNode const& data_node) {
     ElementPtr result = Element::createMap();
-    result->set("type", type);
-    checkAndGetLeaf(result, xpath, "user");
-    checkAndGetLeaf(result, xpath, "password");
-    checkAndGetLeaf(result, xpath, "host");
-    checkAndGetLeaf(result, xpath, "name");
-    checkAndGetLeaf(result, xpath, "persist");
-    checkAndGetLeaf(result, xpath, "port");
-    checkAndGetLeaf(result, xpath, "lfc-interval");
-    checkAndGetLeaf(result, xpath, "readonly");
-    checkAndGetLeaf(result, xpath, "trust-anchor");
-    checkAndGetLeaf(result, xpath, "cert-file");
-    checkAndGetLeaf(result, xpath, "key-file");
-    checkAndGetLeaf(result, xpath, "cipher-list");
-    checkAndGetLeaf(result, xpath, "connect-timeout");
-    checkAndGetLeaf(result, xpath, "max-reconnect-tries");
-    checkAndGetLeaf(result, xpath, "reconnect-wait-time");
-    checkAndGetLeaf(result, xpath, "max-row-errors");
-    checkAndGetLeaf(result, xpath, "on-fail");
-    ConstElementPtr context = getItem(xpath + "/user-context");
-    if (context) {
-        result->set("user-context", Element::fromJSON(context->stringValue()));
-    }
-    return (result);
+
+    getMandatoryDivergingLeaf(result, data_node, "type", "database-type");
+
+    checkAndGetLeaf(result, data_node, "cert-file");
+    checkAndGetLeaf(result, data_node, "cipher-list");
+    checkAndGetLeaf(result, data_node, "connect-timeout");
+    checkAndGetLeaf(result, data_node, "host");
+    checkAndGetLeaf(result, data_node, "key-file");
+    checkAndGetLeaf(result, data_node, "lfc-interval");
+    checkAndGetLeaf(result, data_node, "max-reconnect-tries");
+    checkAndGetLeaf(result, data_node, "max-row-errors");
+    checkAndGetLeaf(result, data_node, "name");
+    checkAndGetLeaf(result, data_node, "on-fail");
+    checkAndGetLeaf(result, data_node, "password");
+    checkAndGetLeaf(result, data_node, "persist");
+    checkAndGetLeaf(result, data_node, "port");
+    checkAndGetLeaf(result, data_node, "readonly");
+    checkAndGetLeaf(result, data_node, "reconnect-wait-time");
+    checkAndGetLeaf(result, data_node, "trust-anchor");
+    checkAndGetLeaf(result, data_node, "user");
+
+    checkAndGetAndJsonifyLeaf(result, data_node, "user-context");
+
+    return (result->empty() ? ElementPtr() : result);
 }
 
 void
-TranslatorDatabase::setDatabase(const string& xpath,
+TranslatorDatabase::setDatabase(string const& xpath,
                                 ConstElementPtr elem,
                                 bool skip) {
     try {
@@ -85,86 +88,86 @@ TranslatorDatabase::setDatabase(const string& xpath,
             isc_throw(NotImplemented,
                       "setDatabase not implemented for the model: " << model_);
         }
-    } catch (const sysrepo_exception& ex) {
-        isc_throw(SysrepoError,
-                  "sysrepo error setting database access '" << elem->str()
-                  << "' at '" << xpath << "': " << ex.what());
+    } catch (Error const& ex) {
+        isc_throw(NetconfError,
+                  "setting database access '" << elem->str()
+                  << "' : " << ex.what());
     }
 }
 
 void
-TranslatorDatabase::setDatabaseKea(const string& xpath,
+TranslatorDatabase::setDatabaseKea(string const& xpath,
                                    ConstElementPtr elem,
                                    bool skip) {
     if (!elem) {
-        delItem(xpath);
+        deleteItem(xpath);
         return;
     }
+
+    checkAndSetLeaf(elem, xpath, "connect-timeout", LeafBaseType::Uint32);
+    checkAndSetLeaf(elem, xpath, "cert-file", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "cipher-list", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "host", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "key-file", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "lfc-interval", LeafBaseType::Uint32);
+    checkAndSetLeaf(elem, xpath, "max-reconnect-tries", LeafBaseType::Uint32);
+    checkAndSetLeaf(elem, xpath, "max-row-errors", LeafBaseType::Uint32);
+    checkAndSetLeaf(elem, xpath, "name", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "on-fail", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "password", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "persist", LeafBaseType::Bool);
+    checkAndSetLeaf(elem, xpath, "port", LeafBaseType::Uint16);
+    checkAndSetLeaf(elem, xpath, "readonly", LeafBaseType::Bool);
+    checkAndSetLeaf(elem, xpath, "reconnect-wait-time", LeafBaseType::Uint32);
+    checkAndSetLeaf(elem, xpath, "trust-anchor", LeafBaseType::String);
+    checkAndSetLeaf(elem, xpath, "user", LeafBaseType::String);
+
+    checkAndSetUserContext(elem, xpath);
+
     if (!skip) {
-        ConstElementPtr type = elem->get("type");
-        if (!type) {
-            isc_throw(BadValue, "setDatabase requires database type: "
-                      << elem->str());
-        }
-        setItem(xpath + "/database-type", type, SR_STRING_T);
-    }
-    checkAndSetLeaf(elem, xpath, "user", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "password", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "host", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "name", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "persist", SR_BOOL_T);
-    checkAndSetLeaf(elem, xpath, "port", SR_UINT16_T);
-    checkAndSetLeaf(elem, xpath, "lfc-interval", SR_UINT32_T);
-    checkAndSetLeaf(elem, xpath, "readonly", SR_BOOL_T);
-    checkAndSetLeaf(elem, xpath, "trust-anchor", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "cert-file", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "key-file", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "cipher-list", SR_STRING_T);
-    checkAndSetLeaf(elem, xpath, "connect-timeout", SR_UINT32_T);
-    checkAndSetLeaf(elem, xpath, "max-reconnect-tries", SR_UINT32_T);
-    checkAndSetLeaf(elem, xpath, "reconnect-wait-time", SR_UINT32_T);
-    checkAndSetLeaf(elem, xpath, "max-row-errors", SR_UINT32_T);
-    checkAndSetLeaf(elem, xpath, "on-fail", SR_STRING_T);
-    ConstElementPtr context = Adaptor::getContext(elem);
-    if (context) {
-        setItem(xpath + "/user-context", Element::create(context->str()),
-                SR_STRING_T);
+        setMandatoryDivergingLeaf(elem, xpath, "type", "database-type", LeafBaseType::String);
     }
 }
 
-TranslatorDatabases::TranslatorDatabases(S_Session session,
+TranslatorDatabases::TranslatorDatabases(Session session,
                                          const string& model)
-    : TranslatorBasic(session, model),
+    : Translator(session, model),
       TranslatorDatabase(session, model) {
 }
 
-TranslatorDatabases::~TranslatorDatabases() {
-}
-
-ConstElementPtr
-TranslatorDatabases::getDatabases(const string& xpath) {
+ElementPtr
+TranslatorDatabases::getDatabases(DataNode const& data_node,
+                                  string const& xpath) {
     try {
         if ((model_ == KEA_DHCP4_SERVER) ||
             (model_ == KEA_DHCP6_SERVER)) {
-            return (getDatabasesKea(xpath));
+            return (getDatabasesKea(data_node, xpath));
         }
-    } catch (const sysrepo_exception& ex) {
-        isc_throw(SysrepoError,
-                  "sysrepo error getting database accesses at '" << xpath
-                  << "': " << ex.what());
+    } catch (Error const& ex) {
+        isc_throw(NetconfError,
+                  "getting database accesses: " << ex.what());
     }
     isc_throw(NotImplemented,
               "getDatabases not implemented for the model: " << model_);
 }
 
 ElementPtr
-TranslatorDatabases::getDatabasesKea(const string& xpath) {
-    return getList<TranslatorDatabase>(xpath, *this,
+TranslatorDatabases::getDatabasesFromAbsoluteXpath(string const& xpath) {
+    try {
+        return getDatabases(findXPath(xpath), xpath);
+    } catch (NetconfError const&) {
+        return ElementPtr();
+    }
+}
+
+ElementPtr
+TranslatorDatabases::getDatabasesKea(DataNode const& data_node, string const& xpath) {
+    return getList<TranslatorDatabase>(data_node, xpath, *this,
                                        &TranslatorDatabase::getDatabase);
 }
 
 void
-TranslatorDatabases::setDatabases(const string& xpath, ConstElementPtr elem) {
+TranslatorDatabases::setDatabases(string const& xpath, ConstElementPtr elem) {
     try {
         if ((model_ == KEA_DHCP4_SERVER) ||
             (model_ == KEA_DHCP6_SERVER)) {
@@ -174,22 +177,22 @@ TranslatorDatabases::setDatabases(const string& xpath, ConstElementPtr elem) {
                       "setDatabases not implemented for the model: "
                       << model_);
         }
-    } catch (const sysrepo_exception& ex) {
-        isc_throw(SysrepoError,
-                  "sysrepo error setting database accesses '" << elem->str()
-                  << "' at '" << xpath << "': " << ex.what());
+    } catch (Error const& ex) {
+        isc_throw(NetconfError,
+                  "setting database accesses '" << elem->str()
+                  << "' : " << ex.what());
     }
 }
 
 void
-TranslatorDatabases::setDatabasesKea(const string& xpath,
+TranslatorDatabases::setDatabasesKea(string const& xpath,
                                      ConstElementPtr elem) {
     if (!elem) {
-        delItem(xpath);
+        deleteItem(xpath);
         return;
     }
     for (size_t i = 0; i < elem->size(); ++i) {
-        ConstElementPtr database = elem->get(i);
+        ElementPtr database = elem->getNonConst(i);
         if (!database->contains("type")) {
             isc_throw(BadValue, "database without type: " << database->str());
         }

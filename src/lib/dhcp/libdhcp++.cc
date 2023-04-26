@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,6 +15,7 @@
 #include <dhcp/option6_iaaddr.h>
 #include <dhcp/option_definition.h>
 #include <dhcp/option_int_array.h>
+#include <dhcp/option_vendor_class.h>
 #include <dhcp/std_option_defs.h>
 #include <dhcp/docsis3_option_defs.h>
 #include <exceptions/exceptions.h>
@@ -51,6 +52,7 @@ const OptionDefParamsEncapsulation OPTION_DEF_PARAMS[] = {
     { LW_V6_OPTION_DEFINITIONS,             LW_V6_OPTION_DEFINITIONS_SIZE,           LW_V6_OPTION_SPACE          },
     { V4V6_RULE_OPTION_DEFINITIONS,         V4V6_RULE_OPTION_DEFINITIONS_SIZE,       V4V6_RULE_OPTION_SPACE      },
     { V4V6_BIND_OPTION_DEFINITIONS,         V4V6_BIND_OPTION_DEFINITIONS_SIZE,       V4V6_BIND_OPTION_SPACE      },
+    { DHCP_AGENT_OPTION_DEFINITIONS,        DHCP_AGENT_OPTION_DEFINITIONS_SIZE,      DHCP_AGENT_OPTION_SPACE     },
     { LAST_RESORT_V4_OPTION_DEFINITIONS,    LAST_RESORT_V4_OPTION_DEFINITIONS_SIZE,  LAST_RESORT_V4_OPTION_SPACE },
     { NULL,                                 0,                                       ""                          }
 };
@@ -61,10 +63,10 @@ const OptionDefParamsEncapsulation OPTION_DEF_PARAMS[] = {
 }  // namespace isc
 
 // static array with factories for options
-std::map<unsigned short, Option::Factory*> LibDHCP::v4factories_;
+map<unsigned short, Option::Factory*> LibDHCP::v4factories_;
 
 // static array with factories for options
-std::map<unsigned short, Option::Factory*> LibDHCP::v6factories_;
+map<unsigned short, Option::Factory*> LibDHCP::v6factories_;
 
 // Static container with option definitions grouped by option space.
 OptionDefContainers LibDHCP::option_defs_;
@@ -92,7 +94,7 @@ void initOptionSpace(OptionDefContainerPtr& defs,
 bool LibDHCP::initialized_ = LibDHCP::initOptionDefs();
 
 const OptionDefContainerPtr
-LibDHCP::getOptionDefs(const std::string& space) {
+LibDHCP::getOptionDefs(const string& space) {
     auto const& container = option_defs_.find(space);
     if (container != option_defs_.end()) {
         return (container->second);
@@ -119,7 +121,7 @@ LibDHCP::getVendorOptionDefs(const Option::Universe u, const uint32_t vendor_id)
 }
 
 OptionDefinitionPtr
-LibDHCP::getOptionDef(const std::string& space, const uint16_t code) {
+LibDHCP::getOptionDef(const string& space, const uint16_t code) {
     const OptionDefContainerPtr& defs = getOptionDefs(space);
     const OptionDefContainerTypeIndex& idx = defs->get<1>();
     const OptionDefContainerTypeRange& range = idx.equal_range(code);
@@ -131,7 +133,7 @@ LibDHCP::getOptionDef(const std::string& space, const uint16_t code) {
 }
 
 OptionDefinitionPtr
-LibDHCP::getOptionDef(const std::string& space, const std::string& name) {
+LibDHCP::getOptionDef(const string& space, const string& name) {
     const OptionDefContainerPtr& defs = getOptionDefs(space);
     const OptionDefContainerNameIndex& idx = defs->get<2>();
     const OptionDefContainerNameRange& range = idx.equal_range(name);
@@ -144,7 +146,7 @@ LibDHCP::getOptionDef(const std::string& space, const std::string& name) {
 
 OptionDefinitionPtr
 LibDHCP::getVendorOptionDef(const Option::Universe u, const uint32_t vendor_id,
-                            const std::string& name) {
+                            const string& name) {
     const OptionDefContainerPtr& defs = getVendorOptionDefs(u, vendor_id);
 
     if (!defs) {
@@ -182,7 +184,7 @@ LibDHCP::getVendorOptionDef(const Option::Universe u, const uint32_t vendor_id,
 }
 
 OptionDefinitionPtr
-LibDHCP::getRuntimeOptionDef(const std::string& space, const uint16_t code) {
+LibDHCP::getRuntimeOptionDef(const string& space, const uint16_t code) {
     OptionDefContainerPtr container = runtime_option_defs_.getValue().getItems(space);
     const OptionDefContainerTypeIndex& index = container->get<1>();
     const OptionDefContainerTypeRange& range = index.equal_range(code);
@@ -194,7 +196,7 @@ LibDHCP::getRuntimeOptionDef(const std::string& space, const uint16_t code) {
 }
 
 OptionDefinitionPtr
-LibDHCP::getRuntimeOptionDef(const std::string& space, const std::string& name) {
+LibDHCP::getRuntimeOptionDef(const string& space, const string& name) {
     OptionDefContainerPtr container = runtime_option_defs_.getValue().getItems(space);
     const OptionDefContainerNameIndex& index = container->get<2>();
     const OptionDefContainerNameRange& range = index.equal_range(name);
@@ -206,14 +208,14 @@ LibDHCP::getRuntimeOptionDef(const std::string& space, const std::string& name) 
 }
 
 OptionDefContainerPtr
-LibDHCP::getRuntimeOptionDefs(const std::string& space) {
+LibDHCP::getRuntimeOptionDefs(const string& space) {
     return (runtime_option_defs_.getValue().getItems(space));
 }
 
 void
 LibDHCP::setRuntimeOptionDefs(const OptionDefSpaceContainer& defs) {
     OptionDefSpaceContainer defs_copy;
-    std::list<std::string> option_space_names = defs.getOptionSpaceNames();
+    list<string> option_space_names = defs.getOptionSpaceNames();
     for (auto const& name : option_space_names) {
         OptionDefContainerPtr container = defs.getItems(name);
         for (auto const& def : *container) {
@@ -240,7 +242,7 @@ LibDHCP::commitRuntimeOptionDefs() {
 }
 
 OptionDefinitionPtr
-LibDHCP::getLastResortOptionDef(const std::string& space, const uint16_t code) {
+LibDHCP::getLastResortOptionDef(const string& space, const uint16_t code) {
     OptionDefContainerPtr container = getLastResortOptionDefs(space);
     const OptionDefContainerTypeIndex& index = container->get<1>();
     const OptionDefContainerTypeRange& range = index.equal_range(code);
@@ -252,7 +254,7 @@ LibDHCP::getLastResortOptionDef(const std::string& space, const uint16_t code) {
 }
 
 OptionDefinitionPtr
-LibDHCP::getLastResortOptionDef(const std::string& space, const std::string& name) {
+LibDHCP::getLastResortOptionDef(const string& space, const string& name) {
     OptionDefContainerPtr container = getLastResortOptionDefs(space);
     const OptionDefContainerNameIndex& index = container->get<2>();
     const OptionDefContainerNameRange& range = index.equal_range(name);
@@ -264,7 +266,7 @@ LibDHCP::getLastResortOptionDef(const std::string& space, const std::string& nam
 }
 
 OptionDefContainerPtr
-LibDHCP::getLastResortOptionDefs(const std::string& space) {
+LibDHCP::getLastResortOptionDefs(const string& space) {
     if (space == DHCP4_OPTION_SPACE) {
         return getOptionDefs(LAST_RESORT_V4_OPTION_SPACE);
     }
@@ -273,7 +275,7 @@ LibDHCP::getLastResortOptionDefs(const std::string& space) {
 }
 
 bool
-LibDHCP::shouldDeferOptionUnpack(const std::string& space, const uint16_t code) {
+LibDHCP::shouldDeferOptionUnpack(const string& space, const uint16_t code) {
     return ((space == DHCP4_OPTION_SPACE) &&
             ((code == DHO_VENDOR_ENCAPSULATED_OPTIONS) ||
              ((code >= 224) && (code <= 254))));
@@ -303,11 +305,9 @@ LibDHCP::optionFactory(Option::Universe u,
     return (it->second(u, type, buf));
 }
 
-
 size_t
-LibDHCP::unpackOptions6(const OptionBuffer& buf,
-                        const std::string& option_space,
-                        isc::dhcp::OptionCollection& options,
+LibDHCP::unpackOptions6(const OptionBuffer& buf, const string& option_space,
+                        OptionCollection& options,
                         size_t* relay_msg_offset /* = 0 */,
                         size_t* relay_msg_len /* = 0 */) {
     size_t offset = 0;
@@ -342,10 +342,10 @@ LibDHCP::unpackOptions6(const OptionBuffer& buf,
         }
 
         // Parse the option header
-        uint16_t opt_type = isc::util::readUint16(&buf[offset], 2);
+        uint16_t opt_type = readUint16(&buf[offset], 2);
         offset += 2;
 
-        uint16_t opt_len = isc::util::readUint16(&buf[offset], 2);
+        uint16_t opt_len = readUint16(&buf[offset], 2);
         offset += 2;
 
         if (offset + opt_len > length) {
@@ -454,10 +454,8 @@ LibDHCP::unpackOptions6(const OptionBuffer& buf,
 }
 
 size_t
-LibDHCP::unpackOptions4(const OptionBuffer& buf,
-                        const std::string& option_space,
-                        isc::dhcp::OptionCollection& options,
-                        std::list<uint16_t>& deferred,
+LibDHCP::unpackOptions4(const OptionBuffer& buf, const string& option_space,
+                        OptionCollection& options, list<uint16_t>& deferred,
                         bool check) {
     size_t offset = 0;
     size_t last_offset = 0;
@@ -575,6 +573,12 @@ LibDHCP::unpackOptions4(const OptionBuffer& buf,
             }
         }
 
+        if (space_is_dhcp4 &&
+            (opt_type == DHO_VIVSO_SUBOPTIONS ||
+             opt_type == DHO_VIVCO_SUBOPTIONS)) {
+            num_defs = 0;
+        }
+
         OptionPtr opt;
         if (num_defs > 1) {
             // Multiple options of the same code are not supported right now!
@@ -681,10 +685,128 @@ LibDHCP::fuseOptions4(OptionCollection& options) {
     return (result);
 }
 
+namespace { // Anynomous namespace.
+
+// VIVCO part of extendVendorOptions4.
+
+void
+extendVivco(OptionCollection& options) {
+    typedef vector<OpaqueDataTuple> TuplesCollection;
+    map<uint32_t, TuplesCollection> vendors_tuples;
+    const auto& range = options.equal_range(DHO_VIVCO_SUBOPTIONS);
+    for (auto it = range.first; it != range.second; ++it) {
+        uint32_t offset = 0;
+        auto const& data = it->second->getData();
+        size_t size;
+        while ((size = data.size() - offset) != 0) {
+            if (size < sizeof(uint32_t)) {
+                options.erase(DHO_VIVCO_SUBOPTIONS);
+                isc_throw(SkipRemainingOptionsError,
+                          "Truncated vendor-class information option"
+                          << ", length=" << size);
+            }
+            uint32_t vendor_id = readUint32(&data[offset], data.size());
+            offset += 4;
+            try {
+                // From OptionVendorClass::unpack.
+                OpaqueDataTuple tuple(OpaqueDataTuple::LENGTH_1_BYTE,
+                                      data.begin() + offset, data.end());
+                vendors_tuples[vendor_id].push_back(tuple);
+                offset += tuple.getTotalLength();
+            } catch (const OpaqueDataTupleError&) {
+                // Ignore this kind of error and continue.
+                break;
+            } catch (const isc::Exception&) {
+                options.erase(DHO_VIVCO_SUBOPTIONS);
+                throw;
+            }
+        }
+    }
+    if (vendors_tuples.empty()) {
+        return;
+    }
+    // Delete the initial option.
+    options.erase(DHO_VIVCO_SUBOPTIONS);
+    // Create a new instance of OptionVendor for each enterprise ID.
+    for (auto const& vendor : vendors_tuples) {
+        if (vendor.second.empty()) {
+            continue;
+        }
+        OptionVendorClassPtr vendor_opt(new OptionVendorClass(Option::V4,
+                                                              vendor.first));
+        for (size_t i = 0; i < vendor.second.size(); ++i) {
+            if (i == 0) {
+                vendor_opt->setTuple(0, vendor.second[0]);
+            } else {
+                vendor_opt->addTuple(vendor.second[i]);
+            }
+        }
+        // Add the new instance of VendorOption with respective sub-options for
+        // this enterprise ID.
+        options.insert(std::make_pair(DHO_VIVCO_SUBOPTIONS, vendor_opt));
+    }
+}
+
+// VIVSO part of extendVendorOptions4.
+
+void
+extendVivso(OptionCollection& options) {
+    map<uint32_t, OptionCollection> vendors_data;
+    const auto& range = options.equal_range(DHO_VIVSO_SUBOPTIONS);
+    for (auto it = range.first; it != range.second; ++it) {
+        uint32_t offset = 0;
+        auto const& data = it->second->getData();
+        size_t size;
+        while ((size = data.size() - offset) != 0) {
+            if (size < sizeof(uint32_t)) {
+                options.erase(DHO_VIVSO_SUBOPTIONS);
+                isc_throw(SkipRemainingOptionsError,
+                          "Truncated vendor-specific information option"
+                          << ", length=" << size);
+            }
+            uint32_t vendor_id = readUint32(&data[offset], data.size());
+            offset += 4;
+            const OptionBuffer vendor_buffer(data.begin() + offset, data.end());
+            try {
+                offset += LibDHCP::unpackVendorOptions4(vendor_id, vendor_buffer,
+                                                        vendors_data[vendor_id]);
+            } catch (const SkipThisOptionError&) {
+                // Ignore this kind of error and continue.
+                break;
+            } catch (const isc::Exception&) {
+                options.erase(DHO_VIVSO_SUBOPTIONS);
+                throw;
+            }
+        }
+    }
+    if (vendors_data.empty()) {
+        return;
+    }
+    // Delete the initial option.
+    options.erase(DHO_VIVSO_SUBOPTIONS);
+    // Create a new instance of OptionVendor for each enterprise ID.
+    for (auto const& vendor : vendors_data) {
+        OptionVendorPtr vendor_opt(new OptionVendor(Option::V4, vendor.first));
+        for (auto const& option : vendor.second) {
+            vendor_opt->addOption(option.second);
+        }
+        // Add the new instance of VendorOption with respective sub-options for
+        // this enterprise ID.
+        options.insert(std::make_pair(DHO_VIVSO_SUBOPTIONS, vendor_opt));
+    }
+}
+
+} // end of anonymous namespace.
+
+void
+LibDHCP::extendVendorOptions4(OptionCollection& options) {
+    extendVivco(options);
+    extendVivso(options);
+}
+
 size_t
-LibDHCP::unpackVendorOptions6(const uint32_t vendor_id,
-                              const OptionBuffer& buf,
-                              isc::dhcp::OptionCollection& options) {
+LibDHCP::unpackVendorOptions6(const uint32_t vendor_id, const OptionBuffer& buf,
+                              OptionCollection& options) {
     size_t offset = 0;
     size_t length = buf.size();
 
@@ -708,10 +830,10 @@ LibDHCP::unpackVendorOptions6(const uint32_t vendor_id,
                       "Vendor option parse failed: truncated header");
         }
 
-        uint16_t opt_type = isc::util::readUint16(&buf[offset], 2);
+        uint16_t opt_type = readUint16(&buf[offset], 2);
         offset += 2;
 
-        uint16_t opt_len = isc::util::readUint16(&buf[offset], 2);
+        uint16_t opt_len = readUint16(&buf[offset], 2);
         offset += 2;
 
         if (offset + opt_len > length) {
@@ -780,7 +902,7 @@ LibDHCP::unpackVendorOptions6(const uint32_t vendor_id,
 
 size_t
 LibDHCP::unpackVendorOptions4(const uint32_t vendor_id, const OptionBuffer& buf,
-                              isc::dhcp::OptionCollection& options) {
+                              OptionCollection& options) {
     size_t offset = 0;
 
     // Get the list of standard option definitions.
@@ -885,8 +1007,7 @@ LibDHCP::unpackVendorOptions4(const uint32_t vendor_id, const OptionBuffer& buf,
 }
 
 void
-LibDHCP::packOptions4(isc::util::OutputBuffer& buf,
-                      const OptionCollection& options,
+LibDHCP::packOptions4(OutputBuffer& buf, const OptionCollection& options,
                       bool top, bool check) {
     OptionCollection agent;
     OptionPtr end;
@@ -1066,16 +1187,14 @@ LibDHCP::splitOptions4(OptionCollection& options,
 }
 
 void
-LibDHCP::packOptions6(isc::util::OutputBuffer& buf,
-                      const OptionCollection& options) {
+LibDHCP::packOptions6(OutputBuffer& buf, const OptionCollection& options) {
     for (auto const& option : options) {
         option.second->pack(buf);
     }
 }
 
 void
-LibDHCP::OptionFactoryRegister(Option::Universe u,
-                               uint16_t opt_type,
+LibDHCP::OptionFactoryRegister(Option::Universe u, uint16_t opt_type,
                                Option::Factory* factory) {
     switch (u) {
     case Option::V6:
@@ -1117,7 +1236,7 @@ LibDHCP::OptionFactoryRegister(Option::Universe u,
 bool
 LibDHCP::initOptionDefs() {
     for (uint32_t i = 0; OPTION_DEF_PARAMS[i].optionDefParams; ++i) {
-        std::string space = OPTION_DEF_PARAMS[i].space;
+        string space = OPTION_DEF_PARAMS[i].space;
         option_defs_[space] = OptionDefContainerPtr(new OptionDefContainer);
         initOptionSpace(option_defs_[space],
                         OPTION_DEF_PARAMS[i].optionDefParams,
@@ -1128,7 +1247,7 @@ LibDHCP::initOptionDefs() {
 }
 
 uint32_t
-LibDHCP::optionSpaceToVendorId(const std::string& option_space) {
+LibDHCP::optionSpaceToVendorId(const string& option_space) {
     // 8 is a minimal length of "vendor-X" format
     if ((option_space.size() < 8) || (option_space.substr(0,7) != "vendor-")) {
         return (0);
@@ -1137,7 +1256,7 @@ LibDHCP::optionSpaceToVendorId(const std::string& option_space) {
     int64_t check;
     try {
         // text after "vendor-", supposedly numbers only
-        std::string x = option_space.substr(7);
+        string x = option_space.substr(7);
 
         check = boost::lexical_cast<int64_t>(x);
     } catch (const boost::bad_lexical_cast &) {
@@ -1153,8 +1272,7 @@ LibDHCP::optionSpaceToVendorId(const std::string& option_space) {
 }
 
 void
-initOptionSpace(OptionDefContainerPtr& defs,
-                const OptionDefParams* params,
+initOptionSpace(OptionDefContainerPtr& defs, const OptionDefParams* params,
                 size_t params_size) {
     // Container holding vendor options is typically not initialized, as it
     // is held in map of null pointers. We need to initialize here in this
@@ -1166,7 +1284,7 @@ initOptionSpace(OptionDefContainerPtr& defs,
     }
 
     for (size_t i = 0; i < params_size; ++i) {
-        std::string encapsulates(params[i].encapsulates);
+        string encapsulates(params[i].encapsulates);
         if (!encapsulates.empty() && params[i].array) {
             isc_throw(isc::BadValue, "invalid standard option definition: "
                       << "option with code '" << params[i].code

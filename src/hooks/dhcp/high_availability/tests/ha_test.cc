@@ -1,4 +1,4 @@
-// Copyright (C) 2017-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2017-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -155,6 +155,7 @@ HATest::createValidJsonConfiguration(const HAConfig::HAMode& ha_mode) const {
         "         \"max-response-delay\": 1000,"
         "         \"max-ack-delay\": 10000,"
         "         \"max-unacked-clients\": 10,"
+        "         \"max-rejected-clients\": 10,"
         "         \"wait-backup-ack\": false,"
         "         \"peers\": ["
         "             {"

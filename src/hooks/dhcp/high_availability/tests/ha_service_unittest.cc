@@ -802,22 +802,14 @@ public:
     /// @param my_state state of the server while lease updates are sent.
     /// @param wait_backup_ack indicates if the server should wait for the acknowledgment
     /// from the backup servers.
+    /// @param create_service a boolean flag indicating whether the test should
+    /// re-create HA service and communication state.
     void testSendLeaseUpdates(std::function<void()> unpark_handler,
                               const bool should_fail,
                               const size_t num_updates,
                               const MyState& my_state = MyState(HA_LOAD_BALANCING_ST),
-                              const bool wait_backup_ack = false) {
-        // Create HA configuration for 3 servers. This server is
-        // server 1.
-        HAConfigPtr config_storage = createValidConfiguration();
-        config_storage->setWaitBackupAck(wait_backup_ack);
-        // Let's override the default value. The lower value makes it easier
-        // for some unit tests to simulate the server's overflow. Simulating it
-        // requires appending leases to the backlog. It is easier to add 10
-        // than 100.
-        config_storage->setDelayedUpdatesLimit(10);
-        setBasicAuth(config_storage);
-
+                              const bool wait_backup_ack = false,
+                              const bool create_service = true) {
         // Create parking lot where query is going to be parked and unparked.
         ParkingLotPtr parking_lot(new ParkingLot());
         ParkingLotHandlePtr parking_lot_handle(new ParkingLotHandle(parking_lot));
@@ -840,22 +832,36 @@ public:
                                             60, 0, 1));
         deleted_leases4->push_back(deleted_lease4);
 
-        // The communication state is the member of the HAServce object. We have to
-        // replace this object with our own implementation to have an ability to
-        // modify its poke time.
-        NakedCommunicationState4Ptr state(new NakedCommunicationState4(io_service_,
-                                                                       config_storage));
-        // Set poke time 30s in the past. If the state is poked it will be reset
-        // to the current time. This allows for testing whether the object has been
-        // poked by the HA service.
-        state->modifyPokeTime(-30);
+        if (create_service) {
+            // Create HA configuration for 3 servers. This server is
+            // server 1.
+            HAConfigPtr config_storage = createValidConfiguration();
+            config_storage->setWaitBackupAck(wait_backup_ack);
+            // Let's override the default value. The lower value makes it easier
+            // for some unit tests to simulate the server's overflow. Simulating it
+            // requires appending leases to the backlog. It is easier to add 10
+            // than 100.
+            config_storage->setDelayedUpdatesLimit(10);
+            setBasicAuth(config_storage);
 
-        // Create HA service and schedule lease updates.
-        createSTService(network_state_, config_storage);
-        service_->communication_state_ = state;
+            // The communication state is the member of the HAServce object. We have to
+            // replace this object with our own implementation to have an ability to
+            // modify its poke time.
+            NakedCommunicationState4Ptr state(new NakedCommunicationState4(io_service_,
+                                                                       config_storage));
+            // Set poke time 30s in the past. If the state is poked it will be reset
+            // to the current time. This allows for testing whether the object has been
+            // poked by the HA service.
+            state->modifyPokeTime(-30);
+
+            // Create HA service.
+            createSTService(network_state_, config_storage);
+            service_->communication_state_ = state;
+        }
 
         service_->transition(my_state.state_, HAService::NOP_EVT);
 
+        // Schedule lease updates.
         EXPECT_EQ(num_updates,
                   service_->asyncSendLeaseUpdates(query, leases4, deleted_leases4,
                                                   parking_lot_handle));
@@ -892,7 +898,9 @@ public:
         EXPECT_TRUE(factory_->getResponseCreator()->getReceivedRequests().empty());
 
         if (should_fail) {
-            EXPECT_EQ(HA_UNAVAILABLE_ST, state->getPartnerState());
+            EXPECT_EQ(HA_UNAVAILABLE_ST, service_->communication_state_->getPartnerState());
+        } else {
+            EXPECT_NE(service_->communication_state_->getPartnerState(), HA_UNAVAILABLE_ST);
         }
     }
 
@@ -906,28 +914,31 @@ public:
     /// @param my_state state of the server while lease updates are sent.
     /// @param wait_backup_ack indicates if the server should wait for the acknowledgment
     /// from the backup servers.
+    /// @param create_service a boolean flag indicating whether the test should
+    /// re-create HA service and communication state.
     void testSendLeaseUpdates6(std::function<void()> unpark_handler,
                                const bool should_fail,
                                const size_t num_updates,
                                const MyState& my_state = MyState(HA_LOAD_BALANCING_ST),
-                               const bool wait_backup_ack = false) {
-        // Create HA configuration for 3 servers. This server is
-        // server 1.
-        HAConfigPtr config_storage = createValidConfiguration();
-        config_storage->setDelayedUpdatesLimit(10);
-        config_storage->setWaitBackupAck(wait_backup_ack);
-        setBasicAuth(config_storage);
+                               const bool wait_backup_ack = false,
+                               const bool create_service = true) {
 
         // Create parking lot where query is going to be parked and unparked.
         ParkingLotPtr parking_lot(new ParkingLot());
         ParkingLotHandlePtr parking_lot_handle(new ParkingLotHandle(parking_lot));
 
+        DuidPtr duid(new DUID(std::vector<uint8_t>(8, 2)));
+
         // Create query.
         Pkt6Ptr query(new Pkt6(DHCPV6_SOLICIT, 1234));
+        OptionPtr opt_client_id(new Option(Option::V6,
+                                           D6O_CLIENTID,
+                                           duid->getDuid().begin(),
+                                           duid->getDuid().end()));
+        query->addOption(opt_client_id);
 
         // Create leases collection and put the lease there.
         Lease6CollectionPtr leases6(new Lease6Collection());
-        DuidPtr duid(new DUID(std::vector<uint8_t>(8, 2)));
         Lease6Ptr lease6(new Lease6(Lease::TYPE_NA, IOAddress("2001:db8:1::cafe"), duid,
                                     1234, 50, 60, 1));
         leases6->push_back(lease6);
@@ -938,22 +949,32 @@ public:
                                             duid, 1234, 50, 60, 1));
         deleted_leases6->push_back(deleted_lease6);
 
-        // The communication state is the member of the HAServce object. We have to
-        // replace this object with our own implementation to have an ability to
-        // modify its poke time.
-        NakedCommunicationState6Ptr state(new NakedCommunicationState6(io_service_,
-                                                                       config_storage));
-        // Set poke time 30s in the past. If the state is poked it will be reset
-        // to the current time. This allows for testing whether the object has been
-        // poked by the HA service.
-        state->modifyPokeTime(-30);
+        if (create_service) {
+            // Create HA configuration for 3 servers. This server is
+            // server 1.
+            HAConfigPtr config_storage = createValidConfiguration();
+            config_storage->setDelayedUpdatesLimit(10);
+            config_storage->setWaitBackupAck(wait_backup_ack);
+            setBasicAuth(config_storage);
 
-        // Create HA service and schedule lease updates.
-        createSTService(network_state_, config_storage, HAServerType::DHCPv6);
-        service_->communication_state_ = state;
+            // The communication state is the member of the HAServce object. We have to
+            // replace this object with our own implementation to have an ability to
+            // modify its poke time.
+            NakedCommunicationState6Ptr state(new NakedCommunicationState6(io_service_,
+                                                                       config_storage));
+            // Set poke time 30s in the past. If the state is poked it will be reset
+            // to the current time. This allows for testing whether the object has been
+            // poked by the HA service.
+            state->modifyPokeTime(-30);
+
+            // Create HA service.
+            createSTService(network_state_, config_storage, HAServerType::DHCPv6);
+            service_->communication_state_ = state;
+        }
 
         service_->transition(my_state.state_, HAService::NOP_EVT);
 
+        // Schedule lease updates.
         EXPECT_EQ(num_updates,
                   service_->asyncSendLeaseUpdates(query, leases6, deleted_leases6,
                                                   parking_lot_handle));
@@ -963,7 +984,8 @@ public:
         // and the deletions in a single bulk update command.
         EXPECT_EQ(num_updates, service_->getPendingRequest(query));
 
-        EXPECT_FALSE(state->isPoked());
+        EXPECT_FALSE(boost::dynamic_pointer_cast<NakedCommunicationState6>
+                     (service_->communication_state_)->isPoked());
 
         // Let's park the packet and associate it with the callback function which
         // simply records the fact that it has been called. We expect that it wasn't
@@ -991,7 +1013,7 @@ public:
         EXPECT_TRUE(factory_->getResponseCreator()->getReceivedRequests().empty());
 
         if (should_fail) {
-            EXPECT_EQ(HA_UNAVAILABLE_ST, state->getPartnerState());
+            EXPECT_EQ(HA_UNAVAILABLE_ST, service_->communication_state_->getPartnerState());
         }
     }
 
@@ -1320,7 +1342,7 @@ public:
 
     /// @brief Tests scenarios when one of the servers to which a
     /// lease update is sent returns an error.
-    void testSndUpdatesControlResultError() {
+    void testSendUpdatesControlResultError() {
         // Instruct the server 2 to return an error as a result of receiving a command.
         factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_ERROR);
 
@@ -1370,7 +1392,7 @@ public:
 
     /// @brief Tests scenarios when one of the servers to which a
     /// lease update is sent does not authorize the local server.
-    void testSndUpdatesControlResultUnauthorized() {
+    void testSendUpdatesControlResultUnauthorized() {
         // Instruct the server 2 to require authentication.
         factory2_->getResponseCreator()->addBasicAuth("foo", "bar");
 
@@ -1447,6 +1469,42 @@ public:
             factory3_->getResponseCreator()->findRequest("lease4-del",
                                                          "192.2.3.4");
         EXPECT_FALSE(delete_request3);
+    }
+
+    /// @brief Test the scenario when the servers receiving a lease update
+    /// return the conflict status code.
+    void testSendUpdatesControlResultConflict() {
+        // Instruct the server 2 to return an error as a result of receiving a command.
+        factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_CONFLICT);
+        factory3_->getResponseCreator()->setControlResult(CONTROL_RESULT_CONFLICT);
+
+        // Start HTTP servers.
+        ASSERT_NO_THROW({
+                listener_->start();
+                listener2_->start();
+                listener3_->start();
+        });
+
+        testSendLeaseUpdates([] {
+            ADD_FAILURE() << "unpark function called but expected that "
+                "the packet is dropped";
+        }, false, 1);
+
+        // Ensure that the server has recorded a lease update conflict. The conflict
+        // reported by the backup server should not count.
+        EXPECT_EQ(1, service_->communication_state_->getRejectedLeaseUpdatesCount());
+
+        // Change the partner's response to success.
+        factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_SUCCESS);
+
+        // Try sending the lease updates again. The previously rejected lease should
+        // now be accepted and the counter should be 0.
+        bool unpark_called = false;
+        testSendLeaseUpdates([&unpark_called] {
+            unpark_called = true;
+        }, false, 1, MyState(HA_LOAD_BALANCING_ST), true, false);
+        EXPECT_TRUE(unpark_called);
+        EXPECT_EQ(0, service_->communication_state_->getRejectedLeaseUpdatesCount());
     }
 
     /// @brief Tests scenarios when all lease updates are sent successfully.
@@ -1840,6 +1898,131 @@ public:
                                                          "2001:db8:1::cafe",
                                                          "2001:db8:1::efac");
         EXPECT_TRUE(update_request2);
+    }
+
+    /// @brief Test the scenario when the servers receiving a lease update
+    /// return the conflict status code.
+    void testSendUpdatesControlResultConflict6() {
+        // Crate a dummy lease for which a conflict status code is returned.
+        auto failed_lease = Element::createMap();
+        failed_lease->set("type",
+                          Element::create("IA_PD"));
+        failed_lease->set("ip-address",
+                          Element::create("2001:db8:1::"));
+        failed_lease->set("subnet-id",
+                          Element::create(2));
+        failed_lease->set("result",
+                          Element::create(CONTROL_RESULT_CONFLICT));
+        failed_lease->set("error-message",
+                          Element::create("failed to create lease"));
+
+        // Create the "failed-leases" list.
+        auto failed_leases = Element::createList();
+        failed_leases->add(failed_lease);
+
+        // Add the list to the arguments.
+        ElementPtr arguments = Element::createMap();
+        arguments->set("failed-leases", failed_leases);
+
+        // Active server returns an empty status code to indicate that no lease
+        // has been created. It should cause the HA service to look into the
+        // status codes for individual leases.
+        factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_EMPTY);
+        factory3_->getResponseCreator()->setControlResult(CONTROL_RESULT_CONFLICT);
+
+        // Configure the server to return our response.
+        factory2_->getResponseCreator()->setArguments("lease6-bulk-apply",
+                                                      arguments);
+
+        // Start HTTP servers.
+        ASSERT_NO_THROW({
+                listener_->start();
+                listener2_->start();
+                listener3_->start();
+        });
+
+        testSendLeaseUpdates6([] {
+            ADD_FAILURE() << "unpark function called but expected that "
+                "the packet is dropped";
+        }, false, 1);
+
+        // Ensure that the server has recorded the lease update conflict. The conflict
+        // reported by the backup server should not count.
+        EXPECT_EQ(1, service_->communication_state_->getRejectedLeaseUpdatesCount());
+
+        // Change the active server's response to success. The initially rejected
+        // lease update should no longer be tracked.
+        factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_SUCCESS);
+
+        bool unpark_called = false;
+        testSendLeaseUpdates6([&unpark_called] {
+            unpark_called = true;
+        }, false, 1, MyState(HA_LOAD_BALANCING_ST), true, false);
+        EXPECT_TRUE(unpark_called);
+        EXPECT_EQ(0, service_->communication_state_->getRejectedLeaseUpdatesCount());
+    }
+
+    /// @brief Test the scenario when the server receiving a lease update returns
+    /// both the conflict and error status code. The latter should take precedence.
+    void testSendUpdatesControlResultConflict6ErrorPrecedence() {
+        // Create the "failed-leases" list.
+        auto failed_leases = Element::createList();
+
+        // Crate a dummy lease for which a conflict status code is returned.
+        auto failed_lease = Element::createMap();
+        failed_lease->set("type",
+                          Element::create("IA_NA"));
+        failed_lease->set("ip-address",
+                          Element::create("2001:db8:1::"));
+        failed_lease->set("subnet-id",
+                          Element::create(2));
+        failed_lease->set("result",
+                          Element::create(CONTROL_RESULT_CONFLICT));
+        failed_lease->set("error-message",
+                          Element::create("failed to create lease"));
+        failed_leases->add(failed_lease);
+
+        // Create another lease with an error status code.
+        failed_lease = Element::createMap();
+        failed_lease->set("type",
+                          Element::create("IA_NA"));
+        failed_lease->set("ip-address",
+                          Element::create("2001:db8:1::2"));
+        failed_lease->set("subnet-id",
+                          Element::create(2));
+        failed_lease->set("result",
+                          Element::create(CONTROL_RESULT_ERROR));
+        failed_lease->set("error-message",
+                          Element::create("failed to create lease"));
+        failed_leases->add(failed_lease);
+
+        // Add the list to the arguments.
+        ElementPtr arguments = Element::createMap();
+        arguments->set("failed-leases", failed_leases);
+
+        // Active server returns an empty status code to indicate that no lease
+        // has been created. It should cause the HA service to look into the
+        // status codes for individual leases.
+        factory2_->getResponseCreator()->setControlResult(CONTROL_RESULT_EMPTY);
+
+        // Configure the server to return our response.
+        factory2_->getResponseCreator()->setArguments("lease6-bulk-apply",
+                                                      arguments);
+
+        // Start HTTP servers.
+        ASSERT_NO_THROW({
+                listener_->start();
+                listener2_->start();
+        });
+
+        testSendLeaseUpdates6([] {
+            ADD_FAILURE() << "unpark function called but expected that "
+                "the packet is dropped";
+        }, false, 1);
+
+        // The conflict should not be recorded because the error status code
+        // takes precedence.
+        EXPECT_EQ(0, service_->communication_state_->getRejectedLeaseUpdatesCount());
     }
 
     /// @brief Runs HAService::processSynchronize for the DHCPv4 server and
@@ -2273,27 +2456,40 @@ TEST_F(HAServiceTest, sendUpdatesBackupServerOfflineMultiThreading) {
 // Test scenario when one of the servers to which a lease update is sent
 // returns an error.
 TEST_F(HAServiceTest, sendUpdatesControlResultError) {
-    testSndUpdatesControlResultError();
+    testSendUpdatesControlResultError();
 }
 
 // Test scenario when one of the servers to which a lease update is sent
 // returns an error.
 TEST_F(HAServiceTest, sendUpdatesControlResultErrorMultiThreading) {
     MultiThreadingMgr::instance().setMode(true);
-    testSndUpdatesControlResultError();
+    testSendUpdatesControlResultError();
 }
 
 // Test scenario when one of the servers to which a lease update is sent
 // requires not provided authentication.
 TEST_F(HAServiceTest, sendUpdatesControlResultUnauthorized) {
-    testSndUpdatesControlResultUnauthorized();
+    testSendUpdatesControlResultUnauthorized();
 }
 
 // Test scenario when one of the servers to which a lease update is sent
 // requires not provided authentication.
 TEST_F(HAServiceTest, sendUpdatesControlResultUnauthorizedMultiThreading) {
     MultiThreadingMgr::instance().setMode(true);
-    testSndUpdatesControlResultUnauthorized();
+    testSendUpdatesControlResultUnauthorized();
+}
+
+// Test scenario when one of the servers to which a lease update is sent
+// returns a conflict status code.
+TEST_F(HAServiceTest, sendUpdatesControlResultConflict) {
+    testSendUpdatesControlResultConflict();
+}
+
+// Test scenario when one of the servers to which a lease update is sent
+// returns a conflict status code.
+TEST_F(HAServiceTest, sendUpdatesControlResultConflictMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testSendUpdatesControlResultConflict();
 }
 
 // Test scenario when all lease updates are sent successfully.
@@ -2478,6 +2674,32 @@ TEST_F(HAServiceTest, sendUpdatesFailedLeases6) {
 TEST_F(HAServiceTest, sendUpdatesFailedLeases6MultiThreading) {
     MultiThreadingMgr::instance().setMode(true);
     testSendUpdatesFailedLeases6();
+}
+
+// Test scenario when one of the servers to which a lease update is sent
+// returns a conflict status code.
+TEST_F(HAServiceTest, sendUpdatesControlResultConflict6) {
+    testSendUpdatesControlResultConflict6();
+}
+
+// Test scenario when one of the servers to which a lease update is sent
+// returns a conflict status code.
+TEST_F(HAServiceTest, sendUpdatesControlResultConflict6MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testSendUpdatesControlResultConflict6();
+}
+
+// Test the scenario when the server receiving a lease update returns
+// both the conflict and error status code. The latter should take precedence.
+TEST_F(HAServiceTest, sendUpdatesControlResultConflict6ErrorPrecedence) {
+    testSendUpdatesControlResultConflict6ErrorPrecedence();
+}
+
+    // Test the scenario when the server receiving a lease update returns
+// both the conflict and error status code. The latter should take precedence.
+TEST_F(HAServiceTest, sendUpdatesControlResultConflict6ErrorPrecedenceMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    testSendUpdatesControlResultConflict6ErrorPrecedence();
 }
 
 // This test verifies that the heartbeat command is processed successfully.
@@ -4551,8 +4773,8 @@ TEST_F(HAServiceTest, processMaintenanceStartNotAllowed) {
     checkAnswer(rsp, CONTROL_RESULT_ERROR,
                 "Unable to transition to the partner-in-maintenance state."
                 " The partner server responded with the following message"
-                " to the ha-maintenance-notify command: response returned,"
-                " error code 1001.");
+                " to the ha-maintenance-notify command: response returned"
+                " (error code 1001).");
 
     // The partner's state precludes entering the in-maintenance state. Thus, this
     // server must not change its state either.
@@ -4690,7 +4912,7 @@ TEST_F(HAServiceTest, processMaintenanceCancelPartnerError) {
     checkAnswer(rsp, CONTROL_RESULT_ERROR,
                 "Unable to cancel maintenance. The partner server responded"
                 " with the following message to the ha-maintenance-notify"
-                " command: response returned, error code 1.");
+                " command: response returned (error code 1).");
 
     // The state of this server should not change.
     EXPECT_EQ(HA_PARTNER_IN_MAINTENANCE_ST, service.getCurrState());
@@ -4736,7 +4958,7 @@ TEST_F(HAServiceTest, processMaintenanceCancelPartnerUnauthorized) {
     checkAnswer(rsp, CONTROL_RESULT_ERROR,
                 "Unable to cancel maintenance. The partner server responded"
                 " with the following message to the ha-maintenance-notify"
-                " command: Unauthorized, error code 1.");
+                " command: Unauthorized (error code 1).");
 
     // The state of this server should not change.
     EXPECT_EQ(HA_PARTNER_IN_MAINTENANCE_ST, service.getCurrState());
@@ -5108,6 +5330,25 @@ public:
         service_->runModel(HAService::NOP_EVT);
     }
 
+    /// @brief Simulates rejected lease updates by the partner.
+    ///
+    /// Too many rejected lease updates should transition the server to the
+    /// terminated state.
+    /// @param leases_num number of simulated rejected leases.
+    void simulateRejectedLeaseUpdates(const unsigned leases_num = 100) {
+        // If the state machine is about to transition to another state,
+        // let's make sure it performs this transition.
+        service_->runModel(HAService::NOP_EVT);
+        // Simulate the rejected lease updates.
+        for (auto i = 0; i < leases_num; ++i) {
+            // Create query with random HW address.
+            Pkt4Ptr query4 = createQuery4(randomKey(HWAddr::ETHERNET_HWADDR_LEN));
+            static_cast<void>(state_->reportRejectedLeaseUpdate(query4, 100));
+        }
+        // The state machine needs to react to the rejected leases.
+        service_->runModel(HAService::NOP_EVT);
+    }
+
     /// @brief Checks transitions dependent on the partner's state.
     ///
     /// This method uses @c partner_ object to control the state of the partner.
@@ -5358,6 +5599,18 @@ public:
         service_->verboseTransition(my_state.state_);
         service_->runModel(TestHAService::NOP_EVT);
         return (isDoingHeartbeat());
+    }
+
+    /// @brief Transitions the server to the specified state and checks that it
+    /// clears the rejected leases counter.
+    ///
+    /// @param my_state this server's state
+    /// @return true if the rejected leases counter has been cleared.
+    bool expectClearRejectedLeases(const MyState& my_state) {
+        simulateRejectedLeaseUpdates(1);
+        service_->verboseTransition(my_state.state_);
+        service_->runModel(TestHAService::NOP_EVT);
+        return (state_->getRejectedLeaseUpdatesCount() == 0);
     }
 
     /// @brief Pointer to the communication state used in the tests.
@@ -7694,6 +7947,60 @@ TEST_F(HAServiceStateMachineTest, shouldSendLeaseUpdatesPassiveBackup) {
     HAConfig::PeerConfigPtr peer_config = valid_config->getPeerConfig("server2");
 
     EXPECT_TRUE(expectLeaseUpdates(MyState(HA_WAITING_ST), peer_config));
+}
+
+// Verifies that the server transitions to the terminated state as a result
+// of too many rejected leases.
+TEST_F(HAServiceStateMachineTest, shouldTerminateDueToRejectedLeases) {
+    startService(createValidConfiguration());
+    service_->verboseTransition(HA_LOAD_BALANCING_ST);
+    service_->runModel(HAService::NOP_EVT);
+
+    // Simulate many rejected leases. It should cause the server to transition
+    // to the terminated state.
+    simulateRejectedLeaseUpdates(100);
+    EXPECT_EQ(HA_TERMINATED_ST, service_->getCurrState());
+}
+
+// Verifies that rejected leases are cleared upon entering certain states and
+// are not cleared upon entering other states in the load balancing mode.
+TEST_F(HAServiceStateMachineTest, clearRejectedLeaseUpdatesLoadBalancing) {
+    startService(createValidConfiguration());
+
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_COMMUNICATION_RECOVERY_ST)));
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_LOAD_BALANCING_ST)));
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_IN_MAINTENANCE_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_PARTNER_DOWN_ST)));
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_PARTNER_IN_MAINTENANCE_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_READY_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_TERMINATED_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_WAITING_ST)));
+}
+
+// Verifies that rejected leases are cleared upon entering certain states and
+// are not cleared upon entering other states in the hot standby mode.
+TEST_F(HAServiceStateMachineTest, clearRejectedLeaseUpdatesHotStandby) {
+    HAConfigPtr config_storage = createValidConfiguration(HAConfig::HOT_STANDBY);
+    config_storage->getPeerConfig("server2")->setRole("standby");
+    startService(config_storage);
+
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_HOT_STANDBY_ST)));
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_IN_MAINTENANCE_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_PARTNER_DOWN_ST)));
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_PARTNER_IN_MAINTENANCE_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_READY_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_TERMINATED_ST)));
+    EXPECT_TRUE(expectClearRejectedLeases(MyState(HA_WAITING_ST)));
+}
+
+// Verifies that rejected leases are cleared upon entering certain states and
+// are not cleared upon entering other states in the passive backup mode.
+TEST_F(HAServiceStateMachineTest, clearRejectedLeaseUpdatesPassiveBackup) {
+    HAConfigPtr config_storage = createValidPassiveBackupConfiguration();
+    config_storage->getPeerConfig("server2")->setRole("backup");
+    startService(config_storage);
+
+    EXPECT_FALSE(expectClearRejectedLeases(MyState(HA_PASSIVE_BACKUP_ST)));
 }
 
 } // end of anonymous namespace

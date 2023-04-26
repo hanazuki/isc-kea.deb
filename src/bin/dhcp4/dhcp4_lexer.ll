@@ -1,4 +1,4 @@
-/* Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
+/* Copyright (C) 2016-2023 Internet Systems Consortium, Inc. ("ISC")
 
    This Source Code Form is subject to the terms of the Mozilla Public
    License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -219,6 +219,15 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp4Parser::make_LEASE_CHECKS(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("lease-checks", driver.loc_);
+    }
+}
+
+\"extended-info-checks\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::SANITY_CHECKS:
+        return isc::dhcp::Dhcp4Parser::make_EXTENDED_INFO_CHECKS(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("extended-info-checks", driver.loc_);
     }
 }
 
@@ -501,6 +510,39 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
     }
 }
 
+\"read-timeout\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_READ_TIMEOUT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("read-timeout", driver.loc_);
+    }
+}
+
+\"write-timeout\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_WRITE_TIMEOUT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("write-timeout", driver.loc_);
+    }
+}
+
+\"tcp-user-timeout\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::LEASE_DATABASE:
+    case isc::dhcp::Parser4Context::HOSTS_DATABASE:
+    case isc::dhcp::Parser4Context::CONFIG_DATABASE:
+        return isc::dhcp::Dhcp4Parser::make_TCP_USER_TIMEOUT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("tcp-user-timeout", driver.loc_);
+    }
+}
+
 \"reconnect-wait-time\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::LEASE_DATABASE:
@@ -699,6 +741,17 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
     }
 }
 
+\"allocator\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_ALLOCATOR(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("allocator", driver.loc_);
+    }
+}
+
 \"statistic-default-sample-count\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::DHCP4:
@@ -805,6 +858,17 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
     }
 }
 
+\"ddns-ttl-percent\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+        return isc::dhcp::Dhcp4Parser::make_DDNS_TTL_PERCENT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("ddns-ttl-percent", driver.loc_);
+    }
+}
+
 \"subnet4\" {
     switch(driver.ctx_) {
     case isc::dhcp::Parser4Context::DHCP4:
@@ -890,6 +954,15 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp4Parser::make_ALWAYS_SEND(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("always-send", driver.loc_);
+    }
+}
+
+\"never-send\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::OPTION_DATA:
+        return isc::dhcp::Dhcp4Parser::make_NEVER_SEND(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("never-send", driver.loc_);
     }
 }
 
@@ -1267,6 +1340,15 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp4Parser::make_TEST(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("test", driver.loc_);
+    }
+}
+
+\"template-test\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::CLIENT_CLASSES:
+        return isc::dhcp::Dhcp4Parser::make_TEMPLATE_TEST(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("template-test", driver.loc_);
     }
 }
 
@@ -2001,6 +2083,45 @@ ControlCharacterFill            [^"\\]|\\["\\/bfnrtu]
         return isc::dhcp::Dhcp4Parser::make_LENIENT_OPTION_PARSING(driver.loc_);
     default:
         return isc::dhcp::Dhcp4Parser::make_STRING("lenient-option-parsing", driver.loc_);
+    }
+}
+
+\"ignore-dhcp-server-identifier\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::COMPATIBILITY:
+        return isc::dhcp::Dhcp4Parser::make_IGNORE_DHCP_SERVER_ID(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("ignore-dhcp-server-identifier", driver.loc_);
+    }
+}
+
+\"ignore-rai-link-selection\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::COMPATIBILITY:
+        return isc::dhcp::Dhcp4Parser::make_IGNORE_RAI_LINK_SEL(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("ignore-rai-link-selection", driver.loc_);
+    }
+}
+
+\"exclude-first-last-24\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::COMPATIBILITY:
+        return isc::dhcp::Dhcp4Parser::make_EXCLUDE_FIRST_LAST_24(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("exclude-first-last-24", driver.loc_);
+    }
+}
+
+\"offer-lifetime\" {
+    switch(driver.ctx_) {
+    case isc::dhcp::Parser4Context::DHCP4:
+    case isc::dhcp::Parser4Context::SUBNET4:
+    case isc::dhcp::Parser4Context::SHARED_NETWORK:
+    case isc::dhcp::Parser4Context::CLIENT_CLASSES:
+        return isc::dhcp::Dhcp4Parser::make_OFFER_LFT(driver.loc_);
+    default:
+        return isc::dhcp::Dhcp4Parser::make_STRING("offer-lifetime", driver.loc_);
     }
 }
 

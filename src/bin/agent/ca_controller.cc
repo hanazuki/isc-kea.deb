@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,7 +10,7 @@
 #include <agent/ca_process.h>
 #include <agent/ca_command_mgr.h>
 #include <agent/parser_context.h>
-#include <cfgrpt/config_report.h>
+#include <process/cfgrpt/config_report.h>
 #include <functional>
 
 using namespace isc::process;
@@ -105,9 +105,6 @@ CtrlAgentProcessPtr
 CtrlAgentController::getCtrlAgentProcess() {
     return (boost::dynamic_pointer_cast<CtrlAgentProcess>(getProcess()));
 }
-
-// Refer to config_report so it will be embedded in the binary.
-const char* const* ca_config_report = isc::detail::config_report;
 
 } // namespace isc::agent
 } // namespace isc

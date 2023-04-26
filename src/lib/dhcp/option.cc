@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -329,6 +329,12 @@ Option::getHeaderLen() const {
 }
 
 void Option::addOption(OptionPtr opt) {
+    if (this == opt.get()) {
+        // Do not allow options to be added to themselves as this
+        // can lead to infinite recursion.
+        isc_throw(InvalidOperation, "option cannot be added to itself: " << toText());
+    }
+
     options_.insert(make_pair(opt->getType(), opt));
 }
 

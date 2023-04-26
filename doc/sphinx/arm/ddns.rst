@@ -138,14 +138,22 @@ directly. It accepts the following command-line switches:
    messages to standard output and errors to standard error when testing
    the configuration.
 
-The ``config.report`` file may also be accessed directly, via the
-following command. The binary ``path`` may be found in the install
-directory or in the ``.libs`` subdirectory in the source tree. For
-example: ``kea/src/bin/d2/.libs/kea-dhcp-ddns``.
+   The contents of the ``config.report`` file may also be accessed by examining
+   certain libraries in the installation tree or in the source tree.
 
-::
+   .. code-block:: shell
 
-   strings path/kea-dhcp-ddns | sed -n 's/;;;; //p'
+    # from installation using libkea-process.so
+    $ strings ${prefix}/lib/libkea-process.so | sed -n 's/;;;; //p'
+
+    # from sources using libkea-process.so
+    $ strings src/lib/process/.libs/libkea-process.so | sed -n 's/;;;; //p'
+
+    # from sources using libkea-process.a
+    $ strings src/lib/process/.libs/libkea-process.a | sed -n 's/;;;; //p'
+
+    # from sources using libcfgrpt.a
+    $ strings src/lib/process/cfgrpt/.libs/libcfgrpt.a | sed -n 's/;;;; //p'
 
 Upon startup, the module loads its configuration and begins listening
 for NCRs based on that configuration.
@@ -183,7 +191,7 @@ is a template that can be customized to individual requirements.
    "DhcpDdns": {
        "ip-address": "127.0.0.1",
        "port": 53001,
-       "dns-server-timeout": 100,
+       "dns-server-timeout": 500,
        "ncr-protocol": "UDP",
        "ncr-format": "JSON",
        "tsig-keys": [ ],
@@ -224,7 +232,7 @@ Global Server Parameters
 
 -  ``dns-server-timeout`` - the maximum amount of time, in milliseconds,
    that D2 will wait for a response from a DNS server to a single DNS
-   update message.
+   update message.  The default is 500 ms.
 
 -  ``ncr-protocol`` - the socket protocol to use when sending requests to
    D2. Currently only UDP is supported.

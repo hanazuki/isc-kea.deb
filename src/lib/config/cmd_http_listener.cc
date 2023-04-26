@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2021-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -67,12 +67,12 @@ CmdHttpListener::start() {
                                               HttpListener::RequestTimeout(TIMEOUT_AGENT_RECEIVE_COMMAND),
                                               HttpListener::IdleTimeout(TIMEOUT_AGENT_IDLE_CONNECTION_TIMEOUT)));
 
-        // Create the thread pool with immediate start.
-        thread_pool_.reset(new HttpThreadPool(thread_io_service_, thread_pool_size_));
-
         // Instruct the HTTP listener to actually open socket, install
         // callback and start listening.
         http_listener_->start();
+
+        // Create the thread pool with immediate start.
+        thread_pool_.reset(new IoServiceThreadPool(thread_io_service_, thread_pool_size_));
 
         // OK, seems like we're good to go.
         LOG_DEBUG(command_logger, DBG_COMMAND, COMMAND_HTTP_LISTENER_STARTED)
@@ -81,6 +81,9 @@ CmdHttpListener::start() {
             .arg(port_)
             .arg(tls_context_ ? "true" : "false");
     } catch (const std::exception& ex) {
+        thread_io_service_.reset();
+        http_listener_.reset();
+        thread_pool_.reset();
         isc_throw(Unexpected, "CmdHttpListener::run failed:" << ex.what());
     }
 }

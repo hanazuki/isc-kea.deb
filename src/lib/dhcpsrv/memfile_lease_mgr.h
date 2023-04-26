@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -15,7 +15,7 @@
 #include <dhcpsrv/csv_lease_file6.h>
 #include <dhcpsrv/memfile_lease_limits.h>
 #include <dhcpsrv/memfile_lease_storage.h>
-#include <dhcpsrv/lease_mgr.h>
+#include <dhcpsrv/tracking_lease_mgr.h>
 
 #include <boost/scoped_ptr.hpp>
 #include <boost/shared_ptr.hpp>
@@ -77,7 +77,7 @@ class LFCSetup;
 /// is not specified, the default location in the installation
 /// directory is used: <install-dir>/var/lib/kea/kea-leases4.csv and
 /// <install-dir>/var/lib/kea/kea-leases6.csv.
-class Memfile_LeaseMgr : public LeaseMgr {
+class Memfile_LeaseMgr : public TrackingLeaseMgr {
 public:
 
     /// @defgroup v4 memfile backend versions
@@ -639,7 +639,7 @@ private:
                             const LeasePageSize& page_size,
                             Lease4Collection& collection) const;
 
-    /// @brief Returns existing IPv6 lease for a given IPv6 address.
+    /// @brief Returns existing IPv6 lease for a given IPv6 address and type.
     ///
     /// @param type specifies lease type: (NA, TA or PD)
     /// @param addr An address of the searched lease.
@@ -647,6 +647,13 @@ private:
     /// @return a pointer to the lease (or NULL if a lease is not found)
     Lease6Ptr getLease6Internal(Lease::Type type,
                                 const isc::asiolink::IOAddress& addr) const;
+
+    /// @brief Returns existing IPv6 lease of any type for a given IPv6 address.
+    ///
+    /// @param addr An address of the searched lease.
+    ///
+    /// @return a pointer to the lease (or NULL if a lease is not found)
+    Lease6Ptr getAnyLease6Internal(const isc::asiolink::IOAddress& addr) const;
 
     /// @brief Returns existing IPv6 lease for a given DUID + IA + lease type
     /// combination
@@ -838,7 +845,7 @@ private:
     uint64_t deleteExpiredReclaimedLeases(const uint32_t secs,
                                           const Universe& universe,
                                           StorageType& storage,
-                                          LeaseFileType& lease_file) const;
+                                          LeaseFileType& lease_file);
 
     /// @brief Fetches the most recent value for a subnet statistic
     ///
@@ -981,7 +988,6 @@ public:
 
 private:
 
-
     /// @brief Initialize the location of the lease file.
     ///
     /// This method uses the parameters passed as a map to the constructor to
@@ -1065,6 +1071,14 @@ private:
 
     /// @brief stores IPv6 leases
     Lease6Storage storage6_;
+
+protected:
+
+    /// @brief stores IPv6 by-relay-id cross-reference table
+    Lease6ExtendedInfoRelayIdTable relay_id6_;
+
+    /// @brief stores IPv6 by-remote-id cross-reference table
+    Lease6ExtendedInfoRemoteIdTable remote_id6_;
 
     /// @brief Holds the pointer to the DHCPv4 lease file IO.
     boost::shared_ptr<CSVLeaseFile4> lease_file4_;
@@ -1271,6 +1285,264 @@ public:
     ///
     /// Must be called from a thread-safe context.
     virtual void clearClassLeaseCounts() override;
+
+    /// The following queries are used to fulfill Bulk Lease Query
+    /// queries. They rely on relay data contained in lease's
+    /// user-context when the extended-store-info flag is enabled.
+
+    /// @brief Returns existing IPv4 leases with a given relay-id.
+    ///
+    /// @param relay_id RAI Relay-ID sub-option value for relay_id of interest
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param qry_start_time when not zero, only leases whose CLTT is greater than
+    /// or equal to this value will be included
+    /// @param qry_end_time when not zero, only leases whose CLTT is less than
+    /// or equal to this value will be included
+    ///
+    /// @return collection of IPv4 leases
+    virtual Lease4Collection
+    getLeases4ByRelayId(const OptionBuffer& relay_id,
+                        const asiolink::IOAddress& lower_bound_address,
+                        const LeasePageSize& page_size,
+                        const time_t& qry_start_time = 0,
+                        const time_t& qry_end_time = 0) override;
+
+    /// @brief Returns existing IPv4 leases with a given remote-id.
+    ///
+    /// @param remote_id RAI Remote-ID sub-option value for remote-id of interest
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param qry_start_time when not zero, only leases whose CLTT is greater than
+    /// or equal to this value will be included. Defaults to zero.
+    /// @param qry_end_time when not zero, only leases whose CLTT is less than
+    /// or equal to this value will be included. Defaults to zero.
+    ///
+    /// @return collection of IPv4 leases
+    virtual Lease4Collection
+    getLeases4ByRemoteId(const OptionBuffer& remote_id,
+                         const asiolink::IOAddress& lower_bound_address,
+                         const LeasePageSize& page_size,
+                         const time_t& qry_start_time = 0,
+                         const time_t& qry_end_time = 0) override;
+
+    /// @brief Returns existing IPv6 leases with a given relay-id.
+    ///
+    /// @param relay_id DUID for relay_id of interest.
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    virtual Lease6Collection
+    getLeases6ByRelayId(const DUID& relay_id,
+                        const asiolink::IOAddress& link_addr,
+                        uint8_t link_len,
+                        const asiolink::IOAddress& lower_bound_address,
+                        const LeasePageSize& page_size) override;
+
+    /// @brief Returns existing IPv6 leases with a given remote-id.
+    ///
+    /// @param remote_id remote-id option data of interest
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    virtual Lease6Collection
+    getLeases6ByRemoteId(const OptionBuffer& remote_id,
+                         const asiolink::IOAddress& link_addr,
+                         uint8_t link_len,
+                         const asiolink::IOAddress& lower_bound_address,
+                         const LeasePageSize& page_size) override;
+
+    /// @brief Returns existing IPv6 leases with on a given link.
+    ///
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    virtual Lease6Collection
+    getLeases6ByLink(const asiolink::IOAddress& link_addr,
+                     uint8_t link_len,
+                     const asiolink::IOAddress& lower_bound_address,
+                     const LeasePageSize& page_size) override;
+
+    /// @brief Extract extended info for v4 leases.
+    ///
+    /// For v4 relay and remote identifiers are stored inside leases vs.
+    /// tables for v6.
+    ///
+    /// @param update Update extended info in database.
+    /// @param current specify whether to use current (true) or staging
+    /// (false) config.
+    /// @return The number of updates in the database or 0.
+    size_t extractExtendedInfo4(bool update, bool current);
+
+    /// @brief Build extended info v6 tables.
+    ///
+    /// @note: this method is a nop for memfile when update is false
+    /// as tables are built at start time.
+    ///
+    /// @param update Update extended info in database.
+    /// @param current specify whether to use current (true) or staging
+    /// (false) config.
+    /// @return The number of updates in the database or 0.
+    virtual size_t buildExtendedInfoTables6(bool update, bool current) override;
+
+private:
+
+    /// @brief Returns existing IPv4 leases with a given relay-id.
+    ///
+    /// @param relay_id RAI Relay-ID sub-option value for relay_id of interest
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param qry_start_time when not zero, only leases whose CLTT is greater than
+    /// or equal to this value will be included
+    /// @param qry_end_time when not zero, only leases whose CLTT is less than
+    /// or equal to this value will be included
+    ///
+    /// @return collection of IPv4 leases
+    Lease4Collection
+    getLeases4ByRelayIdInternal(const OptionBuffer& relay_id,
+                                const asiolink::IOAddress& lower_bound_address,
+                                const LeasePageSize& page_size,
+                                const time_t& qry_start_time,
+                                const time_t& qry_end_time);
+
+    /// @brief Returns existing IPv4 leases with a given remote-id.
+    ///
+    /// @param remote_id RAI Remote-ID sub-option value for remote-id of interest
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param qry_start_time when not zero, only leases whose CLTT is greater than
+    /// or equal to this value will be included. Defaults to zero.
+    /// @param qry_end_time when not zero, only leases whose CLTT is less than
+    /// or equal to this value will be included. Defaults to zero.
+    ///
+    /// @return collection of IPv4 leases
+    Lease4Collection
+    getLeases4ByRemoteIdInternal(const OptionBuffer& remote_id,
+                                 const asiolink::IOAddress& lower_bound_address,
+                                 const LeasePageSize& page_size,
+                                 const time_t& qry_start_time,
+                                 const time_t& qry_end_time);
+
+    /// @brief Returns existing IPv6 leases with a given relay-id.
+    ///
+    /// @param relay_id DUID for relay_id of interest.
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    Lease6Collection
+    getLeases6ByRelayIdInternal(const DUID& relay_id,
+                                const asiolink::IOAddress& link_addr,
+                                uint8_t link_len,
+                                const asiolink::IOAddress& lower_bound_address,
+                                const LeasePageSize& page_size);
+
+    /// @brief Returns existing IPv6 leases with a given remote-id.
+    ///
+    /// @param remote_id remote-id option data of interest.
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    Lease6Collection
+    getLeases6ByRemoteIdInternal(const OptionBuffer& remote_id,
+                                 const asiolink::IOAddress& link_addr,
+                                 uint8_t link_len,
+                                 const asiolink::IOAddress& lower_bound_address,
+                                 const LeasePageSize& page_size);
+
+    /// @brief Returns existing IPv6 leases with on a given link.
+    ///
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    Lease6Collection
+    getLeases6ByLinkInternal(const asiolink::IOAddress& link_addr,
+                             uint8_t link_len,
+                             const asiolink::IOAddress& lower_bound_address,
+                             const LeasePageSize& page_size);
+
+    /// @brief Build extended info v6 tables.
+    ///
+    /// @param update Update extended info in database.
+    /// @param current specify whether to use current (true) or staging
+    /// (false) config.
+    /// @return The number of updates in the database or 0.
+    size_t buildExtendedInfoTables6Internal(bool update, bool current);
+
+public:
+
+    /// @brief Write V4 leases to a file.
+    ///
+    /// @param filename File name to write leases.
+    virtual void writeLeases4(const std::string& filename) override;
+
+    /// @brief Write V6 leases to a file.
+    ///
+    /// @param filename File name to write leases.
+    virtual void writeLeases6(const std::string& filename) override;
+
+protected:
+
+    /// Extended information / Bulk Lease Query shared interface.
+
+    /// @brief Delete lease6 extended info from tables.
+    ///
+    /// @param addr The address of the lease.
+    virtual void deleteExtendedInfo6(const isc::asiolink::IOAddress& addr) override;
+
+    /// @brief Add lease6 extended info into by-relay-id table.
+    ///
+    /// @param lease_addr The address of the lease.
+    /// @param relay_id The relay id from the relay header options.
+    virtual void addRelayId6(const isc::asiolink::IOAddress& lease_addr,
+                             const std::vector<uint8_t>& relay_id) override;
+
+    /// @brief Add lease6 extended info into by-remote-id table.
+    ///
+    /// @param lease_addr The address of the lease.
+    /// @param remote_id The remote id from the relay header options.
+    virtual void addRemoteId6(const isc::asiolink::IOAddress& lease_addr,
+                              const std::vector<uint8_t>& remote_id) override;
+
+private:
+    /// @brief Write V4 leases to a file.
+    ///
+    /// @param filename File name to write leases.
+    /// Must be called from a thread-safe context.
+    virtual void writeLeases4Internal(const std::string& filename);
+
+    /// @brief Write V6 leases to a file.
+    ///
+    /// @param filename File name to write leases.
+    /// Must be called from a thread-safe context.
+    virtual void writeLeases6Internal(const std::string& filename);
 };
 
 }  // namespace dhcp

@@ -325,6 +325,9 @@ public:
 
     /// @brief Add an option.
     ///
+    /// @note: to avoid throwing when adding multiple options
+    /// with the same type use @ref Pkt::addOption.
+    ///
     /// @throw BadValue if option with that type is already present.
     ///
     /// @param opt option to be added
@@ -485,8 +488,8 @@ protected:
     /// Currently it is a no-op, it always returns NULL.
     ///
     /// @return always NULL
-    virtual HWAddrPtr getMACFromRemoteIdRelayOption(){
-        return(HWAddrPtr());
+    virtual HWAddrPtr getMACFromRemoteIdRelayOption() {
+        return (HWAddrPtr());
     }
 
     /// @brief local HW address (dst if receiving packet, src if sending packet)

@@ -1,4 +1,4 @@
-// Copyright (C) 2013-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2013-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -6,11 +6,11 @@
 
 #include <config.h>
 
-#include <cfgrpt/config_report.h>
 #include <config/command_mgr.h>
 #include <d2/d2_controller.h>
 #include <d2/d2_process.h>
 #include <d2/parser_context.h>
+#include <process/cfgrpt/config_report.h>
 #include <stats/stats_mgr.h>
 
 #include <stdlib.h>
@@ -139,9 +139,6 @@ D2Controller::parseFile(const std::string& file_name) {
 
 D2Controller::~D2Controller() {
 }
-
-// Refer to config_report so it will be embedded in the binary.
-const char* const* d2_config_report = isc::detail::config_report;
 
 std::string
 D2Controller::getVersionAddendum() {

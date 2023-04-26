@@ -42,6 +42,15 @@ the following command-line switches:
    comprehensive; certain checks are possible only when running the
    server.
 
+-  ``-T file`` - specifies a configuration file to be tested. ``kea-dhcp4``
+   loads it, checks it, and exits. It performs extra checks beside what ``-t``
+   is doing, like establising database connections (lease backend,
+   host reservations backend, configuration backend and forensic logging
+   backend), hook libraries loading and configuration parsing, etc.
+   It does not open unix or TCP/UDP sockets, neither does it open or rotate
+   files, as all these actions could interfere with a running process on the
+   same machine.
+
 -  ``-v`` - displays the Kea version and exits.
 
 -  ``-V`` - displays the Kea extended version with additional parameters
@@ -51,6 +60,23 @@ the following command-line switches:
 -  ``-W`` - displays the Kea configuration report and exits. The report
    is a copy of the ``config.report`` file produced by ``./configure``;
    it is embedded in the executable binary.
+
+   The contents of the ``config.report`` file may also be accessed by examining
+   certain libraries in the installation tree or in the source tree.
+
+   .. code-block:: shell
+
+    # from installation using libkea-process.so
+    $ strings ${prefix}/lib/libkea-process.so | sed -n 's/;;;; //p'
+
+    # from sources using libkea-process.so
+    $ strings src/lib/process/.libs/libkea-process.so | sed -n 's/;;;; //p'
+
+    # from sources using libkea-process.a
+    $ strings src/lib/process/.libs/libkea-process.a | sed -n 's/;;;; //p'
+
+    # from sources using libcfgrpt.a
+    $ strings src/lib/process/cfgrpt/.libs/libcfgrpt.a | sed -n 's/;;;; //p'
 
 On startup, the server detects available network interfaces and
 attempts to open UDP sockets on all interfaces listed in the
@@ -80,6 +106,14 @@ case, it would be necessary to manually delete the PID file.
 The server can be stopped using the ``kill`` command. When running in a
 console, the server can also be shut down by pressing Ctrl-c. Kea detects
 the key combination and shuts down gracefully.
+
+The reconfiguration of each Kea server is triggered by the SIGHUP signal.
+When a server receives the SIGHUP signal it rereads its configuration file and,
+if the new configuration is valid, uses the new configuration.
+If the new configuration proves to be invalid, the server retains its
+current configuration; however, in some cases a fatal error message is logged
+indicating that the server no longer provides any service: a working
+configuration must be loaded as soon as possible.
 
 .. _dhcp4-configuration:
 
@@ -548,6 +582,57 @@ access the database should be set:
 If there is no password to the account, set the password to the empty
 string ``""``. (This is the default.)
 
+.. _tuning-database-timeouts4:
+
+Tuning Database Timeouts
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+In rare cases, reading or writing to the database may hang. It can be
+caused by a temporary network issue or misconfiguration of the proxy
+server switching the connection between different database instances.
+These situations are rare, but we have received reports from the users
+that Kea can sometimes hang while performing the database IO operations.
+Setting appropriate timeout values can mitigate such issues.
+
+MySQL exposes two distinct connection options to configure the read and
+write timeouts. Kea's corresponding ``read-timeout`` and  ``write-timeout``
+configuration parameters specify the timeouts in seconds. For example:
+
+::
+
+   "Dhcp4": { "lease-database": { "read-timeout" : 10, "write-timeout": 20, ... }, ... }
+
+
+Setting these parameters to 0 is equivalent to not specifying them and
+causes the Kea server to establish a connection to the database with the
+MySQL defaults. In this case, Kea waits infinitely for the completion of
+the read and write operations.
+
+MySQL versions earlier than 5.6 do not support setting timeouts for the
+read and write operations. Moreover, the ``read-timeout`` and ``write-timeout``
+parameters can only be specified for the MySQL backend. Setting them for
+any other backend type causes a configuration error.
+
+Use the ``tcp-user-timeout`` parameter to set a timeout for PostgreSQL
+in seconds. For example:
+
+::
+
+   "Dhcp4": { "lease-database": { "tcp-user-timeout" : 10, ... }, ... }
+
+
+Specifying this parameter for other backend types causes a configuration
+error.
+
+.. note::
+
+    The timeouts described here are only effective for TCP connections.
+    Please note that the MySQL client library used by the Kea servers
+    typically connects to the database via a UNIX domain socket when the
+    ``host`` parameter is ``localhost`` but establishes a TCP connection
+    for ``127.0.0.1``.
+
+
 .. _hosts4-storage:
 
 Hosts Storage
@@ -762,6 +847,12 @@ the parameter is not specified.
 
    The ``readonly`` parameter is only supported for MySQL and
    PostgreSQL databases.
+
+
+Tuning Database Timeouts for Hosts Storage
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+See :ref:`tuning-database-timeouts4`.
 
 .. _dhcp4-interface-configuration:
 
@@ -1231,6 +1322,21 @@ address) address from that pool. In the aforementioned example of pool
 assigned as well. This may be invalid in some network configurations. To
 avoid this, use the ``min-max`` notation.
 
+In a subnet whose prefix length is less 24, users may wish to exclude all
+addresses ending in .0 and .255 from being dynamically allocated.  For
+instance in the subnet 10.0.0.0/8, exclude 10.x.y.0 and 10.x.y.255 for all
+values of x and y even though only 10.0.0.0 and 10.255.255.255 must be
+excluded according to standards.  The `exclude-first-last-24`` configuration
+compatibility flag (:ref:`dhcp4-compatibility`)  was introduced in Kea version
+2.3.6 to do this
+automatically rather than having to explicitly configure many pools or
+reservations for fake hosts. When true it applies only to subnets
+prefix lengths less than 24 bits. It defaults to false.
+
+Note that here exclude means to skip them in the free address pickup
+routine of the allocation engine: if a client explicitly requests or
+has a host reservation for an address in .0 or .255 it will get it.
+
 .. note::
 
     Here are some liberties and limits to the values that subnets and pools can
@@ -1414,9 +1520,64 @@ Parameter Request List option (or its equivalent for vendor options):
    }
 
 
-The ``domain-name-servers`` option is always added to responses (the
-always-send is "sticky"), but the value is the subnet one when the client
-is localized in the subnet.
+In the example above, the ``domain-name-servers`` option respects the global
+``always-send`` flag and is always added to responses, but for subnet
+``192.0.3.0/24``, the value is taken from the subnet-level option data
+specification.
+
+At the opposite of ``always-send`` if the ``never-send`` flag is set to
+``true`` for a particular option the server does not add it to the response.
+The effect is the same as if the client removed the option code in the
+Parameter Request List option (or its equivalent for vendor options):
+
+::
+
+   "Dhcp4": {
+       "option-data": [
+           {
+              "name": "domain-name-servers",
+              "data": "192.0.2.1, 192.0.2.2"
+           },
+           ...
+       ],
+       "subnet4": [
+           {
+              "subnet": "192.0.3.0/24",
+              "option-data": [
+                  {
+                      "name": "domain-name-servers",
+                      "never-send": true
+                  },
+                  ...
+              ],
+              ...
+           },
+           ...
+       ],
+       ...
+   }
+
+In the example above, ``domain-name-servers`` option is never added to
+responses on subnet ``192.0.3.0/24``. ``never-send`` has precedence over
+``always-send`` so if both are true the option is not added.
+
+.. note::
+
+    The ``always-send`` and ``never-send`` flags are sticky, meaning
+    they do not follow the usual configuration inheritance rules.
+    Instead, if they are enabled at least once along the configuration
+    inheritance chain, they get applied regardless of them being
+    disabled in other places which would usually be more prioritized.
+    For instance, if one of the flags is enabled in the global scope,
+    but disabled at the subnet level, it will act as enabled,
+    disregarding the subnet-level setting.
+
+.. note::
+
+   The ``never-send`` is less powerful than the :ref:`hooks-flex-option`,
+   for instance it has no effect on options managed by the server itself.
+   Both ``always-send`` and ``never-send`` has no effect too on options
+   which cannot be requested, for instance from a custom space.
 
 The ``name`` parameter specifies the option name. For a list of
 currently supported names, see :ref:`dhcp4-std-options-list`
@@ -1817,6 +1978,8 @@ types are given in :ref:`dhcp-types`.
    +----------------------------------------+------+---------------------------+-------------+-------------+
    | sip-ua-cs-domains                      | 141  | fqdn                      | true        | false       |
    +----------------------------------------+------+---------------------------+-------------+-------------+
+   | v4-sztp-redirect                       | 143  | tuple                     | true        | false       |
+   +----------------------------------------+------+---------------------------+-------------+-------------+
    | rdnss-selection                        | 146  | record (uint8,            | true        | false       |
    |                                        |      | ipv4-address,             |             |             |
    |                                        |      | ipv4-address, fqdn)       |             |             |
@@ -1988,13 +2151,15 @@ to be configured with those options.
    +--------------------+------+----------------------------------------------------------------------+
    | remote-id          | 2    | Can be used with flex-id to identify hosts.                          |
    +--------------------+------+----------------------------------------------------------------------+
-   | link selection     | 5    | If present, is used to select the appropriate subnet.                |
+   | link-selection     | 5    | If present, is used to select the appropriate subnet.                |
    +--------------------+------+----------------------------------------------------------------------+
    | subscriber-id      | 6    | Can be used with flex-id to identify hosts.                          |
    +--------------------+------+----------------------------------------------------------------------+
    | server-id-override | 11   | If sent by the relay, Kea accepts it as the `server-id`.             |
    +--------------------+------+----------------------------------------------------------------------+
-   | relay-source-port  | 19   | If sent by the relay, Kea sends back its responses to this port.     |
+   | relay-id           | 12   | Identifies the relay                                                 |
+   +--------------------+------+----------------------------------------------------------------------+
+   | relay-port         | 19   | If sent by the relay, Kea sends back its responses to this port.     |
    +--------------------+------+----------------------------------------------------------------------+
 
 All other RAI sub-options can be used in client classification to classify incoming packets to specific classes
@@ -2420,16 +2585,15 @@ The standard spaces defined in Kea and their options are:
 | 2           | tftp-servers | a list of IPv4 addresses of TFTP servers to be used by the cable modem |
 +-------------+--------------+------------------------------------------------------------------------+
 
-In Kea each vendor is represented by its own vendor space. Since there
-are hundreds of vendors and sometimes they use different option
-definitions for different hardware, it is impossible for Kea to support
-them all natively. Fortunately, it's easy to define support for
-new vendor options. Let's take an example of the Genexis home gateway. This
-device requires sending the vivso 125 option with a sub-option 2 that
-contains a string with the TFTP server URL. To support such a device, three
-steps are needed: first, we need to define option definitions that will
-explain how the option is supposed to be formed. Second, we need to
-define option values. Third, we need to tell Kea when to send those
+In Kea each vendor is represented by its own vendor space. Since there are
+hundreds of vendors and sometimes they use different option definitions for
+different hardware, it is impossible for Kea to support them all natively.
+Fortunately, it's easy to define support for new vendor options. Let's take an
+example of the Genexis home gateway. This device requires sending the vivso 125
+option with a sub-option 2 that contains a string with the TFTP server URL. To
+support such a device, three steps are needed: first, we need to define option
+definitions that will explain how the option is supposed to be formed. Second,
+we need to define option values. Third, we need to tell Kea when to send those
 specific options, which we can do via client classification.
 
 An example snippet of a configuration could look similar to the
@@ -2437,90 +2601,145 @@ following:
 
 ::
 
-   {
-       // First, we need to define that the suboption 2 in vivso option for
+   "Dhcp4": {
+       // First, we need to define that the sub-option 2 in vivso option for
        // vendor-id 25167 has a specific format (it's a plain string in this example).
        // After this definition, we can specify values for option tftp.
        "option-def": [
-       {
-           // We define a short name, so the option can be referenced by name.
-           // The option has code 2 and resides within vendor space 25167.
-           // Its data is a plain string.
-           "name": "tftp",
-           "code": 2,
-           "space": "vendor-25167",
-           "type": "string"
-       } ],
+           {
+               // We define a short name, so the option can be referenced by name.
+               // The option has code 2 and resides within vendor space 25167.
+               // Its data is a plain string.
+               "name": "tftp",
+               "code": 2,
+               "space": "vendor-25167",
+               "type": "string"
+           }
+       ],
 
        "client-classes": [
-       {
-           // We now need to tell Kea how to recognize when to use vendor space 25167.
-           // Usually we can use a simple expression, such as checking if the device
-           // sent a vivso option with specific vendor-id, e.g. "vendor[4491].exists".
-           // Unfortunately, Genexis is a bit unusual in this aspect, because it
-           // doesn't send vivso. In this case we need to look into the vendor class
-           // (option code 60) and see if there's a specific string that identifies
-           // the device.
-           "name": "cpe_genexis",
-           "test": "substring(option[60].hex,0,7) == 'HMC1000'",
+           {
+               // We now need to tell Kea how to recognize when to use vendor space 25167.
+               // Usually we can use a simple expression, such as checking if the device
+               // sent a vivso option with specific vendor-id, e.g. "vendor[4491].exists".
+               // Unfortunately, Genexis is a bit unusual in this aspect, because it
+               // doesn't send vivso. In this case we need to look into the vendor class
+               // (option code 60) and see if there's a specific string that identifies
+               // the device.
+               "name": "cpe_genexis",
+               "test": "substring(option[60].hex,0,7) == 'HMC1000'",
 
-           // Once the device is recognized, we want to send two options:
-           // the vivso option with vendor-id set to 25167, and a suboption 2.
-           "option-data": [
-               {
-                   "name": "vivso-suboptions",
-                   "data": "25167"
-               },
+               // Once the device is recognized, we want to send two options:
+               // the vivso option with vendor-id set to 25167, and a sub-option 2.
+               "option-data": [
+                   {
+                       "name": "vivso-suboptions",
+                       "data": "25167"
+                   },
 
-               // The suboption 2 value is defined as any other option. However,
-               // we want to send this suboption 2, even when the client didn't
-               // explicitly request it (often there is no way to do that for
-               // vendor options). Therefore we use always-send to force Kea
-               // to always send this option when 25167 vendor space is involved.
-               {
-                   "name": "tftp",
-                   "space": "vendor-25167",
-                   "data": "tftp://192.0.2.1/genexis/HMC1000.v1.3.0-R.img",
-                   "always-send": true
-               }
-           ]
-       } ]
+                   // The sub-option 2 value is defined as any other option. However,
+                   // we want to send this sub-option 2, even when the client didn't
+                   // explicitly request it (often there is no way to do that for
+                   // vendor options). Therefore we use always-send to force Kea
+                   // to always send this option when 25167 vendor space is involved.
+                   {
+                       "name": "tftp",
+                       "space": "vendor-25167",
+                       "data": "tftp://192.0.2.1/genexis/HMC1000.v1.3.0-R.img",
+                       "always-send": true
+                   }
+               ]
+           }
+       ]
    }
 
-By default, Kea sends back
-only those options that are requested by a client, unless there are
-protocol rules that tell the DHCP server to always send an option. This
-approach works nicely in most cases and avoids problems with clients
-refusing responses with options they do not understand. However,
-the situation with vendor options is more complex, as they
-are not requested the same way as other options, are
-not well-documented in official RFCs, or vary by vendor.
+By default, Kea sends back only those options that are requested by a client,
+unless there are protocol rules that tell the DHCP server to always send an
+option. This approach works nicely in most cases and avoids problems with
+clients refusing responses with options they do not understand. However, the
+situation with vendor options is more complex, as they are not requested the
+same way as other options, are not well-documented in official RFCs, or vary by
+vendor.
 
-Some vendors (such
-as DOCSIS, identified by vendor option 4491) have a mechanism to
-request specific vendor options and Kea is able to honor those.
-Unfortunately, for many other vendors, such as Genexis (25167, discussed
-above), Kea does not have such a mechanism, so it cannot send any
-sub-options on its own. To solve this issue, we devised the concept of
-persistent options. Kea can be told to always send options, even if the
-client did not request them. This can be achieved by adding
-``"always-send": true`` to the option definition. Note that in this
-particular case an option is defined in vendor space 25167. With
-``always-send`` enabled, the option is sent every time there is a
-need to deal with vendor space 25167.
+Some vendors (such as DOCSIS, identified by vendor option 4491) have a mechanism
+to request specific vendor options and Kea is able to honor those (sub-option 1).
+Unfortunately, for many other vendors, such as Genexis (25167, discussed above),
+Kea does not have such a mechanism, so it cannot send any sub-options on its own.
+To solve this issue, we devised the concept of persistent options. Kea can be
+told to always send options, even if the client did not request them. This can
+be achieved by adding ``"always-send": true`` to the option data entry. Note
+that in this particular case an option is defined in vendor space 25167. With
+``always-send`` enabled, the option is sent every time there is a need to deal
+with vendor space 25167.
+This is also how the Kea server can be configured to send multiple vendor
+enterprise numbers and multiple options, specific for each vendor.
+If these options need to be sent by the server regardless if the client
+specified any enterprise number, the ``"always-send": true`` must be configured
+for the option with code 125 (``vivso-suboptions``) for each enterprise number.
+
+::
+
+   "Dhcp4": {
+       "option-data": [
+           {
+               "always-send": true,
+               "name": "vivso-suboptions",
+               "space": "dhcp4",
+               "data": "2234"
+           },
+           {
+               "always-send": true,
+               "name": "vivso-suboptions",
+               "space": "dhcp4",
+               "data": "3561"
+           },
+           {
+               "always-send": true,
+               "data": "tagged",
+               "name": "tag",
+               "space": "vendor-2234"
+           },
+           {
+               "always-send": true,
+               "name": "url",
+               "space": "vendor-3561",
+               "data": "https://example.com:1234/path"
+           }
+       ],
+       "option-def": [
+           {
+               "code": 22,
+               "name": "tag",
+               "space": "vendor-2234",
+               "type": "string"
+           },
+           {
+               "code": 11,
+               "name": "url",
+               "space": "vendor-3561",
+               "type": "string"
+           }
+       ]
+   }
 
 Another possibility is to redefine the option; see :ref:`dhcp4-private-opts`.
 
 Kea comes with several example configuration files. Some of them showcase
 how to configure options 60 and 43. See ``doc/examples/kea4/vendor-specific.json``
-and ``doc/examples/kea6/vivso.json`` in the Kea sources.
+and ``doc/examples/kea4/vivso.json`` in the Kea sources.
 
 .. note::
 
-   Currently only one vendor is supported for the ``vivco-suboptions`` (code 124)
-   and ``vivso-suboptions`` (code 125) options. Specifying
-   multiple enterprise numbers within a single option instance or multiple
-   options with different enterprise numbers is not supported.
+   Multiple vendor enterprise numbers are supported by ``vivso-suboptions``
+   (code 125) option. The option can contain multiple options for each vendor.
+
+   Kea will honor DOCSIS sub-option 1 (ORO) and will add only requested options
+   if this sub-option is present in the client request.
+
+   Currently only one vendor is supported for the ``vivco-suboptions``
+   (code 124) option. Specifying multiple enterprise numbers within a single
+   option instance or multiple options with different enterprise numbers is not
+   supported.
 
 .. _dhcp4-option-spaces:
 
@@ -2599,9 +2818,10 @@ sub-options.
 
 Finally, we can set values for the new options:
 
-::
+.. code-block:: json
 
-   "Dhcp4": {
+   {
+     "Dhcp4": {
        "option-data": [
            {
                "name": "subopt1",
@@ -2609,7 +2829,7 @@ Finally, we can set values for the new options:
                "space": "isc",
                "data": "192.0.2.3"
            },
-           }
+           {
                "name": "subopt2",
                "code": 2,
                "space": "isc",
@@ -2620,8 +2840,8 @@ Finally, we can set values for the new options:
                "code": 222,
                "space": "dhcp4"
            }
-       ],
-       ...
+       ]
+     }
    }
 
 It is possible to create an option which carries some data in
@@ -2681,18 +2901,18 @@ Support for Long Options
 ------------------------
 
 The kea-dhcp4 server partially supports long options (RFC3396).
-Since Kea 2.1.6, the server accepts configuring long options and suboptions
-(longer than 255 bytes). The options and suboptions are stored internally
+Since Kea 2.1.6, the server accepts configuring long options and sub-options
+(longer than 255 bytes). The options and sub-options are stored internally
 in their unwrapped form and they can be processed as usual using the parser
-language. On send, the server splits long options and suboptions into multiple
-options and suboptions, using the respective option code.
+language. On send, the server splits long options and sub-options into multiple
+options and sub-options, using the respective option code.
 
 ::
 
    "option-def": [
        {
            "array": false,
-           "code\": 240,
+           "code": 240,
            "encapsulate": "",
            "name": "my-option",
            "space": "dhcp4",
@@ -2726,12 +2946,12 @@ options and suboptions, using the respective option code.
 
 .. note::
 
-   For this example, the data has been split on several lines, but Kea does not
-   support this in the configuration file.
+   In the example above, the data has been wrapped into several lines for clarity,
+   but Kea does not support it in the configuration file.
 
-This example illustrates configuring a custom long option in a reservation.
-The server, when sending a response, will split this option into several options
-with the same code (11 options with option code 240).
+This example illustrates configuring a custom long option (exceeding 255 octets)
+in a reservation. When sending a response, the server will split this option
+into two options, each with the code 240.
 
 .. note::
 
@@ -2740,8 +2960,8 @@ with the same code (11 options with option code 240).
 
 The server is also able to receive packets with split options (options using
 the same option code) and to fuse the data chunks into one option. This is
-also supported for suboptions if each suboption data chunk also contains the
-suboption code and suboption length.
+also supported for sub-options if each sub-option data chunk also contains the
+sub-option code and sub-option length.
 
 .. _dhcp4-stateless-configuration:
 
@@ -3059,8 +3279,41 @@ may take precedence.
 
 Required evaluation is also available at the shared-network and pool levels.
 The order in which required classes are considered is: shared-network,
-subnet, and pool, i.e. in the reverse order from the way in which ``option-data`` is
-processed.
+subnet, and pool, i.e. in the reverse order from the way in which
+``option-data`` is processed.
+
+.. note::
+
+   Vendor-Identifying Vendor Options are a special case: for all other
+   options an option is identified by its code point, ``vivco-suboptions``
+   (124) and ``vivso-suboptions`` (125) are identified by the pair of
+   code and vendor identifier. This has no visible effect for the
+   ``vivso-suboptions`` which has for value the vendor identifier but it
+   is different for ``vivco-suboptions`` which has for value a record
+   with the vendor identifier and a binary value. For instance in:
+
+::
+
+   "Dhcp4": {
+       "option-data": [
+          {
+              "name": "vivco-suboptions",
+              "always-send": true,
+              "data": "1234, 03666f6f"
+          },
+          {
+              "name": "vivco-suboptions",
+              "always-send": true,
+              "data": "5678, 03626172"
+          },
+          ...
+        ],
+        ...
+    }
+
+The first ``option-data`` entry does not hide as usual the second one because
+vendor identifiers (1234 and 5678) are different: responses will carry
+two instances of the ``vivco-suboptions`` option, each for a different vendor.
 
 .. _dhcp4-ddns-config:
 
@@ -3116,6 +3369,7 @@ DDNS-related parameters are split into two groups:
     -  ``ddns-qualifying-suffix``
     -  ``ddns-update-on-renew``
     -  ``ddns-use-conflict-resolution``
+    -  ``ddns-ttl-percent``
     -  ``hostname-char-set``
     -  ``hostname-char-replacement``
 
@@ -3239,14 +3493,18 @@ conflict with existing entries owned by other DHCPv4 clients.
     reassigning either FQDNs or IP addresses. Doing so causes ``kea-dhcp4``
     to generate DNS removal requests to D2.
 
-.. note::
+The DNS entries Kea creates contain a value for TTL (time to live). Since
+Kea 1.9.3, ``kea-dhcp4`` calculates that value based on
+`RFC 4702, Section 5 <https://tools.ietf.org/html/rfc4702#section-5>`__,
+which suggests that the TTL value be 1/3 of the lease's lifetime, with
+a minimum value of 10 minutes. In earlier versions, the server set the
+TTL value equal to the lease's valid lifetime.
 
-    The DNS entries Kea creates contain a value for TTL (time to live). Since
-    Kea 1.9.3, ``kea-dhcp4`` calculates that value based on
-    `RFC 4702, Section 5 <https://tools.ietf.org/html/rfc4702#section-5>`__,
-    which suggests that the TTL value be 1/3 of the lease's lifetime, with
-    a minimum value of 10 minutes. In earlier versions, the server set the TTL value
-    equal to the lease's valid lifetime.
+Kea 2.3.6 adds a new parameter, ``ddns-ttl-percent``. When specified
+it causes the TTL to be calculated as a simple percentage of the lease's
+life time, using the parameter's value as the percentage. It is specified
+as a decimal percent (e.g. .25, .75, 1.00) and may be specified at the
+global, shared-network, and subnet levels.  By default it is unspecified.
 
 .. _dhcpv4-d2-io-config:
 
@@ -3752,12 +4010,11 @@ enables client identification using ``chaddr`` only. This instructs the
 server to ignore the client identifier during lease lookups and allocations
 for a particular subnet. Consider the following simplified server configuration:
 
-::
+.. code-block:: json
 
-   "Dhcp4": {
-       ...
+   {
+     "Dhcp4": {
        "match-client-id": true,
-       ...
        "subnet4": [
        {
            "subnet": "192.0.10.0/24",
@@ -3766,9 +4023,10 @@ for a particular subnet. Consider the following simplified server configuration:
        },
        {
            "subnet": "10.0.0.0/8",
-           "pools": [ { "pool": "10.0.0.23-10.0.2.99" } ],
+           "pools": [ { "pool": "10.0.0.23-10.0.2.99" } ]
        }
        ]
+     }
    }
 
 The ``match-client-id`` is a boolean value which controls this behavior.
@@ -3935,8 +4193,8 @@ would not want all the leases associated with it to disappear from the
 lease database. Kea has a mechanism to implement sanity checks for situations
 like this.
 
-Kea supports a configuration scope called ``sanity-checks``. It
-currently allows only a single parameter, called ``lease-checks``, which
+Kea supports a configuration scope called ``sanity-checks``.
+A parameter, called ``lease-checks``,
 governs the verification carried out when a new lease is loaded from a
 lease file. This mechanism permits Kea to attempt to correct inconsistent data.
 
@@ -4011,15 +4269,28 @@ subnet levels.
    }
 
 When set to ``true``, information relevant to the DHCPREQUEST asking for the lease is
-added into the lease's user-context as a map element labeled "ISC". Currently,
-the map contains a single value, the ``relay-agent-info`` option (DHCP Option 82),
-when the DHCPREQUEST received contains it. Since DHCPREQUESTs sent as renewals will likely not contain this
+added into the lease's user-context as a map element labeled "ISC". Since
+Kea version 2.3.2,  when the DHCPREQUEST received contains the option
+(DHCP Option 82) the map contains the ``relay-agent-info`` map
+with the content option (DHCP Option 82) in the ``sub-options`` entry and
+when present the ``remote-id`` and ``relay-id`` options.
+Since DHCPREQUESTs sent as renewals will likely not contain this
 information, the values taken from the last DHCPREQUEST that did contain it are
 retained on the lease. The lease's user-context looks something like this:
 
 ::
 
-  { "ISC": { "relay-agent-info": "0x52050104AABBCCDD" } }
+  { "ISC": { "relay-agent-info": { "sub-options": "0x0104AABBCCDD" } } }
+
+Or with remote and relay sub-options:
+
+::
+
+   { "ISC": { "relay-agent-info": {
+       "sub-options": "0x02030102030C03AABBCC",
+       "remote-id": "03010203",
+       "relay-id": "AABBCC"
+   } } }
 
 .. note::
 
@@ -4029,6 +4300,32 @@ retained on the lease. The lease's user-context looks something like this:
     words, ``user-context`` is intended to be a flexible container serving multiple
     purposes. As long as no other purpose also writes an "ISC" element to
     ``user-context`` there should not be a conflict.
+
+Extended lease information is also subject to configurable sanity checking.
+The parameter in the ``sanity-checks`` scope is named ``extended-info-checks``
+and supports these levels:
+
+-  ``none`` - do no check nor upgrade. This level should be used only when
+   extended info is not used at all or when no badly formatted extended
+   info, including using the old format, is expected.
+
+-  ``fix`` - fix some common inconsistencies and upgrade extended info
+   using the old format to the new one. It is the default level and is
+   convenient when Lease Query hook library is not loaded.
+
+-  ``strict`` - fix all inconsistencies which have an impact on the (Bulk)
+   Lease Query hook library.
+
+-  ``pedantic`` - enforce full conformance to the format produced by the
+   Kea code, for instance no extra entries are allowed with the exception
+   of ``comment``.
+
+.. note::
+
+   Currently this feature is implemented only for the memfile
+   backend. The sanity check applies to the lease database in memory,
+   not to the lease file, i.e. inconsistent leases will stay in the lease
+   file.
 
 .. _dhcp4-multi-threading-settings:
 
@@ -4040,15 +4337,15 @@ threads. These settings can be found under the ``multi-threading`` structure and
 represented by:
 
 -  ``enable-multi-threading`` - use multiple threads to process packets in
-   parallel. The default is ``false``.
+   parallel. The default is ``true``.
 
 -  ``thread-pool-size`` - specify the number of threads to process packets in
-   parallel. It may be set to 0 (auto-detect), or any positive number explicitly sets
-   the thread count. The default is 0.
+   parallel. It may be set to ``0`` (auto-detect), or any positive number which
+   explicitly sets the thread count. The default is ``0``.
 
 -  ``packet-queue-size`` - specify the size of the queue used by the thread
-   pool to process packets. It may be set to 0 (unlimited), or any positive
-   number explicitly sets the queue size. The default is 64.
+   pool to process packets. It may be set to ``0`` (unlimited), or any positive
+   number explicitly sets the queue size. The default is ``64``.
 
 An example configuration that sets these parameters looks as follows:
 
@@ -4197,6 +4494,65 @@ In outbound client responses (e.g. DHCPACK messages), the
 i.e. the expiration date does not change. Other options based on the
 valid lifetime e.g. ``dhcp-renewal-time`` and ``dhcp-rebinding-time``,
 also depend on the reusable lifetime.
+
+Temporary Allocation on DHCPDISCOVER
+------------------------------------
+
+By default, kea-dhcp4 does not allocate or store a lease when offering an address
+to a client in response to a DHCPDISCOVER.  In general, kea-dhcp4, can fulfill client
+demands faster by deferring lease allocation and storage until it receives DHCPREQUESTs
+for them.  Release 2.3.6 added a new parameter to kea-dhcp4, ``offer-lifetime``, which
+(when not zero) instructs the server to allocate and persist a lease when generating a
+DHCPOFFER and:
+
+- The persisted lease's lifetime is equal to ``offer-lifetime`` (in seconds).
+
+- The lifetime sent to the client in the DHCPOFFER via option 51 will still be based
+  on ``valid-lifetime``.  This avoids issues with clients that may reject offers whose
+  lifetimes they perceive as too short.
+
+- DDNS updates are not performed. As with the default behavior, that occurs on DHCPREQUEST.
+
+- Updates are not sent to HA peers.
+
+- Assigned lease statistics are incremented.
+
+- Expiration processing and reclamation behave just as they do for leases allocated
+  during DHCPREQUEST processing.
+
+- Lease caching, if enabled, is honored.
+
+- In sites running multiple instances of kea-dhcp4 against a single, shared lease store, races
+  for given address values are lost during DHCPDISCOVER processing rather than during DHCPREQUEST
+  processing.  Servers that lose the race for the address will simply not respond to the client
+  rather than NAK them.  The client in turn will simply retry DHCPDISCOVER.  This should reduce
+  the amount of traffic such conflicts incur.
+
+- Clients repeating DHCPDISCOVERs will be offered the same address each time.
+
+An example subnet configuration is shown below:
+
+::
+
+    "subnet4": [
+        {
+            "pools": [ { "pool":  "192.0.2.1 - 192.0.2.200" } ],
+            "subnet": "192.0.2.0/24",
+            "offer-lifetime": 60,
+            "valid-lifetime": 2000,
+            ...
+        }
+    ],
+
+Here ``offer-lifetime`` has been configured to be 60 seconds with a ``valid-lifetime``
+of 2000 seconds.  This instructs kea-dhcp4 to persist leases for 60 seconds when
+sending them back in DHCPOFFERs and then extending them to 2000 seconds when clients
+DHCPREQUEST them.
+
+The value, which defaults to zero, is supported at the global, shared-network, subnet,
+and class levels. Choosing an appropriate value for offer-lifetime is extremely
+site-dependent but a value between 60 and 120 seconds would be a reasonable starting
+point.
 
 .. _host-reservation-v4:
 
@@ -4429,7 +4785,7 @@ The server qualifies the reserved hostname with the value of the
 ``ddns-qualifying-suffix`` parameter. For example, the following subnet
 configuration:
 
-::
+.. code-block:: json
 
        {
            "subnet4": [ {
@@ -4444,7 +4800,7 @@ configuration:
                ]
             }],
            "dhcp-ddns": {
-               "enable-updates": true,
+               "enable-updates": true
            }
        }
 
@@ -4456,7 +4812,7 @@ treated as a fully qualified name. Thus, by leaving the
 ``ddns-qualifying-suffix`` empty it is possible to qualify hostnames for
 different clients with different domain names:
 
-::
+.. code-block:: json
 
        {
            "subnet4": [ {
@@ -4475,7 +4831,7 @@ different clients with different domain names:
                ]
             }],
            "dhcp-ddns": {
-               "enable-updates": true,
+               "enable-updates": true
            }
        }
 
@@ -5072,23 +5428,28 @@ every subnet that has global reservations enabled.
 
 This feature can be used to assign certain parameters, such as hostname
 or other dedicated, host-specific options. It can also be used to assign
-addresses. However, global reservations that assign addresses bypass the
-whole topology determination provided by the DHCP logic implemented in Kea.
-It is very easy to misuse this feature and get a configuration that is
-inconsistent. To give a specific example, imagine a global reservation
-for the address 192.0.2.100 and two subnets 192.0.2.0/24 and 192.0.5.0/24.
-If global reservations are used in both subnets and a device matching
-global host reservations visits part of the network that is serviced by
-192.0.5.0/24, it will get an IP address 192.0.2.100, a subnet 192.0.5.0,
-and a default router 192.0.5.1. Obviously, such a configuration is
-unusable, as the client will not be able to reach its default gateway.
+addresses.
+
+An address assigned via global host reservation must be feasible for the
+subnet the server selects for the client. In other words, the address must
+lie within the subnet otherwise it will be ignored and the server will
+attempt to dynamically allocate an address.  In the event the selected subnet
+belongs to a shared-network the server will check for feasibility against
+the subnet's siblings, selecting the first in-range subnet.  If no such
+subnet exists, the server will fallback to dynamically allocating the address.
+
+.. note::
+
+    Prior to release 2.3.5, the server did not perform feasibility checks on
+    globally reserved addresses. This allowed the server to be configured to
+    hand out nonsensical leases for arbitrary address values.
 
 To use global host reservations, a configuration similar to the
 following can be used:
 
 ::
 
-   "Dhcp4:" {
+   "Dhcp4": {
        # This specifies global reservations.
        # They will apply to all subnets that
        # have global reservations enabled.
@@ -5398,6 +5759,99 @@ enabled, host reservations lookup is always performed first to avoid lease
 lookup resource locking. The ``reservations-lookup-first`` defaults to ``false``
 when multi-threading is disabled.
 
+.. _host_reservations_as_basic_access_control4:
+
+Host Reservations as Basic Access Control
+-----------------------------------------
+
+Starting with Kea 2.3.5, it is possible to define a host reservation that
+contains just an identifier, without any address, options or values. In some
+deployments this is useful, as the hosts that have a reservation will belong to
+KNOWN class, while others won't. This can be used as a basic access control.
+
+The following example demonstrates this concept. There is a single IPv4 subnet
+and all clients will get an address from it. However, only known (those that
+have reservations) will get their default router configured.
+
+::
+
+    "Dhcp4": {
+        "client-classes": [
+            {
+                "name": "KNOWN",
+                "option-data": [
+                    {
+                        "name": "routers",
+                        "data": "192.0.2.250"
+                    }
+                ]
+            }
+        ],
+        "reservations": [
+            // Clients on this list will be added to the KNOWN class.
+            { "hw-address": "aa:bb:cc:dd:ee:fe" },
+            { "hw-address": "11:22:33:44:55:66" }
+        ],
+        "reservations-in-subnet": true,
+
+        "subnet4": [
+            {
+                "subnet": "192.0.2.0/24",
+                "pools": [
+                    {
+                        "pool": "192.0.2.1-192.0.2.200"
+                    }
+                ]
+            }
+        ]
+    }
+
+This concept can be extended further. A good real life scenario is a list of
+customers of an ISP. Some of them haven't paid their bills. A new class can be
+defined to use alternative default router, that instead of relaying traffic,
+redirects customers to a captive portal urging them to pay their bills.
+
+::
+
+    "Dhcp4": {
+        "client-classes": [
+            {
+                "name": "blocked",
+                "option-data": [
+                    {
+                        "name": "routers",
+                        "data": "192.0.2.251"
+                    }
+                ]
+            },
+        ],
+        "reservations": [
+            // Clients on this list will be added to the KNOWN class. Some
+            // will also be added to the blocked class.
+            { "hw-address": "aa:bb:cc:dd:ee:fe",
+              "client-classes": [ "blocked" ] },
+            { "hw-address": "11:22:33:44:55:66" }
+        ],
+        "reservations-in-subnet": true,
+
+        "subnet4": [
+            {
+                "subnet": "192.0.2.0/24",
+                "pools": [
+                    {
+                        "pool": "192.0.2.1-192.0.2.200"
+                    }
+                ],
+                "option-data": [
+                    {
+                        "name": "routers",
+                        "data": "192.0.2.250"
+                    }
+                ]
+            }
+        ]
+    }
+
 .. _shared-network4:
 
 Shared Networks in DHCPv4
@@ -5476,13 +5930,13 @@ introduced:
                "subnet4": [
                    {
                        "subnet": "10.0.0.0/8",
-                       "pools": [ { "pool":  "10.0.0.1 - 10.0.0.99" } ],
+                       "pools": [ { "pool":  "10.0.0.1 - 10.0.0.99" } ]
                    },
                    {
                        "subnet": "192.0.2.0/24",
                        "pools": [ { "pool":  "192.0.2.100 - 192.0.2.199" } ]
                    }
-               ],
+               ]
            } ], # end of shared-networks
 
        # It is likely that in the network there will be a mix of regular,
@@ -5635,7 +6089,7 @@ shown in the example below.
            "subnet4": [
                {
                    "subnet": "10.0.0.0/8",
-                   "pools": [ { "pool":  "10.0.0.1 - 10.0.0.99" } ],
+                   "pools": [ { "pool":  "10.0.0.1 - 10.0.0.99" } ]
                },
                {
                     "subnet": "192.0.2.0/24",
@@ -5758,7 +6212,7 @@ following example:
                "subnet4": [
                    {
                        "subnet": "192.0.2.0/26",
-                       "pools": [ { "pool": "192.0.2.1 - 192.0.2.63" } ],
+                       "pools": [ { "pool": "192.0.2.1 - 192.0.2.63" } ]
                    },
                    {
                        "subnet": "10.0.0.0/24",
@@ -6013,18 +6467,20 @@ server is able to select this subnet for any incoming packets that come
 from a relay that has an address in the 192.0.2.0/24 subnet. It also
 selects that subnet for a relay with address 10.0.0.1.
 
-::
+.. code-block:: json
 
-   "Dhcp4": {
+   {
+     "Dhcp4": {
        "subnet4": [
            {
                "subnet": "192.0.2.0/24",
                "pools": [ { "pool": "192.0.2.10 - 192.0.2.20" } ],
                "relay": {
                    "ip-addresses": [ "10.0.0.1" ]
-               },
+               }
            }
-       ],
+       ]
+     }
    }
 
 If ``relay`` is specified, the ``ip-addresses`` parameter within it is
@@ -6906,7 +7362,7 @@ All supported parameters can be configured via the ``cb_cmds`` hook library
 described in the :ref:`hooks-cb-cmds` section. The general rule is that
 scalar global parameters are set using
 ``remote-global-parameter4-set``; shared-network-specific parameters
-are set using ``remote-network4-set``; and subnet- and pool-level
+are set using ``remote-network4-set``; and subnet-level and pool-level
 parameters are set using ``remote-subnet4-set``. Whenever
 there is an exception to this general rule, it is highlighted in the
 table. Non-scalar global parameters have dedicated commands; for example,
@@ -7033,9 +7489,10 @@ Enabling the Configuration Backend
 Consider the following configuration snippet, which uses a MySQL configuration
 database:
 
-::
+.. code-block:: json
 
-   "Dhcp4": {
+   {
+     "Dhcp4": {
        "server-tag": "my DHCPv4 server",
        "config-control": {
            "config-databases": [{
@@ -7052,7 +7509,8 @@ database:
            "library": "/usr/local/lib/kea/hooks/libdhcp_mysql_cb.so"
        }, {
            "library": "/usr/local/lib/kea/hooks/libdhcp_cb_cmds.so"
-       }],
+       }]
+     }
    }
 
 The ``config-control`` command contains two parameters. ``config-databases``
@@ -7068,9 +7526,10 @@ merged into the configuration read from the configuration file.
 
 The following snippet illustrates the use of a PostgreSQL database:
 
-::
+.. code-block:: json
 
-   "Dhcp4": {
+   {
+     "Dhcp4": {
        "server-tag": "my DHCPv4 server",
        "config-control": {
            "config-databases": [{
@@ -7087,7 +7546,8 @@ The following snippet illustrates the use of a PostgreSQL database:
            "library": "/usr/local/lib/kea/hooks/libdhcp_pgsql_cb.so"
        }, {
            "library": "/usr/local/lib/kea/hooks/libdhcp_cb_cmds.so"
-       }],
+       }]
+     }
    }
 
 .. note::
@@ -7182,3 +7642,132 @@ or in terms of the log message above, the tuple length ``y`` becomes ``x``.
         }
       }
     }
+
+Ignore DHCP Server Identifier
+-----------------------------
+
+With ``"ignore-dhcp-server-identifier": true``, the server does not check the
+address in the DHCP Server Identifier option i.e. whether a query is sent
+to this server or another one (and in the second case dropping the query).
+
+.. code-block:: json
+
+    {
+      "Dhcp4": {
+        "compatibility": {
+          "ignore-dhcp-server-identifier": true
+        }
+      }
+    }
+
+
+Ignore RAI Link Selection
+-------------------------
+
+With ``"ignore-rai-link-selection": true``, Relay Agent Information Link
+Selection sub-option data will not be used for subnet selection. This will use
+normal subnet selection logic instead of attempting to use the subnet specified
+by the sub-option. This option is not RFC compliant and is set to ``false`` by
+default. Setting this option to ``true`` can help with subnet selection in
+certain scenarios, for example, when your DHCP relays do not allow you to
+specify which sub-options are included in the Relay Agent Information option,
+and include incorrect Link Selection information.
+
+.. code-block:: json
+
+    {
+      "Dhcp4": {
+        "compatibility": {
+          "ignore-rai-link-selection": true
+        }
+      }
+    }
+
+Exclude First Last Addresses in Subnets bigger than /24
+-------------------------------------------------------
+
+The ``exclude-first-last-24`` compatibility flag is described in
+:ref:`dhcp4-address-config` (when true .0 and .255 addresses are excluded
+from subnets with prefix length less than 24).
+
+.. _dhcp4_allocation_strategies:
+
+Address Allocation Strategies in DHCPv4
+=======================================
+
+A DHCP server follows a complicated algorithm to select an IPv4 address for a client.
+It prefers assigning specific addresses requested by the client and the addresses for
+which the client has reservations. If the client requests no particular address,
+has no reservations, or other clients already use these addresses, the server must
+find another available address within the configured pools. A server function called
+"allocator" is responsible in Kea for finding an available address in such a case.
+
+Kea DHCPv4 server provides configuration parameters to select different allocators
+(allocation strategies) at the global, shared network, and subnet levels.
+Consider the following example:
+
+.. code-block:: json
+
+    {
+        "Dhcp4": {
+            "allocator": "random",
+            "subnet4": [
+                {
+                    "id": 1,
+                    "subnet": "10.0.0.0/8",
+                    "allocator": "iterative"
+                },
+                {
+                    "id": 2,
+                    "subnet": "192.0.2.0/24",
+                }
+            ]
+        }
+    }
+
+It overrides the default iterative allocation strategy at the global level and
+selects the random allocation instead. The random allocation will be used
+for the subnet with id 2. The iterative allocation will be used for the subnet
+with id 1.
+
+In the following sections, we describe the supported allocators and recommend
+when to use them.
+
+.. note::
+
+   Allocator selection is currently not supported in the Kea Configuration
+   Backend.
+
+
+Iterative Allocator
+-------------------
+It is the default allocator used by the Kea DHCPv4 server. It remembers the
+last offered address and offers this address increased by 1 to the next client.
+For example, it may offer addresses in this order: ``192.0.2.10``, ``192.0.2.11``,
+``192.0.2.12``, and so on. The time to find and offer the next address is very
+short. Thus, it is the highly performant allocator when the pool utilization
+is low and there is a high probability that the next address is available.
+
+The iterative allocation underperforms when multiple DHCP servers share a lease
+database or are connected to a cluster. The servers tend to offer and allocate
+the same blocks of addresses to different clients independently. It causes many
+allocation conflicts between the servers and retransmissions by clients. A random
+allocation deals with it by dispersing the allocations order.
+
+Random Allocator
+----------------
+
+The random allocator uses a uniform randomization function to select offered
+addresses from the subnet pools. It improves the server's resilience against
+attacks based on allocation predictability. In addition, the random allocation
+is suitable in deployments where multiple servers are connected to a shared
+database or a database cluster. By dispersing the offered addresses, the servers
+minimize the risk of allocating the same address to two different clients at
+the same or nearly the same time.
+
+The random allocator is, however, slightly slower than the iterative allocator.
+Moreover, it increases the server's memory consumption because it must remember
+randomized addresses to avoid offering them repeatedly. Memory consumption grows
+with the number of offered addresses. In other words, larger pools and more
+clients increase memory consumption by random allocation.
+

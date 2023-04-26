@@ -1,6 +1,6 @@
 #!/bin/sh
 
-# Copyright (C) 2018-2020 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -18,21 +18,35 @@
 set -eu
 
 # Change directory to the YANG modules' directory.
-script_path=$(cd "$(dirname "${0}")" && pwd)
-cd "${script_path}/.."
+cd "/home/admin/workspace/kea-dev/build-tarball/kea/src/share/yang/modules"
 
-error=0
-for m in *.yang
-do
-    rev1=$(yanglint -f yin "${m}" | grep '<revision date=' | head -1 | sed \
+exit_code=0
+
+LIBYANG_PREFIX=''
+
+# Find yanglint.
+if test -f "${LIBYANG_PREFIX}/bin/yanglint"; then
+    yanglint="${LIBYANG_PREFIX}/bin/yanglint"
+    LD_LIBRARY_PATH="${LD_LIBRARY_PATH-}:${LIBYANG_PREFIX}/lib:${LIBYANG_PREFIX}/lib64"
+    export LD_LIBRARY_PATH
+elif command -v yanglint; then
+    yanglint='yanglint'
+else
+    exit_code=$((exit_code | 2))
+    printf 'ERROR: cannot find yanglint.\n' >&2
+    exit "${exit_code}"
+fi
+
+for m in *.yang; do
+    rev1=$("${yanglint}" -f yin "${m}" | grep '<revision date=' | head -1 | sed \
  's/.*<revision date="\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)".*/\1/')
     rev2=$(echo "${m}" | sed \
  's/.*@\([0-9][0-9][0-9][0-9]-[0-9][0-9]-[0-9][0-9]\)\..*/\1/')
 
-    if test "${rev1}" != "${rev2}"
-    then
-        error=1
-        printf 'revision mismatch on %s got %s\n' "${m}" "${rev1}"
+    if test "${rev1}" != "${rev2}"; then
+        exit_code=$((exit_code | 4))
+        printf 'ERROR: revision mismatch on module %s: revision date is %s, file name has %s.\n' "${m}" "${rev1}" "${rev2}" >&2
     fi
 done
-exit $error
+
+exit "${exit_code}"

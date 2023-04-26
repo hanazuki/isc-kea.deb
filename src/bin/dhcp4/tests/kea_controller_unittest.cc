@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -230,10 +230,10 @@ public:
     void runTimersWithTimeout(const IOServicePtr& io_service, const long timeout_ms,
                               std::function<bool()> cond = std::function<bool()>()) {
         IntervalTimer timer(*io_service);
-        bool stopped = false;
+        std::atomic<bool> stopped(false);
         timer.setup([&io_service, &stopped]() {
-            io_service->stop();
             stopped = true;
+            io_service->stop();
         }, timeout_ms, IntervalTimer::ONE_SHOT);
 
         // Run as long as the timeout hasn't occurred and the interrupting
@@ -721,7 +721,7 @@ TEST_F(JSONFileBackendTest, configBroken) {
     string config_empty = "";
 
     // This config does not have mandatory Dhcp4 element
-    string config_v4 = "{ \"Dhcp6\": { \"interfaces\": [ \"*\" ],"
+    string config_v6 = "{ \"Dhcp6\": { \"interfaces\": [ \"*\" ],"
         "\"preferred-lifetime\": 3000,"
         "\"rebind-timer\": 2000, "
         "\"renew-timer\": 1000, "
@@ -747,7 +747,7 @@ TEST_F(JSONFileBackendTest, configBroken) {
     EXPECT_THROW(srv->init(TEST_FILE), BadValue);
 
     // Now try to load a config that does not have Dhcp4 component.
-    writeFile(TEST_FILE, config_v4);
+    writeFile(TEST_FILE, config_v6);
     EXPECT_THROW(srv->init(TEST_FILE), BadValue);
 
     // Now try to load a config with Dhcp4 full of nonsense.

@@ -1,4 +1,4 @@
-// Copyright (C) 2020-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2020-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -32,7 +32,7 @@ public:
     IOSignalSet(asiolink::IOServicePtr io_service, IOSignalHandler handler);
 
     /// @brief Destructor.
-    ~IOSignalSet() = default;
+    ~IOSignalSet();
 
     /// @brief Add a signal to the list of signals to handle.
     ///

@@ -21,8 +21,7 @@ EXTRA_DIST =
 
 CLEANFILES = *.gcno *.gcda
 
-TESTS_ENVIRONMENT = \
-	$(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
+TESTS_ENVIRONMENT = $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 
 TESTS =
 if HAVE_GTEST
@@ -57,8 +56,8 @@ ha_unittests_LDADD += $(top_builddir)/src/lib/dhcp/libkea-dhcp++.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/hooks/libkea-hooks.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/database/libkea-database.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/cc/libkea-cc.la
-ha_unittests_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/asiolink/libkea-asiolink.la
+ha_unittests_LDADD += $(top_builddir)/src/lib/dns/libkea-dns++.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/log/libkea-log.la
 ha_unittests_LDADD += $(top_builddir)/src/lib/util/libkea-util.la

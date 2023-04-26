@@ -53,14 +53,20 @@ extern const isc::log::MessageID DHCP4_DECLINE_LEASE_MISMATCH = "DHCP4_DECLINE_L
 extern const isc::log::MessageID DHCP4_DECLINE_LEASE_NOT_FOUND = "DHCP4_DECLINE_LEASE_NOT_FOUND";
 extern const isc::log::MessageID DHCP4_DEFERRED_OPTION_MISSING = "DHCP4_DEFERRED_OPTION_MISSING";
 extern const isc::log::MessageID DHCP4_DEFERRED_OPTION_UNPACK_FAIL = "DHCP4_DEFERRED_OPTION_UNPACK_FAIL";
+extern const isc::log::MessageID DHCP4_DEPRECATED = "DHCP4_DEPRECATED";
 extern const isc::log::MessageID DHCP4_DEVELOPMENT_VERSION = "DHCP4_DEVELOPMENT_VERSION";
 extern const isc::log::MessageID DHCP4_DHCP4O6_BAD_PACKET = "DHCP4_DHCP4O6_BAD_PACKET";
+extern const isc::log::MessageID DHCP4_DHCP4O6_HOOK_SUBNET4_SELECT_DROP = "DHCP4_DHCP4O6_HOOK_SUBNET4_SELECT_DROP";
+extern const isc::log::MessageID DHCP4_DHCP4O6_HOOK_SUBNET4_SELECT_SKIP = "DHCP4_DHCP4O6_HOOK_SUBNET4_SELECT_SKIP";
 extern const isc::log::MessageID DHCP4_DHCP4O6_PACKET_RECEIVED = "DHCP4_DHCP4O6_PACKET_RECEIVED";
 extern const isc::log::MessageID DHCP4_DHCP4O6_PACKET_SEND = "DHCP4_DHCP4O6_PACKET_SEND";
 extern const isc::log::MessageID DHCP4_DHCP4O6_PACKET_SEND_FAIL = "DHCP4_DHCP4O6_PACKET_SEND_FAIL";
 extern const isc::log::MessageID DHCP4_DHCP4O6_RECEIVE_FAIL = "DHCP4_DHCP4O6_RECEIVE_FAIL";
 extern const isc::log::MessageID DHCP4_DHCP4O6_RECEIVING = "DHCP4_DHCP4O6_RECEIVING";
 extern const isc::log::MessageID DHCP4_DHCP4O6_RESPONSE_DATA = "DHCP4_DHCP4O6_RESPONSE_DATA";
+extern const isc::log::MessageID DHCP4_DHCP4O6_SUBNET_DATA = "DHCP4_DHCP4O6_SUBNET_DATA";
+extern const isc::log::MessageID DHCP4_DHCP4O6_SUBNET_SELECTED = "DHCP4_DHCP4O6_SUBNET_SELECTED";
+extern const isc::log::MessageID DHCP4_DHCP4O6_SUBNET_SELECTION_FAILED = "DHCP4_DHCP4O6_SUBNET_SELECTION_FAILED";
 extern const isc::log::MessageID DHCP4_DYNAMIC_RECONFIGURATION = "DHCP4_DYNAMIC_RECONFIGURATION";
 extern const isc::log::MessageID DHCP4_DYNAMIC_RECONFIGURATION_FAIL = "DHCP4_DYNAMIC_RECONFIGURATION_FAIL";
 extern const isc::log::MessageID DHCP4_DYNAMIC_RECONFIGURATION_SUCCESS = "DHCP4_DYNAMIC_RECONFIGURATION_SUCCESS";
@@ -135,7 +141,9 @@ extern const isc::log::MessageID DHCP4_POST_ALLOCATION_NAME_UPDATE_FAIL = "DHCP4
 extern const isc::log::MessageID DHCP4_QUERY_DATA = "DHCP4_QUERY_DATA";
 extern const isc::log::MessageID DHCP4_RECLAIM_EXPIRED_LEASES_FAIL = "DHCP4_RECLAIM_EXPIRED_LEASES_FAIL";
 extern const isc::log::MessageID DHCP4_RELEASE = "DHCP4_RELEASE";
+extern const isc::log::MessageID DHCP4_RELEASE_DELETED = "DHCP4_RELEASE_DELETED";
 extern const isc::log::MessageID DHCP4_RELEASE_EXCEPTION = "DHCP4_RELEASE_EXCEPTION";
+extern const isc::log::MessageID DHCP4_RELEASE_EXPIRED = "DHCP4_RELEASE_EXPIRED";
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL = "DHCP4_RELEASE_FAIL";
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL_NO_LEASE = "DHCP4_RELEASE_FAIL_NO_LEASE";
 extern const isc::log::MessageID DHCP4_RELEASE_FAIL_WRONG_CLIENT = "DHCP4_RELEASE_FAIL_WRONG_CLIENT";
@@ -215,14 +223,20 @@ const char* values[] = {
     "DHCP4_DECLINE_LEASE_NOT_FOUND", "Received DHCPDECLINE for addr %1 from client %2, but no such lease found.",
     "DHCP4_DEFERRED_OPTION_MISSING", "can find deferred option code %1 in the query",
     "DHCP4_DEFERRED_OPTION_UNPACK_FAIL", "An error unpacking the deferred option %1: %2",
+    "DHCP4_DEPRECATED", "The following mechanism is now deprecated and will be removed in the future: %1",
     "DHCP4_DEVELOPMENT_VERSION", "This software is a development branch of Kea. It is not recommended for production use.",
     "DHCP4_DHCP4O6_BAD_PACKET", "received malformed DHCPv4o6 packet: %1",
+    "DHCP4_DHCP4O6_HOOK_SUBNET4_SELECT_DROP", "%1: packet was dropped, because a callout set the next step to 'drop'",
+    "DHCP4_DHCP4O6_HOOK_SUBNET4_SELECT_SKIP", "%1: no subnet was selected, because a callout set the next skip flag",
     "DHCP4_DHCP4O6_PACKET_RECEIVED", "received DHCPv4o6 packet from DHCPv4 server (type %1) for %2 on interface %3",
     "DHCP4_DHCP4O6_PACKET_SEND", "%1: trying to send packet %2 (type %3) to %4 port %5 on interface %6 encapsulating %7: %8 (type %9)",
     "DHCP4_DHCP4O6_PACKET_SEND_FAIL", "%1: failed to send DHCPv4o6 packet: %2",
     "DHCP4_DHCP4O6_RECEIVE_FAIL", "failed to receive DHCPv4o6: %1",
     "DHCP4_DHCP4O6_RECEIVING", "receiving DHCPv4o6 packet from DHCPv6 server",
     "DHCP4_DHCP4O6_RESPONSE_DATA", "%1: responding with packet %2 (type %3), packet details: %4",
+    "DHCP4_DHCP4O6_SUBNET_DATA", "%1: the selected subnet details: %2",
+    "DHCP4_DHCP4O6_SUBNET_SELECTED", "%1: the subnet with ID %2 was selected for client assignments",
+    "DHCP4_DHCP4O6_SUBNET_SELECTION_FAILED", "%1: failed to select subnet for the client",
     "DHCP4_DYNAMIC_RECONFIGURATION", "initiate server reconfiguration using file: %1, after receiving SIGHUP signal or config-reload command",
     "DHCP4_DYNAMIC_RECONFIGURATION_FAIL", "dynamic server reconfiguration failed with file: %1",
     "DHCP4_DYNAMIC_RECONFIGURATION_SUCCESS", "dynamic server reconfiguration succeeded with file: %1",
@@ -297,7 +311,9 @@ const char* values[] = {
     "DHCP4_QUERY_DATA", "%1, packet details: %2",
     "DHCP4_RECLAIM_EXPIRED_LEASES_FAIL", "failed to reclaim expired leases: %1",
     "DHCP4_RELEASE", "%1: address %2 was released properly.",
+    "DHCP4_RELEASE_DELETED", "%1: address %2 was deleted on release.",
     "DHCP4_RELEASE_EXCEPTION", "%1: while trying to release address %2 an exception occurred: %3",
+    "DHCP4_RELEASE_EXPIRED", "%1: address %2 expired on release.",
     "DHCP4_RELEASE_FAIL", "%1: failed to remove lease for address %2",
     "DHCP4_RELEASE_FAIL_NO_LEASE", "%1: client is trying to release non-existing lease %2",
     "DHCP4_RELEASE_FAIL_WRONG_CLIENT", "%1: client is trying to release the lease %2 which belongs to a different client",

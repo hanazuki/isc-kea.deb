@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -718,7 +718,6 @@ int
 StatCmds::statLease4GetHandler(CalloutHandle& handle) {
     try {
         LeaseStatCmdsImpl impl;
-        MultiThreadingCriticalSection cs;
         return (impl.statLease4GetHandler(handle));
     } catch (const std::exception& ex) {
 
@@ -732,7 +731,6 @@ int
 StatCmds::statLease6GetHandler(CalloutHandle& handle) {
     try {
         LeaseStatCmdsImpl impl;
-        MultiThreadingCriticalSection cs;
         return (impl.statLease6GetHandler(handle));
     } catch (const std::exception& ex) {
 

@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -19,7 +19,7 @@
 #include <dhcpsrv/lease_file_loader.h>
 #include <log/logger_manager.h>
 #include <log/logger_name.h>
-#include <cfgrpt/config_report.h>
+#include <process/cfgrpt/config_report.h>
 
 #include <iostream>
 #include <sstream>
@@ -39,9 +39,6 @@ const uint32_t MAX_LEASE_ERRORS = 100;
 
 namespace isc {
 namespace lfc {
-
-// Refer to config_report so it will be embedded in the binary
-const char* const* lfc_config_report = isc::detail::config_report;
 
 /// @brief Defines the application name, it may be used to locate
 /// configuration data and appears in log statements.

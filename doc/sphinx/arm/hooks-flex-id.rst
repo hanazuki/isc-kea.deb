@@ -36,8 +36,8 @@ be host reservations that are tied to specific values of the flexible
 identifier.
 
 The library can be loaded similarly to other hook libraries. It
-takes a mandatory parameter ``identifier-expression`` and an optional boolean
-parameter ``replace-client-id``:
+takes a mandatory parameter ``identifier-expression`` and some optional boolean
+parameters like ``replace-client-id`` and ``ignore-iaid``:
 
 ::
 
@@ -47,7 +47,8 @@ parameter ``replace-client-id``:
                "library": "/path/libdhcp_flex_id.so",
                "parameters": {
                    "identifier-expression": "expression",
-                   "replace-client-id": false
+                   "replace-client-id": false,
+                   "ignore-iaid": false
                }
            },
            ...
@@ -129,6 +130,9 @@ for non-printable characters and do not require the use of the
            ...
        ]
    }
+
+The ``replace-client-id`` Flag
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 When ``replace-client-id`` is set to ``false`` (which is the default setting),
 the ``flex-id`` hook library uses the evaluated flexible identifier solely for
@@ -223,3 +227,29 @@ In DHCPv6, the corresponding query looks something like this:
            "subnet-id": 10
        }
    }
+
+The ``ignore-iaid`` Flag
+~~~~~~~~~~~~~~~~~~~~~~~~
+
+When ``ignore-iaid`` is set to ``true`` (default value is ``false``), the
+``flex-id`` hooks library will make the Kea DHCPv6 server ignore IAID value
+from incoming IPv6 packets. This parameter is ignored by the Kea DHCPv4 server.
+
+If the packet contains only one IA_NA, the IAID value will be changed to ``0``
+and stored as such in the lease storage. Similarly if the packet contains only
+one IA_PD, the IAID value will be changed to ``0`` and stored as such in the
+lease storage. The IAID is restored to its initial value in the response back
+to the client. The change is visible in the identifier expression if the IAID is
+part of the expression.
+
+.. note::
+
+   To avoid lease conflicts, if the incoming packet contains more than one
+   IA_NA, the IAID value will not be changed on any of the IA_NAs. Similarly,
+   if the incoming packet contains more than one IA_PD, the IAID value will not
+   be changed on any of the IA_PDs.
+
+.. warning::
+
+   This functionality breaks RFC compliance and should be enabled only if
+   required. When enabled, a warning message is issued at configure time.

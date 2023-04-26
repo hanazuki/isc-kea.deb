@@ -141,7 +141,7 @@ form:
 ::
 
    {
-       "result": 0|1|2|3,
+       "result": 0|1|2|3|4,
        "text": "textual description",
        "arguments": {
            "argument1": "value1",
@@ -150,16 +150,30 @@ form:
        }
    }
 
-``result`` indicates the outcome of the command. A value of 0 means
-success, while any non-zero value designates an error or a failure to
-complete the requested action. Currently 1 indicates a generic error, 2
-means that a command is not supported, and 3 means that the requested
-operation was completed, but the requested object was not found. For
-example, a well-formed command that requests a subnet that exists in a
-server's configuration returns the result 0. If the server encounters an
-error condition, it returns 1. If the command asks for the IPv6 subnet,
+``result`` value is a status code indicating a result of the command. The
+following general status codes are currently supported:
+
+-  ``0`` - the command has been processed successfully.
+-  ``1`` - a general error or failure has occurred during the command processing.
+-  ``2`` - specified command is unsupported by the server receiving it.
+-  ``3`` - the requested operation has been completed but the requested
+   resource was not found. This status code is returned when a command
+   returns no resources or affects no resources.
+-  ``4`` - the well-formed command has been processed but the requested
+   changes could not be applied because they were in conflict with the
+   server state or its notion of the configuration.
+
+For example, a well-formed command that requests a subnet that exists
+in a server's configuration returns the result 0. If the server encounters
+an error condition, it returns 1. If the command asks for the IPv6 subnet,
 but was sent to a DHCPv4 server, it returns 2. If the query asks for a
-``subnet-id`` and there is no subnet with such an ID, the result is 3.
+subnet with ``subnet-id`` that matches no subnets, the result is 3.
+If the command attempts to update a lease but the specified ``subnet-id``
+does not match the identifier in the server's configuration, the result
+is 4.
+
+Hook libraries can sometimes return some additional status codes specific
+to their use cases.
 
 The ``text`` field typically appears when the result is non-zero and
 contains a description of the error encountered, but it often also
@@ -204,7 +218,7 @@ to one service would be structured as follows:
 
     [
         {
-            "result": 0|1|2|3,
+            "result": 0|1|2|3|4,
             "text": "textual description",
             "arguments": {
                 "argument1": "value1",
@@ -221,7 +235,7 @@ contain responses from each service, in the order they were requested:
 
     [
         {
-            "result": 0|1|2|3,
+            "result": 0|1|2|3|4,
             "text": "textual description",
             "arguments": {
                 "argument1": "value1",
@@ -229,7 +243,7 @@ contain responses from each service, in the order they were requested:
             ...
         },
         {
-            "result": 0|1|2|3,
+            "result": 0|1|2|3|4,
             "text": "textual description",
             "arguments": {
                 "argument1": "value1",
@@ -240,7 +254,7 @@ contain responses from each service, in the order they were requested:
     ]
 
 An exception to this are authentication or authorization errors which cause CA
-to reject the entirely.  The response to such an error will be formatted
+to reject the command entirely.  The response to such an error will be formatted
 as a single entry (JSON map) as follows:
 
 ::
@@ -398,7 +412,7 @@ time. The structure of the command is as follows:
        "arguments":  {
            "<server>": {
            }
-        }
+       }
    }
 
 where <server> is the configuration element name for a given server, such
@@ -412,7 +426,7 @@ as "Dhcp4" or "Dhcp6". For example:
            "Dhcp6": {
                :
            }
-        }
+       }
    }
 
 The server's response contains a numeric code, ``result`` (0 for
@@ -480,6 +494,8 @@ information about the processing of expired leases (lease reclamation).
 The ``libreload`` Command
 -------------------------
 
+This command is now deprecated and will be removed in future Kea versions.
+
 The ``libreload`` command first unloads and then loads all currently
 loaded hook libraries. This is primarily intended to allow one or more
 hook libraries to be replaced with newer versions, without requiring Kea
@@ -537,7 +553,7 @@ configuration. The structure of the command is as follows:
        "arguments":  {
            "<server>": {
            }
-        }
+       }
    }
 
 where <server> is the configuration element name for a given server, such
@@ -551,7 +567,7 @@ as "Dhcp4" or "Dhcp6". For example:
            "Dhcp6": {
                :
            }
-        }
+       }
    }
 
 If the new configuration proves to be invalid, the server retains its

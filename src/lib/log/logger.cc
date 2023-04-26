@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -202,6 +202,11 @@ Logger::fatal(const isc::log::MessageID& ident) {
 void
 Logger::setInterprocessSync(isc::log::interprocess::InterprocessSync* sync) {
     getLoggerPtr()->setInterprocessSync(sync);
+}
+
+bool
+Logger::hasAppender(OutputOption::Destination const destination) {
+    return getLoggerPtr()->hasAppender(destination);
 }
 
 // Comparison (testing only)

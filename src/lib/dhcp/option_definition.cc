@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -669,8 +669,12 @@ OptionDefinition::writeToBuffer(Option::Universe u,
         return;
     case OPT_TUPLE_TYPE:
     {
-        OpaqueDataTuple::LengthFieldType lft = u == Option::V4 ?
-            OpaqueDataTuple::LENGTH_1_BYTE : OpaqueDataTuple::LENGTH_2_BYTES;
+        // In case of V4_SZTP_REDIRECT option #143, bootstrap-server-list is formatted
+        // as a list of tuples "uri-length;URI" where uri-length is coded on 2 octets,
+        // which is not typical for V4 Universe.
+        OpaqueDataTuple::LengthFieldType lft = getCode() == DHO_V4_SZTP_REDIRECT
+                                                   ? OpaqueDataTuple::LENGTH_2_BYTES
+                                                   : OptionDataTypeUtil::getTupleLenFieldType(u);
         OptionDataTypeUtil::writeTuple(value, lft, buf);
         return;
     }
@@ -767,6 +771,18 @@ OptionDefinition::factoryOpaqueDataTuples(Option::Universe u,
                                           OptionBufferConstIter end) {
     boost::shared_ptr<OptionOpaqueDataTuples>
         option(new OptionOpaqueDataTuples(u, type, begin, end));
+
+    return (option);
+}
+
+OptionPtr
+OptionDefinition::factoryOpaqueDataTuples(Option::Universe u,
+                                          uint16_t type,
+                                          OptionBufferConstIter begin,
+                                          OptionBufferConstIter end,
+                                          OpaqueDataTuple::LengthFieldType length_field_type) {
+    boost::shared_ptr<OptionOpaqueDataTuples>
+        option(new OptionOpaqueDataTuples(u, type, begin, end, length_field_type));
 
     return (option);
 }
@@ -872,6 +888,11 @@ OptionDefinition::factorySpecialFormatOption(Option::Universe u,
             // Type uint32.
             // Vendor-Specific Information (option code 125).
             return (OptionPtr(new OptionVendor(Option::V4, begin, end)));
+
+        case DHO_V4_SZTP_REDIRECT:
+            // Array of tuples.
+            // DHCPv4 SZTP Redirect Option (option code 143).
+            return (factoryOpaqueDataTuples(Option::V4, getCode(), begin, end, OpaqueDataTuple::LENGTH_2_BYTES));
 
         default:
             break;

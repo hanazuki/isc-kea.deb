@@ -141,6 +141,7 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                  | ddns_qualifying_suffix
                  | ddns_update_on_renew
                  | ddns_use_conflict_resolution
+                 | ddns_ttl_percent
                  | store_extended_info
                  | statistic_default_sample_count
                  | statistic_default_sample_age
@@ -150,6 +151,8 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                  | reservations_lookup_first
                  | compatibility
                  | parked_packet_limit
+                 | allocator
+                 | offer_lifetime
                  | unknown_map_entry
 
      valid_lifetime ::= "valid-lifetime" ":" INTEGER
@@ -177,6 +180,8 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
      server_tag ::= "server-tag" ":" STRING
 
      parked_packet_limit ::= "parked-packet-limit" ":" INTEGER
+
+     allocator ::= "allocator" ":" STRING
 
      echo_client_id ::= "echo-client-id" ":" BOOLEAN
 
@@ -206,6 +211,8 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
 
      ddns_use_conflict_resolution ::= "ddns-use-conflict-resolution" ":" BOOLEAN
 
+     ddns_ttl_percent ::= "ddns-ttl-percent" ":" FLOAT
+
      hostname_char_set ::= "hostname-char-set" ":" STRING
 
      hostname_char_replacement ::= "hostname-char-replacement" ":" STRING
@@ -221,6 +228,8 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
      ip_reservations_unique ::= "ip-reservations-unique" ":" BOOLEAN
 
      reservations_lookup_first ::= "reservations-lookup-first" ":" BOOLEAN
+
+     offer_lifetime ::= "offer-lifetime" ":" INTEGER
 
      interfaces_config ::= "interfaces-config" ":" "{" interfaces_config_params "}"
 
@@ -270,8 +279,11 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                          | sanity_checks_params ","
 
      sanity_checks_param ::= lease_checks
+                        | extended_info_checks
 
      lease_checks ::= "lease-checks" ":" STRING
+
+     extended_info_checks ::= "extended-info-checks" ":" STRING
 
      hosts_database ::= "hosts-database" ":" "{" database_map_params "}"
 
@@ -300,6 +312,9 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                        | lfc_interval
                        | readonly
                        | connect_timeout
+                       | read_timeout
+                       | write_timeout
+                       | tcp_user_timeout
                        | max_reconnect_tries
                        | reconnect_wait_time
                        | on_fail
@@ -333,6 +348,12 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
      readonly ::= "readonly" ":" BOOLEAN
 
      connect_timeout ::= "connect-timeout" ":" INTEGER
+
+     read_timeout ::= "read-timeout" ":" INTEGER
+
+     write_timeout ::= "write-timeout" ":" INTEGER
+
+     tcp_user_timeout ::= "tcp-user-timeout" ":" INTEGER
 
      max_reconnect_tries ::= "max-reconnect-tries" ":" INTEGER
 
@@ -503,9 +524,12 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                   | ddns_qualifying_suffix
                   | ddns_update_on_renew
                   | ddns_use_conflict_resolution
+                  | ddns_ttl_percent
                   | hostname_char_set
                   | hostname_char_replacement
                   | store_extended_info
+                  | allocator
+                  | offer_lifetime
                   | unknown_map_entry
 
      subnet ::= "subnet" ":" STRING
@@ -588,9 +612,12 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                          | ddns_qualifying_suffix
                          | ddns_update_on_renew
                          | ddns_use_conflict_resolution
+                         | ddns_ttl_percent
                          | hostname_char_set
                          | hostname_char_replacement
                          | store_extended_info
+                         | allocator
+                         | offer_lifetime
                          | unknown_map_entry
 
      option_def_list ::= "option-def" ":" "[" option_def_list_content "]"
@@ -670,6 +697,7 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                       | option_data_space
                       | option_data_csv_format
                       | option_data_always_send
+                      | option_data_never_send
                       | user_context
                       | comment
                       | unknown_map_entry
@@ -685,6 +713,8 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
      option_data_csv_format ::= "csv-format" ":" BOOLEAN
 
      option_data_always_send ::= "always-send" ":" BOOLEAN
+
+     option_data_never_send ::= "never-send" ":" BOOLEAN
 
      pools_list ::= "pools" ":" "[" pools_list_content "]"
 
@@ -799,6 +829,7 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
 
      client_class_param ::= client_class_name
                        | client_class_test
+                       | client_class_template_test
                        | only_if_required
                        | option_def_list
                        | option_data_list
@@ -811,10 +842,13 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                        | valid_lifetime
                        | min_valid_lifetime
                        | max_valid_lifetime
+                       | offer_lifetime
 
      client_class_name ::= name
 
      client_class_test ::= "test" ":" STRING
+
+     client_class_template_test ::= "template-test" ":" STRING
 
      only_if_required ::= "only-if-required" ":" BOOLEAN
 
@@ -991,7 +1025,16 @@ This grammar is generated from ``dhcp4_parser.yy``. See :ref:`dhcp4` for more de
                          | compatibility_params ","
 
      compatibility_param ::= lenient_option_parsing
+                        | ignore_dhcp_server_identifier
+                        | ignore_rai_link_selection
+                        | exclude_first_last_24
                         | unknown_map_entry
 
      lenient_option_parsing ::= "lenient-option-parsing" ":" BOOLEAN
+
+     ignore_dhcp_server_identifier ::= "ignore-dhcp-server-identifier" ":" BOOLEAN
+
+     ignore_rai_link_selection ::= "ignore-rai-link-selection" ":" BOOLEAN
+
+     exclude_first_last_24 ::= "exclude-first-last-24" ":" BOOLEAN
 

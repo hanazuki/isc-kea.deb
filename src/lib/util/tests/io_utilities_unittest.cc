@@ -1,4 +1,4 @@
-// Copyright (C) 2011-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2011-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -42,7 +42,7 @@ TEST(asioutil, readUint16) {
 }
 
 TEST(asioutil, readUint16OutOfRange) {
-    uint8_t data;
+    uint8_t data = 0;
     EXPECT_THROW(readUint16(&data, sizeof(data)), isc::OutOfRange);
 }
 
@@ -87,7 +87,7 @@ const static uint32_t test32[] = {
 };
 
 TEST(asioutil, readUint32) {
-    uint8_t data[8];
+    uint8_t data[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
     // make sure that we can read data, regardless of
     // the memory alignment. That' why we need to repeat
@@ -103,7 +103,7 @@ TEST(asioutil, readUint32) {
 }
 
 TEST(asioutil, readUint32OutOfRange) {
-    uint8_t data[3];
+    uint8_t data[3] = {0, 0, 0};
     EXPECT_THROW(readUint32(data, sizeof(data)), isc::OutOfRange);
 }
 

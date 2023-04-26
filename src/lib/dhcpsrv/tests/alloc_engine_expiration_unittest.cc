@@ -1,4 +1,4 @@
-// Copyright (C) 2015-2020 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -24,6 +24,7 @@
 using namespace std;
 using namespace isc;
 using namespace isc::asiolink;
+using namespace isc::data;
 using namespace isc::dhcp;
 using namespace isc::dhcp::test;
 using namespace isc::dhcp_ddns;
@@ -187,8 +188,7 @@ public:
         LeaseMgrFactory::create(lease_mgr_params);
 
         // Create allocation engine instance.
-        engine_.reset(new AllocEngine(AllocEngine::ALLOC_ITERATIVE,
-                                      100, true));
+        engine_.reset(new AllocEngine(100));
     }
 
     /// @brief Destructor
@@ -426,7 +426,7 @@ public:
     static bool leaseReclaimed(const LeasePtrType& lease) {
         return (lease && lease->stateExpiredReclaimed() &&
                 lease->hostname_.empty() && !lease->fqdn_fwd_ &&
-                !lease->fqdn_rev_);
+                !lease->fqdn_rev_ && !lease->getContext());
     }
 
     /// @brief Lease algorithm checking if lease state is Declined.
@@ -1279,6 +1279,9 @@ ExpirationAllocEngine6Test::createLeases() {
         Lease6Ptr lease(new Lease6(Lease::TYPE_NA, address, duid, 1, 50, 60,
                                    SubnetID(1), true, true,
                                    generateHostnameForLeaseIndex(i)));
+        ElementPtr user_context = Element::createMap();
+        user_context->set("index", Element::create(static_cast<int>(i)));
+        lease->setContext(user_context);
         leases_.push_back(lease);
         // Copy the lease before adding it to the lease manager. We want to
         // make sure that modifications to the leases held in the leases_
@@ -1841,6 +1844,9 @@ ExpirationAllocEngine4Test::createLeases() {
         Lease4Ptr lease(new Lease4(address, hwaddr, ClientIdPtr(), 60,
                                    time(NULL), SubnetID(1), true, true,
                                    generateHostnameForLeaseIndex(i)));
+        ElementPtr user_context = Element::createMap();
+        user_context->set("index", Element::create(static_cast<int>(i)));
+        lease->setContext(user_context);
         leases_.push_back(lease);
         // Copy the lease before adding it to the lease manager. We want to
         // make sure that modifications to the leases held in the leases_
@@ -2320,4 +2326,4 @@ TEST_F(ExpirationAllocEngine4Test, reclaimDeclinedHook2) {
     testReclaimDeclinedHook(true); // true = use skip callout
 }
 
-}; // end of anonymous namespace
+} // end of anonymous namespace

@@ -129,8 +129,14 @@
 /* MySQL is present */
 #undef HAVE_MYSQL
 
+/* MySQL has mysql_get_option defined. */
+#undef HAVE_MYSQL_GET_OPTION
+
 /* MySQL uses my_bool */
 #undef HAVE_MYSQL_MY_BOOL
+
+/* NETCONF capabilities enabled */
+#undef HAVE_NETCONF
 
 /* Check for optreset? */
 #undef HAVE_OPTRESET
@@ -140,6 +146,9 @@
 
 /* PostgreSQL was built with OpenSSL support */
 #undef HAVE_PGSQL_SSL
+
+/* PostgreSQL connection parameter tcp_user_timeout supported */
+#undef HAVE_PGSQL_TCP_USER_TIMEOUT
 
 /* Define to 1 if you have the `pselect' function. */
 #undef HAVE_PSELECT
@@ -165,9 +174,6 @@
 
 /* Define to 1 if you have the <string.h> header file. */
 #undef HAVE_STRING_H
-
-/* Using sysrepo 1.x */
-#undef HAVE_SYSREPO_V1
 
 /* Define to 1 if you have the <sys/devpoll.h> header file. */
 #undef HAVE_SYS_DEVPOLL_H
@@ -201,6 +207,9 @@
 
 /* Define to 1 if libc is musl */
 #undef LIBC_MUSL
+
+/* libyang version */
+#undef LIBYANG_VERSION
 
 /* Explicit initialization of log4cplus possible */
 #undef LOG4CPLUS_INITIALIZER_H
@@ -252,6 +261,9 @@
 
 /* Define to 1 if you have the ANSI C header files. */
 #undef STDC_HEADERS
+
+/* sysrepo version */
+#undef SYSREPO_VERSION
 
 /* Define to 1 if C++11 regex is usable */
 #undef USE_REGEX

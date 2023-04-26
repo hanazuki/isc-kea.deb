@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2021-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -496,6 +496,7 @@ public:
     /// - formatted_value,
     /// - space,
     /// - persistent,
+    /// - cancelled,
     /// - dhcp4_subnet_id/dhcp6_subnet_id,
     /// - scope_id,
     /// - user_context,

@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -98,6 +98,10 @@ public:
     /// for logging.
     void logFormatClockSkewTest();
 
+    /// @brief This test verifies that too many rejected lease updates cause
+    /// the service termination.
+    void rejectedLeaseUpdatesTerminateTest();
+
     /// @brief Tests that the communication state report is correct.
     void getReportTest();
 
@@ -110,6 +114,32 @@ public:
     /// @brief Tests that unsent updates count from partner can be set and
     /// a difference from previous value detected.
     void hasPartnerNewUnsentUpdatesTest();
+
+    /// @brief Test that gathering rejected leases works fine in DHCPv4 case.
+    void reportRejectedLeasesV4Test();
+
+    /// @brief Test that rejected leases are cleared after reporting respective
+    /// successful leases.
+    void reportSuccessfulLeasesV4Test();
+
+    /// @brief Test that invalid values are not accepted when reporting
+    /// rejected leases.
+    void reportRejectedLeasesV4InvalidValuesTest();
+
+    /// @brief Test that gathering rejected leases works fine in the DHCPv6 case.
+    void reportRejectedLeasesV6Test();
+
+    /// @brief Test that rejected leases are cleared after reporting respective
+    /// successful leases.
+    void reportSuccessfulLeasesV6Test();
+
+    /// @brief Test that invalid values are not accepted when reporting
+    /// rejected leases.
+    void reportRejectedLeasesV6InvalidValuesTest();
+
+    /// @brief Test that old rejected lease updates are discarded while
+    /// getting the rejected lease updates count.
+    void getRejectedLeaseUpdatesCountFromContainerTest();
 
     /// @brief Returns test heartbeat implementation.
     ///
@@ -585,6 +615,19 @@ CommunicationStateTest::logFormatClockSkewTest() {
     EXPECT_EQ(expected, log);
 }
 
+void
+CommunicationStateTest::rejectedLeaseUpdatesTerminateTest() {
+    EXPECT_FALSE(state_.rejectedLeaseUpdatesShouldTerminate());
+    // Reject several lease updates but do not exceed the limit.
+    for (auto i = 0; i < 9; ++i) {
+        ASSERT_NO_THROW(state_.reportRejectedLeaseUpdate(createMessage4(DHCPDISCOVER, i, i, 0)));
+    }
+    EXPECT_FALSE(state_.rejectedLeaseUpdatesShouldTerminate());
+    // Add one more. It should exceed the limit.
+    ASSERT_NO_THROW(state_.reportRejectedLeaseUpdate(createMessage4(DHCPDISCOVER, 9, 9, 0)));
+    EXPECT_TRUE(state_.rejectedLeaseUpdatesShouldTerminate());
+}
+
 // Tests that the communication state report is correct.
 void
 CommunicationStateTest::getReportTest() {
@@ -686,6 +729,200 @@ CommunicationStateTest::hasPartnerNewUnsentUpdatesTest() {
     EXPECT_FALSE(state_.hasPartnerNewUnsentUpdates());
 }
 
+void
+CommunicationStateTest::reportRejectedLeasesV4Test() {
+    // Initially, there should be no rejected leases.
+    EXPECT_EQ(0, state_.getRejectedLeaseUpdatesCount());
+
+    // Reject lease update.
+    auto msg = createMessage4(DHCPREQUEST, 1, 0, 0);
+    state_.reportRejectedLeaseUpdate(msg);
+    EXPECT_EQ(1, state_.getRejectedLeaseUpdatesCount());
+
+    // Reject another lease update.
+    msg = createMessage4(DHCPREQUEST, 2, 0, 0);
+    state_.reportRejectedLeaseUpdate(msg);
+    EXPECT_EQ(2, state_.getRejectedLeaseUpdatesCount());
+
+    // Reject a lease with a short (zero) lease lifetime.
+    // This lease should be discarded when we call the
+    // getRejectedLeaseUpdatesCount().
+    msg = createMessage4(DHCPREQUEST, 3, 0, 0);
+    state_.reportRejectedLeaseUpdate(msg, 0);
+    EXPECT_EQ(2, state_.getRejectedLeaseUpdatesCount());
+
+    // Reject lease update for a client using the same MAC
+    // address but different client identifier. It should
+    // be treated as a different lease.
+    msg = createMessage4(DHCPREQUEST, 2, 1, 0);
+    state_.reportRejectedLeaseUpdate(msg);
+    EXPECT_EQ(3, state_.getRejectedLeaseUpdatesCount());
+
+    // Clear rejected leases and make sure the counter
+    // is now 0.
+    state_.clearRejectedLeaseUpdates();
+    EXPECT_EQ(0, state_.getRejectedLeaseUpdatesCount());
+}
+
+void
+CommunicationStateTest::reportSuccessfulLeasesV4Test() {
+    // Initially, there should be no rejected leases.
+    EXPECT_EQ(0, state_.getRejectedLeaseUpdatesCount());
+    auto msg0 = createMessage4(DHCPREQUEST, 1, 0, 0);
+    // Reject lease update.
+    state_.reportRejectedLeaseUpdate(msg0);
+    EXPECT_EQ(1, state_.getRejectedLeaseUpdatesCount());
+    // Reject another lease update.
+    auto msg1 = createMessage4(DHCPREQUEST, 2, 0, 0);
+    state_.reportRejectedLeaseUpdate(msg1);
+    EXPECT_EQ(2, state_.getRejectedLeaseUpdatesCount());
+    // Report successful lease for the first message.
+    // It should reduce the number of rejected lease
+    // updates.
+    EXPECT_TRUE(state_.reportSuccessfulLeaseUpdate(msg0));
+    EXPECT_EQ(1, state_.getRejectedLeaseUpdatesCount());
+    // Report successful lease update for another message.
+    auto msg2 = createMessage4(DHCPREQUEST, 1, 1, 0);
+    EXPECT_FALSE(state_.reportSuccessfulLeaseUpdate(msg2));
+    EXPECT_EQ(1, state_.getRejectedLeaseUpdatesCount());
+    // There should be no rejected lease updates.
+    EXPECT_TRUE(state_.reportSuccessfulLeaseUpdate(msg1));
+    EXPECT_EQ(0, state_.getRejectedLeaseUpdatesCount());
+}
+
+void
+CommunicationStateTest::reportRejectedLeasesV4InvalidValuesTest() {
+    // Populate one valid update. Without it our functions under test
+    // would return early.
+    state_.reportRejectedLeaseUpdate(createMessage4(DHCPREQUEST, 1, 0, 0));
+    // Using DHCPv6 message in the DHCPv4 context is a programming
+    // error and deserves an exception.
+    auto msg = createMessage6(DHCPV6_REQUEST, 1, 0);
+    EXPECT_THROW(state_.reportRejectedLeaseUpdate(msg), BadValue);
+    EXPECT_THROW(state_.reportSuccessfulLeaseUpdate(msg), BadValue);
+}
+
+void
+CommunicationStateTest::reportRejectedLeasesV6Test() {
+    // Initially, there should be no rejected leases.
+    EXPECT_EQ(0, state6_.getRejectedLeaseUpdatesCount());
+
+    // Reject lease update.
+    auto msg = createMessage6(DHCPV6_REQUEST, 1, 0);
+    state6_.reportRejectedLeaseUpdate(msg);
+    EXPECT_EQ(1, state6_.getRejectedLeaseUpdatesCount());
+
+    // Reject another lease update.
+    msg = createMessage6(DHCPV6_REQUEST, 2, 0);
+    state6_.reportRejectedLeaseUpdate(msg);
+    EXPECT_EQ(2, state6_.getRejectedLeaseUpdatesCount());
+
+    // Reject a lease with a short (zero) lease lifetime.
+    // This lease should be discarded when we call the
+    // getRejectedLeaseUpdatesCount().
+    msg = createMessage6(DHCPV6_REQUEST, 3, 0);
+    state6_.reportRejectedLeaseUpdate(msg, 0);
+    EXPECT_EQ(2, state6_.getRejectedLeaseUpdatesCount());
+
+    // Reject it again. It should not affect the counter.
+    msg = createMessage6(DHCPV6_REQUEST, 2, 0);
+    state6_.reportRejectedLeaseUpdate(msg);
+    EXPECT_EQ(2, state6_.getRejectedLeaseUpdatesCount());
+
+    // Clear rejected lease updates and make sure they
+    // are now 0.
+    state6_.clearRejectedLeaseUpdates();
+    EXPECT_EQ(0, state6_.getRejectedLeaseUpdatesCount());
+}
+
+void
+CommunicationStateTest::reportSuccessfulLeasesV6Test() {
+    // Initially, there should be no rejected leases.
+    EXPECT_EQ(0, state6_.getRejectedLeaseUpdatesCount());
+    // Reject lease update.
+    auto msg0 = createMessage6(DHCPV6_SOLICIT, 1, 0);
+    EXPECT_TRUE(state6_.reportRejectedLeaseUpdate(msg0));
+    EXPECT_EQ(1, state6_.getRejectedLeaseUpdatesCount());
+    // Reject another lease update.
+    auto msg1 = createMessage6(DHCPV6_SOLICIT, 2, 0);
+    EXPECT_TRUE(state6_.reportRejectedLeaseUpdate(msg1));
+    EXPECT_EQ(2, state6_.getRejectedLeaseUpdatesCount());
+    // Report successful lease for the first message.
+    // It should reduce the number of rejected lease
+    // updates.
+    EXPECT_TRUE(state6_.reportSuccessfulLeaseUpdate(msg0));
+    EXPECT_EQ(1, state6_.getRejectedLeaseUpdatesCount());
+    // Report successful lease update for a lease that wasn't
+    // rejected. It should not affect the counter.
+    auto msg2 = createMessage6(DHCPV6_SOLICIT, 3, 0);
+    EXPECT_FALSE(state6_.reportSuccessfulLeaseUpdate(msg2));
+    EXPECT_EQ(1, state6_.getRejectedLeaseUpdatesCount());
+    // Report successful lease update for the last lease.
+    // The counter should now be 0.
+    EXPECT_TRUE(state6_.reportSuccessfulLeaseUpdate(msg1));
+    EXPECT_EQ(0, state6_.getRejectedLeaseUpdatesCount());
+}
+
+void
+CommunicationStateTest::reportRejectedLeasesV6InvalidValuesTest() {
+    // Populate one valid update. Without it our functions under test
+    // would return early.
+    state6_.reportRejectedLeaseUpdate(createMessage6(DHCPV6_REQUEST, 1, 0));
+    // Using DHCPv4 message in the DHCPv6 context is a programming
+    // error and deserves an exception.
+    auto msg0 = createMessage4(DHCPREQUEST, 1, 1, 0);
+    EXPECT_THROW(state6_.reportRejectedLeaseUpdate(msg0), BadValue);
+    EXPECT_THROW(state6_.reportSuccessfulLeaseUpdate(msg0), BadValue);
+
+    auto msg1 = createMessage6(DHCPV6_SOLICIT, 1, 0);
+    msg1->delOption(D6O_CLIENTID);
+    EXPECT_FALSE(state6_.reportRejectedLeaseUpdate(msg1));
+    EXPECT_FALSE(state6_.reportSuccessfulLeaseUpdate(msg1));
+}
+
+void
+CommunicationStateTest::getRejectedLeaseUpdatesCountFromContainerTest() {
+    // Create a simple multi index container with two indexes. The
+    // first index is on the ordinal number to distinguish between
+    // different entries. The second index is on the expire_ field
+    // that is identical to the expire_ field in the RejectedClients4
+    // and RejectedClients6 containers.
+    struct Entry {
+        int64_t ordinal_;
+        int64_t expire_;
+    };
+    typedef boost::multi_index_container<
+        Entry,
+        boost::multi_index::indexed_by<
+            boost::multi_index::ordered_unique<
+                boost::multi_index::member<Entry, int64_t,
+                                           &Entry::ordinal_>
+            >,
+            boost::multi_index::ordered_non_unique<
+                boost::multi_index::member<Entry, int64_t,
+                                           &Entry::expire_>
+            >
+        >
+    > Entries;
+    // Add many entries to the container. Odd entries have lifetime
+    // expiring in the future. Even entries have lifetimes expiring in
+    // the past.
+    Entries entries;
+    for (auto i = 0; i < 1000; i++) {
+        entries.insert({i, time(NULL) + (i % 2 ? 100 + i : -1 - i)});
+    }
+    // Get the count of valid entries. It should remove the expiring
+    // entries.
+    auto valid_entries_count = state_.getRejectedLeaseUpdatesCountFromContainer(entries);
+    EXPECT_EQ(500, valid_entries_count);
+    EXPECT_EQ(500, entries.size());
+
+    // Validate that we removed expired entries, not the valid ones.
+    for (auto entry : entries) {
+        EXPECT_EQ(1, entry.ordinal_ % 2);
+    }
+}
+
 TEST_F(CommunicationStateTest, partnerStateTest) {
     partnerStateTest();
 }
@@ -785,6 +1022,15 @@ TEST_F(CommunicationStateTest, clockSkewTestMultiThreading) {
     clockSkewTest();
 }
 
+TEST_F(CommunicationStateTest, rejectedLeaseUpdatesTerminateTest) {
+    rejectedLeaseUpdatesTerminateTest();
+}
+
+TEST_F(CommunicationStateTest, rejectedLeaseUpdatesTerminateTestMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    rejectedLeaseUpdatesTerminateTest();
+}
+
 TEST_F(CommunicationStateTest, logFormatClockSkewTest) {
     logFormatClockSkewTest();
 }
@@ -828,6 +1074,64 @@ TEST_F(CommunicationStateTest, hasPartnerNewUnsentUpdatesTest) {
 TEST_F(CommunicationStateTest, hasPartnerNewUnsentUpdatesTestMultiThreading) {
     MultiThreadingMgr::instance().setMode(true);
     hasPartnerNewUnsentUpdatesTest();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV4Test) {
+    reportRejectedLeasesV4Test();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV4TestMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    reportRejectedLeasesV4Test();
+}
+
+TEST_F(CommunicationStateTest, reportSuccessfulLeasesV4Test) {
+    reportSuccessfulLeasesV4Test();
+}
+
+TEST_F(CommunicationStateTest, reportSuccessfulLeasesV4TestMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    reportSuccessfulLeasesV4Test();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV4InvalidValuesTest) {
+    reportRejectedLeasesV4InvalidValuesTest();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV4InvalidValuesTestMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    reportRejectedLeasesV4InvalidValuesTest();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV6Test) {
+    reportRejectedLeasesV6Test();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV6TestMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    reportRejectedLeasesV6Test();
+}
+
+TEST_F(CommunicationStateTest, reportSuccessfulLeasesV6Test) {
+    reportSuccessfulLeasesV6Test();
+}
+
+TEST_F(CommunicationStateTest, reportSuccessfulLeasesV6TestMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    reportSuccessfulLeasesV6Test();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV6InvalidValuesTest) {
+    reportRejectedLeasesV6InvalidValuesTest();
+}
+
+TEST_F(CommunicationStateTest, reportRejectedLeasesV6InvalidValuesTestMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    reportRejectedLeasesV6InvalidValuesTest();
+}
+
+TEST_F(CommunicationStateTest, getRejectedLeaseUpdatesCountFromContainerTest) {
+    getRejectedLeaseUpdatesCountFromContainerTest();
 }
 
 }

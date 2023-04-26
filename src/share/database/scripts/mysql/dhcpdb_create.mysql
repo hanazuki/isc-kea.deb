@@ -1,4 +1,4 @@
-# Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+# Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -146,7 +146,8 @@ INSERT INTO lease_hwaddr_source VALUES (32, 'HWADDR_SOURCE_SUBSCRIBER_ID');
 # Hardware address extracted from docsis options
 INSERT INTO lease_hwaddr_source VALUES (64, 'HWADDR_SOURCE_DOCSIS');
 
-UPDATE schema_version SET version='2', minor='0';
+UPDATE schema_version
+SET version = '2', minor = '0';
 
 # This line concludes database upgrade to version 2.0.
 
@@ -4800,7 +4801,7 @@ BEGIN
     DECLARE CONTINUE HANDLER FOR SQLEXCEPTION
         RETURN false;
 
-    SELECT JSON_EXTRACT('{ "foo": 1 }', '$.foo') INTO dummy;
+    SELECT JSON_EXTRACT('{ "foo-bar": 1 }', '$."foo-bar"') INTO dummy;
     RETURN true;
 END $$
 DELIMITER ;
@@ -5061,6 +5062,32 @@ UPDATE schema_version
     SET version = '14', minor = '0';
 
 -- This line concludes the schema upgrade to version 14.
+
+-- This line starts the schema upgrade to version 15.
+
+-- Add cancelled (aka never-send) column to option tables.
+
+ALTER TABLE dhcp4_options
+    ADD COLUMN cancelled TINYINT(1) NOT NULL DEFAULT 0;
+
+ALTER TABLE dhcp6_options
+    ADD COLUMN cancelled TINYINT(1) NOT NULL DEFAULT 0;
+
+-- Add offer_lifetime column to v4 tables.
+ALTER TABLE dhcp4_shared_network
+    ADD COLUMN offer_lifetime INT(10) DEFAULT NULL;
+
+ALTER TABLE dhcp4_subnet
+    ADD COLUMN offer_lifetime INT(10) DEFAULT NULL;
+
+ALTER TABLE dhcp4_client_class
+    ADD COLUMN offer_lifetime INT(10) DEFAULT NULL;
+
+-- Update the schema version number.
+UPDATE schema_version
+    SET version = '15', minor = '0';
+
+-- This line concludes the schema upgrade to version 15.
 
 # Notes:
 #

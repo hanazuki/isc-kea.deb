@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,7 +10,7 @@
 #include <asiolink/io_service.h>
 #include <dhcp/hwaddr.h>
 #include <dhcpsrv/dhcpsrv_exceptions.h>
-#include <dhcpsrv/lease_mgr.h>
+#include <dhcpsrv/tracking_lease_mgr.h>
 #include <mysql/mysql_connection.h>
 
 #include <boost/scoped_ptr.hpp>
@@ -89,7 +89,7 @@ typedef boost::shared_ptr<MySqlLeaseContextPool> MySqlLeaseContextPoolPtr;
 /// database.  Use of this backend presupposes that a MySQL database is
 /// available and that the Kea schema has been created within it.
 
-class MySqlLeaseMgr : public LeaseMgr {
+class MySqlLeaseMgr : public TrackingLeaseMgr {
 public:
 
     /// @brief Constructor
@@ -906,6 +906,7 @@ private:
     /// to the prepared statement, executes the statement and checks to
     /// see how many rows were deleted.
     ///
+    /// @param ctx Context
     /// @param stindex Index of prepared statement to be executed
     /// @param bind Array of MYSQL_BIND objects representing the parameters.
     ///        (Note that the number is determined by the number of parameters
@@ -915,7 +916,8 @@ private:
     ///
     /// @throw isc::db::DbOperationError An operation on the open database has
     ///        failed.
-    uint64_t deleteLeaseCommon(StatementIndex stindex,
+    uint64_t deleteLeaseCommon(MySqlLeaseContextPtr& ctx,
+                               StatementIndex stindex,
                                MYSQL_BIND* bind);
 
     /// @brief Delete expired-reclaimed leases.
@@ -997,6 +999,12 @@ private:
     /// @brief Clears the class-lease count map.
     virtual void clearClassLeaseCounts() override;
 
+    /// @brief Write V4 leases to a file.
+    virtual void writeLeases4(const std::string& /*filename*/) override;
+
+    /// @brief Write V6 leases to a file.
+    virtual void writeLeases6(const std::string& /*filename*/) override;
+
     /// @brief Check Error and Throw Exception
     ///
     /// This method invokes @ref MySqlConnection::checkError.
@@ -1012,7 +1020,106 @@ private:
                     int status, StatementIndex index,
                     const char* what) const;
 
-    /// @brief Context RAII Allocator.
+    /// The following queries are used to fulfill Bulk Lease Query
+    /// queries. They rely on relay data contained in lease's
+    /// user-context when the extended-store-info flag is enabled.
+
+    /// @brief Returns existing IPv4 leases with a given relay-id.
+    ///
+    /// @param relay_id RAI Relay-ID sub-option value for relay_id of interest
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param qry_start_time when not zero, only leases whose CLTT is greater than
+    /// or equal to this value will be included
+    /// @param qry_end_time when not zero, only leases whose CLTT is less than
+    /// or equal to this value will be included
+    ///
+    /// @return collection of IPv4 leases
+    virtual Lease4Collection
+    getLeases4ByRelayId(const OptionBuffer& relay_id,
+                        const asiolink::IOAddress& lower_bound_address,
+                        const LeasePageSize& page_size,
+                        const time_t& qry_start_time = 0,
+                        const time_t& qry_end_time = 0) override;
+
+    /// @brief Returns existing IPv4 leases with a given remote-id.
+    ///
+    /// @param remote_id RAI Remote-ID sub-option value for remote-id of interest
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    /// @param qry_start_time when not zero, only leases whose CLTT is greater than
+    /// or equal to this value will be included. Defaults to zero.
+    /// @param qry_end_time when not zero, only leases whose CLTT is less than
+    /// or equal to this value will be included. Defaults to zero.
+    ///
+    /// @return collection of IPv4 leases
+    virtual Lease4Collection
+    getLeases4ByRemoteId(const OptionBuffer& remote_id,
+                         const asiolink::IOAddress& lower_bound_address,
+                         const LeasePageSize& page_size,
+                         const time_t& qry_start_time = 0,
+                         const time_t& qry_end_time = 0) override;
+
+    /// @brief Returns existing IPv6 leases with a given relay-id.
+    ///
+    /// @param relay_id DUID for relay_id of interest.
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    virtual Lease6Collection
+    getLeases6ByRelayId(const DUID& relay_id,
+                        const asiolink::IOAddress& link_addr,
+                        uint8_t link_len,
+                        const asiolink::IOAddress& lower_bound_address,
+                        const LeasePageSize& page_size) override;
+
+    /// @brief Returns existing IPv6 leases with a given remote-id.
+    ///
+    /// @param remote_id remote-id option data of interest.
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    virtual Lease6Collection
+    getLeases6ByRemoteId(const OptionBuffer& remote_id,
+                         const asiolink::IOAddress& link_addr,
+                         uint8_t link_len,
+                         const asiolink::IOAddress& lower_bound_address,
+                         const LeasePageSize& page_size) override;
+
+    /// @brief Returns existing IPv6 leases with on a given link.
+    ///
+    /// @param link_addr limit results to leases on this link (prefix).
+    /// @param link_len limit results to leases on this link (length).
+    /// @param lower_bound_address IPv4 address used as lower bound for the
+    /// returned range.
+    /// @param page_size maximum size of the page returned.
+    ///
+    /// @return collection of IPv6 leases
+    virtual Lease6Collection
+    getLeases6ByLink(const asiolink::IOAddress& link_addr,
+                     uint8_t link_len,
+                     const asiolink::IOAddress& lower_bound_address,
+                     const LeasePageSize& page_size) override;
+
+    /// @brief Build extended info v6 tables.
+    ///
+    /// @param update Update extended info in database.
+    /// @param current specify whether to use current (true) or staging
+    /// (false) config.
+    /// @return The number of updates in the database or 0.
+    virtual size_t buildExtendedInfoTables6(bool update, bool current) override;
+
+    /// @brief Context RAII allocator.
     class MySqlLeaseContextAlloc {
     public:
 
@@ -1037,6 +1144,82 @@ private:
         /// @brief The manager
         const MySqlLeaseMgr& mgr_;
     };
+
+    /// @brief Context RAII allocator for lease tracking.
+    ///
+    /// This context should be used in the non-const calls that
+    /// may trigger callbacks for lease tracking.
+    class MySqlLeaseTrackingContextAlloc {
+    public:
+
+        /// @brief Constructor
+        ///
+        /// This constructor takes a context of the pool if one is available
+        /// or creates a new one.
+        ///
+        /// @param mgr A parent instance
+        /// @param lease allocated or deallocated lease instance.
+        MySqlLeaseTrackingContextAlloc(MySqlLeaseMgr& mgr, const LeasePtr& lease);
+
+        /// @brief Destructor
+        ///
+        /// This destructor puts back the context in the pool.
+        ~MySqlLeaseTrackingContextAlloc();
+
+        /// @brief The context
+        MySqlLeaseContextPtr ctx_;
+
+    private:
+
+        /// @brief The manager
+        MySqlLeaseMgr& mgr_;
+
+        /// @brief Tracked lease instance.
+        LeasePtr lease_;
+    };
+
+protected:
+
+    /// Extended information / Bulk Lease Query shared interface.
+
+    /// @brief Modifies the setting whether the lease extended info tables
+    /// are enabled.
+    ///
+    /// Transient redefine to refuse the enable setting.
+    /// @param enabled new setting.
+    virtual void setExtendedInfoTablesEnabled(const bool enabled) override {
+        if (enabled) {
+            isc_throw(isc::NotImplemented,
+                      "extended info tables are not yet supported by mysql");
+        }
+    }
+
+    /// @brief Decode parameters to set whether the lease extended info tables
+    /// are enabled.
+    ///
+    /// @note: common code in constructors.
+    ///
+    /// @param parameters The parameter map.
+    virtual void setExtendedInfoTablesEnabled(const db::DatabaseConnection::ParameterMap& parameters) override;
+
+    /// @brief Delete lease6 extended info from tables.
+    ///
+    /// @param addr The address of the lease.
+    virtual void deleteExtendedInfo6(const isc::asiolink::IOAddress& addr) override;
+
+    /// @brief Add lease6 extended info into by-relay-id table.
+    ///
+    /// @param lease_addr The address of the lease.
+    /// @param relay_id The relay id from the relay header options.
+    virtual void addRelayId6(const isc::asiolink::IOAddress& lease_addr,
+                             const std::vector<uint8_t>& relay_id) override;
+
+    /// @brief Add lease6 extended info into by-remote-id table.
+    ///
+    /// @param lease_addr The address of the lease.
+    /// @param remote_id The remote id from the relay header options.
+    virtual void addRemoteId6(const isc::asiolink::IOAddress& lease_addr,
+                              const std::vector<uint8_t>& remote_id) override;
 
 private:
 

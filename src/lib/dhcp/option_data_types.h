@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -418,6 +418,16 @@ public:
     /// @param [out] buf output buffer.
     static void writeTuple(const OpaqueDataTuple& tuple,
                            std::vector<uint8_t>& buf);
+
+    /// @brief Returns Length Field Type for a tuple.
+    ///
+    /// Returns Length Field Type for a tuple basing on the given
+    /// Option v4/v6 Universe.
+    ///
+    /// @param u specifies universe (V4 or V6)
+    /// @return By default 1 octet Length Field Type for V4 option
+    /// or 2 octets Length Field Type for V6 option
+    static OpaqueDataTuple::LengthFieldType getTupleLenFieldType(Option::Universe u);
 
     /// @brief Read boolean value from a buffer.
     ///

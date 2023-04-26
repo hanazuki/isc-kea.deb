@@ -1,4 +1,4 @@
-// Copyright (C) 2019-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2019-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -325,14 +325,15 @@ TEST_F(Dhcp6CBTest, mergeOptions) {
     // Add solmax-rt to the first backend.
     opt.reset(new OptionDescriptor(
               createOption<OptionString>(Option::V6, D6O_BOOTFILE_URL,
-                                         true, false, "updated-boot-file")));
+                                         true, false, false,
+                                         "updated-boot-file")));
     opt->space_name_ = DHCP6_OPTION_SPACE;
     db1_->createUpdateOption6(ServerSelector::ALL(), opt);
 
     // Add solmax-rt to the second backend.
     opt.reset(new OptionDescriptor(
               createOption<OptionUint32>(Option::V6, D6O_SOL_MAX_RT,
-                                         false, true, 700)));
+                                         false, false, true, 700)));
     opt->space_name_ = DHCP6_OPTION_SPACE;
     db2_->createUpdateOption6(ServerSelector::ALL(), opt);
 
@@ -449,8 +450,8 @@ TEST_F(Dhcp6CBTest, mergeSubnets) {
     extractConfig(base_config);
 
     // Make a few subnets
-    Subnet6Ptr subnet1(new Subnet6(IOAddress("2001:1::"), 64, 1, 2, 100, 100, SubnetID(1)));
-    Subnet6Ptr subnet3(new Subnet6(IOAddress("2001:3::"), 64, 1, 2, 100, 100, SubnetID(3)));
+    auto subnet1 = Subnet6::create(IOAddress("2001:1::"), 64, 1, 2, 100, 100, SubnetID(1));
+    auto subnet3 = Subnet6::create(IOAddress("2001:3::"), 64, 1, 2, 100, 100, SubnetID(3));
 
     // Add subnet1 to db1 and subnet3 to db2
     db1_->createUpdateSubnet6(ServerSelector::ALL(), subnet1);

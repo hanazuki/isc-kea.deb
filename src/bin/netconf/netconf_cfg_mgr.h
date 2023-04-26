@@ -1,4 +1,4 @@
-// Copyright (C) 2018-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2018-2022 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -9,10 +9,9 @@
 
 #include <cc/data.h>
 #include <hooks/hooks_config.h>
-#include <process/d_cfg_mgr.h>
 #include <netconf/netconf_config.h>
-#include <boost/pointer_cast.hpp>
-#include <map>
+#include <process/d_cfg_mgr.h>
+
 #include <string>
 
 namespace isc {
@@ -20,7 +19,7 @@ namespace netconf {
 
 class NetconfConfig;
 /// @brief Pointer to a configuration context.
-typedef boost::shared_ptr<NetconfConfig> NetconfConfigPtr;
+using NetconfConfigPtr = boost::shared_ptr<NetconfConfig>;
 
 /// @brief Netconf Configuration Context.
 ///
@@ -38,8 +37,8 @@ public:
     /// @brief Returns pointer to configured global parameters.
     ///
     /// @todo revisit this at the toElement first use.
-    isc::data::ConstElementPtr getConfiguredGlobals() const {
-        return (isc::data::ConstElementPtr(configured_globals_));
+    isc::data::ElementPtr getConfiguredGlobals() const {
+        return (isc::data::ElementPtr(configured_globals_));
     }
 
     /// @brief Saves scalar elements from the global scope of a configuration.
@@ -91,7 +90,7 @@ public:
     ///
     /// @return a pointer to a configuration which can be parsed into
     /// the initial configuration object
-    virtual isc::data::ElementPtr toElement() const;
+    isc::data::ElementPtr toElement() const override final;
 
 private:
 
@@ -115,7 +114,7 @@ private:
 
     /// @brief Configured hooks libraries.
     isc::hooks::HooksConfig hooks_config_;
-};
+};  // NetconfConfig
 
 /// @brief Ctrl Netconf Configuration Manager.
 ///
@@ -123,7 +122,6 @@ private:
 /// configuration.
 class NetconfCfgMgr : public process::DCfgMgrBase {
 public:
-
     /// @brief Constructor.
     NetconfCfgMgr();
 
@@ -144,25 +142,24 @@ public:
     /// to be returned. This parameter is ignored for Netconf.
     ///
     /// @return Summary of the configuration in the textual format.
-    virtual std::string getConfigSummary(const uint32_t selection);
+    std::string getConfigSummary(const uint32_t selection) override final;
 
     /// @brief Return a list of all paths that contain passwords or secrets for
     /// kea-netconf.
     ///
     /// @return the list of lists of sequential JSON map keys needed to reach
     /// the passwords and secrets.
-    std::list<std::list<std::string>> jsonPathsToRedact() const;
+    std::list<std::list<std::string>> jsonPathsToRedact() const override final;
 
 protected:
-
     /// @brief Parses configuration of Netconf.
     ///
     /// @param config Pointer to a configuration specified for netconf.
     /// @param check_only Boolean flag indicating if this method should
     /// only verify correctness of the provided configuration.
     /// @return Pointer to a result of configuration parsing.
-    virtual isc::data::ConstElementPtr
-    parse(isc::data::ConstElementPtr config, bool check_only);
+    isc::data::ConstElementPtr
+    parse(isc::data::ConstElementPtr config, bool check_only) override final;
 
     /// @brief Creates a new, blank NetconfConfig context.
     ///
@@ -174,13 +171,13 @@ protected:
     /// error.
     ///
     /// @return Returns a ConfigPtr to the new context instance.
-    virtual process::ConfigPtr createNewContext();
-};
+    process::ConfigPtr createNewContext() override final;
+};  // NetconfCfgMgr
 
 /// @brief Defines a shared pointer to NetconfCfgMgr.
-typedef boost::shared_ptr<NetconfCfgMgr> NetconfCfgMgrPtr;
+using NetconfCfgMgrPtr = boost::shared_ptr<NetconfCfgMgr>;
 
-} // namespace isc::netconf
-} // namespace isc
+}  // namespace netconf
+}  // namespace isc
 
-#endif // NETCONF_CFG_MGR_H
+#endif  // NETCONF_CFG_MGR_H

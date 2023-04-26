@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -10,6 +10,7 @@
 #include <dhcpsrv/lease_mgr_factory.h>
 #include <dhcpsrv/mysql_lease_mgr.h>
 #include <dhcpsrv/testutils/test_utils.h>
+#include <dhcpsrv/testutils/mysql_generic_backend_unittest.h>
 #include <dhcpsrv/tests/generic_lease_mgr_unittest.h>
 #include <exceptions/exceptions.h>
 #include <mysql/mysql_connection.h>
@@ -197,8 +198,14 @@ TEST(MySqlOpenTest, OpenDatabase) {
 
     // Check for missing parameters
     EXPECT_THROW(LeaseMgrFactory::create(connectionString(
-        MYSQL_VALID_TYPE, NULL, VALID_HOST, INVALID_USER, VALID_PASSWORD)),
+        MYSQL_VALID_TYPE, NULL, VALID_HOST, VALID_USER, VALID_PASSWORD)),
         NoDatabaseName);
+
+    // Check for extended info tables.
+    const char* EX_INFO = "extended-info-tables=true";
+    EXPECT_THROW(LeaseMgrFactory::create(connectionString(
+        MYSQL_VALID_TYPE, VALID_NAME, VALID_HOST, VALID_USER, VALID_PASSWORD, EX_INFO)),
+        NotImplemented);
 
     // Tidy up after the test
     destroyMySQLSchema(true);
@@ -1073,6 +1080,25 @@ TEST_F(MySqlLeaseMgrTest, leaseStatsQueryAttribution6MultiThreading) {
     testLeaseStatsQueryAttribution6();
 }
 
+/// @brief This test is a basic check for the generic backend test class,
+///        rather than any production code check.
+TEST_F(MySqlGenericBackendTest, leaseCount) {
+
+    // Create database connection parameter list
+    DatabaseConnection::ParameterMap params;
+    params["name"] = "keatest";
+    params["user"] = "keatest";
+    params["password"] = "keatest";
+
+    // Create and open the database connection
+    MySqlConnection conn(params);
+    conn.openDatabase();
+
+    // Check that the countRows is working. It's used extensively in other
+    // tests, so basic check is enough here.
+    EXPECT_EQ(0, countRows(conn, "lease4"));
+}
+
 /// @brief Checks that no exceptions are thrown when inquiring about JSON
 /// support and prints an informative message.
 TEST_F(MySqlLeaseMgrTest, isJsonSupported) {
@@ -1126,14 +1152,9 @@ TEST_F(MySqlLeaseMgrTest, checkLimitsNull) {
 
 /// @brief Checks a few v4 limit checking scenarios.
 TEST_F(MySqlLeaseMgrTest, checkLimits4) {
-    // Limit checking should be precluded at reconfiguration time on systems
-    // that don't have JSON support in the database. It's fine if it throws.
+    // Can't assume anything about the error message.
     if (!LeaseMgrFactory::instance().isJsonSupported()) {
-        ASSERT_THROW_MSG(LeaseMgrFactory::instance().checkLimits4(
-            isc::data::Element::createMap()), isc::db::DbOperationError,
-            "unable to set up for storing all results for "
-            "<SELECT checkLease4Limits(?)>, reason: FUNCTION "
-            "keatest.JSON_EXTRACT does not exist (error code 1305)");
+        std::cout << "Skipped test because of lack of JSON support in the database." << std::endl;
         return;
     }
 
@@ -1143,19 +1164,179 @@ TEST_F(MySqlLeaseMgrTest, checkLimits4) {
 
 /// @brief Checks a few v6 limit checking scenarios.
 TEST_F(MySqlLeaseMgrTest, checkLimits6) {
-    // Limit checking should be precluded at reconfiguration time on systems
-    // that don't have JSON support in the database. It's fine if it throws.
+    // Can't assume anything about the error message.
     if (!LeaseMgrFactory::instance().isJsonSupported()) {
-        ASSERT_THROW_MSG(LeaseMgrFactory::instance().checkLimits6(
-            isc::data::Element::createMap()), isc::db::DbOperationError,
-            "unable to set up for storing all results for "
-            "<SELECT checkLease6Limits(?)>, reason: FUNCTION "
-            "keatest.JSON_EXTRACT does not exist (error code 1305)");
+        std::cout << "Skipped test because of lack of JSON support in the database." << std::endl;
         return;
     }
 
     // The rest of the checks are only for databases with JSON support.
     testLeaseLimits6();
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is added.
+TEST_F(MySqlLeaseMgrTest, trackAddLease4) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackAddLease4(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is added.
+TEST_F(MySqlLeaseMgrTest, trackAddLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackAddLease4(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is added.
+TEST_F(MySqlLeaseMgrTest, trackAddLeaseNA) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackAddLeaseNA(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is added.
+TEST_F(MySqlLeaseMgrTest, trackAddLeaseNAMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackAddLeaseNA(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is added.
+TEST_F(MySqlLeaseMgrTest, trackAddLeasePD) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackAddLeasePD(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is added.
+TEST_F(MySqlLeaseMgrTest, trackAddLeasePDMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackAddLeasePD(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is updated.
+TEST_F(MySqlLeaseMgrTest, trackUpdateLease4) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackUpdateLease4(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is updated.
+TEST_F(MySqlLeaseMgrTest, trackUpdateLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackUpdateLease4(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is updated.
+TEST_F(MySqlLeaseMgrTest, trackUpdateLeaseNA) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackUpdateLeaseNA(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is updated.
+TEST_F(MySqlLeaseMgrTest, trackUpdateLeaseNAMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackUpdateLeaseNA(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is updated.
+TEST_F(MySqlLeaseMgrTest, trackUpdateLeasePD) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackUpdateLeasePD(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is updated.
+TEST_F(MySqlLeaseMgrTest, trackUpdateLeasePDMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackUpdateLeasePD(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is deleted.
+TEST_F(MySqlLeaseMgrTest, trackDeleteLease4) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackDeleteLease4(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv4 lease is deleted.
+TEST_F(MySqlLeaseMgrTest, trackDeleteLease4MultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackDeleteLease4(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is deleted.
+TEST_F(MySqlLeaseMgrTest, trackDeleteLeaseNA) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackDeleteLeaseNA(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 address lease is deleted.
+TEST_F(MySqlLeaseMgrTest, trackDeleteLeaseNAMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackDeleteLeaseNA(true, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is deleted.
+TEST_F(MySqlLeaseMgrTest, trackDeleteLeasePD) {
+    // It is unnecessary to lock the lease in ST. The backend does not
+    // provide the MT-safe context for the callbacks.
+    testTrackDeleteLeasePD(false, false);
+}
+
+/// @brief Checks if the backends call the callbacks when an
+/// IPv6 prefix lease is deleted.
+TEST_F(MySqlLeaseMgrTest, trackDeleteLeasePDMultiThreading) {
+    MultiThreadingMgr::instance().setMode(true);
+    // The lease should be locked in the MT mode. The backend does not
+    // provide an MT-safe context.
+    testTrackDeleteLeasePD(true, false);
+}
+
+/// @brief Checks that the lease manager can be recreated and its
+/// registered callbacks preserved, if desired.
+TEST_F(MySqlLeaseMgrTest, recreateWithCallbacks) {
+    testRecreateWithCallbacks(validMySQLConnectionString());
+}
+
+/// @brief Checks that the lease manager can be recreated without the
+/// previously registered callbacks.
+TEST_F(MySqlLeaseMgrTest, recreateWithoutCallbacks) {
+    testRecreateWithoutCallbacks(validMySQLConnectionString());
 }
 
 }  // namespace

@@ -1,4 +1,4 @@
-// Copyright (C) 2021-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2021-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -50,6 +50,8 @@ CfgGlobals::nameToIndex = {
     { "ddns-update-on-renew", DDNS_UPDATE_ON_RENEW },
     { "ddns-use-conflict-resolution", DDNS_USE_CONFLICT_RESOLUTION },
     { "parked-packet-limit", PARKED_PACKET_LIMIT },
+    { "allocator", ALLOCATOR },
+    { "ddns-ttl-percent", DDNS_TTL_PERCENT },
 
     // DHCPv4 specific parameters.
     { "echo-client-id", ECHO_CLIENT_ID },
@@ -58,12 +60,14 @@ CfgGlobals::nameToIndex = {
     { "next-server", NEXT_SERVER },
     { "server-hostname", SERVER_HOSTNAME },
     { "boot-file-name", BOOT_FILE_NAME },
+    { "offer-lifetime", OFFER_LIFETIME },
 
     // DHCPv6 specific parameters.
     { "data-directory", DATA_DIRECTORY },
     { "preferred-lifetime", PREFERRED_LIFETIME },
     { "min-preferred-lifetime", MIN_PREFERRED_LIFETIME },
-    { "max-preferred-lifetime", MAX_PREFERRED_LIFETIME }
+    { "max-preferred-lifetime", MAX_PREFERRED_LIFETIME },
+    { "pd-allocator", PD_ALLOCATOR }
 };
 
 // Load time sanity check.

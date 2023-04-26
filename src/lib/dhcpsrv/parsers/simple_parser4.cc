@@ -1,4 +1,4 @@
-// Copyright (C) 2016-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2016-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -99,6 +99,9 @@ const SimpleKeywords SimpleParser4::GLOBAL4_PARAMETERS = {
     { "ddns-use-conflict-resolution",     Element::boolean },
     { "compatibility",                    Element::map },
     { "parked-packet-limit",              Element::integer },
+    { "allocator",                        Element::string },
+    { "offer-lifetime",                   Element::integer },
+    { "ddns-ttl-percent",                 Element::real },
 };
 
 /// @brief This table defines default global values for DHCPv4
@@ -140,6 +143,7 @@ const SimpleDefaults SimpleParser4::GLOBAL4_DEFAULTS = {
     { "ddns-update-on-renew",             Element::boolean, "false" },
     { "ddns-use-conflict-resolution",     Element::boolean, "true" },
     { "parked-packet-limit",              Element::integer, "256" },
+    { "allocator",                        Element::string,  "iterative" },
 };
 
 /// @brief This table defines all option definition parameters.
@@ -183,6 +187,7 @@ const SimpleKeywords SimpleParser4::OPTION4_PARAMETERS = {
     { "space",        Element::string },
     { "csv-format",   Element::boolean },
     { "always-send",  Element::boolean },
+    { "never-send",   Element::boolean },
     { "user-context", Element::map },
     { "comment",      Element::string },
     { "metadata",     Element::map }
@@ -196,7 +201,8 @@ const SimpleKeywords SimpleParser4::OPTION4_PARAMETERS = {
 const SimpleDefaults SimpleParser4::OPTION4_DEFAULTS = {
     { "space",        Element::string,  "dhcp4"}, // DHCP4_OPTION_SPACE
     { "csv-format",   Element::boolean, "true"},
-    { "always-send",  Element::boolean, "false"}
+    { "always-send",  Element::boolean, "false"},
+    { "never-send",   Element::boolean, "false"}
 };
 
 /// @brief This table defines all subnet parameters for DHCPv4.
@@ -249,7 +255,10 @@ const SimpleKeywords SimpleParser4::SUBNET4_PARAMETERS = {
     { "cache-threshold",                Element::real },
     { "cache-max-age",                  Element::integer },
     { "ddns-update-on-renew",           Element::boolean },
-    { "ddns-use-conflict-resolution",   Element::boolean }
+    { "ddns-use-conflict-resolution",   Element::boolean },
+    { "allocator",                      Element::string },
+    { "offer-lifetime",                 Element::integer },
+    { "ddns-ttl-percent",               Element::real },
 };
 
 /// @brief This table defines default values for each IPv4 subnet.
@@ -302,7 +311,9 @@ const ParamsList SimpleParser4::INHERIT_TO_SUBNET4 = {
     "t2-percent",
     "store-extended-info",
     "cache-threshold",
-    "cache-max-age"
+    "cache-max-age",
+    "allocator",
+    "offer-lifetime",
 };
 
 /// @brief This table defines all pool parameters.
@@ -365,7 +376,10 @@ const SimpleKeywords SimpleParser4::SHARED_NETWORK4_PARAMETERS = {
     { "cache-threshold",                Element::real },
     { "cache-max-age",                  Element::integer },
     { "ddns-update-on-renew",           Element::boolean },
-    { "ddns-use-conflict-resolution",   Element::boolean }
+    { "ddns-use-conflict-resolution",   Element::boolean },
+    { "allocator",                      Element::string },
+    { "offer-lifetime",                 Element::integer },
+    { "ddns-ttl-percent",               Element::real },
 };
 
 /// @brief This table defines default values for each IPv4 shared network.
@@ -388,7 +402,7 @@ const SimpleDefaults SimpleParser4::DHCP_QUEUE_CONTROL4_DEFAULTS = {
 
 /// @brief This table defines default values for multi-threading in DHCPv4.
 const SimpleDefaults SimpleParser4::DHCP_MULTI_THREADING4_DEFAULTS = {
-    { "enable-multi-threading", Element::boolean, "false" },
+    { "enable-multi-threading", Element::boolean, "true" },
     { "thread-pool-size",       Element::integer, "0" },
     { "packet-queue-size",      Element::integer, "64" }
 };

@@ -90,27 +90,25 @@ PRE_UNINSTALL = :
 POST_UNINSTALL = :
 build_triplet = @build@
 host_triplet = @host@
-TESTS = $(SHTESTS) $(am__EXEEXT_2)
 @HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_1 = $(MYSQL_LIBS)
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_2 = $(PGSQL_LIBS)
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_3 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la \
-@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@	$(top_builddir)/src/lib/mysql/libkea-mysql.la
-@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_4 = $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la \
+@HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@am__append_3 = $(top_builddir)/src/lib/pgsql/testutils/libpgsqltest.la \
 @HAVE_GTEST_TRUE@@HAVE_PGSQL_TRUE@	$(top_builddir)/src/lib/pgsql/libkea-pgsql.la
-
-# Run C++ tests on "make check".
-@HAVE_GTEST_TRUE@am__append_5 = $(PROGRAM_TESTS)
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@am__append_4 = $(top_builddir)/src/lib/mysql/testutils/libmysqltest.la \
+@HAVE_GTEST_TRUE@@HAVE_MYSQL_TRUE@	$(top_builddir)/src/lib/mysql/libkea-mysql.la
+@HAVE_GTEST_TRUE@TESTS = $(am__EXEEXT_1) $(SHTESTS)
 @HAVE_GTEST_TRUE@noinst_PROGRAMS = $(am__EXEEXT_1)
 subdir = src/bin/dhcp6/tests
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
 am__aclocal_m4_deps = $(top_srcdir)/m4macros/ax_boost_for_kea.m4 \
 	$(top_srcdir)/m4macros/ax_cpp11.m4 \
+	$(top_srcdir)/m4macros/ax_cpp20.m4 \
 	$(top_srcdir)/m4macros/ax_crypto.m4 \
 	$(top_srcdir)/m4macros/ax_find_library.m4 \
 	$(top_srcdir)/m4macros/ax_gssapi.m4 \
 	$(top_srcdir)/m4macros/ax_gtest.m4 \
 	$(top_srcdir)/m4macros/ax_isc_rpath.m4 \
-	$(top_srcdir)/m4macros/ax_sysrepo.m4 \
+	$(top_srcdir)/m4macros/ax_netconf.m4 \
 	$(top_srcdir)/m4macros/libtool.m4 \
 	$(top_srcdir)/m4macros/ltoptions.m4 \
 	$(top_srcdir)/m4macros/ltsugar.m4 \
@@ -200,26 +198,25 @@ dhcp6_unittests_OBJECTS = $(am_dhcp6_unittests_OBJECTS) \
 am__DEPENDENCIES_1 =
 @HAVE_GTEST_TRUE@dhcp6_unittests_DEPENDENCIES =  \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/bin/dhcp6/libdhcp6.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/http/libkea-http.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(am__append_3) $(am__append_4) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
@@ -382,7 +379,6 @@ am__tty_colors = { \
     std='[m'; \
   fi; \
 }
-@HAVE_GTEST_TRUE@am__EXEEXT_2 = $(am__EXEEXT_1)
 DIST_SUBDIRS = $(SUBDIRS)
 am__DIST_COMMON = $(srcdir)/Makefile.in \
 	$(srcdir)/dhcp6_process_tests.sh.in $(srcdir)/marker_file.h.in \
@@ -448,11 +444,18 @@ DEPDIR = @DEPDIR@
 DISTCHECK_BOOST_CONFIGURE_FLAG = @DISTCHECK_BOOST_CONFIGURE_FLAG@
 DISTCHECK_CONTRIB_CONFIGURE_FLAG = @DISTCHECK_CONTRIB_CONFIGURE_FLAG@
 DISTCHECK_CRYPTO_CONFIGURE_FLAG = @DISTCHECK_CRYPTO_CONFIGURE_FLAG@
+DISTCHECK_GSSAPI_CONFIGURE_FLAG = @DISTCHECK_GSSAPI_CONFIGURE_FLAG@
 DISTCHECK_GTEST_CONFIGURE_FLAG = @DISTCHECK_GTEST_CONFIGURE_FLAG@
 DISTCHECK_KEA_SHELL_CONFIGURE_FLAG = @DISTCHECK_KEA_SHELL_CONFIGURE_FLAG@
+DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG = @DISTCHECK_LIBYANGCPP_CONFIGURE_FLAG@
+DISTCHECK_LIBYANG_CONFIGURE_FLAG = @DISTCHECK_LIBYANG_CONFIGURE_FLAG@
 DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG = @DISTCHECK_LOG4CPLUS_CONFIGURE_FLAG@
+DISTCHECK_MYSQL_CONFIGURE_FLAG = @DISTCHECK_MYSQL_CONFIGURE_FLAG@
 DISTCHECK_PERFDHCP_CONFIGURE_FLAG = @DISTCHECK_PERFDHCP_CONFIGURE_FLAG@
+DISTCHECK_PGSQL_CONFIGURE_FLAG = @DISTCHECK_PGSQL_CONFIGURE_FLAG@
 DISTCHECK_PREMIUM_CONFIGURE_FLAG = @DISTCHECK_PREMIUM_CONFIGURE_FLAG@
+DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG = @DISTCHECK_SYSREPOCPP_CONFIGURE_FLAG@
+DISTCHECK_SYSREPO_CONFIGURE_FLAG = @DISTCHECK_SYSREPO_CONFIGURE_FLAG@
 DLLTOOL = @DLLTOOL@
 DSYMUTIL = @DSYMUTIL@
 DUMPBIN = @DUMPBIN@
@@ -471,7 +474,7 @@ GTEST_INCLUDES = @GTEST_INCLUDES@
 GTEST_LDADD = @GTEST_LDADD@
 GTEST_LDFLAGS = @GTEST_LDFLAGS@
 GTEST_SOURCE = @GTEST_SOURCE@
-HAVE_SYSREPO = @HAVE_SYSREPO@
+HAVE_NETCONF = @HAVE_NETCONF@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
 INSTALL_PROGRAM = @INSTALL_PROGRAM@
@@ -489,6 +492,16 @@ LEX_OUTPUT_ROOT = @LEX_OUTPUT_ROOT@
 LIBOBJS = @LIBOBJS@
 LIBS = @LIBS@
 LIBTOOL = @LIBTOOL@
+LIBYANGCPP_CPPFLAGS = @LIBYANGCPP_CPPFLAGS@
+LIBYANGCPP_INCLUDEDIR = @LIBYANGCPP_INCLUDEDIR@
+LIBYANGCPP_LIBS = @LIBYANGCPP_LIBS@
+LIBYANGCPP_PREFIX = @LIBYANGCPP_PREFIX@
+LIBYANGCPP_VERSION = @LIBYANGCPP_VERSION@
+LIBYANG_CPPFLAGS = @LIBYANG_CPPFLAGS@
+LIBYANG_INCLUDEDIR = @LIBYANG_INCLUDEDIR@
+LIBYANG_LIBS = @LIBYANG_LIBS@
+LIBYANG_PREFIX = @LIBYANG_PREFIX@
+LIBYANG_VERSION = @LIBYANG_VERSION@
 LIPO = @LIPO@
 LN_S = @LN_S@
 LOG4CPLUS_INCLUDES = @LOG4CPLUS_INCLUDES@
@@ -535,12 +548,18 @@ SET_MAKE = @SET_MAKE@
 SHELL = @SHELL@
 SPHINXBUILD = @SPHINXBUILD@
 SRPD_PLUGINS_PATH = @SRPD_PLUGINS_PATH@
+SR_PLUGINS_PATH = @SR_PLUGINS_PATH@
 SR_REPO_PATH = @SR_REPO_PATH@
 STRIP = @STRIP@
+SYSREPOCPP_CPPFLAGS = @SYSREPOCPP_CPPFLAGS@
+SYSREPOCPP_INCLUDEDIR = @SYSREPOCPP_INCLUDEDIR@
+SYSREPOCPP_LIBS = @SYSREPOCPP_LIBS@
+SYSREPOCPP_PREFIX = @SYSREPOCPP_PREFIX@
 SYSREPOCPP_VERSION = @SYSREPOCPP_VERSION@
 SYSREPO_CPPFLAGS = @SYSREPO_CPPFLAGS@
 SYSREPO_INCLUDEDIR = @SYSREPO_INCLUDEDIR@
 SYSREPO_LIBS = @SYSREPO_LIBS@
+SYSREPO_PREFIX = @SYSREPO_PREFIX@
 SYSREPO_VERSION = @SYSREPO_VERSION@
 USE_LCOV = @USE_LCOV@
 VALGRIND = @VALGRIND@
@@ -609,23 +628,15 @@ SUBDIRS = .
 
 # Add to the tarball:
 EXTRA_DIST = get_config_unittest.cc.skel
-TESTS_ENVIRONMENT = \
-        $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
-
+TESTS_ENVIRONMENT = $(LIBTOOL) --mode=execute $(VALGRIND_COMMAND)
 
 # Shell tests
 SHTESTS = dhcp6_process_tests.sh
-
-# Run shell tests on "make check".
-check_SCRIPTS = $(SHTESTS)
 
 # As with every file generated by ./configure, clean them up when running
 # "make distclean", but not on "make clean".
 DISTCLEANFILES = $(SHTESTS) marker_file.h test_data_files_config.h \
 	test_libraries.h
-
-# Don't install shell tests.
-noinst_SCRIPTS = $(SHTESTS)
 AM_CPPFLAGS = -I$(top_srcdir)/src/lib -I$(top_builddir)/src/lib \
 	-I$(top_srcdir)/src/bin -I$(top_builddir)/src/bin \
 	-I$(top_srcdir)/src -I$(top_builddir)/src \
@@ -702,31 +713,36 @@ noinst_LTLIBRARIES = libco1.la libco2.la libco3.la
 @HAVE_GTEST_TRUE@	$(am__append_2) $(GTEST_LDFLAGS)
 @HAVE_GTEST_TRUE@dhcp6_unittests_LDADD =  \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/bin/dhcp6/libdhcp6.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cfgrpt/libcfgrpt.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/testutils/libdhcpsrvtest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcpsrv/libkea-dhcpsrv.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/eval/libkea-eval.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp_ddns/libkea-dhcp_ddns.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/stats/libkea-stats.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/config/libkea-cfgclient.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/http/libkea-http.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/process/libkea-process.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/tests/libdhcptest.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dhcp/libkea-dhcp++.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(am__append_3) $(am__append_4) \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/testutils/libdatabasetest.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/database/libkea-database.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/testutils/libkea-testutils.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cc/libkea-cc.la \
+@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/asiolink/libkea-asiolink.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/dns/libkea-dns++.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/cryptolink/libkea-cryptolink.la \
-@HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/hooks/libkea-hooks.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/log/libkea-log.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/util/libkea-util.la \
 @HAVE_GTEST_TRUE@	$(top_builddir)/src/lib/exceptions/libkea-exceptions.la \
 @HAVE_GTEST_TRUE@	$(LOG4CPLUS_LIBS) $(CRYPTO_LIBS) \
 @HAVE_GTEST_TRUE@	$(BOOST_LIBS) $(GTEST_LDADD)
+
+# Run shell tests on "make check".
+@HAVE_GTEST_TRUE@check_SCRIPTS = $(SHTESTS)
+
+# Don't install shell tests.
+noinst_SCRIPTS = $(SHTESTS)
 all: all-recursive
 
 .SUFFIXES:

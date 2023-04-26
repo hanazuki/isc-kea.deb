@@ -1,4 +1,4 @@
-// Copyright (C) 2012-2022 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2012-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -11,6 +11,8 @@
 #include <cc/data.h>
 #include <cc/user_context.h>
 #include <dhcp/option_space_container.h>
+#include <dhcpsrv/allocator.h>
+#include <dhcpsrv/allocation_state.h>
 #include <dhcpsrv/lease.h>
 #include <dhcpsrv/network.h>
 #include <dhcpsrv/pool.h>
@@ -30,7 +32,6 @@
 
 #include <cstdint>
 #include <map>
-#include <mutex>
 #include <utility>
 
 namespace isc {
@@ -75,51 +76,7 @@ public:
                 const isc::asiolink::IOAddress& addr,
                 const ClientClasses& client_classes) const;
 
-    /// @brief returns the last address that was tried from this subnet.
-    ///
-    /// This method returns the last address that was attempted to be allocated
-    /// from this subnet. This is used as helper information for the next
-    /// iteration of the allocation algorithm.
-    ///
-    /// @note: this routine is Kea thread safe.
-    ///
-    /// @todo: Define map<SubnetID, ClientClass, IOAddress> somewhere in the
-    ///        AllocEngine::IterativeAllocator and keep the data there
-    ///
-    /// @param type lease type to be returned
-    /// @return address/prefix that was last tried from this subnet
-    isc::asiolink::IOAddress getLastAllocated(Lease::Type type) const;
-
-    /// @brief Returns the timestamp when the @c setLastAllocated function
-    /// was called.
-    ///
-    /// @note: this routine is Kea thread safe.
-    ///
-    /// @param lease_type Lease type for which last allocation timestamp should
-    /// be returned.
-    ///
-    /// @return Time when a lease of a specified type has been allocated from
-    /// this subnet. The negative infinity time is returned if a lease type is
-    /// not recognized (which is unlikely).
-    boost::posix_time::ptime
-    getLastAllocatedTime(const Lease::Type& lease_type) const;
-
-    /// @brief sets the last address that was tried from this subnet.
-    ///
-    /// This method sets the last address that was attempted to be allocated
-    /// from this subnet. This is used as helper information for the next
-    /// iteration of the allocation algorithm.
-    ///
-    /// @note: this routine is Kea thread safe.
-    ///
-    /// @todo: Define map<SubnetID, ClientClass, IOAddress> somewhere in the
-    ///        AllocEngine::IterativeAllocator and keep the data there
-    /// @param addr address/prefix to that was tried last
-    /// @param type lease type to be set
-    void setLastAllocated(Lease::Type type,
-                          const isc::asiolink::IOAddress& addr);
-
-    /// @brief Returns unique ID for that subnet.
+     /// @brief Returns unique ID for that subnet.
     ///
     /// @return unique ID for that subnet
     SubnetID getID() const { return (id_); }
@@ -229,6 +186,22 @@ public:
     uint64_t getPoolCapacity(Lease::Type type,
                              const ClientClasses& client_classes) const;
 
+    /// @brief Returns the number of possible leases for specified lease type
+    /// allowed for a client which belongs to classes and matching selection
+    /// criteria relative to provided hint prefix length.
+    ///
+    /// @param type type of the lease
+    /// @param client_classes list of classes the client belongs to
+    /// @param prefix_length_match type which indicates the selection criteria
+    /// for the pools relative to the provided hint prefix length
+    /// @param hint_prefix_length the hint prefix length that the client
+    /// provided
+    /// @return number of leases matching lease type and classes
+    uint64_t getPoolCapacity(Lease::Type type,
+                             const ClientClasses& client_classes,
+                             Allocator::PrefixLenMatchType prefix_length_match,
+                             uint8_t hint_prefix_length) const;
+
     /// @brief Returns textual representation of the subnet (e.g.
     /// "2001:db8::/64").
     ///
@@ -308,6 +281,44 @@ public:
     /// @return a collection of all pools
     PoolCollection& getPoolsWritable(Lease::Type type);
 
+    /// @brief Returns lease allocator instance.
+    ///
+    /// An allocator is responsible for selecting leases from the subnet's
+    /// pools. Each subnet has one allocator common for all pools belonging
+    /// to the subnet. The allocation engine uses this function to get the
+    /// current subnet allocator and uses it to select and offer an address.
+    ///
+    /// @param type lease type for which the allocator instance should be
+    /// returned.
+    /// @return Allocator instance.
+    AllocatorPtr getAllocator(Lease::Type type) const;
+
+    /// @brief Sets new allocator instance.
+    ///
+    /// If the server is configured to use a different allocator for the
+    /// subnet, it can set the current allocator with this function.
+    ///
+    /// @param type lease type for which the allocator is set.
+    /// @param allocator new allocator instance.
+    void setAllocator(Lease::Type type, const AllocatorPtr& allocator);
+
+    /// @brief Returns subnet-specific allocation state.
+    ///
+    /// The actual type of the state depends on the allocator type.
+    ///
+    /// @param type lease type for which the allocation state is returned.
+    /// @return allocation state.
+    SubnetAllocationStatePtr getAllocationState(Lease::Type type) const;
+
+    /// @brief Sets subnet-specific allocation state.
+    ///
+    /// @param type lease type for which the allocation state is set.
+    /// @param allocation_state allocation state instance.
+    void setAllocationState(Lease::Type type, const SubnetAllocationStatePtr& allocation_state);
+
+    /// @brief Calls @c initAfterConfigure for each allocator.
+    void initAllocatorsAfterConfigure();
+
 protected:
 
     /// @brief Protected constructor.
@@ -382,6 +393,23 @@ protected:
     uint64_t sumPoolCapacity(const PoolCollection& pools,
                              const ClientClasses& client_classes) const;
 
+    /// @brief Returns a sum of possible leases in all pools allowing classes
+    /// and matching selection criteria relative to provided hint prefix length.
+    ///
+    /// @note This function should be called only for PD pools.
+    ///
+    /// @param pools list of pools
+    /// @param client_classes list of classes
+    /// @param prefix_length_match type which indicates the selection criteria
+    /// for the pools relative to the provided hint prefix length
+    /// @param hint_prefix_length the hint prefix length that the client
+    /// provided
+    /// @return sum of possible/allowed leases
+    uint64_t sumPoolCapacity(const PoolCollection& pools,
+                             const ClientClasses& client_classes,
+                             Allocator::PrefixLenMatchType prefix_length_match,
+                             uint8_t hint_prefix_length) const;
+
     /// @brief Checks if the specified pool overlaps with an existing pool.
     ///
     /// @param pool_type Pool type.
@@ -396,6 +424,12 @@ protected:
     ///
     /// @return A pointer to unparsed subnet configuration.
     virtual data::ElementPtr toElement() const;
+
+    virtual std::string getLabel() const {
+        std::stringstream ss;
+        ss << "subnet-id " << id_;
+        return (ss.str());
+    }
 
     /// @brief Converts subnet prefix to a pair of prefix/length pair.
     ///
@@ -429,86 +463,14 @@ protected:
     /// @brief a prefix length of the subnet.
     uint8_t prefix_len_;
 
-    /// @brief last allocated address.
-    ///
-    /// This is the last allocated address that was previously allocated from
-    /// this particular subnet. Some allocation algorithms (e.g. iterative) use
-    /// that value, others do not. It should be noted that although the value
-    /// is usually correct, there are cases when it is invalid, e.g. after
-    /// removing a pool, restarting or changing allocation algorithms. For
-    /// that purpose it should be only considered a help that should not be
-    /// fully trusted.
-    isc::asiolink::IOAddress last_allocated_ia_;
-
-    /// @brief last allocated temporary address.
-    ///
-    /// See @ref last_allocated_ia_ for details.
-    isc::asiolink::IOAddress last_allocated_ta_;
-
-    /// @brief last allocated IPv6 prefix.
-    ///
-    /// See @ref last_allocated_ia_ for details.
-    isc::asiolink::IOAddress last_allocated_pd_;
-
-    /// @brief Timestamp indicating when a lease of a specified type has been
-    /// last allocated from this subnet.
-    ///
-    /// @note: This map is protected by the mutex.
-    std::map<Lease::Type, boost::posix_time::ptime> last_allocated_time_;
-
     /// @brief Shared network name.
     std::string shared_network_name_;
 
-private:
+    /// @brief Lease allocators used by the subnet.
+    std::map<Lease::Type, AllocatorPtr> allocators_;
 
-    /// @brief returns the last address that was tried from this subnet.
-    ///
-    /// Should be called in a thread safe context.
-    ///
-    /// This method returns the last address that was attempted to be allocated
-    /// from this subnet. This is used as helper information for the next
-    /// iteration of the allocation algorithm.
-    ///
-    /// @todo: Define map<SubnetID, ClientClass, IOAddress> somewhere in the
-    ///        AllocEngine::IterativeAllocator and keep the data there
-    ///
-    /// @param type lease type to be returned
-    /// @return address/prefix that was last tried from this subnet
-    isc::asiolink::IOAddress getLastAllocatedInternal(Lease::Type type) const;
-
-    /// @brief Returns the timestamp when the @c setLastAllocated function
-    /// was called.
-    ///
-    /// Should be called in a thread safe context.
-    ///
-    /// @param lease_type Lease type for which last allocation timestamp should
-    /// be returned.
-    ///
-    /// @return Time when a lease of a specified type has been allocated from
-    /// this subnet. The negative infinity time is returned if a lease type is
-    /// not recognized (which is unlikely).
-    boost::posix_time::ptime
-    getLastAllocatedTimeInternal(const Lease::Type& lease_type) const;
-
-    /// @brief sets the last address that was tried from this subnet.
-    ///
-    /// Should be called in a thread safe context.
-    ///
-    /// This method sets the last address that was attempted to be allocated
-    /// from this subnet. This is used as helper information for the next
-    /// iteration of the allocation algorithm.
-    ///
-    /// @note: this routine is Kea thread safe.
-    ///
-    /// @todo: Define map<SubnetID, ClientClass, IOAddress> somewhere in the
-    ///        AllocEngine::IterativeAllocator and keep the data there
-    /// @param addr address/prefix to that was tried last
-    /// @param type lease type to be set
-    void setLastAllocatedInternal(Lease::Type type,
-                                  const isc::asiolink::IOAddress& addr);
-
-    /// @brief Mutex to protect the internal state.
-    boost::scoped_ptr<std::mutex> mutex_;
+    /// @brief Holds subnet-specific allocation state.
+    std::map<Lease::Type, SubnetAllocationStatePtr> allocation_states_;
 };
 
 /// @brief A generic pointer to either Subnet4 or Subnet6 object
@@ -554,6 +516,10 @@ public:
     /// object within a hooks library in cases when the library may be
     /// unloaded before the object is destroyed. This ensures that the
     /// ownership of the object by the Kea process is retained.
+    ///
+    /// It associates the subnet with the default, iterative, allocator.
+    /// Therefore, using this function should be preferred over the
+    /// constructor whenever the subnet needs a default allocator.
     ///
     /// @param prefix Subnet4 prefix
     /// @param length prefix length
@@ -644,6 +610,12 @@ public:
 
 private:
 
+    /// @brief Deleted copy constructor.
+    Subnet4(const Subnet4&) = delete;
+
+    /// @brief Deleted assignment operator.
+    Subnet4& operator=(const Subnet4&) = delete;
+
     /// @brief Returns default address for pool selection.
     ///
     /// @return ANY IPv4 address
@@ -704,6 +676,10 @@ public:
     /// object within a hooks library in cases when the library may be
     /// unloaded before the object is destroyed. This ensures that the
     /// ownership of the object by the Kea process is retained.
+    ///
+    /// It associates the subnet with the default, iterative, allocator.
+    /// Therefore, using this function should be preferred over the
+    /// constructor whenever the subnet needs a default allocator.
     ///
     /// @param prefix Subnet6 prefix
     /// @param length prefix length
@@ -779,6 +755,12 @@ public:
     parsePrefix(const std::string& prefix);
 
 private:
+
+    /// @brief Deleted copy constructor.
+    Subnet6(const Subnet6&) = delete;
+
+    /// @brief Deleted assignment operator.
+    Subnet6& operator=(const Subnet6&) = delete;
 
     /// @brief Returns default address for pool selection
     /// @return ANY IPv6 address

@@ -1,4 +1,4 @@
-// Copyright (C) 2014-2021 Internet Systems Consortium, Inc. ("ISC")
+// Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
 //
 // This Source Code Form is subject to the terms of the Mozilla Public
 // License, v. 2.0. If a copy of the MPL was not distributed with this
@@ -54,14 +54,17 @@ public:
         test_time_ms_(0), io_signal_set_(),
         processed_signals_(), stop_at_count_(0), handler_throw_error_(false) {
 
-        io_signal_set_.reset(new IOSignalSet(
-                                     io_service_,
-                                     std::bind(&IOSignalTest::processSignal,
-                                               this, ph::_1)));
+        io_signal_set_.reset(new IOSignalSet(io_service_,
+                                             std::bind(&IOSignalTest::processSignal,
+                                                       this, ph::_1)));
     }
 
     /// @brief Destructor.
-    ~IOSignalTest() {}
+    ~IOSignalTest() {
+        io_signal_set_.reset();
+        // Make sure the cancel handler for the IOSignalSet is called.
+        io_service_->poll();
+    }
 
     /// @brief Method used as the IOSignalSet handler.
     ///

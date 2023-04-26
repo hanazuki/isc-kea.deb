@@ -7,15 +7,11 @@
 #ifndef ISC_ADAPTOR_SUBNET_H
 #define ISC_ADAPTOR_SUBNET_H 1
 
-#include <yang/adaptor.h>
 #include <dhcpsrv/subnet_id.h>
-#include <set>
+#include <yang/adaptor.h>
 
 namespace isc {
 namespace yang {
-
-/// @brief Set of SubnetIDs.
-typedef std::set<isc::dhcp::SubnetID> SubnetIDSet;
 
 /// @brief JSON adaptor for subnets adding IDs and canonizes relays.
 ///
@@ -29,26 +25,24 @@ typedef std::set<isc::dhcp::SubnetID> SubnetIDSet;
 /// code should work without it.
 class AdaptorSubnet {
 public:
-
-    /// @brief Constructor.
-    AdaptorSubnet();
-
     /// @brief Destructor.
-    virtual ~AdaptorSubnet();
+    virtual ~AdaptorSubnet() = default;
 
     /// @brief Collect a subnet ID.
     ///
     /// @param subnet The subnet.
     /// @param set The reference to the set of assigned IDs.
     /// @return True if the subnet has an ID, false otherwise.
-    static bool collectID(isc::data::ConstElementPtr subnet, SubnetIDSet& set);
+    static bool collectID(isc::data::ConstElementPtr subnet,
+                          isc::dhcp::SubnetIDSet& set);
 
     /// @brief Assign subnet ID.
     ///
     /// @param subnet The subnet.
     /// @param set The reference to the set of assigned IDs.
     /// @param next The next ID.
-    static void assignID(isc::data::ElementPtr subnet, SubnetIDSet& set,
+    static void assignID(isc::data::ElementPtr subnet,
+                         isc::dhcp::SubnetIDSet& set,
                          isc::dhcp::SubnetID& next);
 
     /// @brief Update relay.
@@ -58,9 +52,9 @@ public:
     ///
     /// @param subnet The subnet.
     static void updateRelay(isc::data::ElementPtr subnet);
-};
+};  // AdaptorSubnet
 
-}  // end of namespace isc::yang
-}  // end of namespace isc
+}  // namespace yang
+}  // namespace isc
 
-#endif // ISC_ADAPTOR_SUBNET_H
+#endif  // ISC_ADAPTOR_SUBNET_H
