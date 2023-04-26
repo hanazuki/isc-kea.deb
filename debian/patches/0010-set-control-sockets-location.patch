@@ -19,8 +19,11 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/isc-kea/+bug/1863100
  src/bin/keactrl/kea-dhcp4.conf.pre      | 2 +-
  src/bin/keactrl/kea-dhcp6.conf.pre      | 2 +-
  src/bin/keactrl/kea-netconf.conf.pre    | 4 ++--
- 5 files changed, 8 insertions(+), 8 deletions(-)
+ tools/path_replacer.sh.in               | 6 +++++-
+ 6 files changed, 13 insertions(+), 9 deletions(-)
 
+diff --git a/src/bin/keactrl/kea-ctrl-agent.conf.pre b/src/bin/keactrl/kea-ctrl-agent.conf.pre
+index e6ae8b8..d144238 100644
 --- a/src/bin/keactrl/kea-ctrl-agent.conf.pre
 +++ b/src/bin/keactrl/kea-ctrl-agent.conf.pre
 @@ -32,15 +32,15 @@
@@ -42,6 +45,8 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/isc-kea/+bug/1863100
          }
      },
  
+diff --git a/src/bin/keactrl/kea-dhcp-ddns.conf.pre b/src/bin/keactrl/kea-dhcp-ddns.conf.pre
+index 07c2042..a0f3080 100644
 --- a/src/bin/keactrl/kea-dhcp-ddns.conf.pre
 +++ b/src/bin/keactrl/kea-dhcp-ddns.conf.pre
 @@ -23,7 +23,7 @@
@@ -53,6 +58,8 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/isc-kea/+bug/1863100
    },
    "tsig-keys": [],
    "forward-ddns" : {},
+diff --git a/src/bin/keactrl/kea-dhcp4.conf.pre b/src/bin/keactrl/kea-dhcp4.conf.pre
+index 47f66eb..5eef4cd 100644
 --- a/src/bin/keactrl/kea-dhcp4.conf.pre
 +++ b/src/bin/keactrl/kea-dhcp4.conf.pre
 @@ -49,7 +49,7 @@
@@ -64,6 +71,8 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/isc-kea/+bug/1863100
      },
  
      // Use Memfile lease database backend to store leases in a CSV file.
+diff --git a/src/bin/keactrl/kea-dhcp6.conf.pre b/src/bin/keactrl/kea-dhcp6.conf.pre
+index acb10a3..410536e 100644
 --- a/src/bin/keactrl/kea-dhcp6.conf.pre
 +++ b/src/bin/keactrl/kea-dhcp6.conf.pre
 @@ -43,7 +43,7 @@
@@ -75,6 +84,8 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/isc-kea/+bug/1863100
      },
  
      // Use Memfile lease database backend to store leases in a CSV file.
+diff --git a/src/bin/keactrl/kea-netconf.conf.pre b/src/bin/keactrl/kea-netconf.conf.pre
+index 37d15b1..967503b 100644
 --- a/src/bin/keactrl/kea-netconf.conf.pre
 +++ b/src/bin/keactrl/kea-netconf.conf.pre
 @@ -30,13 +30,13 @@
@@ -93,9 +104,11 @@ Bug-Ubuntu: https://bugs.launchpad.net/ubuntu/+source/isc-kea/+bug/1863100
              }
          }
      },
+diff --git a/tools/path_replacer.sh.in b/tools/path_replacer.sh.in
+index deb1264..a73836d 100644
 --- a/tools/path_replacer.sh.in
 +++ b/tools/path_replacer.sh.in
-@@ -28,13 +28,17 @@
+@@ -28,13 +28,17 @@ sysconfdir="@sysconfdir@"
  localstatedir="@localstatedir@"
  exec_prefix="@exec_prefix@"
  libdir="@libdir@"

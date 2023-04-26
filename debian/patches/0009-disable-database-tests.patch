@@ -1,11 +1,21 @@
-Description: Skip the database tests
- The MySQL and PostgreSQL tests require a server with username,
- password and tables setup for the test, see doc/devel/unit-tests.dox.
- There's no way to instruct the build system to skip specific tests,
- so let's disable them with a patch.
+From: Paride Legovini <paride.legovini@canonical.com>
+Date: Wed, 26 Apr 2023 06:29:16 +0000
+Subject: Skip the database tests
+
 Forwarded: not-needed
-Author: Paride Legovini <paride.legovini@canonical.com>
 Last-Update: 2020-12-03
+
+The MySQL and PostgreSQL tests require a server with username,
+password and tables setup for the test, see doc/devel/unit-tests.dox.
+There's no way to instruct the build system to skip specific tests,
+so let's disable them with a patch.
+---
+ src/bin/admin/tests/mysql_tests.sh.in | 2 ++
+ src/bin/admin/tests/pgsql_tests.sh.in | 2 ++
+ 2 files changed, 4 insertions(+)
+
+diff --git a/src/bin/admin/tests/mysql_tests.sh.in b/src/bin/admin/tests/mysql_tests.sh.in
+index 5fa34b4..45f262e 100644
 --- a/src/bin/admin/tests/mysql_tests.sh.in
 +++ b/src/bin/admin/tests/mysql_tests.sh.in
 @@ -1,4 +1,6 @@
@@ -13,8 +23,10 @@ Last-Update: 2020-12-03
 +echo "SKIPPING MYSQL TEST"
 +exit 0
  
- # Copyright (C) 2014-2022 Internet Systems Consortium, Inc. ("ISC")
+ # Copyright (C) 2014-2023 Internet Systems Consortium, Inc. ("ISC")
  #
+diff --git a/src/bin/admin/tests/pgsql_tests.sh.in b/src/bin/admin/tests/pgsql_tests.sh.in
+index 410f8f0..448991e 100644
 --- a/src/bin/admin/tests/pgsql_tests.sh.in
 +++ b/src/bin/admin/tests/pgsql_tests.sh.in
 @@ -1,4 +1,6 @@
@@ -22,5 +34,5 @@ Last-Update: 2020-12-03
 +echo "SKIPPING POSTGRESQL TEST"
 +exit 0
  
- # Copyright (C) 2015-2022 Internet Systems Consortium, Inc. ("ISC")
+ # Copyright (C) 2015-2023 Internet Systems Consortium, Inc. ("ISC")
  #
